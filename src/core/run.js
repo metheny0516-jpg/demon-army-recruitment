@@ -5,6 +5,8 @@ const Game = {
   power(m) { return m.hp + m.atk * 3 + m.def * 2 + m.spd; },
   armyPower(roster) { return roster.reduce((s, m) => s + this.power(m), 0); },
 
+  RETRIES_PER_RUN: 1,
+
   newRun() {
     const history = Storage.loadHistory();
     this.state = {
@@ -18,10 +20,56 @@ const Game = {
       maxPower: 0,
       raceCounts: {},
       uidSeq: 1,
-      lastBattle: null
+      lastBattle: null,
+      retriesLeft: this.RETRIES_PER_RUN,
+      retriesUsed: 0,
+      checkpoint: null
     };
     this.genApplicants();
+    this.saveCheckpoint();
     this.save();
+  },
+
+  // ── チェックポイントと再起 ──────────────────
+  // 自動戦闘は乱数を含むため、同じ戦闘をそのまま振り直せると採用・編成の
+  // 判断がすべて無意味になる。そこで巻き戻す先を「戦闘の直前」ではなく
+  // 「採用フェーズの開始時点」にして、やり直せるのはサイコロではなく
+  // “編成の判断”になるようにしている。
+  saveCheckpoint() {
+    const st = this.state;
+    const copy = {};
+    for (const k of Object.keys(st)) {
+      if (k === "checkpoint") continue;   // 入れ子になるのを防ぐ
+      copy[k] = st[k];
+    }
+    st.checkpoint = JSON.parse(JSON.stringify(copy));
+  },
+
+  canRetry() {
+    const st = this.state;
+    return !!st && st.retriesLeft > 0 && !!st.checkpoint;
+  },
+
+  retry() {
+    const st = this.state;
+    if (!this.canRetry()) return false;
+    const restored = st.checkpoint;
+    restored.retriesLeft = st.retriesLeft - 1;
+    restored.retriesUsed = (st.retriesUsed || 0) + 1;
+    restored.gold = Math.floor(restored.gold / 2);  // 軍を立て直す出費
+    restored.checkpoint = null;
+    this.state = restored;
+    this.saveCheckpoint();
+    this.save();
+    return true;
+  },
+
+  // 再起せず敗北を確定させる
+  concede() {
+    const st = this.state;
+    if (!st || st.phase !== "defeat") return;
+    st.phase = "gameover";
+    this.endRun(false);
   },
 
   save() { Storage.saveRun(this.state); },
@@ -170,15 +218,14 @@ const Game = {
       this.processDepartures(notes);
       st.stage += 1;
       if (st.stage > ENEMY_STAGES.length) {
-        st.phase = "clear";
-        this.endRun(true);
+        st.phase = "clear";   // 記録の確定は deploy() の末尾でまとめて行う
       } else {
         st.phase = "result";
         this.genApplicants();
       }
     } else {
-      st.phase = "gameover";
-      this.endRun(false);
+      // 敗北。再起の余地があるうちは魔界史に確定させない
+      st.phase = "defeat";
     }
 
     st.lastBattle = {
@@ -192,7 +239,17 @@ const Game = {
       logLength: result.log.length,
       contribution: result.contribution
     };
-    this.save();
+
+    // 記録の確定とセーブの後始末は必ず最後に行う。先に endRun してから
+    // save すると、消したはずのセーブが書き戻ってしまう。
+    if (st.phase === "clear") {
+      this.endRun(true);
+    } else if (st.phase === "defeat" && !this.canRetry()) {
+      st.phase = "gameover";
+      this.endRun(false);
+    } else {
+      this.save();
+    }
     return { result, notes, stageData };
   },
 
@@ -277,6 +334,7 @@ const Game = {
       mainRace,
       region: cleared ? "王都（制圧）" : this.stageData().region,
       cause: cleared ? "人間界を征服し引退" : `${this.stageData().army}に敗北`,
+      retriesUsed: st.retriesUsed || 0,
       finalRoster: st.roster.map(m => ({ name: m.name, race: m.race, job: m.job })),
       date: new Date().toISOString().slice(0, 10)
     };
@@ -289,6 +347,7 @@ const Game = {
   nextRecruit() {
     this.state.phase = "recruit";
     this.state.hiresLeft = 1;
+    this.saveCheckpoint();   // ここが「一戦手前」の戻り先になる
     this.save();
   }
 };

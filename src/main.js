@@ -20,6 +20,7 @@ const App = {
       case "recruit": return UI.recruit();
       case "formation": return UI.formation();
       case "result": return UI.result();
+      case "defeat": return UI.defeat();
       case "gameover":
       case "clear": return UI.gameover(st.record, Storage.loadHistory());
       default: return this.showTitle();
@@ -89,6 +90,14 @@ const App = {
 
       case "nextrecruit":
         Game.nextRecruit();
+        return this.render();
+
+      case "retry":
+        Game.retry();
+        return this.render();
+
+      case "concede":
+        Game.concede();
         return this.render();
     }
   }

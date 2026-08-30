@@ -176,8 +176,9 @@ const UI = {
       <div class="cards">${cards}</div>
       <div class="spacer"></div>
       <div class="row">
-        <button data-action="skip">誰も採用しない（面接を打ち切る）</button>
-        <button data-action="toformation">部隊編成へ進む</button>
+        <button data-action="skip" ${st.roster.length === 0 ? "disabled" : ""}>誰も採用しない（面接を打ち切る）</button>
+        <button data-action="toformation" ${st.roster.length === 0 ? "disabled" : ""}>部隊編成へ進む</button>
+        ${st.roster.length === 0 ? `<span class="muted">部隊が空では出撃できない。まず1体は採用せよ。</span>` : ""}
       </div>
       <div class="spacer"></div>
       ${rosterPanel}
@@ -205,7 +206,8 @@ const UI = {
       <div class="spacer"></div>
       ${this.synergyPanel(st.roster)}
       ${this.enemyPreview()}
-      <button class="primary wide" data-action="deploy" ${empty ? "disabled" : ""}>出撃する</button>`);
+      <button class="primary wide" data-action="deploy" ${empty ? "disabled" : ""}>出撃する</button>
+      ${empty ? `<div class="spacer"></div><button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}`);
   },
 
   battle(result, stageData) {
@@ -233,6 +235,32 @@ const UI = {
       <button class="primary wide" data-action="nextrecruit">次の応募者を面接する</button>`);
   },
 
+  // 敗北したが、まだ再起できる状態の画面
+  defeat() {
+    const st = Game.state;
+    const b = st.lastBattle;
+    const cp = st.checkpoint;
+    const goldNow = cp ? cp.gold : st.gold;
+    const goldAfter = Math.floor(goldNow / 2);
+    return this.set(`<div class="banner lose">
+        <h2>魔王軍、壊滅</h2>
+        <div>${U.esc(b.army)} に敗北した</div>
+      </div>
+      ${this.contributionPanel(b.contribution)}
+      <div class="panel">
+        <h3>まだ終わりではない</h3>
+        <div class="muted">
+          第${st.stage}戦の採用面接まで時を巻き戻せる。応募者を選び直し、並べ直せ。<br>
+          ただし軍の立て直しには金がかかる：所持金 <b class="gold">${goldNow}G → ${goldAfter}G</b><br>
+          この機会は<b>このランで1度きり</b>だ。
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary" data-action="retry">⟲ 再起する（残り ${st.retriesLeft} 回）</button>
+        <button class="danger" data-action="concede">ここで終わる（歴史に刻む）</button>
+      </div>`);
+  },
+
   gameover(record, history) {
     this.set(`<div class="banner ${record.cleared ? "win" : "lose"}">
         <h2>${record.cleared ? "人間界を制圧した！" : "魔王軍、壊滅"}</h2>
@@ -247,6 +275,7 @@ const UI = {
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
           <dt>死因</dt><dd>${U.esc(record.cause)}</dd>
+          ${record.retriesUsed ? `<dt>再起</dt><dd>${record.retriesUsed}回</dd>` : ""}
         </dl>
         <div class="muted">最後まで付き従った者たち：${
           record.finalRoster.length ? record.finalRoster.map(m => U.esc(m.name)).join("、") : "誰も残らなかった"}</div>
@@ -269,6 +298,7 @@ const UI = {
           <dt>主力種族</dt><dd>${U.esc(r.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(r.region)}</dd>
           <dt>死因</dt><dd>${U.esc(r.cause)}</dd>
+          ${r.retriesUsed ? `<dt>再起</dt><dd>${r.retriesUsed}回</dd>` : ""}
         </dl>
       </div>`).join("");
     this.set(`<div class="panel">
