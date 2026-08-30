@@ -155,5 +155,34 @@ const TRAITS = {
         ctx.log(`　${ctx.attacker.name}の【悪戯】 ${ctx.target.name}の攻撃力が下がった`, "trait");
       }
     }
+  },
+  guardian_prayer: {
+    name: "回復の祈り",
+    desc: "ラウンド終了時、最もHP割合の低い味方をHPの15%回復",
+    onRoundEnd(ctx) {
+      const u = ctx.unit;
+      if (!u.alive) return;
+      const target = ctx.allies
+        .filter(a => a.alive && a.hp < a.maxHp)
+        .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
+      if (!target) return;
+      const heal = Math.min(target.maxHp - target.hp, Math.ceil(target.maxHp * 0.15));
+      if (heal <= 0) return;
+      target.hp += heal;
+      ctx.log(`　${u.name}の【回復の祈り】 ${target.name}のHPが${heal}回復`, "trait");
+    }
+  },
+  hero_awaken: {
+    name: "覚醒",
+    desc: "自身のHPが50%以下になると覚醒し、以後ダメージ+50%（1戦闘1回）",
+    modDealt(ctx) {
+      const u = ctx.attacker;
+      if (!u.flags.awakened && u.hp <= u.maxHp * 0.5) {
+        u.flags.awakened = true;
+        u.mods.dmgMult *= 1.5;
+        ctx.mult *= 1.5;
+        ctx.notes.push("覚醒");
+      }
+    }
   }
 };

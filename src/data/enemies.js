@@ -46,7 +46,7 @@ const ENEMY_STAGES = [
       { name: "精鋭兵ダン", icon: "⚔️", hp: 38, atk: 13, def: 7, spd: 6 },
       { name: "精鋭兵エド", icon: "⚔️", hp: 38, atk: 13, def: 7, spd: 6 },
       { name: "精鋭兵フォス", icon: "⚔️", hp: 38, atk: 13, def: 7, spd: 6 },
-      { name: "将軍グラハム", icon: "🎖️", hp: 60, atk: 16, def: 9, spd: 7 }
+      { name: "将軍グラハム", icon: "🎖️", hp: 60, atk: 16, def: 9, spd: 7, traits: ["brute"] }
     ]
   },
   {
@@ -55,14 +55,14 @@ const ENEMY_STAGES = [
       { name: "聖騎士オルガ", icon: "🛡️", hp: 48, atk: 16, def: 10, spd: 7 },
       { name: "聖騎士ジン", icon: "🛡️", hp: 48, atk: 16, def: 10, spd: 7 },
       { name: "聖騎士カレン", icon: "🛡️", hp: 48, atk: 16, def: 10, spd: 7 },
-      { name: "団長ヴァレス", icon: "🎖️", hp: 70, atk: 19, def: 11, spd: 8 }
+      { name: "団長ヴァレス", icon: "🎖️", hp: 70, atk: 19, def: 11, spd: 8, traits: ["brute"] }
     ]
   },
   {
     stage: 8, army: "勇者アレン一行", region: "王都", reward: 50,
     units: [
       { name: "戦士ドルフ", icon: "🪓", hp: 90, atk: 18, def: 10, spd: 7 },
-      { name: "勇者アレン", icon: "👑", hp: 120, atk: 24, def: 12, spd: 10 },
+      { name: "勇者アレン", icon: "👑", hp: 120, atk: 24, def: 12, spd: 10, traits: ["hero_awaken"] },
       { name: "聖女エル", icon: "✨", hp: 70, atk: 12, def: 8, spd: 6 },
       { name: "賢者ミラ", icon: "📖", hp: 60, atk: 20, def: 6, spd: 8 }
     ]

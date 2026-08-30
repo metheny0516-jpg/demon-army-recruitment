@@ -13,7 +13,14 @@ const BattleScene = {
     note: 170, death: 460, revive: 780, survive: 420, heal: 300, result: 900
   },
 
+  // 長期戦がだらけないための自動圧縮。シナジー同士が噛み合って乱戦が
+  // 長引いても、x1でこの秒数に収まるよう全体の尺を縮める（各イベントの
+  // 個別の尺はいじらない）。短い戦闘は一切圧縮されない。
+  AUTO_CAP_MS: 20000,
+  MIN_AUTO_SCALE: 0.45,
+
   speed: 1,
+  autoScale: 1,
   timers: [],
   units: {},      // id → { el, fill, data }
   state: null,
@@ -89,6 +96,11 @@ const BattleScene = {
     }
     this.updateSpeedBtn();
 
+    const rawTotal = timeline.reduce((sum, ev) => sum + this.durationOf(ev), 0);
+    this.autoScale = rawTotal > this.AUTO_CAP_MS
+      ? Math.max(this.MIN_AUTO_SCALE, this.AUTO_CAP_MS / rawTotal)
+      : 1;
+
     this.timeline = timeline;
     this.index = 0;
     this.step();
@@ -98,7 +110,7 @@ const BattleScene = {
     if (this.index >= this.timeline.length) return this.finish();
     const ev = this.timeline[this.index++];
     const dur = this.render(ev);
-    const wait = Math.max(60, dur / this.speed);
+    const wait = Math.max(60, (dur * this.autoScale) / this.speed);
     this.timers.push(setTimeout(() => this.step(), wait));
   },
 
@@ -202,7 +214,7 @@ const BattleScene = {
     c.classList.remove("show");
     void c.offsetWidth;
     c.classList.add("show");
-    this.timers.push(setTimeout(() => c.classList.remove("show"), 1300 / this.speed));
+    this.timers.push(setTimeout(() => c.classList.remove("show"), (1300 * this.autoScale) / this.speed));
   },
 
   banner(victory) {
