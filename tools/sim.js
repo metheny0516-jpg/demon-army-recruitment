@@ -3,7 +3,7 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/monsters.js','src/data/synergies.js','src/data/enemies.js',
+const files = ['src/data/traits.js','src/data/monsters.js','src/data/synergies.js','src/data/enemies.js','src/data/events.js',
                'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -40,6 +40,14 @@ function runOnce(strat, stats){
   while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
     // 採用フェーズ: 枠がある限り採用する
     while (st.phase === 'recruit' && st.applicants.length) {
+      // 種族狙いの戦略は、目当てが居らず金に余裕があれば求人を出し直す
+      if (strat.reroll && strat.kind === 'race'
+          && !st.applicants.some(m => m.race === strat.race)
+          && Game.canReroll()
+          && st.gold - Game.rerollCost() >= strat.keepGold) {
+        Game.reroll(); stats.rerolls++;
+        continue;
+      }
       if (strat.kind === 'pivot') {
         // ステージ4以降、安い兵を解雇して少数精鋭に切り替える
         if (st.stage >= 4) {
@@ -77,7 +85,15 @@ function runOnce(strat, stats){
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
     }
-    if (st.phase === 'result') Game.nextRecruit();
+    if (st.phase === 'result') Game.afterResult();
+    // ハプニングは無作為に選ぶ（人間の判断は再現できないため）
+    if (st.phase === 'event') {
+      if (st.pendingEvent) {
+        const opts = Game.eventOptions();
+        if (opts.length) { Game.chooseEvent(opts[Math.floor(Math.random()*opts.length)].i); stats.events++; }
+      }
+      Game.nextRecruit();
+    }
     // 敗北したが再起できる状態。実プレイヤー同様、権利があれば必ず使う。
     if (st.phase === 'defeat') {
       if (Game.canRetry()) { Game.retry(); stats.retries++; }
@@ -90,7 +106,9 @@ function runOnce(strat, stats){
 const strategies = [
   {name:'最強優先', kind:'greedy'},
   {name:'ゴブリン統一', kind:'race', race:'ゴブリン'},
+  {name:'ゴブリン統一+求人', kind:'race', race:'ゴブリン', reroll:true, keepGold:6},
   {name:'スライム統一', kind:'race', race:'スライム'},
+  {name:'骸骨寄せ+求人', kind:'race', race:'骸骨兵', reroll:true, keepGold:6},
   {name:'骸骨寄せ', kind:'race', race:'骸骨兵'},
   {name:'安月給', kind:'cheap'},
   {name:'魔法職寄せ', kind:'caster'},
@@ -99,14 +117,14 @@ const strategies = [
 ];
 const N = Number(process.argv[2] || 400);
 for (const s of strategies) {
-  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0 };
+  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
   const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  再起 ${stats.retries}回`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
 }

@@ -588,3 +588,14 @@ button.wide { width: 100%; }
   display: block;
 }
 .bu-portrait.noimg::after { content: attr(data-fallback); font-size: 22px; line-height: 34px; }
+
+/* ── ハプニング ── */
+.event-panel { border-left: 4px solid var(--gold); }
+.event-text {
+  white-space: pre-wrap;
+  line-height: 1.8;
+  font-size: 14px;
+  margin-top: 6px;
+}
+.event-options { display: flex; flex-direction: column; gap: 8px; }
+.event-choice { text-align: left; }

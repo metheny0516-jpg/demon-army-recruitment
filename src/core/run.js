@@ -23,6 +23,9 @@ const Game = {
       lastBattle: null,
       retriesLeft: this.RETRIES_PER_RUN,
       retriesUsed: 0,
+      rerollsThisPhase: 0,
+      pendingEvent: null,
+      eventOutcome: null,
       checkpoint: null
     };
     this.genApplicants();
@@ -153,6 +156,36 @@ const Game = {
     return base + "・改";
   },
 
+  // ── 求人の出し直し ────────────────────────
+  // 目当ての種族が来ない回に何もできないと、狙った編成を組む戦略だけが
+  // 一方的に不利になる。かといって無料で引き直せると緊張感が消えるので、
+  // 「広告費」として所持金を払わせ、給与の支払いと競合させる。
+  // 同じ面接内では倍々に高くなるため、無限に引き直すことはできない。
+  // 最初の FREE_REROLLS 回は無料。それ以降は広告費が倍々に増える。
+  FREE_REROLLS: 1,
+  REROLL_BASE_COST: 2,
+
+  rerollCost() {
+    const n = this.state.rerollsThisPhase || 0;
+    if (n < this.FREE_REROLLS) return 0;
+    return this.REROLL_BASE_COST * Math.pow(2, n - this.FREE_REROLLS);
+  },
+
+  canReroll() {
+    const st = this.state;
+    return st.phase === "recruit" && st.applicants.length > 0 && st.gold >= this.rerollCost();
+  },
+
+  reroll() {
+    if (!this.canReroll()) return false;
+    const st = this.state;
+    st.gold -= this.rerollCost();
+    st.rerollsThisPhase = (st.rerollsThisPhase || 0) + 1;
+    this.genApplicants();
+    this.save();
+    return true;
+  },
+
   // ── 採用・解雇・編成 ──────────────────────
   canHire() { return this.state.roster.length < 5; },
 
@@ -166,6 +199,7 @@ const Game = {
     st.hiresLeft = (st.hiresLeft || 1) - 1;
     // 設立期など採用枠が残っていれば、続けて次の応募者を面接する
     if (st.hiresLeft > 0 && this.canHire()) {
+      st.rerollsThisPhase = 0;   // 新しい面接なので広告費もリセット
       this.genApplicants();
     } else {
       st.applicants = [];
@@ -331,15 +365,22 @@ const Game = {
       st.gold -= total;
       for (const m of st.roster) {
         m.unpaid = false;
+        m.unpaidStreak = 0;
         m.loyalty = U.clamp(m.loyalty + 2, 0, 100);
       }
       notes.push(`給与 ${total}G を支払った（所持金 ${st.gold}G）全員の忠誠+2`);
     } else {
+      // 連続で未払いにするほど痛手が大きくなる。固定値だと8戦のランでは
+      // 忠誠0に届かず、離脱の脅しが空砲になっていた（実測 300ラン中1回）。
+      let worst = 0;
       for (const m of st.roster) {
         m.unpaid = true;
-        m.loyalty = U.clamp(m.loyalty - 15, 0, 100);
+        m.unpaidStreak = (m.unpaidStreak || 0) + 1;
+        const penalty = 15 + 15 * (m.unpaidStreak - 1);
+        worst = Math.max(worst, penalty);
+        m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
       }
-      notes.push(`金庫が足りない！ 給与${total}G が未払いに……全員の忠誠-15`);
+      notes.push(`金庫が足りない！ 給与${total}G が未払いに……忠誠が最大 ${worst} 下がった`);
     }
   },
 
@@ -379,10 +420,96 @@ const Game = {
     Storage.clearRun();
   },
 
+  // ── ハプニング ────────────────────────────
+  EVENT_CHANCE: 0.45,
+
+  // 戦闘後に何か起きるか抽選する。起きれば phase を "event" にする。
+  maybeEvent() {
+    const st = this.state;
+    st.pendingEvent = null;
+    st.eventOutcome = null;
+    if (st.roster.length === 0) return false;
+    if (!U.chance(this.EVENT_CHANCE)) return false;
+
+    const pool = EVENTS.filter(e => { try { return e.check(st); } catch (err) { return false; } });
+    if (pool.length === 0) return false;
+
+    // 重み付き抽選
+    const total = pool.reduce((sum, e) => sum + (e.weight || 1), 0);
+    let r = U.rand() * total;
+    let ev = pool[0];
+    for (const e of pool) { r -= (e.weight || 1); if (r <= 0) { ev = e; break; } }
+
+    const cast = ev.cast(st);
+    if (!cast) return false;
+
+    st.pendingEvent = { id: ev.id, cast, text: ev.text(st, this.resolveCast(cast)) };
+    st.phase = "event";
+    this.save();
+    return true;
+  },
+
+  // uid で保存した登場人物を、その場のモンスターに解決する
+  // （セーブをまたいでも壊れないよう、参照ではなく uid で持つ）
+  resolveCast(cast) {
+    const out = {};
+    for (const k of Object.keys(cast || {})) {
+      out[k] = this.state.roster.find(m => m.uid === cast[k]) || null;
+    }
+    return out;
+  },
+
+  currentEvent() {
+    const pe = this.state.pendingEvent;
+    return pe ? EVENTS.find(e => e.id === pe.id) : null;
+  },
+
+  // いま選べる選択肢（所持金が足りないものは除く）
+  eventOptions() {
+    const ev = this.currentEvent();
+    if (!ev) return [];
+    const st = this.state;
+    return ev.options
+      .map((o, i) => ({ o, i }))
+      .filter(({ o }) => !o.check || o.check(st));
+  },
+
+  chooseEvent(index) {
+    const st = this.state;
+    const ev = this.currentEvent();
+    if (!ev || !ev.options[index]) return false;
+    const cast = this.resolveCast(st.pendingEvent.cast);
+    // 登場人物が既に居ない場合は何も起こさない
+    for (const k of Object.keys(cast)) if (cast[k] === null && st.pendingEvent.cast[k] !== undefined) {
+      st.eventOutcome = "……当人はもう軍にいなかった。話は流れた。";
+      st.pendingEvent = null;
+      this.save();
+      return true;
+    }
+    const notes = [];
+    st.eventOutcome = ev.options[index].apply(st, cast) || "";
+    this.processDepartures(notes);
+    if (notes.length) st.eventOutcome += "\n" + notes.join("\n");
+    st.pendingEvent = null;
+    this.save();
+    return true;
+  },
+
   // 勝利後「次へ」→ 採用フェーズへ
+  // 結果画面の「次へ」。ハプニングが起きればそちらを先に見せる。
+  afterResult() {
+    if (this.maybeEvent()) return "event";
+    this.nextRecruit();
+    return "recruit";
+  },
+
   nextRecruit() {
-    this.state.phase = "recruit";
-    this.state.hiresLeft = 1;
+    const st = this.state;
+    st.phase = "recruit";
+    st.hiresLeft = 1;
+    st.rerollsThisPhase = 0;
+    st.pendingEvent = null;
+    st.eventOutcome = null;
     this.saveCheckpoint();   // ここが「一戦手前」の戻り先になる
     this.save();
   }

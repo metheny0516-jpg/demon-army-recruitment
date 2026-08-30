@@ -3,12 +3,17 @@
 // 条件はUIにはあえて全て表示せず、発動時のみ見せる（プレイヤーの発見を重視）。
 const SYNERGIES = [
   {
+    // 3体で頭打ちの固定値だと、4体目・5体目が何も足さず「全振り」が
+    // 報われない。頭数に応じて伸ばすことで、種族を統一するコスト
+    // （弱い個体で枠を埋めること）に見合う爆発力を持たせる。
     id: "goblin_horde",
     name: "ゴブリン軍団",
-    desc: "ゴブリンの与ダメージ+30%",
-    check(units) { return units.filter(u => u.race === "ゴブリン").length >= 3; },
+    desc: "ゴブリンの与ダメージ+30%（3体目以降、1体増えるごとにさらに+30%）",
+    count(units) { return units.filter(u => u.race === "ゴブリン").length; },
+    check(units) { return this.count(units) >= 3; },
     apply(units) {
-      for (const u of units) if (u.race === "ゴブリン") u.mods.dmgMult *= 1.3;
+      const mult = 1 + 0.3 * (this.count(units) - 2);
+      for (const u of units) if (u.race === "ゴブリン") u.mods.dmgMult *= mult;
     }
   },
   {
@@ -22,15 +27,16 @@ const SYNERGIES = [
   {
     id: "legion_of_dead",
     name: "死の軍勢",
-    desc: "アンデッドの与ダメージ+30%、死霊術の復活が全快に",
+    desc: "アンデッドの与ダメージ+30%（2体目以降、1体増えるごとにさらに+30%）、死霊術の復活が全快に",
+    count(units) { return units.filter(u => u.tags.includes("undead")).length; },
     check(units) {
-      const undead = units.filter(u => u.tags.includes("undead")).length;
       const necro = units.some(u => u.traits.includes("necromancy"));
-      return necro && undead >= 2;
+      return necro && this.count(units) >= 2;
     },
     apply(units) {
+      const mult = 1 + 0.3 * (this.count(units) - 1);
       for (const u of units) {
-        if (u.tags.includes("undead")) u.mods.dmgMult *= 1.3;
+        if (u.tags.includes("undead")) u.mods.dmgMult *= mult;
         if (u.traits.includes("necromancy")) u.mods.necroFull = true;
       }
     }
@@ -38,12 +44,14 @@ const SYNERGIES = [
   {
     id: "arcane_circle",
     name: "魔法結社",
-    desc: "魔法職の与ダメージ+40%、火球が敵全体に広がる",
-    check(units) { return units.filter(u => u.tags.includes("caster")).length >= 3; },
+    desc: "魔法職の与ダメージ+35%（3体目以降、1体増えるごとにさらに+35%）、火球が敵全体に広がる",
+    count(units) { return units.filter(u => u.tags.includes("caster")).length; },
+    check(units) { return this.count(units) >= 3; },
     apply(units) {
+      const mult = 1 + 0.35 * (this.count(units) - 2);
       for (const u of units) {
         if (u.tags.includes("caster")) {
-          u.mods.dmgMult *= 1.4;
+          u.mods.dmgMult *= mult;
           u.mods.fireballAll = true;
         }
       }
