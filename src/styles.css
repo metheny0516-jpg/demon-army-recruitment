@@ -438,6 +438,9 @@ button.wide { width: 100%; }
 }
 .cutin b { display: block; font-size: 19px; letter-spacing: 2px; }
 .cutin span { font-size: 12px; color: #e2d4ff; }
+.cutin-portrait { display: none; width: 44px; height: 44px; object-fit: cover; object-position: top center; border-radius: 9px; border: 1px solid #ffd479; }
+.cutin.has-portrait { display: flex; align-items: center; justify-content: center; gap: 10px; text-align: left; }
+.cutin.has-portrait .cutin-portrait { display: block; }
 @keyframes cutinIn {
   0%   { opacity: 0; transform: translateY(-50%) translateX(-110%); }
   18%  { opacity: 1; transform: translateY(-50%) translateX(0); }

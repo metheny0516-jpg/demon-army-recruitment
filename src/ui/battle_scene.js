@@ -64,7 +64,10 @@ const BattleScene = {
           <span class="scene-army">魔王軍</span>
         </div>
         <div class="scene-band" id="band-player"></div>
-        <div class="cutin" id="cutin"><b id="cutin-name"></b><span id="cutin-desc"></span></div>
+        <div class="cutin" id="cutin">
+          <img class="cutin-portrait" id="cutin-portrait" alt="">
+          <div class="cutin-copy"><b id="cutin-name"></b><span id="cutin-desc"></span></div>
+        </div>
       </div>
       <div class="scene-ctrl">
         <button class="small" data-action="speed" id="speed-btn">速度 x1</button>
@@ -177,7 +180,7 @@ const BattleScene = {
         break;
       }
       case "synergy":
-        this.cutin(ev.name, ev.desc);
+        this.cutin(ev.name, ev.desc, ev.id);
         break;
       case "result":
         this.banner(ev.victory);
@@ -215,9 +218,14 @@ const BattleScene = {
     s.classList.add("shake");
   },
 
-  cutin(name, desc) {
+  cutin(name, desc, synergyId) {
     const c = document.getElementById("cutin");
     if (!c) return;
+    const portrait = document.getElementById("cutin-portrait");
+    const hasPortrait = synergyId === "king_slime";
+    portrait.src = hasPortrait ? UI.PORTRAIT_DIR + "king_slime.png" : "";
+    portrait.alt = hasPortrait ? "キングスライム" : "";
+    c.classList.toggle("has-portrait", hasPortrait);
     document.getElementById("cutin-name").textContent = name;
     document.getElementById("cutin-desc").textContent = desc;
     c.classList.remove("show");
