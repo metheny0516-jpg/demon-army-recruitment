@@ -602,3 +602,7 @@ button.wide { width: 100%; }
 }
 .event-options { display: flex; flex-direction: column; gap: 8px; }
 .event-choice { text-align: left; }
+
+/* 倒れたが蘇生で生還した者。戦死とは区別する（蘇生系特性の価値を見せるため） */
+.contrib-badge.revived { background: #123a2a; color: #8ef0a8; border: 1px solid #2a7a52; }
+.fallen-panel { border-left: 4px solid #6a2020; }

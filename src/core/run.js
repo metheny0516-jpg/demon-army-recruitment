@@ -26,6 +26,10 @@ const Game = {
       rerollsThisPhase: 0,
       pendingEvent: null,
       eventOutcome: null,
+      pendingVacancies: 0,
+      fallenTotal: 0,
+      fallenRoll: [],
+      lastFallen: [],
       checkpoint: null
     };
     this.genApplicants();
@@ -97,7 +101,8 @@ const Game = {
     const defaults = {
       roster: [], applicants: [], hiresLeft: 1, maxPower: 0, raceCounts: {}, uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
-      rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, checkpoint: null
+      rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, checkpoint: null,
+      pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: []
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
@@ -284,6 +289,7 @@ const Game = {
     if (result.victory) {
       st.gold += stageData.reward;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
+      this.processCasualties(result.contribution, notes);
       this.paySalaries(notes);
       this.processDepartures(notes);
       st.stage += 1;
@@ -336,7 +342,7 @@ const Game = {
       const v = (tpl && tpl.voices) || SPECIAL_MONSTER_VOICES[c.tplId];
       if (!v) { c.voice = null; continue; }
       let key;
-      if (c.died) key = "dead";
+      if (c.survived === false) key = "dead";
       else if (c.unpaid) key = "unpaid";
       else if (topDealer && c.id === topDealer.id) key = "mvp";
       else if (c.dealt === 0) key = "idle";
@@ -424,6 +430,32 @@ const Game = {
     }
   },
 
+  // 戦死した者を軍から外す。給与計算より前に呼ぶので、死者に給料は出ない。
+  //
+  // これが無いと「死んだのに次の戦いで全快で復帰する」ことになり、最期の台詞も
+  // 戦果パネルの戦死バッジも意味を失う。同時に、採用フェーズが「欠員が出たから
+  // 募集する」という本来の意味を持つようになる。
+  //
+  // 判定に died（一度でも倒れたか）ではなく survived（最終的に生きていたか）を
+  // 使うのが要点。これにより死霊術・執念・白骨といった蘇生系の特性が
+  // 「永久退場を防ぐ保険」として機能する。
+  processCasualties(contribution, notes) {
+    const st = this.state;
+    st.pendingVacancies = 0;
+    st.lastFallen = [];
+    const fallen = (contribution || []).filter(c => c.survived === false);
+    if (fallen.length === 0) return;
+
+    const uids = new Set(fallen.map(c => c.uid));
+    st.roster = st.roster.filter(m => !uids.has(m.uid));
+    st.pendingVacancies = fallen.length;
+    st.fallenTotal = (st.fallenTotal || 0) + fallen.length;
+    st.lastFallen = fallen.map(c => ({ name: c.name, race: c.race }));
+    st.fallenRoll = (st.fallenRoll || []).concat(st.lastFallen);
+    notes.push(`戦没：${fallen.map(c => c.name).join("、")}（${fallen.length}名）。`
+      + `この者たちへの給与支払いは不要になった`);
+  },
+
   processDepartures(notes) {
     const st = this.state;
     const leaving = st.roster.filter(m => m.loyalty <= 0);
@@ -452,6 +484,8 @@ const Game = {
       region: cleared ? "王都（制圧）" : this.stageData().region,
       cause: cleared ? "人間界を征服し引退" : `${this.stageData().army}に敗北`,
       retriesUsed: st.retriesUsed || 0,
+      fallenTotal: st.fallenTotal || 0,
+      fallenRoll: (st.fallenRoll || []).map(f => f.name),
       finalRoster: st.roster.map(m => ({ name: m.name, race: m.race, job: m.job })),
       date: new Date().toISOString().slice(0, 10)
     };
@@ -546,7 +580,9 @@ const Game = {
   nextRecruit() {
     const st = this.state;
     st.phase = "recruit";
-    st.hiresLeft = 1;
+    // 欠員が出た分だけ追加で採用できる（欠員募集）
+    st.hiresLeft = 1 + (st.pendingVacancies || 0);
+    st.pendingVacancies = 0;
     st.rerollsThisPhase = 0;
     st.pendingEvent = null;
     st.eventOutcome = null;

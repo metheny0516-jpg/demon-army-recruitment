@@ -139,9 +139,11 @@ const UI = {
       if (topTanker && c.id === topTanker.id && (!topDealer || c.id !== topDealer.id)) {
         badges.push(`<span class="contrib-badge tank">🛡盾役</span>`);
       }
-      if (c.died) badges.push(`<span class="contrib-badge dead">💀戦死</span>`);
+      const fell = c.survived === false;
+      if (fell) badges.push(`<span class="contrib-badge dead">💀戦死</span>`);
+      else if (c.died) badges.push(`<span class="contrib-badge revived">✨生還</span>`);
       const ratio = c.dealt / maxDealt;
-      return `<div class="contrib-row ${c.died ? "died" : ""}">
+      return `<div class="contrib-row ${fell ? "died" : ""}">
         <span class="contrib-icon">${this.icon(c.race)}</span>
         <span class="contrib-name">${U.esc(c.name)}</span>
         <div class="contrib-badges">${badges.join("")}</div>
@@ -220,8 +222,9 @@ const UI = {
     this.set(`${this.hud()}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
-        <div class="muted">${st.hiresLeft > 1
-          ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
+        <div class="muted">${
+          st.stage === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
+          : st.hiresLeft > 1 ? `先の戦いで欠員が出た。${st.hiresLeft}名まで補充できる。`
           : "3名が魔王軍への入隊を希望している。採用できるのは1名だけだ。"}</div>
       </div>
       <div class="cards">${cards}</div>
@@ -284,6 +287,11 @@ const UI = {
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
       ${this.contributionPanel(b.contribution)}
+      ${(st.lastFallen && st.lastFallen.length) ? `<div class="panel fallen-panel">
+        <h3>🕯 戦没者</h3>
+        <div class="muted">${st.lastFallen.map(f => `${this.icon(f.race)} ${U.esc(f.name)}`).join("　")}</div>
+        <div class="muted">この者たちは軍を去った。次の面接で ${st.lastFallen.length} 名まで補充できる。</div>
+      </div>` : ""}
       <div class="panel">
         <h3>現在の部隊</h3>
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
@@ -360,6 +368,7 @@ const UI = {
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
           <dt>死因</dt><dd>${U.esc(record.cause)}</dd>
           ${record.retriesUsed ? `<dt>再起</dt><dd>${record.retriesUsed}回</dd>` : ""}
+          ${record.fallenTotal ? `<dt>戦没者</dt><dd>${record.fallenTotal}名</dd>` : ""}
         </dl>
         <div class="muted">最後まで付き従った者たち：${
           record.finalRoster.length ? record.finalRoster.map(m => U.esc(m.name)).join("、") : "誰も残らなかった"}</div>
@@ -383,6 +392,7 @@ const UI = {
           <dt>到達地域</dt><dd>${U.esc(r.region)}</dd>
           <dt>死因</dt><dd>${U.esc(r.cause)}</dd>
           ${r.retriesUsed ? `<dt>再起</dt><dd>${r.retriesUsed}回</dd>` : ""}
+          ${r.fallenTotal ? `<dt>戦没者</dt><dd>${r.fallenTotal}名</dd>` : ""}
         </dl>
       </div>`).join("");
     this.set(`<div class="panel">

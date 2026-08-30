@@ -28,6 +28,7 @@ const Battle = {
   makeUnit(m, side) {
     return {
       id: null,
+      uid: m.uid !== undefined ? m.uid : null,
       side,
       name: m.name,
       race: m.race || "人間",
@@ -250,8 +251,10 @@ const Battle = {
       const kills = hits.filter(e => e.fromId === u.id && e.dead).length;
       const died = timeline.some(e => e.type === "death" && e.unitId === u.id);
       return {
-        id: u.id, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
-        unpaid: !!u.unpaid, dealt, taken, kills, died
+        id: u.id, uid: u.uid, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
+        unpaid: !!u.unpaid, dealt, taken, kills,
+        died,                 // 一度でも倒れたか（蘇生した者も true）
+        survived: u.alive     // 戦闘終了時に生きていたか。退場判定はこちらを使う
       };
     }).sort((a, b) => b.dealt - a.dealt);
   }
