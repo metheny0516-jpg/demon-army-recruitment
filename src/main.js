@@ -20,6 +20,7 @@ const App = {
       case "recruit": return UI.recruit();
       case "formation": return UI.formation();
       case "result": return UI.result();
+      case "event": return UI.event();
       case "defeat": return UI.defeat();
       case "gameover":
       case "clear": return UI.gameover(st.record, Storage.loadHistory());
@@ -90,6 +91,18 @@ const App = {
         return;
 
       case "afterbattle":
+        return this.render();
+
+      case "afterresult":
+        Game.afterResult();
+        return this.render();
+
+      case "eventpick":
+        Game.chooseEvent(Number(data.index));
+        return this.render();
+
+      case "eventdone":
+        Game.nextRecruit();
         return this.render();
 
       case "nextrecruit":

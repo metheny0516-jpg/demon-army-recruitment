@@ -288,7 +288,7 @@ const UI = {
         <h3>現在の部隊</h3>
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
       </div>
-      <button class="primary wide" data-action="nextrecruit">次の応募者を面接する</button>`);
+      <button class="primary wide" data-action="afterresult">次へ</button>`);
   },
 
   // 敗北したが、まだ再起できる状態の画面
@@ -315,6 +315,34 @@ const UI = {
         <button class="primary" data-action="retry">⟲ 再起する（残り ${st.retriesLeft} 回）</button>
         <button class="danger" data-action="concede">ここで終わる（歴史に刻む）</button>
       </div>`);
+  },
+
+  // ハプニング画面。選択肢を出し、選んだ後は結果を見せてから採用へ進む。
+  event() {
+    const st = Game.state;
+    const ev = Game.currentEvent();
+
+    // 選択済み → 結果を見せる
+    if (!ev || st.eventOutcome) {
+      return this.set(`${this.hud()}
+        <div class="panel event-panel">
+          <h2>⚡ その後</h2>
+          <div class="event-text">${U.esc(st.eventOutcome || "")}</div>
+        </div>
+        <button class="primary wide" data-action="eventdone">次の応募者を面接する</button>`);
+    }
+
+    const opts = Game.eventOptions().map(({ o, i }) =>
+      `<button class="wide event-choice" data-action="eventpick" data-index="${i}">${
+        U.esc(typeof o.label === "function" ? o.label(st) : o.label)}</button>`
+    ).join("");
+
+    this.set(`${this.hud()}
+      <div class="panel event-panel">
+        <h2>⚡ ${U.esc(ev.title)}</h2>
+        <div class="event-text">${U.esc(st.pendingEvent.text)}</div>
+      </div>
+      <div class="event-options">${opts}</div>`);
   },
 
   gameover(record, history) {
