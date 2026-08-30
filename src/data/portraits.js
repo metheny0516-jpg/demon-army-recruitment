@@ -10,7 +10,7 @@
 // 画像の仕様: 768×1024（3:4）、80KB以下、顔は上から55%以内に収める
 // （戦闘画面では上部を正方形に切り抜いて使うため）。
 const PORTRAITS = [
-  // "goblin",
-  // "slime",
-  // "necromancer",
+  "goblin",
+  "slime",
+  "necromancer",
 ];
