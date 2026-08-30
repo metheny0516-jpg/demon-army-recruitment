@@ -3,8 +3,14 @@
 最終更新: 2026-08-30 / ブランチ `claude/demon-king-recruitment-game-sapqsx`
 
 このファイルは開発を引き継ぐ人（AI含む）向けのメモ。
-ゲームの仕様そのものは `README.md` に書いてある。**まず README を読むこと。**
 ここには「READMEに書ききれない、踏むと痛い所」と「次にやること」を書く。
+
+読む順番:
+
+1. **[`DESIGN_PRINCIPLES.md`](DESIGN_PRINCIPLES.md)** — 最上位の設計指針。
+   何を作るか・作らないかの判断は常にここが優先する。最重要KPIは「もう1回遊びたいか」
+2. **[`README.md`](README.md)** — いま何がどう実装されているか
+3. このファイル — 落とし穴とバックログ
 
 ---
 
