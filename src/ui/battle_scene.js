@@ -28,6 +28,15 @@ const BattleScene = {
   // 敵はデータのアイコン、味方は種族アイコン
   iconOf(u) { return u.icon || (u.side === "enemy" ? "🗡" : UI.icon(u.race)); },
 
+  // 立ち絵があればそれを使い、無ければ絵文字に落ちる（敵は今のところ絵文字のみ）
+  portraitHtml(u) {
+    const emoji = this.iconOf(u);
+    const id = u.tplId;
+    if (!UI.hasPortrait(id)) return emoji;
+    return `<span class="bu-portrait" data-fallback="${emoji}"><img src="${UI.PORTRAIT_DIR}${id}.png" alt=""
+      onerror="UI.portraitFailed('${id}', this)"></span>`;
+  },
+
   loadSpeed() {
     try { this.speed = Number(localStorage.getItem("maou_speed")) || 1; } catch (e) { this.speed = 1; }
     if (![1, 2, 4].includes(this.speed)) this.speed = 1;
@@ -68,7 +77,7 @@ const BattleScene = {
   unitHtml(u) {
     return `<div class="bu" id="bu-${u.id}">
       <div class="bu-flash"></div>
-      <div class="bu-icon">${this.iconOf(u)}</div>
+      <div class="bu-icon">${this.portraitHtml(u)}</div>
       <div class="bu-name">${U.esc(u.name)}</div>
       <div class="bu-hp"><div class="bu-hpfill" id="hp-${u.id}"></div></div>
       <div class="bu-pop" id="pop-${u.id}"></div>

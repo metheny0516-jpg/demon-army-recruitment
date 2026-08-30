@@ -9,6 +9,40 @@ const UI = {
   },
   icon(race) { return this.RACE_ICON[race] || "❓"; },
 
+  // ── 立ち絵 ────────────────────────────
+  // portraits.js の一覧に載っている種族は assets/monsters/{tplId}.png を、
+  // それ以外は絵文字を使う。一覧方式にしているのは、未収録の種族に対して
+  // 毎回404リクエストが飛ぶのを避けるため。
+  PORTRAIT_DIR: "assets/monsters/",
+  missingPortraits: new Set(),
+
+  // 一覧に載っていて、かつ読み込みに失敗していない種族だけ画像を使う
+  hasPortrait(id) {
+    return !!id
+      && typeof PORTRAITS !== "undefined" && PORTRAITS.indexOf(id) !== -1
+      && !this.missingPortraits.has(id);
+  },
+
+  // 一覧に載っていてもファイルが無い場合の保険。以後その種族は絵文字にする。
+  portraitFailed(id, img) {
+    this.missingPortraits.add(id);
+    const holder = img.parentNode;
+    img.remove();
+    if (holder) holder.classList.add("noimg");
+  },
+
+  // shape: "photo" = 履歴書の証明写真風(3:4) / それ以外 = 丸アイコン
+  avatarHtml(m, shape) {
+    const cls = "avatar" + (shape === "photo" ? " photo" : "");
+    const emoji = this.icon(m.race);
+    const id = m.tplId;
+    if (!this.hasPortrait(id)) {
+      return `<span class="${cls} noimg" data-fallback="${emoji}"></span>`;
+    }
+    return `<span class="${cls}" data-fallback="${emoji}"><img src="${this.PORTRAIT_DIR}${id}.png" alt=""
+      onerror="UI.portraitFailed('${id}', this)"></span>`;
+  },
+
   init(root) { this.root = root; },
 
   set(html) {
@@ -67,7 +101,7 @@ const UI = {
     const unpaid = m.unpaid ? `<span class="unpaid">給与未払い</span>` : "";
     return `<div class="card">
       <div class="card-head">
-        <div class="avatar">${this.icon(m.race)}</div>
+        ${this.avatarHtml(m, opts.resume ? "photo" : "")}
         <div>
           <div class="card-name">${U.esc(m.name)}</div>
           <div class="card-job">${U.esc(m.race)} / ${U.esc(m.job)}</div>

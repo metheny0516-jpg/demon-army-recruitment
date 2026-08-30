@@ -66,7 +66,7 @@ const Battle = {
     const note = (text, cls) => emit("note", { text, cls: cls || "info", emphasis: cls === "revive" ? 2 : 0 });
 
     const snap = u => ({
-      id: u.id, name: u.name, race: u.race, icon: u.icon, side: u.side,
+      id: u.id, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon, side: u.side,
       hp: u.hp, maxHp: u.maxHp, traits: u.traits.slice()
     });
 

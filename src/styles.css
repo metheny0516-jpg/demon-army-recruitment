@@ -99,6 +99,24 @@ button.wide { width: 100%; }
   font-size: 22px;
   background: #3a2f57;
   border: 1px solid var(--line);
+  overflow: hidden;
+}
+/* 立ち絵は3:4なので、上（顔）を基準に切り抜く */
+.avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+/* 画像が無い種族は絵文字を出す */
+.avatar.noimg::after { content: attr(data-fallback); }
+
+/* 採用画面だけ、履歴書に貼られた証明写真の形にする */
+.avatar.photo {
+  width: 54px; height: 72px; flex: 0 0 54px;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  box-shadow: 0 1px 4px rgba(0,0,0,.5);
 }
 .card-name { font-weight: bold; font-size: 16px; }
 .card-job { color: var(--dim); font-size: 12px; }
@@ -553,3 +571,20 @@ button.wide { width: 100%; }
 
 /* 決着表示中は「VS」帯を隠す（同じ位置に重なって読めなくなるため） */
 .scene.decided .scene-mid { opacity: 0; }
+
+/* 戦闘画面の立ち絵 */
+.bu-portrait {
+  display: block;
+  width: 34px; height: 34px;
+  margin: 0 auto;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #3a2f57;
+}
+.bu-portrait img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  display: block;
+}
+.bu-portrait.noimg::after { content: attr(data-fallback); font-size: 22px; line-height: 34px; }
