@@ -77,7 +77,11 @@ const App = {
       }
 
       case "skiplog":
-        if (UI.showAllLog) UI.showAllLog();
+        BattleScene.skip();
+        return;
+
+      case "speed":
+        BattleScene.cycleSpeed();
         return;
 
       case "afterbattle":

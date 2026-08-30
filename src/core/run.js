@@ -66,7 +66,7 @@ const Game = {
     return {
       uid: st.uidSeq++,
       tplId: tpl.id,
-      name: U.pick(tpl.names),
+      name: this.uniqueName(tpl.names),
       race: tpl.race,
       job: U.pick(tpl.jobs),
       hp: vary(tpl.base.hp),
@@ -80,6 +80,21 @@ const Game = {
       quote: U.pick(tpl.quotes),
       unpaid: false
     };
+  },
+
+  // 同じ軍団に同名が並ぶと戦闘ログが読めなくなるので、名前は重複させない
+  uniqueName(pool) {
+    const used = new Set([
+      ...this.state.roster.map(m => m.name),
+      ...this.state.applicants.map(m => m.name)
+    ]);
+    const free = pool.filter(n => !used.has(n));
+    if (free.length) return U.pick(free);
+    const base = U.pick(pool);
+    for (const suffix of ["二世", "三世", "四世", "五世"]) {
+      if (!used.has(base + suffix)) return base + suffix;
+    }
+    return base + "・改";
   },
 
   // ── 採用・解雇・編成 ──────────────────────

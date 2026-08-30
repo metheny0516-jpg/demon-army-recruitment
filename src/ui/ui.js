@@ -1,7 +1,6 @@
 // 画面描画。状態は Game.state を読むだけで、UIは状態を持たない（描画関数は毎回作り直す）。
 const UI = {
   root: null,
-  logTimer: null,
 
   RACE_ICON: {
     "ゴブリン": "👺", "オーク": "🐗", "スライム": "🟢", "コボルト": "🐕",
@@ -13,7 +12,7 @@ const UI = {
   init(root) { this.root = root; },
 
   set(html) {
-    if (this.logTimer) { clearInterval(this.logTimer); this.logTimer = null; }
+    if (typeof BattleScene !== "undefined") BattleScene.stop();
     this.root.innerHTML = html;
     window.scrollTo(0, 0);
   },
@@ -185,45 +184,9 @@ const UI = {
   },
 
   battle(result, stageData) {
-    // 戦闘中は通常HUDを出さない（deploy時点でステージ番号が進んでいるため混乱する）
-    this.set(`<div class="hud">
-        <span>第 <b>${Game.state.generation}</b> 代魔王軍</span>
-        <span>第 <b>${stageData.stage}</b> 戦</span>
-        <span class="muted">${U.esc(stageData.region)}</span>
-      </div>
-      <div class="panel">
-        <h2>🔥 ${U.esc(stageData.army)} との戦闘</h2>
-        <div class="muted">${U.esc(stageData.region)}／勝てば報酬 ${stageData.reward}G</div>
-      </div>
-      <div class="log" id="log"></div>
-      <div class="spacer"></div>
-      <div class="row">
-        <button data-action="skiplog">▶▶ 最後まで飛ばす</button>
-        <button class="primary" data-action="afterbattle" id="next-btn" style="display:none">結果を見る</button>
-      </div>`);
-
-    const logEl = document.getElementById("log");
-    const lines = result.log;
-    let i = 0;
-    const finish = () => {
-      if (this.logTimer) { clearInterval(this.logTimer); this.logTimer = null; }
-      const btn = document.getElementById("next-btn");
-      if (btn) btn.style.display = "";
-    };
-    this.showAllLog = () => {
-      while (i < lines.length) {
-        logEl.insertAdjacentHTML("beforeend", `<div class="${lines[i].c}">${U.esc(lines[i].t)}</div>`);
-        i++;
-      }
-      logEl.scrollTop = logEl.scrollHeight;
-      finish();
-    };
-    this.logTimer = setInterval(() => {
-      if (i >= lines.length) { finish(); return; }
-      logEl.insertAdjacentHTML("beforeend", `<div class="${lines[i].c}">${U.esc(lines[i].t)}</div>`);
-      logEl.scrollTop = logEl.scrollHeight;
-      i++;
-    }, 55);
+    // 描画はレンダラに委譲する。UIは戦闘の中身を知らない。
+    this.set(BattleScene.shell(stageData));
+    BattleScene.play(result.timeline);
   },
 
   result() {

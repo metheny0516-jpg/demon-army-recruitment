@@ -239,3 +239,220 @@ button.wide { width: 100%; }
   font-size: 13px;
 }
 .mini .muted { font-size: 11px; }
+
+/* ══ 戦闘シーン ══════════════════════════════════════
+   アニメーションは transform / opacity のみ。
+   レイアウトを走らせないため、スマホでも 60fps を保てる。 */
+.scene {
+  position: relative;
+  background: radial-gradient(ellipse at 50% 50%, #241d3a 0%, #14101c 75%);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 8px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.scene-band {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  justify-content: center;
+  min-height: 92px;
+}
+.scene-mid {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px 0;
+  font-size: 11px;
+  color: var(--dim);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 3px 0;
+}
+.scene-vs { color: var(--red); font-weight: bold; font-size: 14px; }
+.scene-army { flex: 1; text-align: center; }
+
+/* ── ユニットカード ── */
+.bu {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 96px;
+  background: linear-gradient(#2e2545, #241d38);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 4px 5px;
+  text-align: center;
+  will-change: transform;
+}
+.bu-icon { font-size: 26px; line-height: 1.1; }
+.bu-name {
+  font-size: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+.bu-hp {
+  height: 5px;
+  background: #0e0b16;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.bu-hpfill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #6fd08c, #4fae6c);
+  transform-origin: left center;
+  transform: scaleX(1);
+  transition: transform .25s ease-out;
+}
+.bu-hpfill.low { background: linear-gradient(90deg, #e05a5a, #b53c3c); }
+
+/* 被弾フラッシュ（opacityのみ） */
+.bu-flash {
+  position: absolute;
+  inset: 0;
+  border-radius: 8px;
+  background: #ff5a5a;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 死亡 */
+.bu.dead {
+  opacity: .28;
+  transform: scale(.92) rotate(-6deg);
+  filter: grayscale(1);
+  transition: opacity .3s, transform .3s;
+}
+
+/* ── 攻撃の踏み込み ── */
+@keyframes lungeUp {
+  0%   { transform: translateY(0); }
+  35%  { transform: translateY(-14px) scale(1.08); }
+  100% { transform: translateY(0); }
+}
+@keyframes lungeDown {
+  0%   { transform: translateY(0); }
+  35%  { transform: translateY(14px) scale(1.08); }
+  100% { transform: translateY(0); }
+}
+.bu.lunge-up   { animation: lungeUp .34s ease-out; }
+.bu.lunge-down { animation: lungeDown .34s ease-out; }
+
+/* ── 被弾 ── */
+@keyframes hitShake {
+  0%,100% { transform: translateX(0); }
+  25%     { transform: translateX(-4px); }
+  75%     { transform: translateX(4px); }
+}
+@keyframes hitShakeBig {
+  0%,100% { transform: translateX(0) scale(1); }
+  20%     { transform: translateX(-7px) scale(1.06); }
+  50%     { transform: translateX(6px) scale(1.04); }
+  80%     { transform: translateX(-3px) scale(1); }
+}
+@keyframes flashIn {
+  0%   { opacity: 0; }
+  30%  { opacity: .55; }
+  100% { opacity: 0; }
+}
+.bu.hit     { animation: hitShake .26s ease-out; }
+.bu.hit-big { animation: hitShakeBig .38s ease-out; }
+.bu.hit .bu-flash     { animation: flashIn .26s ease-out; }
+.bu.hit-big .bu-flash { animation: flashIn .38s ease-out; }
+
+/* ── 復活 ── */
+@keyframes popIn {
+  0%   { transform: scale(.5); opacity: .2; }
+  60%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.bu.pop { animation: popIn .55s ease-out; }
+
+/* ── 飛ぶ数字 ── */
+.bu-pop { position: absolute; top: 2px; left: 0; right: 0; height: 0; pointer-events: none; }
+.fnum {
+  position: absolute;
+  left: 0; right: 0;
+  font-weight: bold;
+  font-size: 15px;
+  color: #ffdd66;
+  text-shadow: 0 1px 3px #000, 0 0 8px #000;
+  animation: floatUp .9s ease-out forwards;
+  white-space: nowrap;
+}
+.fnum.big { font-size: 21px; color: #ff8a5a; }
+.fnum.heal { color: #6fd08c; }
+.fnum.guard { color: #8fb8ff; font-size: 13px; }
+@keyframes floatUp {
+  0%   { transform: translateY(6px) scale(.7); opacity: 0; }
+  25%  { transform: translateY(-4px) scale(1.15); opacity: 1; }
+  100% { transform: translateY(-34px) scale(1); opacity: 0; }
+}
+
+/* ── 画面揺れ（決定打） ── */
+@keyframes sceneShake {
+  0%,100% { transform: translate(0,0); }
+  20%     { transform: translate(-5px, 3px); }
+  40%     { transform: translate(5px, -3px); }
+  60%     { transform: translate(-3px, -2px); }
+  80%     { transform: translate(3px, 2px); }
+}
+.scene.shake { animation: sceneShake .32s ease-out; }
+
+/* ── シナジー カットイン ── */
+.cutin {
+  position: absolute;
+  left: 0; right: 0;
+  top: 50%;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, rgba(122,63,196,.96), rgba(60,30,110,.92));
+  border-top: 2px solid var(--purple);
+  border-bottom: 2px solid var(--purple);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(-50%) translateX(-110%);
+  pointer-events: none;
+}
+.cutin b { display: block; font-size: 19px; letter-spacing: 2px; }
+.cutin span { font-size: 12px; color: #e2d4ff; }
+@keyframes cutinIn {
+  0%   { opacity: 0; transform: translateY(-50%) translateX(-110%); }
+  18%  { opacity: 1; transform: translateY(-50%) translateX(0); }
+  82%  { opacity: 1; transform: translateY(-50%) translateX(0); }
+  100% { opacity: 0; transform: translateY(-50%) translateX(110%); }
+}
+.cutin.show { animation: cutinIn 1.3s ease-out; }
+
+/* ── 決着 ── */
+.scene-result {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 34px;
+  font-weight: bold;
+  letter-spacing: 6px;
+  animation: popIn .5s ease-out;
+}
+.scene-result.win  { color: #8ef0a8; text-shadow: 0 0 24px #0c2414, 0 2px 8px #000; background: rgba(10,22,14,.82); }
+.scene-result.lose { color: #ff8a8a; text-shadow: 0 0 24px #240c0c, 0 2px 8px #000; background: rgba(24,10,10,.82); }
+
+.scene-ctrl { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+
+@media (max-width: 560px) {
+  .bu-icon { font-size: 22px; }
+  .bu { padding: 5px 2px 4px; }
+  .scene-band { min-height: 82px; gap: 4px; }
+  .scene-result { font-size: 26px; }
+}
+
+/* 端末側で「視差効果を減らす」設定なら演出を抑える */
+@media (prefers-reduced-motion: reduce) {
+  .bu, .scene, .cutin, .fnum, .scene-result { animation: none !important; }
+  .bu-hpfill { transition: none; }
+}
