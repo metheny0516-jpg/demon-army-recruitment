@@ -12,5 +12,12 @@
 const PORTRAITS = [
   "goblin",
   "slime",
+  "kobold",
+  "orc",
+  "skeleton",
+  "zombie",
+  "imp",
+  "mage",
   "necromancer",
+  "ogre",
 ];
