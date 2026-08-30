@@ -189,7 +189,8 @@ const Game = {
       goldBefore,
       synergies: result.activeSynergies,
       notes,
-      logLength: result.log.length
+      logLength: result.log.length,
+      contribution: result.contribution
     };
     this.save();
     return { result, notes, stageData };

@@ -234,7 +234,21 @@ const Battle = {
       // 旧来のテキストログ（タイムラインから導出）
       log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
       rounds: Math.min(round, this.MAX_ROUNDS),
-      activeSynergies: activeSyn.map(s => s.name)
+      activeSynergies: activeSyn.map(s => s.name),
+      // 誰がどれだけ働いたか（結果画面のMVP表示用）。新しい状態を戦闘中に
+      // 持ち回る必要はなく、既に確定したタイムラインから導出するだけでよい。
+      contribution: this.summarizeContribution(timeline, playerUnits)
     };
+  },
+
+  summarizeContribution(timeline, playerUnits) {
+    const hits = timeline.filter(e => e.type === "attack" || e.type === "splash");
+    return playerUnits.map(u => {
+      const dealt = hits.filter(e => e.fromId === u.id).reduce((s, e) => s + e.dmg, 0);
+      const taken = hits.filter(e => e.toId === u.id).reduce((s, e) => s + e.dmg, 0);
+      const kills = hits.filter(e => e.fromId === u.id && e.dead).length;
+      const died = timeline.some(e => e.type === "death" && e.unitId === u.id);
+      return { id: u.id, name: u.name, race: u.race, icon: u.icon, dealt, taken, kills, died };
+    }).sort((a, b) => b.dealt - a.dealt);
   }
 };

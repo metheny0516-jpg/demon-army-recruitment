@@ -456,3 +456,61 @@ button.wide { width: 100%; }
   .bu, .scene, .cutin, .fnum, .scene-result { animation: none !important; }
   .bu-hpfill { transition: none; }
 }
+
+/* ── 戦果パネル（貢献度）── */
+.contrib-list { display: flex; flex-direction: column; gap: 6px; }
+.contrib-row {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  grid-template-areas:
+    "icon name badges"
+    "bar  bar  num";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 4px;
+  background: #1b1530;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.contrib-row.died { opacity: .72; }
+.contrib-icon { grid-area: icon; font-size: 18px; }
+.contrib-name {
+  grid-area: name;
+  font-weight: bold;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.contrib-badges { grid-area: badges; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.contrib-badge {
+  font-size: 11px;
+  border-radius: 5px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+.contrib-badge.mvp { background: #4a3a12; color: var(--gold); border: 1px solid #8a6a20; }
+.contrib-badge.tank { background: #12314a; color: var(--blue); border: 1px solid #205a8a; }
+.contrib-badge.dead { background: #3a1414; color: #ff9a9a; border: 1px solid #6a2020; }
+.contrib-bar {
+  grid-area: bar;
+  height: 8px;
+  background: #0e0b16;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.contrib-fill {
+  height: 100%;
+  width: 100%;
+  transform-origin: left center;
+  background: linear-gradient(90deg, #a77bf3, #7b3fc4);
+}
+.contrib-num {
+  grid-area: num;
+  font-size: 12px;
+  color: var(--dim);
+  white-space: nowrap;
+  text-align: right;
+}
+.contrib-num small { font-size: 10px; margin-left: 2px; }

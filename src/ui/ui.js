@@ -78,6 +78,31 @@ const UI = {
     </div>`;
   },
 
+  // 戦闘後の「誰がどれだけ働いたか」パネル。棒の長さだけで一発で分かるようにする。
+  contributionPanel(contribution) {
+    if (!contribution || contribution.length === 0) return "";
+    const maxDealt = Math.max(1, ...contribution.map(c => c.dealt));
+    const topDealer = contribution.find(c => c.dealt > 0);
+    const topTanker = contribution.slice().sort((a, b) => b.taken - a.taken)[0];
+    const rows = contribution.map(c => {
+      const badges = [];
+      if (topDealer && c.id === topDealer.id) badges.push(`<span class="contrib-badge mvp">👑殊勲</span>`);
+      if (topTanker && c.id === topTanker.id && c.taken > 0 && (!topDealer || c.id !== topDealer.id)) {
+        badges.push(`<span class="contrib-badge tank">🛡盾役</span>`);
+      }
+      if (c.died) badges.push(`<span class="contrib-badge dead">💀戦死</span>`);
+      const ratio = c.dealt / maxDealt;
+      return `<div class="contrib-row ${c.died ? "died" : ""}">
+        <span class="contrib-icon">${this.icon(c.race)}</span>
+        <span class="contrib-name">${U.esc(c.name)}</span>
+        <div class="contrib-badges">${badges.join("")}</div>
+        <div class="contrib-bar"><div class="contrib-fill" style="transform:scaleX(${ratio})"></div></div>
+        <span class="contrib-num">${c.dealt}<small>与ダメ</small>${c.kills ? ` / ${c.kills}撃破` : ""}</span>
+      </div>`;
+    }).join("");
+    return `<div class="panel"><h3>戦果</h3><div class="contrib-list">${rows}</div></div>`;
+  },
+
   synergyPanel(roster) {
     const act = Synergy.active(roster);
     if (act.length === 0) {
@@ -200,6 +225,7 @@ const UI = {
       </div>
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
+      ${this.contributionPanel(b.contribution)}
       <div class="panel">
         <h3>現在の部隊</h3>
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
@@ -225,6 +251,7 @@ const UI = {
         <div class="muted">最後まで付き従った者たち：${
           record.finalRoster.length ? record.finalRoster.map(m => U.esc(m.name)).join("、") : "誰も残らなかった"}</div>
       </div>
+      ${this.contributionPanel(Game.state.lastBattle && Game.state.lastBattle.contribution)}
       <div class="row">
         <button class="primary" data-action="new">第${history.length + 1}代として再挑戦</button>
         <button data-action="history">魔界史を見る</button>
