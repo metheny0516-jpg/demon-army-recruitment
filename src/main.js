@@ -48,6 +48,10 @@ const App = {
         Game.hire(Number(data.index));
         return this.render();
 
+      case "reroll":
+        Game.reroll();
+        return this.render();
+
       case "skip":
         Game.skipHire();
         return this.render();

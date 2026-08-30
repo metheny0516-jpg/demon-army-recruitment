@@ -227,6 +227,8 @@ const UI = {
       <div class="cards">${cards}</div>
       <div class="spacer"></div>
       <div class="row">
+        <button data-action="reroll" ${Game.canReroll() ? "" : "disabled"}>
+          📢 求人を出し直す（広告費 ${Game.rerollCost()}G）</button>
         <button data-action="skip" ${st.roster.length === 0 ? "disabled" : ""}>誰も採用しない（面接を打ち切る）</button>
         <button data-action="toformation" ${st.roster.length === 0 ? "disabled" : ""}>部隊編成へ進む</button>
         ${st.roster.length === 0 ? `<span class="muted">部隊が空では出撃できない。まず1体は採用せよ。</span>` : ""}

@@ -23,6 +23,7 @@ const Game = {
       lastBattle: null,
       retriesLeft: this.RETRIES_PER_RUN,
       retriesUsed: 0,
+      rerollsThisPhase: 0,
       checkpoint: null
     };
     this.genApplicants();
@@ -153,6 +154,36 @@ const Game = {
     return base + "・改";
   },
 
+  // ── 求人の出し直し ────────────────────────
+  // 目当ての種族が来ない回に何もできないと、狙った編成を組む戦略だけが
+  // 一方的に不利になる。かといって無料で引き直せると緊張感が消えるので、
+  // 「広告費」として所持金を払わせ、給与の支払いと競合させる。
+  // 同じ面接内では倍々に高くなるため、無限に引き直すことはできない。
+  // 最初の FREE_REROLLS 回は無料。それ以降は広告費が倍々に増える。
+  FREE_REROLLS: 1,
+  REROLL_BASE_COST: 2,
+
+  rerollCost() {
+    const n = this.state.rerollsThisPhase || 0;
+    if (n < this.FREE_REROLLS) return 0;
+    return this.REROLL_BASE_COST * Math.pow(2, n - this.FREE_REROLLS);
+  },
+
+  canReroll() {
+    const st = this.state;
+    return st.phase === "recruit" && st.applicants.length > 0 && st.gold >= this.rerollCost();
+  },
+
+  reroll() {
+    if (!this.canReroll()) return false;
+    const st = this.state;
+    st.gold -= this.rerollCost();
+    st.rerollsThisPhase = (st.rerollsThisPhase || 0) + 1;
+    this.genApplicants();
+    this.save();
+    return true;
+  },
+
   // ── 採用・解雇・編成 ──────────────────────
   canHire() { return this.state.roster.length < 5; },
 
@@ -166,6 +197,7 @@ const Game = {
     st.hiresLeft = (st.hiresLeft || 1) - 1;
     // 設立期など採用枠が残っていれば、続けて次の応募者を面接する
     if (st.hiresLeft > 0 && this.canHire()) {
+      st.rerollsThisPhase = 0;   // 新しい面接なので広告費もリセット
       this.genApplicants();
     } else {
       st.applicants = [];
@@ -383,6 +415,7 @@ const Game = {
   nextRecruit() {
     this.state.phase = "recruit";
     this.state.hiresLeft = 1;
+    this.state.rerollsThisPhase = 0;
     this.saveCheckpoint();   // ここが「一戦手前」の戻り先になる
     this.save();
   }
