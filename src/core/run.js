@@ -54,11 +54,16 @@ const Game = {
     const st = this.state;
     if (!this.canRetry()) return false;
     const restored = st.checkpoint;
-    restored.retriesLeft = st.retriesLeft - 1;
-    restored.retriesUsed = (st.retriesUsed || 0) + 1;
-    restored.gold = Math.floor(restored.gold / 2);  // 軍を立て直す出費
-    restored.checkpoint = null;
-    this.state = restored;
+    const retriesLeft = st.retriesLeft - 1;
+    const retriesUsed = (st.retriesUsed || 0) + 1;
+    // state を別インスタンスに差し替えず、中身だけ入れ替える。
+    // 参照を掴んでいる呼び出し側が古い状態を見続けるのを防ぐため。
+    for (const k of Object.keys(st)) delete st[k];
+    Object.assign(st, restored);
+    st.retriesLeft = retriesLeft;
+    st.retriesUsed = retriesUsed;
+    st.gold = Math.floor(st.gold / 2);  // 軍を立て直す出費
+    st.checkpoint = null;
     this.saveCheckpoint();
     this.save();
     return true;
@@ -126,6 +131,9 @@ const Game = {
       traits,
       tags: tpl.tags.slice(),
       quote: U.pick(tpl.quotes),
+      prevJob: U.pick(tpl.prevJobs),
+      motive: U.pick(tpl.motives),
+      flaw: U.pick(tpl.flaws),
       unpaid: false
     };
   },
@@ -277,6 +285,9 @@ const Game = {
       traits: ["slime_body", "regen"],
       tags: [],
       quote: "……！（すごく大きくなった）",
+      prevJob: `スライム3体（${slimes.map(m => m.name).join("・")}）`,
+      motive: "みんなで、ひとつに、なりました",
+      flaw: "もう、もどれない",
       unpaid: false
     };
     const removed = new Set(slimes.map(m => m.uid));

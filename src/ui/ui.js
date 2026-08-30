@@ -49,6 +49,19 @@ const UI = {
     }).join("");
   },
 
+  // 履歴書欄。採用画面だけで出す（編成画面はスクロールが長くなるため省く）
+  resumeHtml(m) {
+    const rows = [
+      ["前職", m.prevJob],
+      ["志望動機", m.motive],
+      ["短所", m.flaw]
+    ].filter(r => r[1]);
+    if (rows.length === 0) return "";
+    return `<dl class="resume">${
+      rows.map(([k, v]) => `<dt>${k}</dt><dd>${U.esc(v)}</dd>`).join("")
+    }</dl>`;
+  },
+
   monsterCard(m, opts) {
     opts = opts || {};
     const unpaid = m.unpaid ? `<span class="unpaid">給与未払い</span>` : "";
@@ -61,6 +74,7 @@ const UI = {
         </div>
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
       </div>
+      ${opts.resume ? this.resumeHtml(m) : ""}
       <div class="stats">
         <div class="stat"><span class="k">HP</span><span class="v">${m.hp}</span></div>
         <div class="stat"><span class="k">攻撃</span><span class="v">${m.atk}</span></div>
@@ -151,6 +165,7 @@ const UI = {
     const st = Game.state;
     const full = !Game.canHire();
     const cards = st.applicants.map((m, i) => this.monsterCard(m, {
+      resume: true,
       footer: `<button class="primary wide" data-action="hire" data-index="${i}" ${full ? "disabled" : ""}>
         ${full ? "部隊が満員（誰かを解雇せよ）" : `採用する（給与 ${m.salary}G）`}</button>`
     })).join("");

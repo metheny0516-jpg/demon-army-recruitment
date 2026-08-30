@@ -78,6 +78,11 @@ function runOnce(strat, stats){
       stats.battles++;
     }
     if (st.phase === 'result') Game.nextRecruit();
+    // 敗北したが再起できる状態。実プレイヤー同様、権利があれば必ず使う。
+    if (st.phase === 'defeat') {
+      if (Game.canRetry()) { Game.retry(); stats.retries++; }
+      else Game.concede();
+    }
   }
   return st.record || {};
 }
@@ -94,14 +99,14 @@ const strategies = [
 ];
 const N = Number(process.argv[2] || 400);
 for (const s of strategies) {
-  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{} };
+  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
   const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  再起 ${stats.retries}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
 }

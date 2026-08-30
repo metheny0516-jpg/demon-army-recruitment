@@ -514,3 +514,18 @@ button.wide { width: 100%; }
   text-align: right;
 }
 .contrib-num small { font-size: 10px; margin-left: 2px; }
+
+/* ── 履歴書欄（採用画面のカード内）── */
+.resume {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0;
+  padding: 8px 10px;
+  background: #1b1530;
+  border-left: 3px solid var(--gold);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.resume dt { color: var(--dim); white-space: nowrap; }
+.resume dd { margin: 0; }
