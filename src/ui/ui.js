@@ -96,12 +96,13 @@ const UI = {
   contributionPanel(contribution) {
     if (!contribution || contribution.length === 0) return "";
     const maxDealt = Math.max(1, ...contribution.map(c => c.dealt));
-    const topDealer = contribution.find(c => c.dealt > 0);
-    const topTanker = contribution.slice().sort((a, b) => b.taken - a.taken)[0];
+    // 配列の並び順に依存しないよう、最大値を明示的に求める
+    const topDealer = contribution.reduce((b, c) => (c.dealt > 0 && (!b || c.dealt > b.dealt)) ? c : b, null);
+    const topTanker = contribution.reduce((b, c) => (c.taken > 0 && (!b || c.taken > b.taken)) ? c : b, null);
     const rows = contribution.map(c => {
       const badges = [];
       if (topDealer && c.id === topDealer.id) badges.push(`<span class="contrib-badge mvp">👑殊勲</span>`);
-      if (topTanker && c.id === topTanker.id && c.taken > 0 && (!topDealer || c.id !== topDealer.id)) {
+      if (topTanker && c.id === topTanker.id && (!topDealer || c.id !== topDealer.id)) {
         badges.push(`<span class="contrib-badge tank">🛡盾役</span>`);
       }
       if (c.died) badges.push(`<span class="contrib-badge dead">💀戦死</span>`);
@@ -112,6 +113,7 @@ const UI = {
         <div class="contrib-badges">${badges.join("")}</div>
         <div class="contrib-bar"><div class="contrib-fill" style="transform:scaleX(${ratio})"></div></div>
         <span class="contrib-num">${c.dealt}<small>与ダメ</small>${c.kills ? ` / ${c.kills}撃破` : ""}</span>
+        ${c.voice ? `<div class="contrib-voice">「${U.esc(c.voice)}」</div>` : ""}
       </div>`;
     }).join("");
     return `<div class="panel"><h3>戦果</h3><div class="contrib-list">${rows}</div></div>`;

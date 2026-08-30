@@ -31,6 +31,7 @@ const Battle = {
       side,
       name: m.name,
       race: m.race || "人間",
+      tplId: m.tplId || null,
       icon: m.icon || null,
       job: m.job || "",
       maxHp: m.hp,
@@ -248,7 +249,10 @@ const Battle = {
       const taken = hits.filter(e => e.toId === u.id).reduce((s, e) => s + e.dmg, 0);
       const kills = hits.filter(e => e.fromId === u.id && e.dead).length;
       const died = timeline.some(e => e.type === "death" && e.unitId === u.id);
-      return { id: u.id, name: u.name, race: u.race, icon: u.icon, dealt, taken, kills, died };
+      return {
+        id: u.id, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
+        unpaid: !!u.unpaid, dealt, taken, kills, died
+      };
     }).sort((a, b) => b.dealt - a.dealt);
   }
 };

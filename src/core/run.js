@@ -245,7 +245,7 @@ const Game = {
       synergies: result.activeSynergies,
       notes,
       logLength: result.log.length,
-      contribution: result.contribution
+      contribution: this.attachVoices(result.contribution, result.victory)
     };
 
     // 記録の確定とセーブの後始末は必ず最後に行う。先に endRun してから
@@ -259,6 +259,31 @@ const Game = {
       this.save();
     }
     return { result, notes, stageData };
+  },
+
+  // 戦果に応じて各モンスターの一言を選ぶ。
+  // 状況の優先度: 戦死 > 給与未払い > 殊勲 > 何もできず > 被弾最多 > 勝敗。
+  // 画面の再描画で台詞が変わらないよう、ここで一度だけ選んで保存する。
+  attachVoices(contribution, victory) {
+    if (!contribution || contribution.length === 0) return contribution;
+    // 配列の並び順に依存しないよう、最大値を明示的に求める
+    const topDealer = contribution.reduce((b, c) => (c.dealt > 0 && (!b || c.dealt > b.dealt)) ? c : b, null);
+    const topTanker = contribution.reduce((b, c) => (c.taken > 0 && (!b || c.taken > b.taken)) ? c : b, null);
+    for (const c of contribution) {
+      const tpl = MONSTER_TEMPLATES.find(t => t.id === c.tplId);
+      const v = tpl && tpl.voices;
+      if (!v) { c.voice = null; continue; }
+      let key;
+      if (c.died) key = "dead";
+      else if (c.unpaid) key = "unpaid";
+      else if (topDealer && c.id === topDealer.id) key = "mvp";
+      else if (c.dealt === 0) key = "idle";
+      else if (topTanker && c.id === topTanker.id) key = "hurt";
+      else key = victory ? "win" : "lose";
+      const pool = (v[key] && v[key].length) ? v[key] : v[victory ? "win" : "lose"];
+      c.voice = (pool && pool.length) ? U.pick(pool) : null;
+    }
+    return contribution;
   },
 
   rosterAsUnits() {

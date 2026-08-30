@@ -463,8 +463,9 @@ button.wide { width: 100%; }
   display: grid;
   grid-template-columns: auto minmax(0,1fr) auto;
   grid-template-areas:
-    "icon name badges"
-    "bar  bar  num";
+    "icon name  badges"
+    "bar  bar   num"
+    "voice voice voice";
   align-items: center;
   column-gap: 8px;
   row-gap: 4px;
@@ -529,3 +530,15 @@ button.wide { width: 100%; }
 }
 .resume dt { color: var(--dim); white-space: nowrap; }
 .resume dd { margin: 0; }
+
+/* 戦闘後の一言。数字の隣に人格を戻すための行。 */
+.contrib-voice {
+  grid-area: voice;
+  font-size: 12px;
+  color: var(--dim);
+  font-style: italic;
+  border-top: 1px dashed var(--line);
+  padding-top: 5px;
+  margin-top: 2px;
+}
+.contrib-row.died .contrib-voice { color: #d09a9a; }
