@@ -1,0 +1,107 @@
+// バランス検証用のヘッドレスシミュレータ（ブラウザ不要）
+//   使い方: node tools/sim.js
+// 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
+// データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
+const fs = require('fs'), vm = require('vm');
+const files = ['src/data/traits.js','src/data/monsters.js','src/data/synergies.js','src/data/enemies.js',
+               'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
+const store = {};
+const ctx = { console, Math, Date, JSON, localStorage: {
+  getItem: k => (k in store ? store[k] : null),
+  setItem: (k,v) => { store[k]=String(v); }, removeItem: k => { delete store[k]; }
+}};
+vm.createContext(ctx);
+for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename:f});
+const Game = vm.runInContext('Game', ctx);
+const Synergy = vm.runInContext('Synergy', ctx);
+const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
+
+function chooseIndex(apps, roster, strat){
+  if (strat.kind === 'race') {
+    const hit = apps.findIndex(m => m.race === strat.race);
+    if (hit >= 0) return hit;
+  }
+  if (strat.kind === 'cheap') return apps.reduce((b,m,i)=> m.salary < apps[b].salary ? i : b, 0);
+  if (strat.kind === 'caster') {
+    const hit = apps.findIndex(m => m.tags.includes('caster'));
+    if (hit >= 0) return hit;
+  }
+  if (strat.kind === 'elite') {
+    const rich = apps.map((m,i)=>[m,i]).filter(([m])=> m.salary >= 5);
+    if (rich.length) return rich.reduce((b,x)=> power(x[0])>power(b[0])?x:b)[1];
+  }
+  return apps.reduce((b,m,i)=> power(m) > power(apps[b]) ? i : b, 0);
+}
+
+function runOnce(strat, stats){
+  Game.newRun();
+  const st = Game.state;
+  let guard = 0;
+  while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
+    // 採用フェーズ: 枠がある限り採用する
+    while (st.phase === 'recruit' && st.applicants.length) {
+      if (strat.kind === 'pivot') {
+        // ステージ4以降、安い兵を解雇して少数精鋭に切り替える
+        if (st.stage >= 4) {
+          for (const m of st.roster.filter(m => m.salary < 5)) Game.fire(m.uid);
+          while (st.roster.length > 3) {
+            const worst = st.roster.reduce((b,m)=> power(m) < power(b) ? m : b, st.roster[0]);
+            Game.fire(worst.uid);
+          }
+          if (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5)) { Game.skipHire(); break; }
+          Game.hire(st.applicants.map((m,i)=>[m,i]).filter(([m])=>m.salary>=5)
+                    .reduce((b,x)=> power(x[0])>power(b[0])?x:b)[1]);
+          continue;
+        }
+      }
+      if (strat.kind === 'elite') {
+        // 3体埋まっている、または高給の応募者がいない回は見送る（シナジーを壊さない）
+        if (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5)) { Game.skipHire(); break; }
+      }
+      if (!Game.canHire()) {
+        const idx = chooseIndex(st.applicants, st.roster, strat);
+        const weakest = st.roster.reduce((b,m)=> power(m) < power(b) ? m : b, st.roster[0]);
+        if (power(st.applicants[idx]) > power(weakest) * 1.1) Game.fire(weakest.uid);
+        else { Game.skipHire(); break; }
+      }
+      Game.hire(chooseIndex(st.applicants, st.roster, strat));
+    }
+    if (st.phase === 'recruit') Game.skipHire();
+    if (st.phase === 'formation') {
+      st.roster.sort((a,b)=> b.hp - a.hp);           // HP高い順に前へ
+      for (const s of Synergy.active(st.roster)) stats.syn[s.name] = (stats.syn[s.name]||0)+1;
+      const stageNow = st.stage;
+      const out = Game.deploy();
+      if (!out) break;
+      if (st.roster.some(m => m.unpaid)) stats.unpaid++;
+      if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
+      stats.battles++;
+    }
+    if (st.phase === 'result') Game.nextRecruit();
+  }
+  return st.record || {};
+}
+
+const strategies = [
+  {name:'最強優先', kind:'greedy'},
+  {name:'ゴブリン統一', kind:'race', race:'ゴブリン'},
+  {name:'スライム統一', kind:'race', race:'スライム'},
+  {name:'骸骨寄せ', kind:'race', race:'骸骨兵'},
+  {name:'安月給', kind:'cheap'},
+  {name:'魔法職寄せ', kind:'caster'},
+  {name:'精鋭3体', kind:'elite'},
+  {name:'中盤で精鋭に転換', kind:'pivot'},
+];
+const N = Number(process.argv[2] || 400);
+for (const s of strategies) {
+  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{} };
+  const res = [];
+  for (let i=0;i<N;i++) res.push(runOnce(s, stats));
+  const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
+  const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
+  const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
+  const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%`);
+  console.log(`  敗北ステージ: ${loss}`);
+  console.log(`  シナジー出現: ${syn || 'なし'}`);
+}

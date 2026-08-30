@@ -1,0 +1,241 @@
+/* 魔王採用試験（仮） - PC/スマホ両対応。画像素材なしでCSSのみで表現する。 */
+:root {
+  --bg: #14101c;
+  --bg2: #1e1830;
+  --panel: #241d38;
+  --panel2: #2e2545;
+  --line: #453a63;
+  --text: #ece7f5;
+  --dim: #a294c4;
+  --gold: #f0c46a;
+  --red: #e05a5a;
+  --green: #6fd08c;
+  --purple: #a77bf3;
+  --blue: #6fb2e0;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+#app { max-width: 900px; margin: 0 auto; padding: 12px 12px 60px; }
+
+/* ── 共通パーツ ───────────────────────── */
+h1, h2, h3 { margin: 0 0 8px; line-height: 1.3; }
+.muted { color: var(--dim); font-size: 13px; }
+.center { text-align: center; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.row.tight { gap: 6px; }
+.spacer { height: 14px; }
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: var(--panel2);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 16px;
+  transition: filter .12s, transform .06s;
+  min-height: 44px;
+}
+button:hover { filter: brightness(1.25); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: .4; cursor: not-allowed; }
+button.primary { background: linear-gradient(#7b3fc4, #5a2b96); border-color: #9a6be0; font-weight: bold; }
+button.danger { background: #4a2130; border-color: #7d3b4d; color: #f0b0b0; }
+button.ghost { background: transparent; }
+button.small { padding: 4px 10px; min-height: 32px; font-size: 13px; }
+button.wide { width: 100%; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+/* ── ヘッダー（所持金・ステージ） ────────── */
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.hud b { font-size: 15px; }
+.hud .gold { color: var(--gold); }
+
+/* ── モンスターカード ─────────────────── */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.card {
+  background: linear-gradient(160deg, var(--panel2), var(--panel));
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.card.compact { padding: 10px; }
+.card-head { display: flex; align-items: center; gap: 8px; }
+.avatar {
+  width: 40px; height: 40px; flex: 0 0 40px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 22px;
+  background: #3a2f57;
+  border: 1px solid var(--line);
+}
+.card-name { font-weight: bold; font-size: 16px; }
+.card-job { color: var(--dim); font-size: 12px; }
+.pos-badge {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dim);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; text-align: center; }
+.stat { background: #1b1530; border-radius: 6px; padding: 4px 2px; }
+.stat .k { font-size: 10px; color: var(--dim); display: block; }
+.stat .v { font-weight: bold; font-size: 15px; }
+
+.meta { display: flex; gap: 10px; font-size: 12px; flex-wrap: wrap; }
+.meta .salary { color: var(--gold); }
+.meta .loyal { color: var(--blue); }
+.meta .unpaid { color: var(--red); font-weight: bold; }
+
+.traits { display: flex; flex-direction: column; gap: 4px; }
+.trait {
+  background: #322650;
+  border-left: 3px solid var(--purple);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.trait b { color: var(--purple); }
+.quote {
+  font-size: 12px;
+  color: var(--dim);
+  font-style: italic;
+  border-top: 1px dashed var(--line);
+  padding-top: 6px;
+}
+
+/* ── シナジー表示 ───────────────────── */
+.syn-list { display: flex; flex-direction: column; gap: 6px; }
+.syn {
+  background: #2b2350;
+  border: 1px solid var(--purple);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.syn b { color: var(--purple); }
+.syn .d { color: var(--dim); font-size: 12px; }
+
+/* ── 戦闘ログ ───────────────────────── */
+.log {
+  background: #0e0b16;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  max-height: 55vh;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.7;
+  font-family: "SF Mono", Consolas, "Courier New", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.log div { padding: 1px 0; }
+.log .round { color: var(--gold); border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; font-weight: bold; }
+.log .dmg { color: #d8d0ea; }
+.log .trait { color: var(--purple); }
+.log .synergy { color: #ffd479; font-weight: bold; }
+.log .death { color: var(--red); }
+.log .revive { color: var(--green); }
+.log .result-win { color: var(--green); font-weight: bold; font-size: 15px; }
+.log .result-lose { color: var(--red); font-weight: bold; font-size: 15px; }
+
+/* ── 対戦カード表示 ──────────────────── */
+.vs { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; align-items: center; }
+.vs .side { background: #1b1530; border-radius: 8px; padding: 8px; font-size: 13px; }
+.vs .side h4 { margin: 0 0 4px; font-size: 13px; color: var(--dim); }
+.vs .mid { color: var(--red); font-weight: bold; font-size: 18px; }
+.vs ul { margin: 0; padding-left: 16px; }
+
+/* ── タイトル ───────────────────────── */
+.title-screen { text-align: center; padding: 30px 10px; }
+.title-screen h1 {
+  font-size: 34px;
+  letter-spacing: 2px;
+  background: linear-gradient(#f0c46a, #b4632a);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.title-menu { display: flex; flex-direction: column; gap: 10px; max-width: 320px; margin: 24px auto 0; }
+
+/* ── 魔界史 ───────────────────────── */
+.history-item {
+  background: var(--panel2);
+  border-left: 4px solid var(--gold);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.history-item .gen { font-weight: bold; font-size: 15px; color: var(--gold); }
+.history-item.cleared { border-left-color: var(--green); }
+.history-item dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; }
+.history-item dt { color: var(--dim); }
+.history-item dd { margin: 0; }
+
+/* ── 結果バナー ───────────────────── */
+.banner { border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 12px; }
+.banner.win { background: linear-gradient(#2c5a3a, #1d3d28); border: 1px solid var(--green); }
+.banner.lose { background: linear-gradient(#5a2c2c, #3d1d1d); border: 1px solid var(--red); }
+.banner h2 { margin: 0; }
+.notes { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
+.notes li { padding: 2px 0; }
+
+/* ── スマホ ───────────────────────── */
+@media (max-width: 560px) {
+  #app { padding: 8px 8px 50px; }
+  .cards { grid-template-columns: 1fr; }
+  .title-screen h1 { font-size: 26px; }
+  .vs { grid-template-columns: 1fr; }
+  .vs .mid { text-align: center; }
+  .log { max-height: 45vh; font-size: 12px; }
+}
+
+/* 採用画面に出す現部隊の簡易表示（ここから解雇できる） */
+.mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #1b1530;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.mini .muted { font-size: 11px; }
