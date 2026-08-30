@@ -79,7 +79,7 @@ const Battle = {
     });
     for (const s of activeSyn) {
       emit("synergy", {
-        name: s.name, desc: s.desc, emphasis: 3,
+        id: s.id, name: s.name, desc: s.desc, emphasis: 3,
         text: `シナジー発動【${s.name}】 ${s.desc}`, cls: "synergy"
       });
     }

@@ -63,6 +63,7 @@ const Game = {
     // 参照を掴んでいる呼び出し側が古い状態を見続けるのを防ぐため。
     for (const k of Object.keys(st)) delete st[k];
     Object.assign(st, restored);
+    this.migrateState();
     st.retriesLeft = retriesLeft;
     st.retriesUsed = retriesUsed;
     st.gold = Math.floor(st.gold / 2);  // 軍を立て直す出費
@@ -83,8 +84,31 @@ const Game = {
   save() { Storage.saveRun(this.state); },
   load() {
     const s = Storage.loadRun();
-    if (s) this.state = s;
-    return !!s;
+    if (!s || typeof s !== "object") return false;
+    this.state = s;
+    this.migrateState();
+    return true;
+  },
+
+  // 新しい状態項目を追加しても、既存プレイヤーの LocalStorage セーブを壊さない。
+  migrateState() {
+    const st = this.state;
+    if (!st || typeof st !== "object") return;
+    const defaults = {
+      roster: [], applicants: [], hiresLeft: 1, maxPower: 0, raceCounts: {}, uidSeq: 1,
+      lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
+      rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, checkpoint: null
+    };
+    for (const [key, value] of Object.entries(defaults)) {
+      if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
+    }
+    if (!Array.isArray(st.roster)) st.roster = [];
+    if (!Array.isArray(st.applicants)) st.applicants = [];
+    if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
+    for (const m of [...st.roster, ...st.applicants]) {
+      m.unpaid = !!m.unpaid;
+      m.unpaidStreak = m.unpaidStreak || 0;
+    }
   },
 
   stageData() { return ENEMY_STAGES[this.state.stage - 1]; },
@@ -239,8 +263,9 @@ const Game = {
 
     // キングスライム合体（出撃時・永続）
     const kingSyn = SYNERGIES.find(s => s.id === "king_slime");
+    let kingMerged = false;
     if (kingSyn && kingSyn.check(this.rosterAsUnits())) {
-      this.mergeKingSlime(notes);
+      kingMerged = this.mergeKingSlime(notes);
     }
 
     const playerUnits = this.rosterAsUnits().map(m => Battle.makeUnit(m, "player"));
@@ -248,6 +273,9 @@ const Game = {
     const enemyUnits = stageData.units.map(e => Battle.makeUnit(e, "enemy"));
 
     const result = Battle.simulate(playerUnits, enemyUnits);
+    // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
+    // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
+    if (kingMerged) this.addMergeSynergy(result, kingSyn);
 
     // 最大戦力を記録（魔界史用）
     st.maxPower = Math.max(st.maxPower, this.armyPower(st.roster));
@@ -305,7 +333,7 @@ const Game = {
     const topTanker = contribution.reduce((b, c) => (c.taken > 0 && (!b || c.taken > b.taken)) ? c : b, null);
     for (const c of contribution) {
       const tpl = MONSTER_TEMPLATES.find(t => t.id === c.tplId);
-      const v = tpl && tpl.voices;
+      const v = (tpl && tpl.voices) || SPECIAL_MONSTER_VOICES[c.tplId];
       if (!v) { c.voice = null; continue; }
       let key;
       if (c.died) key = "dead";
@@ -320,6 +348,17 @@ const Game = {
     return contribution;
   },
 
+  addMergeSynergy(result, synergy) {
+    const event = {
+      type: "synergy", id: synergy.id, name: synergy.name, desc: synergy.desc, emphasis: 3,
+      text: `シナジー発動【${synergy.name}】 ${synergy.desc}`, cls: "synergy"
+    };
+    const startAt = result.timeline.findIndex(e => e.type === "battle_start");
+    result.timeline.splice(Math.max(0, startAt + 1), 0, event);
+    result.log.unshift({ t: event.text, c: event.cls });
+    result.activeSynergies.unshift(synergy.name);
+  },
+
   rosterAsUnits() {
     // シナジー判定用に mods/traits を持つ簡易ビューを作る
     return this.state.roster;
@@ -328,7 +367,7 @@ const Game = {
   mergeKingSlime(notes) {
     const st = this.state;
     const slimes = st.roster.filter(m => m.race === "スライム").slice(0, 3);
-    if (slimes.length < 3) return;
+    if (slimes.length < 3) return false;
     const king = {
       uid: st.uidSeq++,
       tplId: "king_slime",
@@ -355,6 +394,7 @@ const Game = {
     st.roster.splice(Math.min(idx, st.roster.length), 0, king);
     st.raceCounts["キングスライム"] = (st.raceCounts["キングスライム"] || 0) + 1;
     notes.push(`スライム3体が合体して ${king.name} が誕生した！！`);
+    return true;
   },
 
   paySalaries(notes) {
