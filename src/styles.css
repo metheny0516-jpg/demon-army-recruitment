@@ -51,7 +51,7 @@ button:disabled { opacity: .4; cursor: not-allowed; }
 button.primary { background: linear-gradient(#7b3fc4, #5a2b96); border-color: #9a6be0; font-weight: bold; }
 button.danger { background: #4a2130; border-color: #7d3b4d; color: #f0b0b0; }
 button.ghost { background: transparent; }
-button.small { padding: 4px 10px; min-height: 32px; font-size: 13px; }
+button.small { padding: 4px 10px; min-height: 40px; font-size: 13px; }
 button.wide { width: 100%; }
 
 .panel {
@@ -542,3 +542,14 @@ button.wide { width: 100%; }
   margin-top: 2px;
 }
 .contrib-row.died .contrib-voice { color: #d09a9a; }
+
+/* 並び替えと解雇を左右の端に離す（誤タップで取り消せない解雇が起きるのを防ぐ） */
+.card-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+/* 決着表示中は「VS」帯を隠す（同じ位置に重なって読めなくなるため） */
+.scene.decided .scene-mid { opacity: 0; }

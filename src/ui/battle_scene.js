@@ -220,6 +220,9 @@ const BattleScene = {
   banner(victory) {
     const s = document.getElementById("scene");
     if (!s) return;
+    // 決着表示は画面中央に出るため、同じ位置にある「VS」帯を隠す。
+    // 隠さないと「勝 VS 利」のように文字が重なって読めなくなる。
+    s.classList.add("decided");
     const b = document.createElement("div");
     b.className = "scene-result " + (victory ? "win" : "lose");
     b.textContent = victory ? "勝　利" : "敗　北";

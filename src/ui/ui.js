@@ -123,7 +123,7 @@ const UI = {
     const act = Synergy.active(roster);
     if (act.length === 0) {
       return `<div class="panel"><h3>発動中のシナジー</h3>
-        <div class="muted">まだ何も発動していない。種族や職業、給与額の組み合わせで何かが起きるかもしれない……</div></div>`;
+        <div class="muted">まだ何も発動していない。種族、頭数、給与額の組み合わせで何かが起きるかもしれない……</div></div>`;
     }
     return `<div class="panel"><h3>発動中のシナジー</h3><div class="syn-list">${
       act.map(s => `<div class="syn"><b>${U.esc(s.name)}</b><div class="d">${U.esc(s.desc)}</div></div>`).join("")
@@ -206,9 +206,12 @@ const UI = {
     const st = Game.state;
     const cards = st.roster.map((m, i) => this.monsterCard(m, {
       badge: i === 0 ? "最前列（狙われやすい）" : `${i + 1}番目`,
-      footer: `<div class="row tight">
-        <button class="small" data-action="up" data-index="${i}" ${i === 0 ? "disabled" : ""}>▲ 前へ</button>
-        <button class="small" data-action="down" data-index="${i}" ${i === st.roster.length - 1 ? "disabled" : ""}>▼ 後ろへ</button>
+      // 解雇は取り消せない操作なので、並び替えボタンとは反対の端に離して置く
+      footer: `<div class="card-actions">
+        <div class="row tight">
+          <button class="small" data-action="up" data-index="${i}" ${i === 0 ? "disabled" : ""}>▲ 前へ</button>
+          <button class="small" data-action="down" data-index="${i}" ${i === st.roster.length - 1 ? "disabled" : ""}>▼ 後ろへ</button>
+        </div>
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
       </div>`
     })).join("");
