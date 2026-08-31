@@ -127,6 +127,26 @@ sim側がそのフェーズを処理できず**無限ループして空回りす
 そのせいで「敗北してもセーブが残り続ける」実バグを長期間見逃した。
 テストを書いたら「わざと壊したら落ちるか」を一度確認すること。
 
+### 3-4b. テストは「UIの形」ではなく「守りたい性質」を測る
+
+UIを作り替えたとき、ボタン名を名指ししていたテストが**静かに無意味になった**実例が2つ。
+
+- `tier0` は `[data-action="down"]` と `[data-action="fire"]` の距離を測っていた。
+  出撃隊／控えの分離で同じカードに両方が並ばなくなり、要素が見つからず落ちた。
+  → 今は「`.danger` のボタンは他のボタンから20px以上離れている」という
+  **性質そのもの**を測る。並び替え同士が近いのは押し間違えても取り返せるので対象外。
+- `portrait` は「オーガは一覧に無いから絵文字」を対照群にしていた。
+  オーガの絵が増えた瞬間にこの前提が壊れた。
+  → 今は `PORTRAITS` に載っていないことが保証される架空のidを実行時に作る。
+
+**実在のコンテンツを対照群に使わない。** 増えた瞬間にテストが嘘になる。
+
+もう1点。`ok()` が失敗しても `process.exit(errs.length?1:0)` で握り潰していたテストがあり、
+`run-all.sh` が `tail -1` しか出さないため画面上は `✓ JSエラーなし` に見えていた。
+今は `ok()` が `process.exitCode=1` を立て、終了コードにも反映される。
+**テストを足すときは `ok()` を使い、独自に `process.exit` する場合は
+`process.exitCode` を必ず巻き込むこと。**
+
 ### 3-5. 立ち絵は一覧方式（404を出さないため）
 
 最初は「PNGがあれば自動で使う」方式にしたが、未収録の7種族に対して
@@ -260,21 +280,32 @@ node tools/test-battle-happenings.js
 ### ブラウザ回帰テスト（14本）
 
 ```bash
-npm install playwright          # 初回のみ
+PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright   # 初回のみ
 sh tools/browser-tests/run-all.sh
 ```
 
-Chromium が既定の場所にない場合:
+`run-all.sh` は `/opt/pw-browsers/chromium-*/chrome-linux/chrome` を自動で探す。
+別の場所にある場合だけ `CHROME` で指定する:
 
 ```bash
 CHROME=/path/to/chrome sh tools/browser-tests/run-all.sh
 ```
 
+**npm が入れた playwright と同梱ブラウザの版が食い違うと**
+「Please run `npx playwright install`」で全滅する。`npx playwright install` は
+走らせず（帯域も容量も食う）、`CHROME` で既存のバイナリを指すこと。
+
+落ちたテストは `✗ FAILED` と落ちた行を表示し、`run-all.sh` 自体も 1 で終了する。
+最後に `✓ 全テスト通過` が出たときだけ通ったと見なしてよい。
+
 個別に走らせるときは `GAME` にリポジトリの絶対パスを渡す:
 
 ```bash
-GAME=$(pwd) node tools/browser-tests/smoke.js
+GAME=$(pwd) CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
+  node tools/browser-tests/smoke.js
 ```
+
+スクリーンショットは `.screenshots/` に出る（`.gitignore` 済み）。
 
 | テスト | 見ているもの |
 |---|---|

@@ -74,5 +74,5 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
   await page.screenshot({ path: process.env.SP + '/retry-final.png', fullPage: true });
 
   console.log(errs.length ? '\n✗ JSエラー: '+errs.join(', ') : '\n✓ JSエラーなし');
-  await b.close(); process.exit(errs.length?1:0);
+  await b.close(); process.exit(errs.length || process.exitCode ? 1 : 0);
 })().catch(e => { console.error('✗ 失敗:', e.message); process.exit(1); });

@@ -63,5 +63,5 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }
   console.log(errors.length ? '\n✗ JSエラー:\n' + errors.join('\n') : '\n✓ JSエラーなし');
   await browser.close();
-  process.exit(errors.length ? 1 : 0);
+  process.exit(errors.length || process.exitCode ? 1 : 0);
 })().catch(e => { console.error('✗ 失敗:', e.message); process.exit(1); });

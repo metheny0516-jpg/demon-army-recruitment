@@ -1,5 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const ok=(c,m)=>console.log((c?'  ✓ ':'  ✗ ')+m);
+const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m); };
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await b.newPage({ viewport: { width: 390, height: 844 } });
@@ -20,5 +20,5 @@ const ok=(c,m)=>console.log((c?'  ✓ ':'  ✗ ')+m);
   await page.click('[data-action="title"]'); await page.waitForTimeout(120);
   ok(await page.locator('[data-action="new"]').count()===1, 'タイトルに戻れた');
   console.log(errs.length?'\n✗ '+errs.join(', '):'\n✓ JSエラーなし');
-  await b.close(); process.exit(errs.length?1:0);
+  await b.close(); process.exit(errs.length || process.exitCode ? 1 : 0);
 })().catch(e=>{console.error('✗',e.message);process.exit(1);});

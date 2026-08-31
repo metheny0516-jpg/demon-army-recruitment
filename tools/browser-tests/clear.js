@@ -28,5 +28,5 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   await page.screenshot({ path: process.env.SP + '/shot-clear.png', fullPage: true });
   console.log(errors.length ? '✗ JSエラー: ' + errors.join(', ') : '✓ JSエラーなし');
   await browser.close();
-  process.exit(errors.length || !win ? 1 : 0);
+  process.exit(errors.length || !win || process.exitCode ? 1 : 0);
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

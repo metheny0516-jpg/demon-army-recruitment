@@ -1,0 +1,8 @@
+# playwright を入れるとここに落ちる（npm install --no-save でも .bin は残る）
+node_modules/
+package-lock.json
+
+# ブラウザテストが吐くスクリーンショット。中身は毎回変わるのでコミットしない。
+# （assets/monsters/*.png は成果物なので追跡対象のまま）
+.screenshots/
+/*.png

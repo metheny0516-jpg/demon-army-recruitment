@@ -12,11 +12,16 @@ const ok=(c,m)=>{ if(!c) process.exitCode = 1; console.log((c?'  ✓ ':'  ✗ ')
   page.on('requestfailed', r => { if (/assets\/monsters/.test(r.url())) notFound.push(r.url().split('/').pop()); });
   await page.goto('file://' + process.env.GAME + '/index.html');
   await page.click('[data-action="new"]');
-  await page.evaluate(() => {
+  // 「一覧に無い種族」は実在の種族を名指しすると、絵が増えた瞬間にテストが壊れる。
+  // PORTRAITS に載っていないことが保証される架空のidを対照群として使う。
+  const absent = await page.evaluate(() => {
+    let id = 'zz_no_art';
+    while (PORTRAITS.includes(id)) id += 'z';
     const mk=(tplId,race)=>({uid:Math.random(),tplId,name:race,race,job:'試験',hp:20,atk:5,def:2,spd:5,
       salary:2,loyalty:50,traits:[],tags:[],quote:'',prevJob:'前職',motive:'志望',flaw:'短所',unpaid:false});
-    Game.state.applicants=[mk('goblin','ゴブリン'),mk('ogre','オーガ'),mk('slime','スライム')];
+    Game.state.applicants=[mk('goblin','ゴブリン'),mk(id,'名も無き何か'),mk('slime','スライム')];
     Game.state.phase='recruit'; App.render();
+    return id;
   });
   await page.waitForTimeout(600);
   const a = await page.evaluate(() => Array.from(document.querySelectorAll('.avatar')).map(el=>({
@@ -25,7 +30,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode = 1; console.log((c?'  ✓ ':'  ✗ ')
   })));
   console.log(`▼ MODE=${MODE}`);
   ok(a.every(x=>x.w===54&&x.h===72), '採用画面は3:4の証明写真の形 (54x72)');
-  ok(a[1].noimg && !a[1].img, 'オーガ（一覧に無い）は常に絵文字 ('+a[1].fb+')');
+  ok(a[1].noimg && !a[1].img, `一覧に無い種族(${absent})は常に絵文字 (`+a[1].fb+')');
 
   if (MODE === 'present') {
     ok(a[0].img && a[2].img, 'ゴブリン・スライムは立ち絵が表示される');
@@ -33,7 +38,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode = 1; console.log((c?'  ✓ ':'  ✗ ')
   } else if (MODE === 'broken') {
     ok(!a[2].img && a[2].noimg, 'ファイルが無いスライムは絵文字へ安全に落ちる ('+a[2].fb+')');
     const miss = await page.evaluate(()=>Array.from(UI.missingPortraits));
-    ok(miss.includes('slime'), '失敗を記憶して以後요求しない: '+JSON.stringify(miss));
+    ok(miss.includes('slime'), '失敗を記憶して以後要求しない: '+JSON.stringify(miss));
   } else {
     ok(!a[0].img && !a[2].img, '一覧が空なので全員が絵文字');
     ok(notFound.length===0, '未登録の種族に対して404を飛ばさない');

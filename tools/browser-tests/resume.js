@@ -26,5 +26,5 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   console.log(`編成画面のスクロール量: ${h2}px (${(h2/844).toFixed(2)}画面分)`);
 
   console.log(errs.length?'\n✗ '+errs.join(', '):'\n✓ JSエラーなし');
-  await b.close(); process.exit(errs.length?1:0);
+  await b.close(); process.exit(errs.length || process.exitCode ? 1 : 0);
 })().catch(e=>{console.error('✗',e.message);process.exit(1);});

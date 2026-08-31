@@ -34,5 +34,5 @@ const ok = (condition, message) => console.log((condition ? '  ✓ ' : '  ✗ ')
 
   console.log(errors.length ? '✗ JSエラー: ' + errors.join(', ') : '✓ JSエラーなし');
   await browser.close();
-  process.exit(errors.length ? 1 : 0);
+  process.exit(errors.length || process.exitCode ? 1 : 0);
 })().catch(error => { console.error('✗', error.message); process.exit(1); });
