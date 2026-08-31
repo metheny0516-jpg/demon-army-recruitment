@@ -64,15 +64,16 @@ const UI = {
   hud() {
     const st = Game.state;
     const sd = Game.stageData();
-    const salary = st.roster.reduce((s, m) => s + m.salary, 0);
+    const salary = Game.salaryTotal();
     return `<div class="hud">
       <span>第 <b>${st.generation}</b> 代魔王軍</span>
       <span>作戦 <b>${st.turn}</b></span>
       <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
       <span>警戒度 <b>${st.alert}</b></span>
       <span class="gold">所持金 <b>${st.gold}G</b></span>
-      <span>給与総額 <b>${salary}G</b>/戦</span>
-      <span>部隊 <b>${st.roster.length}/5</b></span>
+      <span>軍維持費 <b>${salary}G</b>/戦</span>
+      <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
+      <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
       <span class="muted">${U.esc(sd.region)}</span>
     </div>`;
   },
@@ -170,7 +171,7 @@ const UI = {
 
   enemyPreview() {
     const sd = Game.stageData();
-    const mine = Game.state.roster;
+    const mine = Game.activeRoster();
     return `<div class="panel">
       <h3>${U.esc(sd.missionTitle || "次の戦い")}：${U.esc(sd.army)}
         <span class="muted">（${U.esc(sd.region)}／報酬 ${sd.reward}G）</span></h3>
@@ -198,7 +199,7 @@ const UI = {
         <button class="wide ghost" data-action="history">魔界史（${history.length}代の記録）</button>
       </div>
       <div class="spacer"></div>
-      <p class="muted">部隊は最大5体。勝てば報酬、しかし毎戦の給与支払いが待っている。<br>敗北すれば軍団は消滅し、歴史だけが残る。</p>
+      <p class="muted">最大20体の軍団から5体を選抜。勝てば報酬、しかし毎戦の維持費が待っている。<br>敗北すれば軍団は消滅し、歴史だけが残る。</p>
     </div>`);
   },
 
@@ -208,11 +209,11 @@ const UI = {
     const cards = st.applicants.map((m, i) => this.monsterCard(m, {
       resume: true,
       footer: `<button class="primary wide" data-action="hire" data-index="${i}" ${full ? "disabled" : ""}>
-        ${full ? "部隊が満員（誰かを解雇せよ）" : `採用する（給与 ${m.salary}G）`}</button>`
+        ${full ? "軍団が満員（誰かを解雇せよ）" : `採用する（給与 ${m.salary}G）`}</button>`
     })).join("");
     // 満員でも応募者を逃さず入れ替えられるよう、この画面から解雇できるようにする
     const rosterPanel = st.roster.length ? `<div class="panel">
-      <h3>現在の部隊 <span class="muted">（${st.roster.length}/5）</span></h3>
+      <h3>現在の軍団 <span class="muted">（${st.roster.length}/${Game.MAX_ARMY}）</span></h3>
       <div class="muted">枠を空けたければ、ここで解雇できる。</div>
       <div class="spacer" style="height:8px"></div>
       <div class="row tight">${st.roster.map(m => `
@@ -241,7 +242,7 @@ const UI = {
       </div>
       <div class="spacer"></div>
       ${rosterPanel}
-      ${this.synergyPanel(st.roster)}`);
+      ${this.synergyPanel(Game.activeRoster())}`);
   },
 
   mission() {
@@ -263,10 +264,11 @@ const UI = {
         <p>${U.esc(m.description)}</p>
         <dl class="mission-economy">
           <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
-          <dt>現在の給与</dt><dd>${salary}G</dd>
+          <dt>現在の維持費</dt><dd>${salary}G</dd>
           <dt>差引見込</dt><dd class="${net >= 0 ? "positive" : "negative"}">${net >= 0 ? "+" : ""}${net}G</dd>
           <dt>作戦結果</dt><dd>${U.esc(consequence)}</dd>
           <dt>警戒度</dt><dd>+${m.alertDelta}</dd>
+          <dt>軍勢警戒</dt><dd>${m.armyPressure ? `敵能力 +${m.armyPressure}%` : "なし"}</dd>
         </dl>
         <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
       </div>`;
@@ -281,30 +283,42 @@ const UI = {
 
   formation() {
     const st = Game.state;
-    const cards = st.roster.map((m, i) => this.monsterCard(m, {
+    const active = Game.activeRoster();
+    const activeIds = new Set(st.activeUids);
+    const reserves = st.roster.filter(m => !activeIds.has(m.uid));
+    const activeCards = active.map((m, i) => this.monsterCard(m, {
       badge: i === 0 ? "最前列（狙われやすい）" : `${i + 1}番目`,
-      // 解雇は取り消せない操作なので、並び替えボタンとは反対の端に離して置く
       footer: `<div class="card-actions">
         <div class="row tight">
-          <button class="small" data-action="up" data-index="${i}" ${i === 0 ? "disabled" : ""}>▲ 前へ</button>
-          <button class="small" data-action="down" data-index="${i}" ${i === st.roster.length - 1 ? "disabled" : ""}>▼ 後ろへ</button>
+          <button class="small" data-action="up" data-uid="${m.uid}" ${i === 0 ? "disabled" : ""}>▲ 前へ</button>
+          <button class="small" data-action="down" data-uid="${m.uid}" ${i === active.length - 1 ? "disabled" : ""}>▼ 後ろへ</button>
         </div>
+        <button class="small" data-action="toggledeploy" data-uid="${m.uid}">控えへ</button>
+      </div>`
+    })).join("");
+    const reserveCards = reserves.map(m => this.monsterCard(m, {
+      badge: "控え（兵站費1G）",
+      footer: `<div class="card-actions">
+        <button class="small primary" data-action="toggledeploy" data-uid="${m.uid}"
+          ${active.length >= Game.MAX_DEPLOY ? "disabled" : ""}>出撃隊へ</button>
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
       </div>`
     })).join("");
-    const empty = st.roster.length === 0;
+    const empty = active.length === 0;
     this.set(`${this.hud()}
       <div class="panel">
-        <h2>⚔ 部隊編成 <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || "作戦未選択")}</span></h2>
-        <div class="muted">並び順が配置。上にいるほど敵に狙われやすい。壁役を前に、魔法使いを後ろに。</div>
+        <h2>⚔ 出撃隊編成 <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || "作戦未選択")}</span></h2>
+        <div class="muted">軍団${st.roster.length}体から最大5体を選抜。並びの上ほど狙われやすい。控えは1体1Gの兵站費。</div>
       </div>
-      ${empty ? `<div class="panel"><b style="color:var(--red)">部隊が空だ。</b> このまま出撃すれば即敗北する。</div>` : ""}
-      <div class="cards">${cards}</div>
+      ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 控えから最低1体を選べ。</div>` : ""}
+      <div class="army-section"><h3>出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
+      <div class="army-section reserve-section"><h3>控え ${reserves.length}/${Game.MAX_ARMY - active.length}</h3>
+        <div class="cards">${reserveCards || `<div class="muted">控えはいない</div>`}</div></div>
       <div class="spacer"></div>
-      ${this.synergyPanel(st.roster)}
+      ${this.synergyPanel(active)}
       ${this.enemyPreview()}
       <button class="primary wide" data-action="deploy" ${empty ? "disabled" : ""}>出撃する</button>
-      ${empty ? `<div class="spacer"></div><button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}`);
+      ${st.roster.length === 0 ? `<div class="spacer"></div><button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}`);
   },
 
   battle(result, stageData) {
@@ -331,7 +345,7 @@ const UI = {
         <div class="muted">この者たちは軍を去った。次の面接で ${st.lastFallen.length} 名まで補充できる。</div>
       </div>` : ""}
       <div class="panel">
-        <h3>現在の部隊</h3>
+        <h3>現在の軍団</h3>
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
       </div>
       <button class="primary wide" data-action="afterresult">次へ</button>`);
@@ -404,6 +418,7 @@ const UI = {
           <dt>王国攻略</dt><dd>${record.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>最終警戒度</dt><dd>${record.alert || 0}</dd>
           <dt>最大戦力</dt><dd>${record.maxPower}</dd>
+          <dt>最大兵員数</dt><dd>${record.maxArmySize || (record.finalRoster || []).length}体</dd>
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
           <dt>死因</dt><dd>${U.esc(record.cause)}</dd>
@@ -428,6 +443,7 @@ const UI = {
         <dl>
           <dt>在位</dt><dd>${r.reignYears}年</dd>
           <dt>最大戦力</dt><dd>${r.maxPower}</dd>
+          <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
           <dt>勝利数</dt><dd>${r.battlesWon || 0}戦</dd>
           <dt>王国攻略</dt><dd>${r.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>主力種族</dt><dd>${U.esc(r.mainRace)}</dd>

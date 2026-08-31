@@ -609,6 +609,16 @@ button.wide { width: 100%; }
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
+
+.army-section { margin-top: 14px; }
+.army-section > h3 { margin: 0 0 8px; }
+.reserve-section {
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, .12);
+}
+.reserve-section .card { opacity: .88; }
 .mission-card {
   background: #171226;
   border: 1px solid var(--line);

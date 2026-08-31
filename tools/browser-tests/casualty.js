@@ -18,6 +18,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
       { uid:902, tplId:'ogre', name:'生存者', race:'オーガ', job:'', hp:400, atk:60, def:20, spd:9,
         salary:2, loyalty:70, traits:[], tags:[], quote:'', unpaid:false }
     ];
+    Game.state.activeUids = Game.state.roster.map(m => m.uid);
     Game.state.stage = 1; Game.state.gold = 50; Game.state.phase='formation'; App.render();
     return Game.state.roster.map(m=>m.name);
   });

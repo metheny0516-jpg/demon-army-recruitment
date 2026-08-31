@@ -55,6 +55,7 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
     Game.state.conquest = 7;
     Game.state.turn = 8;
     if(!Game.state.roster.length) Game.state.roster.push({uid:1,name:'囮',race:'スライム',job:'',hp:1,atk:1,def:0,spd:1,salary:1,loyalty:50,traits:[],tags:[],quote:'',unpaid:false});
+    Game.state.activeUids = Game.state.roster.slice(0, 5).map(m => m.uid);
     Game.state.roster.forEach(m => { m.hp=1; m.atk=1; m.def=0; });
     Game.state.phase='formation'; App.render();
   });

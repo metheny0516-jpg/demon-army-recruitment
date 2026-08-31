@@ -17,6 +17,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
       hp:40, atk:16, def:4, spd:7-i*0.1, salary:3, loyalty:70,
       traits:['coward','pack'], tags:[], quote:'', unpaid:false
     }));
+    Game.state.activeUids = Game.state.roster.map(m => m.uid);
     Game.state.stage = 5;
     Game.state.conquest = 4;
     Game.state.turn = 5;

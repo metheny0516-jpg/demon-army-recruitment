@@ -38,6 +38,7 @@ function runOnce(strat, stats){
   const st = Game.state;
   let guard = 0;
   while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
+    stats.maxArmy = Math.max(stats.maxArmy, st.roster.length);
     // 採用フェーズ: 枠がある限り採用する
     while (st.phase === 'recruit' && st.applicants.length) {
       // 種族狙いの戦略は、目当てが居らず金に余裕があれば求人を出し直す
@@ -88,8 +89,10 @@ function runOnce(strat, stats){
       Game.selectMission(index >= 0 ? index : 2);
     }
     if (st.phase === 'formation') {
-      st.roster.sort((a,b)=> b.hp - a.hp);           // HP高い順に前へ
-      for (const s of Synergy.active(st.roster)) stats.syn[s.name] = (stats.syn[s.name]||0)+1;
+      const best = st.roster.slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
+      best.sort((a,b)=> b.hp - a.hp);                // 強い5体を選び、HP高い順に前へ
+      st.activeUids = best.map(m => m.uid);
+      for (const s of Synergy.active(Game.activeRoster())) stats.syn[s.name] = (stats.syn[s.name]||0)+1;
       const stageNow = st.stage;
       const out = Game.deploy();
       if (!out) break;
@@ -131,14 +134,14 @@ const strategies = [
 ];
 const N = Number(process.argv[2] || 400);
 for (const s of strategies) {
-  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0 };
+  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, maxArmy:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
   const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
 }

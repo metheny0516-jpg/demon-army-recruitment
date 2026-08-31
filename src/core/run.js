@@ -7,6 +7,8 @@ const Game = {
 
   RETRIES_PER_RUN: 1,
   MAX_CONQUEST: ENEMY_STAGES.length,
+  MAX_ARMY: 20,
+  MAX_DEPLOY: 5,
 
   newRun() {
     const history = Storage.loadHistory();
@@ -22,10 +24,12 @@ const Game = {
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       gold: 10,
       roster: [],
+      activeUids: [],
       applicants: [],
       phase: "recruit",
       hiresLeft: 2,
       maxPower: 0,
+      maxArmySize: 0,
       raceCounts: {},
       uidSeq: 1,
       lastBattle: null,
@@ -120,7 +124,7 @@ const Game = {
       if (st.phase === "formation") st.phase = "mission";
     }
     const defaults = {
-      roster: [], applicants: [], hiresLeft: 1, maxPower: 0, raceCounts: {}, uidSeq: 1,
+      roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0, raceCounts: {}, uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
@@ -132,12 +136,20 @@ const Game = {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
     }
     if (!Array.isArray(st.roster)) st.roster = [];
+    if (!Array.isArray(st.activeUids)) st.activeUids = st.roster.slice(0, this.MAX_DEPLOY).map(m => m.uid);
     if (!Array.isArray(st.applicants)) st.applicants = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
     if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
     if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
     }
+    const rosterIds = new Set(st.roster.map(m => m.uid));
+    st.activeUids = st.activeUids.filter((uid, i, ids) => rosterIds.has(uid) && ids.indexOf(uid) === i)
+      .slice(0, this.MAX_DEPLOY);
+    if (st.activeUids.length === 0 && st.roster.length) {
+      st.activeUids = st.roster.slice(0, this.MAX_DEPLOY).map(m => m.uid);
+    }
+    st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
     st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
     for (const m of [...st.roster, ...st.applicants]) {
       m.unpaid = !!m.unpaid;
@@ -151,7 +163,13 @@ const Game = {
   },
 
   salaryTotal() {
-    return this.state.roster.reduce((sum, m) => sum + m.salary, 0);
+    const active = new Set(this.state.activeUids);
+    return this.state.roster.reduce((sum, m) => sum + (active.has(m.uid) ? m.salary : 1), 0);
+  },
+
+  activeRoster() {
+    const byId = new Map(this.state.roster.map(m => [m.uid, m]));
+    return this.state.activeUids.map(uid => byId.get(uid)).filter(Boolean);
   },
 
   // 応募者の質は征服だけでなく経過作戦でも上がる。ただし寄り道だけで
@@ -179,7 +197,10 @@ const Game = {
     const st = this.state;
     const baseIndex = U.clamp(st.conquest + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1);
     const base = ENEMY_STAGES[baseIndex];
-    const scale = type.enemyMult * (1 + st.alert * 0.02);
+    // 大軍は選抜の自由度が高いぶん敵にも察知される。隠し補正にせず
+    // mission.armyPressure として作戦カードへ渡し、解雇・維持の判断材料にする。
+    const armyPressure = Math.min(6, Math.max(0, st.roster.length - this.MAX_DEPLOY) * 2);
+    const scale = type.enemyMult * (1 + st.alert * 0.02) * (1 + armyPressure / 100);
     const stat = (value, min) => Math.max(min, Math.round(value * scale));
     const units = base.units.map((unit, index) => ({
       ...unit,
@@ -208,6 +229,7 @@ const Game = {
       alertDelta: type.alertDelta,
       conquestDelta: type.conquestDelta,
       loyaltyDelta: type.loyaltyDelta,
+      armyPressure,
       baseStage: base.stage,
       units
     };
@@ -336,7 +358,7 @@ const Game = {
   },
 
   // ── 採用・解雇・編成 ──────────────────────
-  canHire() { return this.state.roster.length < 5; },
+  canHire() { return this.state.roster.length < this.MAX_ARMY; },
 
   hire(index) {
     const st = this.state;
@@ -344,6 +366,8 @@ const Game = {
     const m = st.applicants[index];
     if (!m) return false;
     st.roster.push(m);
+    st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
+    if (st.activeUids.length < this.MAX_DEPLOY) st.activeUids.push(m.uid);
     st.raceCounts[m.race] = (st.raceCounts[m.race] || 0) + 1;
     st.hiresLeft = (st.hiresLeft || 1) - 1;
     // 設立期など採用枠が残っていれば、続けて次の応募者を面接する
@@ -364,6 +388,30 @@ const Game = {
   fire(uid) {
     const st = this.state;
     st.roster = st.roster.filter(m => m.uid !== uid);
+    st.activeUids = st.activeUids.filter(id => id !== uid);
+    this.save();
+  },
+
+  toggleDeploy(uid) {
+    const st = this.state;
+    if (!st.roster.some(m => m.uid === uid)) return false;
+    const index = st.activeUids.indexOf(uid);
+    if (index >= 0) {
+      st.activeUids.splice(index, 1);
+    } else {
+      if (st.activeUids.length >= this.MAX_DEPLOY) return false;
+      st.activeUids.push(uid);
+    }
+    this.save();
+    return true;
+  },
+
+  moveDeployed(uid, dir) {
+    const r = this.state.activeUids;
+    const index = r.indexOf(uid);
+    const next = index + dir;
+    if (index < 0 || next < 0 || next >= r.length) return;
+    [r[index], r[next]] = [r[next], r[index]];
     this.save();
   },
 
@@ -378,7 +426,7 @@ const Game = {
   // ── 出撃と戦闘処理 ────────────────────────
   deploy() {
     const st = this.state;
-    if (st.roster.length === 0) return null;
+    if (this.activeRoster().length === 0) return null;
     // 旧セーブやテストが直接 formation を作った場合だけ、次の侵攻作戦を補う。
     if (!st.selectedMission) {
       const invade = MISSION_TYPES.find(m => m.id === "invade");
@@ -403,7 +451,7 @@ const Game = {
     if (kingMerged) this.addMergeSynergy(result, kingSyn);
 
     // 最大戦力を記録（魔界史用）
-    st.maxPower = Math.max(st.maxPower, this.armyPower(st.roster));
+    st.maxPower = Math.max(st.maxPower, this.armyPower(this.activeRoster()));
 
     const goldBefore = st.gold;
     if (result.victory) {
@@ -513,12 +561,12 @@ const Game = {
 
   rosterAsUnits() {
     // シナジー判定用に mods/traits を持つ簡易ビューを作る
-    return this.state.roster;
+    return this.activeRoster();
   },
 
   mergeKingSlime(notes) {
     const st = this.state;
-    const slimes = st.roster.filter(m => m.race === "スライム").slice(0, 3);
+    const slimes = this.activeRoster().filter(m => m.race === "スライム").slice(0, 3);
     if (slimes.length < 3) return false;
     const king = {
       uid: st.uidSeq++,
@@ -544,6 +592,9 @@ const Game = {
     const idx = st.roster.findIndex(m => removed.has(m.uid));
     st.roster = st.roster.filter(m => !removed.has(m.uid));
     st.roster.splice(Math.min(idx, st.roster.length), 0, king);
+    const activeIndex = Math.min(...slimes.map(m => st.activeUids.indexOf(m.uid)).filter(i => i >= 0));
+    st.activeUids = st.activeUids.filter(uid => !removed.has(uid));
+    st.activeUids.splice(Math.min(activeIndex, st.activeUids.length), 0, king.uid);
     st.raceCounts["キングスライム"] = (st.raceCounts["キングスライム"] || 0) + 1;
     notes.push(`スライム3体が合体して ${king.name} が誕生した！！`);
     return true;
@@ -551,7 +602,7 @@ const Game = {
 
   paySalaries(notes) {
     const st = this.state;
-    const total = st.roster.reduce((s, m) => s + m.salary, 0);
+    const total = this.salaryTotal();
     if (total === 0) return;
     if (st.gold >= total) {
       st.gold -= total;
@@ -594,6 +645,7 @@ const Game = {
 
     const uids = new Set(fallen.map(c => c.uid));
     st.roster = st.roster.filter(m => !uids.has(m.uid));
+    st.activeUids = st.activeUids.filter(uid => !uids.has(uid));
     st.pendingVacancies = fallen.length;
     st.fallenTotal = (st.fallenTotal || 0) + fallen.length;
     st.lastFallen = fallen.map(c => ({ name: c.name, race: c.race }));
@@ -611,6 +663,7 @@ const Game = {
     if (leaving.length > 0) {
       const ids = new Set(leaving.map(m => m.uid));
       st.roster = st.roster.filter(m => !ids.has(m.uid));
+      st.activeUids = st.activeUids.filter(uid => !ids.has(uid));
     }
   },
 
@@ -637,6 +690,7 @@ const Game = {
       fallenTotal: st.fallenTotal || 0,
       fallenRoll: (st.fallenRoll || []).map(f => f.name),
       finalRoster: st.roster.map(m => ({ name: m.name, race: m.race, job: m.job })),
+      maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
       date: new Date().toISOString().slice(0, 10)
     };
     st.record = record;

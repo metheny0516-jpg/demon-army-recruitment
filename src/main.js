@@ -68,11 +68,15 @@ const App = {
         return this.render();
 
       case "up":
-        Game.moveUnit(Number(data.index), -1);
+        Game.moveDeployed(Number(data.uid), -1);
         return this.render();
 
       case "down":
-        Game.moveUnit(Number(data.index), 1);
+        Game.moveDeployed(Number(data.uid), 1);
+        return this.render();
+
+      case "toggledeploy":
+        Game.toggleDeploy(Number(data.uid));
         return this.render();
 
       case "fire":
