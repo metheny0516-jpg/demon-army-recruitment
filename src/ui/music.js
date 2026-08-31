@@ -230,14 +230,13 @@ const Music = {
     for (const note of this.BASS_PATTERN) {
       if (note.step !== step || L.bass.density < note.p) continue;
       if (this.slacking(.85)) continue;
-      this.voice(this.freq(note.deg, -1), .26, {
-        type: "triangle", gain: L.bass.gain * .16, filter: 620, detune: this.wobble(), at
-      });
+      this.marchNote(this.freq(note.deg, 0), .26, L.bass.gain * .16, at);
     }
 
-    // 号令ラッパ。将軍がいると軍が音でも変わる。
+    // 号令ラッパ。将軍がいると軍が音でも変わる。デチューンした2声を重ね、
+    // 単純な鋸波1本より角の取れた、合唱っぽい厚みを出す（ユニゾン）。
     if (L.brass.gain > .02 && (step === 0 || step === 8) && !this.slacking(.6)) {
-      [0, 4, 7].forEach((deg, i) => this.voice(this.freq(deg, 0), .42, {
+      [0, 4, 7].forEach((deg, i) => this.unison(this.freq(deg, 0), .42, {
         type: "sawtooth", gain: L.brass.gain * .055, filter: 1500,
         detune: this.wobble(), at: at + i * .012
       }));
@@ -250,11 +249,12 @@ const Music = {
       }));
     }
 
-    // 魔法の鈴。術者が増えるほど煌びやか。
+    // 魔法の鈴。術者が増えるほど煌びやか。ごく軽いユニゾンで、
+    // 単純な三角波1本の「安っぽさ」を和らげる（きらめきの質感）。
     if (L.bells.gain > .02 && step % 4 === 2 && !this.slacking(.75)) {
-      this.voice(this.freq((step / 2) % 7, 2), .3, {
+      this.unison(this.freq((step / 2) % 7, 2), .3, {
         type: "triangle", gain: L.bells.gain * .035, filter: 4200, detune: this.wobble(), at
-      });
+      }, 5);
     }
 
     // 間の抜けた裏拍。真面目な行進曲を台無しにする係。
@@ -294,12 +294,34 @@ const Music = {
     osc.stop(now + dur + .02);
   },
 
+  // 単純な波形1本を、わずかにデチューンした2声で挟んで鳴らす（ユニゾン）。
+  // 効果音と同じ「合成っぽい」薄さの原因は、倍音の少ない波形を単音で鳴らしている
+  // ことそのものにある。音量ではなく音の作り方を変える対策として足した。
+  unison(freq, dur, opts = {}, cents = 9) {
+    const base = opts.gain || .04;
+    this.voice(freq, dur, { ...opts, gain: base * .7 });
+    this.voice(freq, dur, { ...opts, gain: base * .4, detune: (opts.detune || 0) + cents });
+    this.voice(freq, dur, { ...opts, gain: base * .4, detune: (opts.detune || 0) - cents });
+  },
+
+  // 行進ベースの1音。スマホの小型スピーカーは110Hz未満の帯域をほぼ再生できないため、
+  // 基音をroot付近（旧実装の1オクターブ上）まで上げたうえで、オクターブ上の倍音を
+  // 控えめに重ねる。基音が鳴らないスピーカーでも、耳はこの倍音から元のピッチを
+  // 補って聞き取る（欠落基音の錯覚）。低いオクターブに置いたまま音量だけ上げても、
+  // 出せない帯域は出せないので解決しない。
+  marchNote(freq, dur, gain, at) {
+    this.voice(freq, dur, { type: "triangle", gain, filter: 900, detune: this.wobble(), at });
+    this.voice(freq * 2, dur * .75, { type: "sine", gain: gain * .38, filter: 2400, detune: this.wobble(), at });
+  },
+
   thump(at, gain) {
-    this.voice(this.desc.root / 2, .17, { type: "sine", gain: gain * .2, to: this.desc.root / 3.4, at });
-    // スマホの小型スピーカーは110Hz付近の低音をほぼ再生できない。
-    // 低音の輪郭が聞こえないと足音そのものが無音に聞こえるため、
-    // 踏み込みの芯を中域のクリックで補う（ヘッドホンでは低音に重なって厚みになる）。
-    this.hiss(at, .04, gain * .22, 2400, "bandpass");
+    const root = this.desc.root;
+    // 芯（旧実装は root/2〜root/3.4 ≒ 32〜55Hz で、スマホでは事実上出ない帯域だった）。
+    this.voice(root * .85, .15, { type: "sine", gain: gain * .22, to: root * .55, at });
+    // オクターブ上の倍音。基音が聞こえないスピーカーでも踏み込みのピッチを伝える。
+    this.voice(root * 1.7, .09, { type: "triangle", gain: gain * .13, to: root * 1.05, at });
+    // 踏み込みの芯を中域のクリックで補う（既存）。
+    this.hiss(at, .04, gain * .24, 2400, "bandpass");
   },
 
   snare(at, gain) { this.hiss(at, .09, gain * .5, 1900, "bandpass"); },

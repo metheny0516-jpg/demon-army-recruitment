@@ -13,10 +13,13 @@ let byType = { triangle: 0 };
 // 実質無音になるレベルまで沈んでいても気づけない（実際に踏んだバグ）。
 let creatingHiss = false;
 let hissPeaks = [];
+// 音程を持つ音（voice() の frequency）に実際にセットされた値も拾う。
+// 「聞こえる帯域まで上げたか」を検証するのに使う（下の test 11）。
+let toneFreqs = [];
 class AudioParam {
-  constructor(hiss) { this.value = 0; this.hiss = !!hiss; }
-  setValueAtTime(v) { this.value = v; if (this.hiss) hissPeaks.push(v); }
-  exponentialRampToValueAtTime(v) { this.value = v; if (this.hiss) hissPeaks.push(v); }
+  constructor(hiss, freq) { this.value = 0; this.hiss = !!hiss; this.freq = !!freq; }
+  setValueAtTime(v) { this.value = v; if (this.hiss) hissPeaks.push(v); if (this.freq) toneFreqs.push(v); }
+  exponentialRampToValueAtTime(v) { this.value = v; if (this.hiss) hissPeaks.push(v); if (this.freq) toneFreqs.push(v); }
   setTargetAtTime(v) { this.value = v; }
 }
 class AudioNode {
@@ -28,7 +31,7 @@ class GainNode extends AudioNode {
   constructor() { super(); this.gain = new AudioParam(creatingHiss); creatingHiss = false; }
 }
 class OscillatorNode extends AudioNode {
-  constructor() { super(); this.frequency = new AudioParam(); this.detune = new AudioParam(); }
+  constructor() { super(); this.frequency = new AudioParam(false, true); this.detune = new AudioParam(); }
   start() { super.start(); byType[this.type] = (byType[this.type] || 0) + 1; }
 }
 class BufferSourceNode extends AudioNode {
@@ -229,6 +232,33 @@ function bars(state, count) {
   // BGMは常時鳴る下敷きなので効果音より控えめでよいが、これを大きく下回ると
   // 実プレイでは「鳴っていない」のと区別がつかない（修正前は0.0018程度だった）。
   assert(loudest >= 0.008, `BGMのノイズ系（スネア・ハイハット等）の実効音量が小さすぎる: ${loudest.toFixed(4)}`);
+}
+
+
+// 11. 低音が「聞こえない帯域」に閉じ込められていないかを測る。
+//     旧実装は足音・行進ベースの基音が32〜110Hz中心で、スマホの小型スピーカーは
+//     この帯域をほぼ再生できない。音量を上げても解決しない（実際にオーナーの
+//     実機で確認済み）。基音を実際に再生される帯域まで上げ、オクターブ上の
+//     倍音を重ねているか（欠落基音の錯覚で低さを伝える設計になっているか）を見る。
+{
+  Sound.muted = false;
+  // 将軍・アンデッド・術者は含めない編成にする。号令ラッパ等は元から音域が高く、
+  // 混ざると「足音・行進ベースの音域」を正しく測れなくなるため。
+  Music.desc = Music.describe(army([unit(), unit(), unit(), unit(), unit()]), { scene: 'battle' });
+  let seed = 42;
+  Music.rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  toneFreqs = [];
+  assert(Music.start(), 'BGMを開始できない');
+  for (let bar = 0; bar < 8; bar++) {
+    for (let step = 0; step < 16; step++) Music.scheduleStep(step, bar * 2 + step * 0.1);
+  }
+  Music.suspend();
+  assert(toneFreqs.length > 0, '音程を持つ音が1回も鳴っていない');
+  // スマホの小型スピーカーが実用上再生できる下限のおおよその目安。
+  const audibleFloor = 130;
+  const highest = Math.max(...toneFreqs);
+  assert(highest > audibleFloor,
+    `足音・行進ベースが${audibleFloor}Hz未満に閉じ込められている（最高でも${highest.toFixed(1)}Hz）`);
 }
 
 console.log('✓ BGM: 頭数・昇進・種族・未払い・忠誠・警戒度が演奏へ接続、サボりが効く');
