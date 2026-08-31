@@ -4,6 +4,7 @@ const App = {
 
   start() {
     UI.init(document.getElementById("app"));
+    if (typeof Sound !== "undefined") Sound.init();
     UI.bind((action, data) => this.onAction(action, data));
     this.showTitle();
   },
@@ -30,6 +31,7 @@ const App = {
   },
 
   onAction(action, data) {
+    if (typeof Sound !== "undefined") Sound.ui(action);
     switch (action) {
       case "new":
         Game.newRun();

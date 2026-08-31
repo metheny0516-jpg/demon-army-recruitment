@@ -54,6 +54,32 @@ button.ghost { background: transparent; }
 button.small { padding: 4px 10px; min-height: 40px; font-size: 13px; }
 button.wide { width: 100%; }
 
+/* 効果音設定。普段は小さく、触れたときだけ音量スライダーを見せる。 */
+.sound-control {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(20, 16, 28, .94);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+}
+.sound-toggle { min-height: 36px; padding: 3px 9px; font-size: 12px; }
+.sound-slider { display: none; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; }
+.sound-control:hover .sound-slider,
+.sound-control:focus-within .sound-slider { display: flex; }
+.sound-slider input { width: 100px; accent-color: var(--purple); }
+
+@media (max-width: 560px) {
+  .sound-control { right: 6px; bottom: 6px; }
+  .sound-slider input { width: 76px; }
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);

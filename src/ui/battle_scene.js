@@ -154,6 +154,10 @@ const BattleScene = {
   // 1イベントを描画し、次までの尺(ms)を返す
   render(ev) {
     if (ev.text) this.appendLog(ev.text, ev.cls);
+    if (typeof Sound !== "undefined") {
+      const from = this.units[ev.fromId];
+      Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from && from.side });
+    }
 
     switch (ev.type) {
       case "battle_start":
@@ -375,6 +379,10 @@ const BattleScene = {
   // 残りを一気に適用して終わらせる
   skip() {
     this.stop();
+    if (typeof Sound !== "undefined") {
+      Sound.stopAll();
+      Sound.cue("skip");
+    }
     while (this.index < this.timeline.length) {
       const ev = this.timeline[this.index++];
       if (ev.text) this.appendLog(ev.text, ev.cls);

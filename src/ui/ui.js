@@ -56,6 +56,7 @@ const UI = {
     this.root.addEventListener("click", ev => {
       const el = ev.target.closest("[data-action]");
       if (!el) return;
+      if (typeof Sound !== "undefined") Sound.unlock();
       handler(el.dataset.action, el.dataset);
     });
   },
@@ -368,6 +369,7 @@ const UI = {
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
       </div>
       <button class="primary wide" data-action="afterresult">次へ</button>`);
+    if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
   },
 
   // 敗北したが、まだ再起できる状態の画面
