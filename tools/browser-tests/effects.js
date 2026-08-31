@@ -9,6 +9,8 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   await page.goto('file://' + process.env.GAME + '/index.html');
 
   await page.evaluate(() => {
+    // BattleScene.shell() は世代表示に Game.state を使う。単体テストでも実ランと同じ前提を作る。
+    Game.newRun();
     localStorage.removeItem('maou_speed');
     const player = { id: 'p0', tplId: 'goblin', name: '古参のゴブ太', race: 'ゴブリン', icon: '👺', side: 'player', hp: 30, maxHp: 30 };
     const enemy = { id: 'e0', name: '勇者アレン', icon: '⚔️', side: 'enemy', hp: 50, maxHp: 50 };

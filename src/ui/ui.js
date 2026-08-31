@@ -165,6 +165,26 @@ const UI = {
     return `<div class="panel"><h3>戦果</h3><div class="contrib-list">${rows}</div></div>`;
   },
 
+  // 敗北を「ただの死因」で終わらせず、次に変えられる判断を考えたくなる材料にする。
+  nearMissPanel(nearMiss) {
+    if (!nearMiss || !nearMiss.enemyMaxHp) return "";
+    const maxHp = Math.max(1, Number(nearMiss.enemyMaxHp) || 1);
+    const closest = Math.max(0, Math.min(maxHp, Number(nearMiss.closestRemaining) || 0));
+    const final = Math.max(0, Math.min(maxHp, Number(nearMiss.finalRemaining) || 0));
+    const dealt = Math.max(0, maxHp - closest);
+    const percent = Math.round(dealt / maxHp * 100);
+    const isNearMiss = percent >= 75;
+    const recovered = final > closest;
+    const last = nearMiss.lastEventText ? `<div class="near-miss-last"><b>最後:</b> ${U.esc(nearMiss.lastEventText)}</div>` : "";
+    return `<div class="panel near-miss-panel">
+      <h3>${isNearMiss ? "🕯 最も追い詰めた瞬間" : "🕯 敗因メモ"}</h3>
+      <div class="near-miss-score">敵軍の耐久を <b>${percent}%</b> 削った</div>
+      <div class="near-miss-hp">敵軍HP <b>${closest}</b> / ${maxHp}${isNearMiss ? ` ― あと <b>${closest}</b> ダメージ` : ""}</div>
+      ${recovered ? `<div class="muted">その後、敵軍は ${final} HP まで立て直した。</div>` : ""}
+      ${last}
+    </div>`;
+  },
+
   synergyPanel(roster) {
     const act = Synergy.active(roster);
     if (act.length === 0) {
@@ -383,6 +403,7 @@ const UI = {
         <h2>魔王軍、壊滅</h2>
         <div>${U.esc(b.army)} に敗北した</div>
       </div>
+      ${this.nearMissPanel(b.nearMiss)}
       ${this.contributionPanel(b.contribution)}
       <div class="panel">
         <h3>まだ終わりではない</h3>
@@ -451,6 +472,7 @@ const UI = {
         <div class="muted">最後まで付き従った者たち：${
           record.finalRoster.length ? record.finalRoster.map(m => U.esc(m.name)).join("、") : "誰も残らなかった"}</div>
       </div>
+      ${this.nearMissPanel(Game.state.lastBattle && Game.state.lastBattle.nearMiss)}
       ${this.contributionPanel(Game.state.lastBattle && Game.state.lastBattle.contribution)}
       <div class="row">
         <button class="primary" data-action="new">第${history.length + 1}代として再挑戦</button>

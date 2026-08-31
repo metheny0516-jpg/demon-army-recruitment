@@ -268,7 +268,44 @@ const Battle = {
       incidents: timeline.filter(e => e.type === "incident").map(e => ({ id: e.id, name: e.name, text: e.text })),
       // 誰がどれだけ働いたか（結果画面のMVP表示用）。新しい状態を戦闘中に
       // 持ち回る必要はなく、既に確定したタイムラインから導出するだけでよい。
-      contribution: this.summarizeContribution(timeline, playerUnits)
+      contribution: this.summarizeContribution(timeline, playerUnits),
+      nearMiss: this.summarizeNearMiss(timeline)
+    };
+  },
+
+  // 敗北後に「どこまで迫れたか」を見せるための要約。
+  // 戦闘中の状態は持ち回らず、timeline の開始スナップショットと HP 差分だけを再生する。
+  summarizeNearMiss(timeline) {
+    const start = timeline.find(e => e.type === "battle_start");
+    const enemies = (start && start.enemy) || [];
+    if (!enemies.length) return null;
+
+    const enemyIds = new Set(enemies.map(e => e.id));
+    const hp = new Map(enemies.map(e => [e.id, e.hp]));
+    const maxHp = enemies.reduce((sum, e) => sum + e.maxHp, 0);
+    if (maxHp <= 0) return null;
+
+    let closestRemaining = enemies.reduce((sum, e) => sum + e.hp, 0);
+    const setHp = (id, value) => {
+      if (enemyIds.has(id) && Number.isFinite(value)) hp.set(id, Math.max(0, value));
+    };
+    for (const event of timeline) {
+      if (event.type === "attack" || event.type === "splash") setHp(event.toId, event.hp);
+      else if (event.type === "heal" || event.type === "revive" || event.type === "survive") setHp(event.unitId, event.hp);
+      const remaining = [...hp.values()].reduce((sum, value) => sum + value, 0);
+      closestRemaining = Math.min(closestRemaining, remaining);
+    }
+
+    const finalRemaining = [...hp.values()].reduce((sum, value) => sum + value, 0);
+    const lastEvent = [...timeline].reverse().find(e => e.type !== "result" && e.text);
+    const closestDamage = maxHp - closestRemaining;
+    return {
+      enemyMaxHp: maxHp,
+      closestRemaining,
+      finalRemaining,
+      closestDamage,
+      closestPercent: Math.round(closestDamage / maxHp * 100),
+      lastEventText: lastEvent ? String(lastEvent.text).trim() : ""
     };
   },
 

@@ -531,7 +531,8 @@ const Game = {
       incidents: result.incidents || [],
       notes,
       logLength: result.log.length,
-      contribution: this.attachVoices(result.contribution, result.victory)
+      contribution: this.attachVoices(result.contribution, result.victory),
+      nearMiss: result.nearMiss
     };
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
 

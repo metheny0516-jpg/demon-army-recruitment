@@ -721,6 +721,22 @@ button.wide { width: 100%; }
 }
 .contrib-num small { font-size: 10px; margin-left: 2px; }
 
+/* 敗北時に「何が足りなかったか」を数字で返す。再起で編成を変える理由にする。 */
+.near-miss-panel {
+  border-color: #9a6be0;
+  background: linear-gradient(135deg, rgba(91, 43, 150, .18), rgba(36, 29, 56, .95));
+}
+.near-miss-score { font-size: 16px; }
+.near-miss-score b, .near-miss-hp b { color: var(--gold); }
+.near-miss-hp { margin-top: 3px; color: var(--dim); font-size: 13px; }
+.near-miss-last {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+  color: var(--dim);
+  font-size: 12px;
+}
+
 /* ── 履歴書欄（採用画面のカード内）── */
 .resume {
   display: grid;

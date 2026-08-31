@@ -34,7 +34,7 @@ run() {
   fi
 }
 
-for t in smoke autoplay mission clear scene cutin effects sound contrib retry softlock resume tier0 reroll eventui casualty; do
+for t in smoke autoplay mission clear scene cutin effects sound contrib retry nearmiss softlock resume tier0 reroll eventui casualty; do
   run "$t" DUMMY=1
 done
 run portrait MODE=present
