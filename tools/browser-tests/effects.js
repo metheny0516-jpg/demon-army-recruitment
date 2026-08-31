@@ -1,0 +1,53 @@
+const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+
+(async () => {
+  const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const errors = [];
+  page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
+  page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
+  await page.goto('file://' + process.env.GAME + '/index.html');
+
+  await page.evaluate(() => {
+    localStorage.removeItem('maou_speed');
+    const player = { id: 'p0', tplId: 'goblin', name: '古参のゴブ太', race: 'ゴブリン', icon: '👺', side: 'player', hp: 30, maxHp: 30 };
+    const enemy = { id: 'e0', name: '勇者アレン', icon: '⚔️', side: 'enemy', hp: 50, maxHp: 50 };
+    UI.set(BattleScene.shell({
+      stage: 8, baseStage: Game.MAX_CONQUEST, missionKind: 'invade',
+      region: '王都', army: '勇者アレン一行'
+    }));
+    BattleScene.play([
+      { type: 'battle_start', player: [player], enemy: [enemy] },
+      { type: 'round_start', round: 1, emphasis: 1, text: '── ラウンド 1 ──' },
+      { type: 'attack', fromId: 'p0', toId: 'e0', dmg: 8, hp: 42, maxHp: 50, emphasis: 1 },
+      { type: 'round_start', round: 2, emphasis: 1, text: '── ラウンド 2 ──' },
+      { type: 'synergy', id: 'general_command', name: '将軍の号令', desc: '全軍、進め！' },
+      { type: 'incident', id: 'mutiny', name: '仲間割れ', unitId: 'p0', targetId: 'p0', emphasis: 3 },
+      { type: 'revive', unitId: 'p0', hp: 10, maxHp: 30 },
+      { type: 'result', victory: true }
+    ]);
+  });
+
+  await page.waitForTimeout(120);
+  if (!await page.locator('.scene.final-battle').count()) errors.push('最終決戦の専用背景が無い');
+  if (!await page.locator('.scene-intro.show').count()) errors.push('最終決戦の開幕表示が無い');
+
+  await page.waitForTimeout(1450);
+  if (!await page.locator('.round-banner.show').count()) errors.push('ラウンド開始表示が無い');
+  if ((await page.locator('#round-number').innerText()) !== 'ROUND 1') errors.push('ROUND 1 が読めない');
+
+  await page.waitForTimeout(1200);
+  const action = await page.locator('#action-caption').innerText();
+  if (!action.includes('古参のゴブ太') || !action.includes('勇者アレン')) errors.push('攻撃者と対象が読めない');
+
+  const timing = await page.evaluate(() => ({
+    round: BattleScene.SPECIAL_DURATION.round_start,
+    attack: BattleScene.DURATION[1],
+    cap: BattleScene.AUTO_CAP_MS
+  }));
+  if (timing.round < 1000 || timing.attack < 600 || timing.cap < 40000) errors.push('観戦テンポ設定が短すぎる');
+
+  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ ラウンド区切り・攻撃表示・最終決戦演出');
+  await browser.close();
+  process.exit(errors.length ? 1 : 0);
+})().catch(e => { console.error('✗', e.message); process.exit(1); });

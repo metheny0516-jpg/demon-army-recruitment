@@ -270,7 +270,47 @@ button.wide { width: 100%; }
   margin-bottom: 10px;
   overflow: hidden;
 }
+.scene.final-battle {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(142, 37, 48, .35), transparent 38%),
+    radial-gradient(ellipse at 50% 50%, #2d1836 0%, #100b17 78%);
+  border-color: #9f6348;
+}
+.scene-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.scene.fx-general_command .scene-fx,
+.scene.fx-elite_few .scene-fx {
+  background: radial-gradient(circle, rgba(255, 213, 107, .7), rgba(146, 91, 21, .08) 60%, transparent 76%);
+}
+.scene.fx-goblin_horde .scene-fx,
+.scene.fx-king_slime .scene-fx,
+.scene.fx-revive .scene-fx {
+  background: radial-gradient(circle, rgba(92, 218, 136, .58), rgba(25, 86, 57, .08) 62%, transparent 78%);
+}
+.scene.fx-legion_of_dead .scene-fx,
+.scene.fx-arcane_circle .scene-fx {
+  background: radial-gradient(circle, rgba(148, 96, 255, .64), rgba(44, 29, 97, .08) 60%, transparent 78%);
+}
+.scene.fx-cheap_labor .scene-fx,
+.scene.fx-incident .scene-fx {
+  background: repeating-linear-gradient(118deg, rgba(213, 54, 45, .5) 0 13px, transparent 13px 32px);
+}
+.scene.fx-guard .scene-fx {
+  background: radial-gradient(circle, rgba(104, 166, 255, .58), rgba(30, 60, 107, .06) 62%, transparent 78%);
+}
+@keyframes scenePulse {
+  0%, 100% { opacity: 0; transform: scale(.82); }
+  35%, 65% { opacity: .8; transform: scale(1.08); }
+}
+.scene.fx-active .scene-fx { animation: scenePulse 1.35s ease-out; }
 .scene-band {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 6px;
   align-items: stretch;
@@ -278,6 +318,8 @@ button.wide { width: 100%; }
   min-height: 92px;
 }
 .scene-mid {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -305,6 +347,23 @@ button.wide { width: 100%; }
   text-align: center;
   will-change: transform;
 }
+.bu::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border: 2px solid #ffe09a;
+  border-radius: 11px;
+  opacity: 0;
+  pointer-events: none;
+}
+.bu.acting { z-index: 3; border-color: #dcb75d; }
+.bu.targeted { border-color: #d56262; }
+.bu.trouble { border-color: #ff6d61; background: linear-gradient(#492330, #2a1726); }
+@keyframes actingFocus {
+  0%, 100% { opacity: 0; transform: scale(.9); }
+  28%, 72% { opacity: 1; transform: scale(1); }
+}
+.bu.acting::after { animation: actingFocus .62s ease-out; }
 .bu-icon { font-size: 26px; line-height: 1.1; }
 .bu-name {
   font-size: 10px;
@@ -406,6 +465,7 @@ button.wide { width: 100%; }
 .fnum.big { font-size: 21px; color: #ff8a5a; }
 .fnum.heal { color: #6fd08c; }
 .fnum.guard { color: #8fb8ff; font-size: 13px; }
+.fnum.fallen { color: #d7c2c2; font-size: 13px; }
 @keyframes floatUp {
   0%   { transform: translateY(6px) scale(.7); opacity: 0; }
   25%  { transform: translateY(-4px) scale(1.15); opacity: 1; }
@@ -422,6 +482,79 @@ button.wide { width: 100%; }
 }
 .scene.shake { animation: sceneShake .32s ease-out; }
 
+/* ── 行動名・ラウンド区切り ── */
+.action-caption {
+  position: absolute;
+  z-index: 4;
+  top: 50%;
+  left: 50%;
+  width: min(92%, 430px);
+  padding: 5px 12px;
+  border: 1px solid rgba(255, 224, 154, .45);
+  border-radius: 999px;
+  color: #fff0c4;
+  background: rgba(15, 10, 24, .92);
+  text-align: center;
+  font-size: 12px;
+  font-weight: bold;
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(.92);
+  pointer-events: none;
+}
+@keyframes actionCaption {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); }
+  18%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.04); }
+}
+.action-caption.show { animation: actionCaption .62s ease-out; }
+
+.round-banner,
+.scene-intro {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13, 9, 22, .88);
+  opacity: 0;
+  transform: scale(.94);
+  pointer-events: none;
+}
+.round-banner span,
+.scene-intro span {
+  color: var(--dim);
+  font-size: 11px;
+  letter-spacing: 2px;
+}
+.round-banner b {
+  color: #f1dfb0;
+  font-size: 27px;
+  letter-spacing: 5px;
+}
+@keyframes roundReveal {
+  0% { opacity: 0; transform: scale(.92); }
+  18%, 68% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.06); }
+}
+.round-banner.show { animation: roundReveal 1.08s ease-out; }
+
+.scene-intro { z-index: 8; background: rgba(20, 5, 12, .94); }
+.scene-intro b {
+  color: #ffcf86;
+  font-size: 29px;
+  letter-spacing: 4px;
+  text-shadow: 0 0 18px rgba(255, 87, 70, .62);
+}
+.scene-intro small { color: #eab7ad; }
+@keyframes finalIntro {
+  0% { opacity: 0; transform: scale(1.16); }
+  20%, 75% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.96); }
+}
+.scene-intro.show { animation: finalIntro 1.4s ease-out; }
+
 /* ── シナジー カットイン ── */
 .cutin {
   position: absolute;
@@ -435,6 +568,7 @@ button.wide { width: 100%; }
   opacity: 0;
   transform: translateY(-50%) translateX(-110%);
   pointer-events: none;
+  z-index: 6;
 }
 .cutin b { display: block; font-size: 19px; letter-spacing: 2px; }
 .cutin span { font-size: 12px; color: #e2d4ff; }
@@ -448,18 +582,32 @@ button.wide { width: 100%; }
   100% { opacity: 0; transform: translateY(-50%) translateX(110%); }
 }
 .cutin.show { animation: cutinIn 1.3s ease-out; }
+.cutin.fx-general_command,
+.cutin.fx-elite_few { background: linear-gradient(90deg, rgba(139, 91, 20, .96), rgba(73, 40, 13, .94)); border-color: #ffd56b; }
+.cutin.fx-goblin_horde,
+.cutin.fx-king_slime { background: linear-gradient(90deg, rgba(36, 128, 73, .96), rgba(19, 69, 48, .94)); border-color: #79e39c; }
+.cutin.fx-legion_of_dead,
+.cutin.fx-arcane_circle { background: linear-gradient(90deg, rgba(98, 50, 170, .96), rgba(41, 29, 103, .94)); border-color: #b68cff; }
+.cutin.fx-cheap_labor,
+.cutin.fx-incident { background: linear-gradient(90deg, rgba(151, 43, 38, .97), rgba(72, 24, 32, .95)); border-color: #ff7b6e; }
 
 /* ── 決着 ── */
 .scene-result {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 34px;
   font-weight: bold;
   letter-spacing: 6px;
   animation: popIn .5s ease-out;
+  z-index: 10;
+  flex-direction: column;
 }
+.scene-result b { font-size: inherit; }
+.scene-result small { margin-top: 8px; font-size: 12px; letter-spacing: 2px; }
+.scene-result.final.win { color: #ffe09a; background: rgba(27, 17, 8, .9); }
 .scene-result.win  { color: #8ef0a8; text-shadow: 0 0 24px #0c2414, 0 2px 8px #000; background: rgba(10,22,14,.82); }
 .scene-result.lose { color: #ff8a8a; text-shadow: 0 0 24px #240c0c, 0 2px 8px #000; background: rgba(24,10,10,.82); }
 
@@ -474,7 +622,17 @@ button.wide { width: 100%; }
 
 /* 端末側で「視差効果を減らす」設定なら演出を抑える */
 @media (prefers-reduced-motion: reduce) {
-  .bu, .scene, .cutin, .fnum, .scene-result { animation: none !important; }
+  .bu, .bu::after, .scene, .scene-fx, .cutin, .fnum, .scene-result,
+  .action-caption, .round-banner, .scene-intro, .promotion-panel { animation: none !important; }
+  .bu.acting::after,
+  .action-caption.show,
+  .round-banner.show,
+  .scene-intro.show,
+  .cutin.show { opacity: 1; }
+  .action-caption.show { transform: translate(-50%, -50%) scale(1); }
+  .round-banner.show, .scene-intro.show { transform: scale(1); }
+  .cutin.show { transform: translateY(-50%) translateX(0); }
+  .scene.fx-active .scene-fx { opacity: .65; transform: scale(1); }
   .bu-hpfill { transition: none; }
 }
 
@@ -647,8 +805,16 @@ button.wide { width: 100%; }
   background: rgba(194, 145, 54, .1);
   font-size: .82rem;
 }
-.promotion-panel { border-color: var(--gold); }
+.promotion-panel { border-color: var(--gold); animation: promotionReveal .72s ease-out; }
 .promotion-row { padding: 8px 0; border-top: 1px solid var(--border); }
+.promotion-row.promotion-general {
+  color: #ffe6a8;
+  background: linear-gradient(90deg, rgba(194, 145, 54, .13), transparent);
+}
+@keyframes promotionReveal {
+  0% { opacity: 0; transform: translateY(12px) scale(.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
 .promotion-row:first-of-type { border-top: 0; }
 .incident-panel { border-color: #9c433f; background: rgba(120, 35, 30, .12); }
 .incident { color: #ff9e8f; font-weight: bold; }

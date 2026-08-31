@@ -7,23 +7,30 @@
 // アニメーションは transform と opacity のみを使う（レイアウトを走らせない＝スマホで滑らか）。
 const BattleScene = {
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
-  DURATION: { 0: 300, 1: 400, 2: 560, 3: 760 },
+  DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   SPECIAL_DURATION: {
-    battle_start: 260, round_start: 420, synergy: 1450,
-    note: 170, incident: 1300, death: 460, revive: 780, survive: 420, heal: 300, result: 900
+    battle_start: 500, round_start: 1150, synergy: 1650,
+    note: 260, incident: 1700, death: 750, revive: 1100, survive: 650, heal: 500, result: 1200
   },
 
   // 長期戦がだらけないための自動圧縮。シナジー同士が噛み合って乱戦が
   // 長引いても、x1でこの秒数に収まるよう全体の尺を縮める（各イベントの
   // 個別の尺はいじらない）。短い戦闘は一切圧縮されない。
-  AUTO_CAP_MS: 20000,
-  MIN_AUTO_SCALE: 0.45,
+  AUTO_CAP_MS: 45000,
+  MIN_AUTO_SCALE: 0.62,
+
+  EFFECT_CLASSES: [
+    "fx-goblin_horde", "fx-king_slime", "fx-legion_of_dead", "fx-arcane_circle",
+    "fx-cheap_labor", "fx-elite_few", "fx-general_command", "fx-incident",
+    "fx-revive", "fx-guard"
+  ],
 
   speed: 1,
   autoScale: 1,
   timers: [],
   units: {},      // id → { el, fill, data }
   state: null,
+  isFinalBattle: false,
 
   // 敵はデータのアイコン、味方は種族アイコン
   iconOf(u) { return u.icon || (u.side === "enemy" ? "🗡" : UI.icon(u.race)); },
@@ -50,13 +57,16 @@ const BattleScene = {
 
   // 骨組みのHTML。ui.js から差し込む。
   shell(stageData) {
+    this.isFinalBattle = stageData.missionKind === "invade" && stageData.baseStage === Game.MAX_CONQUEST;
+    const sceneClass = this.isFinalBattle ? "scene final-battle" : "scene";
     return `
       <div class="hud">
         <span>第 <b>${Game.state.generation}</b> 代魔王軍</span>
         <span>第 <b>${stageData.stage}</b> 作戦</span>
         <span class="muted">${U.esc(stageData.region)}</span>
       </div>
-      <div class="scene" id="scene">
+      <div class="${sceneClass}" id="scene">
+        <div class="scene-fx" id="scene-fx"></div>
         <div class="scene-band" id="band-enemy"></div>
         <div class="scene-mid">
           <span class="scene-army">${U.esc(stageData.army)}</span>
@@ -64,6 +74,13 @@ const BattleScene = {
           <span class="scene-army">魔王軍</span>
         </div>
         <div class="scene-band" id="band-player"></div>
+        <div class="action-caption" id="action-caption"></div>
+        <div class="round-banner" id="round-banner">
+          <span id="round-kicker"></span><b id="round-number"></b>
+        </div>
+        <div class="scene-intro" id="scene-intro">
+          <span>王国最終防衛線</span><b>FINAL BATTLE</b><small>${U.esc(stageData.army)}</small>
+        </div>
         <div class="cutin" id="cutin">
           <img class="cutin-portrait" id="cutin-portrait" alt="">
           <div class="cutin-copy"><b id="cutin-name"></b><span id="cutin-desc"></span></div>
@@ -103,7 +120,8 @@ const BattleScene = {
         el: document.getElementById("bu-" + u.id),
         fill: document.getElementById("hp-" + u.id),
         pop: document.getElementById("pop-" + u.id),
-        side: u.side
+        side: u.side,
+        name: u.name
       };
     }
     this.updateSpeedBtn();
@@ -127,6 +145,7 @@ const BattleScene = {
   },
 
   durationOf(ev) {
+    if (ev.type === "battle_start" && this.isFinalBattle) return 1450;
     return this.SPECIAL_DURATION[ev.type] !== undefined
       ? this.SPECIAL_DURATION[ev.type]
       : this.DURATION[ev.emphasis] || 300;
@@ -137,9 +156,16 @@ const BattleScene = {
     if (ev.text) this.appendLog(ev.text, ev.cls);
 
     switch (ev.type) {
+      case "battle_start":
+        if (this.isFinalBattle) this.battleIntro();
+        break;
+      case "round_start":
+        this.roundBanner(ev.round);
+        break;
       case "attack":
       case "splash": {
         const from = this.units[ev.fromId], to = this.units[ev.toId];
+        this.focusAttack(from, to, ev);
         if (from && ev.type === "attack") {
           from.el.classList.remove("lunge-up", "lunge-down");
           void from.el.offsetWidth; // アニメーション再生のためのリセット
@@ -154,7 +180,10 @@ const BattleScene = {
       }
       case "death": {
         const u = this.units[ev.unitId];
-        if (u) u.el.classList.add("dead");
+        if (u) {
+          u.el.classList.add("dead");
+          this.float(u, "倒れた！", "fallen");
+        }
         break;
       }
       case "revive": {
@@ -166,6 +195,7 @@ const BattleScene = {
           u.el.classList.add("pop");
           this.setHp(u, ev.hp, ev.maxHp);
           this.float(u, "復活！", "heal");
+          this.pulse("revive");
         }
         break;
       }
@@ -176,16 +206,28 @@ const BattleScene = {
       }
       case "survive": {
         const u = this.units[ev.unitId];
-        if (u) { this.setHp(u, ev.hp, ev.maxHp); this.float(u, "耐えた！", "guard"); }
+        if (u) {
+          this.setHp(u, ev.hp, ev.maxHp);
+          this.float(u, "耐えた！", "guard");
+          this.pulse("guard");
+        }
         break;
       }
       case "synergy":
+        this.pulse(ev.id);
         this.cutin(ev.name, ev.desc, ev.id);
         break;
-      case "incident":
+      case "incident": {
+        const culprit = this.units[ev.unitId];
+        const target = this.units[ev.targetId];
+        this.clearFocus();
+        if (culprit) culprit.el.classList.add("acting", "trouble");
+        if (target) target.el.classList.add("targeted");
+        this.pulse("incident");
         this.cutin(ev.name, "魔王軍で事件発生！", ev.id);
         this.shake();
         break;
+      }
       case "result":
         this.banner(ev.victory);
         break;
@@ -203,6 +245,75 @@ const BattleScene = {
     void u.el.offsetWidth;
     u.el.classList.add(emphasis >= 2 ? "hit-big" : "hit");
     this.float(u, (label ? label + " " : "") + dmg, emphasis >= 2 ? "big" : "");
+  },
+
+  clearFocus() {
+    for (const u of Object.values(this.units)) {
+      u.el.classList.remove("acting", "targeted", "trouble");
+    }
+  },
+
+  focusAttack(from, to, ev) {
+    this.clearFocus();
+    if (from) from.el.classList.add("acting");
+    if (to) to.el.classList.add("targeted");
+    if (!from || !to) return;
+    const action = ev.type === "splash" ? (ev.label || "追撃") : "攻撃";
+    this.showAction(`${from.name}の${action}　→　${to.name}`);
+  },
+
+  showAction(text) {
+    const c = document.getElementById("action-caption");
+    if (!c) return;
+    c.textContent = text;
+    c.classList.remove("show");
+    void c.offsetWidth;
+    c.classList.add("show");
+    this.timers.push(setTimeout(() => c.classList.remove("show"), (600 * this.autoScale) / this.speed));
+  },
+
+  battleIntro() {
+    const intro = document.getElementById("scene-intro");
+    if (!intro) return;
+    intro.classList.remove("show");
+    void intro.offsetWidth;
+    intro.classList.add("show");
+    this.timers.push(setTimeout(() => intro.classList.remove("show"), (1400 * this.autoScale) / this.speed));
+  },
+
+  roundBanner(round) {
+    this.clearFocus();
+    const b = document.getElementById("round-banner");
+    if (!b) return;
+    document.getElementById("round-kicker").textContent = round === 1
+      ? "戦闘開始"
+      : `ROUND ${round - 1} 終了`;
+    document.getElementById("round-number").textContent = `ROUND ${round}`;
+    b.classList.remove("show");
+    void b.offsetWidth;
+    b.classList.add("show");
+    this.timers.push(setTimeout(() => b.classList.remove("show"), (1080 * this.autoScale) / this.speed));
+  },
+
+  pulse(kind) {
+    const s = document.getElementById("scene");
+    if (!s) return;
+    s.classList.remove("fx-active");
+    for (const cls of this.EFFECT_CLASSES) s.classList.remove(cls);
+    const synergyKinds = [
+      "goblin_horde", "king_slime", "legion_of_dead", "arcane_circle",
+      "cheap_labor", "elite_few", "general_command"
+    ];
+    const cls = synergyKinds.includes(kind) ? `fx-${kind}`
+      : kind === "revive" ? "fx-revive"
+        : kind === "guard" ? "fx-guard"
+          : "fx-incident";
+    s.classList.add(cls);
+    void s.offsetWidth;
+    s.classList.add("fx-active");
+    this.timers.push(setTimeout(() => {
+      s.classList.remove("fx-active", cls);
+    }, (1450 * this.autoScale) / this.speed));
   },
 
   // ダメージ数字を浮かせる。カード内に絶対配置するので座標計測は不要。
@@ -230,6 +341,9 @@ const BattleScene = {
     portrait.src = hasPortrait ? UI.PORTRAIT_DIR + "king_slime.png" : "";
     portrait.alt = hasPortrait ? "キングスライム" : "";
     c.classList.toggle("has-portrait", hasPortrait);
+    for (const cls of this.EFFECT_CLASSES) c.classList.remove(cls);
+    const tone = this.EFFECT_CLASSES.find(cls => cls === `fx-${synergyId}`) || "fx-incident";
+    c.classList.add(tone);
     document.getElementById("cutin-name").textContent = name;
     document.getElementById("cutin-desc").textContent = desc;
     c.classList.remove("show");
@@ -245,8 +359,9 @@ const BattleScene = {
     // 隠さないと「勝 VS 利」のように文字が重なって読めなくなる。
     s.classList.add("decided");
     const b = document.createElement("div");
-    b.className = "scene-result " + (victory ? "win" : "lose");
-    b.textContent = victory ? "勝　利" : "敗　北";
+    b.className = "scene-result " + (victory ? "win" : "lose") + (this.isFinalBattle ? " final" : "");
+    b.innerHTML = `<b>${victory ? "勝　利" : "敗　北"}</b>${
+      this.isFinalBattle && victory ? "<small>王国最終防衛線 突破</small>" : ""}`;
     s.appendChild(b);
   },
 

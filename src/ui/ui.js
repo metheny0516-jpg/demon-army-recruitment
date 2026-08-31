@@ -354,7 +354,7 @@ const UI = {
         ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}
       ${(st.lastPromotions && st.lastPromotions.length) ? `<div class="panel promotion-panel">
         <h3>👑 魔王軍人事</h3>
-        ${st.lastPromotions.map(p => `<div class="promotion-row"><b>${U.esc(p.name)}</b> を
+        ${st.lastPromotions.map(p => `<div class="promotion-row promotion-${U.esc(p.rankId)}"><b>${U.esc(p.name)}</b> を
           <span class="rank-badge rank-${U.esc(p.rankId)}">${U.esc(p.rankName)}</span> に任ずる！
           <div class="muted">${U.esc(p.message)}</div></div>`).join("")}
       </div>` : ""}
