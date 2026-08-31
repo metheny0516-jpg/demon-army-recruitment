@@ -5,18 +5,35 @@ const App = {
   start() {
     UI.init(document.getElementById("app"));
     if (typeof Sound !== "undefined") Sound.init();
+    if (typeof Music !== "undefined") Music.init();
     UI.bind((action, data) => this.onAction(action, data));
     this.showTitle();
   },
 
   showTitle() {
     Game.state = null;
+    this.music("title");
     UI.title(!!Storage.loadRun(), Storage.loadHistory());
+  },
+
+  // BGMは「軍団そのものが演奏している」ので、場面名だけ渡せば
+  // 編成・昇進・未払い・忠誠・警戒度は Music 側が状態から読み取る。
+  MUSIC_SCENES: {
+    recruit: "recruit", event: "recruit",
+    mission: "mission", formation: "mission",
+    result: "mission", defeat: "defeat",
+    gameover: "defeat", clear: "victory"
+  },
+
+  music(scene) {
+    if (typeof Music === "undefined") return;
+    Music.update(Game.state, { scene });
   },
 
   render() {
     const st = Game.state;
     if (!st) return this.showTitle();
+    this.music(this.MUSIC_SCENES[st.phase] || "recruit");
     switch (st.phase) {
       case "recruit": return UI.recruit();
       case "mission": return UI.mission();

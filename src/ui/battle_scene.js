@@ -58,6 +58,7 @@ const BattleScene = {
   // 骨組みのHTML。ui.js から差し込む。
   shell(stageData) {
     this.isFinalBattle = stageData.missionKind === "invade" && stageData.baseStage === Game.MAX_CONQUEST;
+    if (typeof Music !== "undefined") Music.update(Game.state, { scene: this.isFinalBattle ? "final" : "battle" });
     const sceneClass = this.isFinalBattle ? "scene final-battle" : "scene";
     return `
       <div class="hud">
@@ -357,6 +358,7 @@ const BattleScene = {
   },
 
   banner(victory) {
+    if (typeof Music !== "undefined") Music.update(Game.state, { scene: victory ? "victory" : "defeat" });
     const s = document.getElementById("scene");
     if (!s) return;
     // 決着表示は画面中央に出るため、同じ位置にある「VS」帯を隠す。

@@ -70,9 +70,15 @@ button.wide { width: 100%; }
   box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
 }
 .sound-toggle { min-height: 36px; padding: 3px 9px; font-size: 12px; }
+.bgm-toggle { padding: 3px 7px; font-size: 15px; }
+.bgm-toggle.bgm-off { color: var(--dim); text-decoration: line-through; }
 .sound-slider { display: none; align-items: center; gap: 6px; color: var(--dim); font-size: 11px; }
+/* 常時出しておくと固定パネルが広がり、下にある「解雇」などへ近づいてしまう。 */
+.sound-extra { display: none; }
 .sound-control:hover .sound-slider,
 .sound-control:focus-within .sound-slider { display: flex; }
+.sound-control:hover .sound-extra,
+.sound-control:focus-within .sound-extra { display: inline-flex; }
 .sound-slider input { width: 100px; accent-color: var(--purple); }
 
 @media (max-width: 560px) {
