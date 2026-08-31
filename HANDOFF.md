@@ -223,6 +223,40 @@ WAVは `tools/generate-sfx.js` から再生成でき、外部素材は使って�
 実素材へ交換する場合も `Sound.cue()` の名前を契約として保つこと。
 検証は `node tools/test-sound.js` とブラウザテスト `sound`。
 
+### 効果音の次段階: 純合成から実録フォーリーへ（調査中・未実装）
+
+オーナー試聴結果: 現在の `basun/gachan/zushi/zuba` は
+**「まだ合成っぽい、初期ファミコンのようでちゃっちい」**。純合成をさらに磨く方針は
+ここで打ち切り、迫力のある実録素材を核に差し替える。既存12音は比較用・フォールバックとして
+残し、採用品が決まるまでは置換しない。
+
+次セッションの最初の作業:
+
+1. CC0実録候補をダウンロードして別名で追加し、`tools/sfx-lab.html` にA/B比較を作る。
+2. 剣の風切り、肉・鎧への衝突、低域の重量音を1音へレイヤーする。
+   単体素材のポン置きではなく、実録を中心にEQ・コンプレッサー・短い残響でゲーム向けに整える。
+3. オーナーが比較試聴して採用を決めた後だけ、`zuba/basun/gachan/zushi` の3変種へ書き出す。
+4. 外部素材を入れたら `assets/sfx/LICENSES.md` に作者、個別ページ、取得日、ライセンスを必ず記録する。
+
+調査済み候補（2026-08-31時点）:
+
+- **第一候補 / 法務が最も簡単**: OpenGameArt「20 Sword Sound Effects (Attacks and Clashes)」
+  by StarNinjas。実際のナイフ同士を録音・加工した剣撃10音＋衝突10音、CC0。
+  https://opengameart.org/node/122900
+  ページ内の `sword_-_starninjas.zip` と `sword_clash_-_starninjas.zip` が個別音源。
+- **品質の上限候補**: Sonniss #GameAudioGDC Bundle。ゲームへの組み込み、改変、商用利用、
+  無表記が許可されるが、素材単体の配布は禁止。バンドルが巨大なので、必要カテゴリだけ取得できるか
+  次回確認する。取得日のライセンス版が適用される。
+  https://sonniss.com/gdc-bundle-license/
+- **補助候補**: Pixabay の DavidDumaisAudio「Sword Slash With Metallic Impact」等。
+  商用利用可能でゲーム内の複合作品への組み込みはStandalone配布ではない。ただし原音をそのまま
+  リポジトリへ置くより、加工・混合して完成ゲーム内だけで配る運用が安全。
+  https://pixabay.com/sound-effects/film-special-effects-sword-slash-with-metallic-impact-185435/
+
+重要: ロマサガ等の既存ゲーム音源を抽出・模倣コピーしない。「鋭いアタック＋実録衝突＋重量ある
+低域」という機能的な参考に留める。今回の調査だけではファイル追加、音声差し替え、コード変更は
+行っていない。
+
 ### 戦死したモンスターを本当に退場させる（完了）
 
 戦闘で倒れた者はロスターから永久に外れる。給与計算より前に外すので死者に給料は出ない。
