@@ -80,7 +80,11 @@ const Music = {
   clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, Number(v) || 0)); },
 
   // ── 再生側（差し替え可能） ────────────────
-  MIX: .3,
+  // 効果音は単発の強調表現、BGMは常時鳴り続ける下敷きなので、同じ音量では
+  // BGM側が埋もれて聞こえなくなる。効果音より控えめに、しかし無音とは
+  // はっきり区別できる音量に上げてある（元は .3 で、上のhiss()の減衰バグと
+  // 重なって実質ほぼ無音になっていた）。
+  MIX: .55,
   LOOKAHEAD: .14,
   TICK: 25,
 
@@ -292,6 +296,10 @@ const Music = {
 
   thump(at, gain) {
     this.voice(this.desc.root / 2, .17, { type: "sine", gain: gain * .2, to: this.desc.root / 3.4, at });
+    // スマホの小型スピーカーは110Hz付近の低音をほぼ再生できない。
+    // 低音の輪郭が聞こえないと足音そのものが無音に聞こえるため、
+    // 踏み込みの芯を中域のクリックで補う（ヘッドホンでは低音に重なって厚みになる）。
+    this.hiss(at, .04, gain * .22, 2400, "bandpass");
   },
 
   snare(at, gain) { this.hiss(at, .09, gain * .5, 1900, "bandpass"); },
@@ -309,7 +317,9 @@ const Music = {
       source.connect(filter);
       tail = filter;
     }
-    amp.gain.setValueAtTime(Math.max(.0015, gain * .12), at);
+    // 以前は末尾で *.12 していたため、効果音と比べて実質1桁近く小さい音量になっていた
+    // （スネア・ハイハットが聞き取れないほど小さく、実質的に「BGMが鳴らない」状態を作っていた）。
+    amp.gain.setValueAtTime(Math.max(.0025, gain * .5), at);
     amp.gain.exponentialRampToValueAtTime(.0012, at + dur);
     tail.connect(amp);
     amp.connect(this.out);

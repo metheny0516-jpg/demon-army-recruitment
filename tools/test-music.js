@@ -6,10 +6,17 @@ const fs = require('fs'), vm = require('vm');
 
 let started = 0;
 let byType = { triangle: 0 };
+// hiss()（スネア・ハイハット・踏み込みのクリック等、ノイズ由来の中高域）が
+// 実際に amp.gain へ書き込む値だけを拾う。voice()（オシレーター由来の音程）とは
+// 作られる順序（createBufferSource → createGain）で見分ける。
+// これが無いと「音は鳴っている」ことしか検証できず、hiss()内部の減衰量が
+// 実質無音になるレベルまで沈んでいても気づけない（実際に踏んだバグ）。
+let creatingHiss = false;
+let hissPeaks = [];
 class AudioParam {
-  constructor() { this.value = 0; }
-  setValueAtTime(v) { this.value = v; }
-  exponentialRampToValueAtTime(v) { this.value = v; }
+  constructor(hiss) { this.value = 0; this.hiss = !!hiss; }
+  setValueAtTime(v) { this.value = v; if (this.hiss) hissPeaks.push(v); }
+  exponentialRampToValueAtTime(v) { this.value = v; if (this.hiss) hissPeaks.push(v); }
   setTargetAtTime(v) { this.value = v; }
 }
 class AudioNode {
@@ -17,12 +24,16 @@ class AudioNode {
   start() { started++; }
   stop() { if (this.onended) this.onended(); }
 }
-class GainNode extends AudioNode { constructor() { super(); this.gain = new AudioParam(); } }
+class GainNode extends AudioNode {
+  constructor() { super(); this.gain = new AudioParam(creatingHiss); creatingHiss = false; }
+}
 class OscillatorNode extends AudioNode {
   constructor() { super(); this.frequency = new AudioParam(); this.detune = new AudioParam(); }
   start() { super.start(); byType[this.type] = (byType[this.type] || 0) + 1; }
 }
-class BufferSourceNode extends AudioNode { constructor() { super(); this.buffer = null; } }
+class BufferSourceNode extends AudioNode {
+  constructor() { super(); this.buffer = null; creatingHiss = true; }
+}
 class FilterNode extends AudioNode {
   constructor() { super(); this.frequency = new AudioParam(); this.type = 'lowpass'; }
 }
@@ -192,6 +203,32 @@ function bars(state, count) {
   Sound.muted = true;
   assert(Music.start() === false, '効果音ミュート中にBGMが鳴る');
   Sound.muted = false;
+}
+
+
+// 10. 実際に「聞こえる音量か」を測る。
+//     オシレーターが started() したかだけを見るテスト（1〜9）は、内部の減衰計算で
+//     音量が実質ゼロまで沈んでいても検出できない。実際にこのバグを踏んだ:
+//     hiss() 内部に二重の減衰があり、スネア・ハイハットが効果音の1/10未満まで
+//     沈んでいた。実プレイでは「BGMが鳴らない」のと区別がつかなかった。
+{
+  Sound.muted = false;
+  Music.desc = Music.describe(army([unit(), unit(), unit()]), { scene: 'battle' });
+  let seed = 777;
+  Music.rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  hissPeaks = [];
+  assert(Music.start(), 'BGMを開始できない');
+  for (let bar = 0; bar < 8; bar++) {
+    for (let step = 0; step < 16; step++) Music.scheduleStep(step, bar * 2 + step * 0.1);
+  }
+  Music.suspend();
+  assert(hissPeaks.length > 0, 'スネア・ハイハット系のノイズ音が1回も鳴っていない');
+  const masterVolume = 0.55; // Sound の初期音量
+  const loudest = Math.max(...hissPeaks) * Music.out.gain.value * masterVolume;
+  // 効果音1発の実効音量はおおむね 0.015〜0.03（tone/noiseのgainにSound.masterを掛けた値）。
+  // BGMは常時鳴る下敷きなので効果音より控えめでよいが、これを大きく下回ると
+  // 実プレイでは「鳴っていない」のと区別がつかない（修正前は0.0018程度だった）。
+  assert(loudest >= 0.008, `BGMのノイズ系（スネア・ハイハット等）の実効音量が小さすぎる: ${loudest.toFixed(4)}`);
 }
 
 console.log('✓ BGM: 頭数・昇進・種族・未払い・忠誠・警戒度が演奏へ接続、サボりが効く');
