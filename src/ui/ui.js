@@ -102,11 +102,15 @@ const UI = {
   monsterCard(m, opts) {
     opts = opts || {};
     const unpaid = m.unpaid ? `<span class="unpaid">給与未払い</span>` : "";
+    const rank = Game.rankOf(m);
+    const nextRank = Game.nextRank(m);
+    const merit = m.merit || 0;
+    const meritText = nextRank ? `戦功 ${merit}/${nextRank.threshold}` : `戦功 ${merit}・最高位`;
     return `<div class="card">
       <div class="card-head">
         ${this.avatarHtml(m, opts.resume ? "photo" : "")}
         <div>
-          <div class="card-name">${U.esc(m.name)}</div>
+          <div class="card-name">${U.esc(m.name)} <span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span></div>
           <div class="card-job">${U.esc(m.race)} / ${U.esc(m.job)}</div>
         </div>
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
@@ -121,9 +125,11 @@ const UI = {
       <div class="meta">
         <span class="salary">希望給与 ${m.salary}G</span>
         <span class="loyal">忠誠 ${m.loyalty}</span>
+        <span class="merit">${meritText}</span>
         ${unpaid}
       </div>
       <div class="traits">${this.traitHtml(m.traits)}</div>
+      ${rank.id === "general" ? `<div class="general-ability">⚔ 将軍の号令：出撃中、味方全員の与ダメージ+15%</div>` : ""}
       ${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}
       ${opts.footer || ""}
     </div>`;
@@ -339,6 +345,12 @@ const UI = {
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
       ${this.contributionPanel(b.contribution)}
+      ${(st.lastPromotions && st.lastPromotions.length) ? `<div class="panel promotion-panel">
+        <h3>👑 魔王軍人事</h3>
+        ${st.lastPromotions.map(p => `<div class="promotion-row"><b>${U.esc(p.name)}</b> を
+          <span class="rank-badge rank-${U.esc(p.rankId)}">${U.esc(p.rankName)}</span> に任ずる！
+          <div class="muted">${U.esc(p.message)}</div></div>`).join("")}
+      </div>` : ""}
       ${(st.lastFallen && st.lastFallen.length) ? `<div class="panel fallen-panel">
         <h3>🕯 戦没者</h3>
         <div class="muted">${st.lastFallen.map(f => `${this.icon(f.race)} ${U.esc(f.name)}`).join("　")}</div>
@@ -419,6 +431,7 @@ const UI = {
           <dt>最終警戒度</dt><dd>${record.alert || 0}</dd>
           <dt>最大戦力</dt><dd>${record.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${record.maxArmySize || (record.finalRoster || []).length}体</dd>
+          <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
           <dt>死因</dt><dd>${U.esc(record.cause)}</dd>
@@ -444,6 +457,7 @@ const UI = {
           <dt>在位</dt><dd>${r.reignYears}年</dd>
           <dt>最大戦力</dt><dd>${r.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
+          <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
           <dt>勝利数</dt><dd>${r.battlesWon || 0}戦</dd>
           <dt>王国攻略</dt><dd>${r.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>主力種族</dt><dd>${U.esc(r.mainRace)}</dd>

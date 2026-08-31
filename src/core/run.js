@@ -42,6 +42,8 @@ const Game = {
       fallenTotal: 0,
       fallenRoll: [],
       lastFallen: [],
+      lastPromotions: [],
+      generalsMade: [],
       checkpoint: null
     };
     this.genApplicants();
@@ -128,6 +130,8 @@ const Game = {
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
+      lastPromotions: [],
+      generalsMade: [],
       turn: 1, conquest: 0, alert: 0, battlesWon: 0,
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 }
@@ -139,6 +143,7 @@ const Game = {
     if (!Array.isArray(st.activeUids)) st.activeUids = st.roster.slice(0, this.MAX_DEPLOY).map(m => m.uid);
     if (!Array.isArray(st.applicants)) st.applicants = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
+    if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
     if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
     if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
@@ -154,6 +159,8 @@ const Game = {
     for (const m of [...st.roster, ...st.applicants]) {
       m.unpaid = !!m.unpaid;
       m.unpaidStreak = m.unpaidStreak || 0;
+      m.merit = Math.max(0, Number(m.merit) || 0);
+      m.rankId = m.rankId || this.rankForMerit(m.merit).id;
     }
   },
 
@@ -170,6 +177,19 @@ const Game = {
   activeRoster() {
     const byId = new Map(this.state.roster.map(m => [m.uid, m]));
     return this.state.activeUids.map(uid => byId.get(uid)).filter(Boolean);
+  },
+
+  rankForMerit(merit) {
+    return PROMOTION_RANKS.slice().reverse().find(rank => merit >= rank.threshold) || PROMOTION_RANKS[0];
+  },
+
+  rankOf(monster) {
+    return PROMOTION_RANKS.find(rank => rank.id === monster.rankId) || PROMOTION_RANKS[0];
+  },
+
+  nextRank(monster) {
+    const index = PROMOTION_RANKS.findIndex(rank => rank.id === this.rankOf(monster).id);
+    return PROMOTION_RANKS[index + 1] || null;
   },
 
   // 応募者の質は征服だけでなく経過作戦でも上がる。ただし寄り道だけで
@@ -308,7 +328,9 @@ const Game = {
       prevJob: U.pick(tpl.prevJobs),
       motive: U.pick(tpl.motives),
       flaw: U.pick(tpl.flaws),
-      unpaid: false
+      unpaid: false,
+      merit: 0,
+      rankId: "soldier"
     };
   },
 
@@ -458,6 +480,7 @@ const Game = {
       st.gold += stageData.reward;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
       this.processCasualties(result.contribution, notes);
+      this.awardMerit(result.contribution, notes);
       this.applyMissionOutcome(stageData, notes);
       this.paySalaries(notes);
       this.processDepartures(notes);
@@ -523,6 +546,45 @@ const Game = {
     }
   },
 
+  awardMerit(contribution, notes) {
+    const st = this.state;
+    st.lastPromotions = [];
+    const survivors = (contribution || []).filter(c => c.survived !== false);
+    if (!survivors.length) return;
+    const topDealer = survivors.reduce((best, c) => !best || c.dealt > best.dealt ? c : best, null);
+    const topTanker = survivors.reduce((best, c) => !best || c.taken > best.taken ? c : best, null);
+    for (const c of survivors) {
+      const monster = st.roster.find(m => m.uid === c.uid);
+      if (!monster) continue;
+      let gained = 1 + Math.min(2, c.kills || 0);
+      if (topDealer && c.uid === topDealer.uid && c.dealt > 0) gained += 2;
+      if (topTanker && c.uid === topTanker.uid && c.taken > 0 && c.uid !== topDealer.uid) gained += 1;
+      monster.merit = (monster.merit || 0) + gained;
+      const targetRank = this.rankForMerit(monster.merit);
+      while (monster.rankId !== targetRank.id) {
+        const next = this.nextRank(monster);
+        if (!next || next.threshold > monster.merit) break;
+        this.promote(monster, next, notes);
+      }
+    }
+  },
+
+  promote(monster, rank, notes) {
+    const boost = rank.boost || {};
+    monster.rankId = rank.id;
+    monster.hp = Math.max(1, Math.round(monster.hp * (boost.hp || 1)));
+    monster.atk = Math.max(1, Math.round(monster.atk * (boost.atk || 1)));
+    monster.def = Math.max(0, monster.def + (boost.def || 0));
+    monster.loyalty = U.clamp(monster.loyalty + (boost.loyalty || 0), 0, 100);
+    monster.salary += boost.salary || 0;
+    const entry = { uid: monster.uid, name: monster.name, rankId: rank.id, rankName: rank.name, message: rank.message };
+    this.state.lastPromotions.push(entry);
+    if (rank.id === "general" && !this.state.generalsMade.some(g => g.uid === monster.uid)) {
+      this.state.generalsMade.push({ uid: monster.uid, name: monster.name, race: monster.race });
+    }
+    notes.push(`昇進！ ${monster.name} は【${rank.name}】となった。${rank.message}`);
+  },
+
   // 戦果に応じて各モンスターの一言を選ぶ。
   // 状況の優先度: 戦死 > 給与未払い > 殊勲 > 何もできず > 被弾最多 > 勝敗。
   // 画面の再描画で台詞が変わらないよう、ここで一度だけ選んで保存する。
@@ -568,6 +630,8 @@ const Game = {
     const st = this.state;
     const slimes = this.activeRoster().filter(m => m.race === "スライム").slice(0, 3);
     if (slimes.length < 3) return false;
+    const merit = slimes.reduce((sum, m) => sum + (m.merit || 0), 0);
+    const rank = this.rankForMerit(merit);
     const king = {
       uid: st.uidSeq++,
       tplId: "king_slime",
@@ -586,7 +650,9 @@ const Game = {
       prevJob: `スライム3体（${slimes.map(m => m.name).join("・")}）`,
       motive: "みんなで、ひとつに、なりました",
       flaw: "もう、もどれない",
-      unpaid: false
+      unpaid: false,
+      merit,
+      rankId: rank.id
     };
     const removed = new Set(slimes.map(m => m.uid));
     const idx = st.roster.findIndex(m => removed.has(m.uid));
@@ -596,6 +662,9 @@ const Game = {
     st.activeUids = st.activeUids.filter(uid => !removed.has(uid));
     st.activeUids.splice(Math.min(activeIndex, st.activeUids.length), 0, king.uid);
     st.raceCounts["キングスライム"] = (st.raceCounts["キングスライム"] || 0) + 1;
+    if (rank.id === "general" && !st.generalsMade.some(g => g.uid === king.uid)) {
+      st.generalsMade.push({ uid: king.uid, name: king.name, race: king.race });
+    }
     notes.push(`スライム3体が合体して ${king.name} が誕生した！！`);
     return true;
   },
@@ -689,7 +758,8 @@ const Game = {
       retriesUsed: st.retriesUsed || 0,
       fallenTotal: st.fallenTotal || 0,
       fallenRoll: (st.fallenRoll || []).map(f => f.name),
-      finalRoster: st.roster.map(m => ({ name: m.name, race: m.race, job: m.job })),
+      generalsMade: (st.generalsMade || []).map(g => ({ name: g.name, race: g.race })),
+      finalRoster: st.roster.map(m => ({ name: m.name, race: m.race, job: m.job, rankId: m.rankId, merit: m.merit || 0 })),
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
       date: new Date().toISOString().slice(0, 10)
     };

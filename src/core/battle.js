@@ -35,6 +35,7 @@ const Battle = {
       tplId: m.tplId || null,
       icon: m.icon || null,
       job: m.job || "",
+      rankId: m.rankId || "soldier",
       maxHp: m.hp,
       hp: m.hp,
       atk: m.atk,

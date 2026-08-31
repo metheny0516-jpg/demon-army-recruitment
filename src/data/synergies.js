@@ -3,6 +3,15 @@
 // 条件はUIにはあえて全て表示せず、発動時のみ見せる（プレイヤーの発見を重視）。
 const SYNERGIES = [
   {
+    id: "general_command",
+    name: "将軍の号令",
+    desc: "将軍が率いる出撃隊は全員の与ダメージ+15%",
+    check(units) { return units.some(u => u.rankId === "general"); },
+    apply(units) {
+      for (const u of units) u.mods.dmgMult *= 1.15;
+    }
+  },
+  {
     // 3体で頭打ちの固定値だと、4体目・5体目が何も足さず「全振り」が
     // 報われない。頭数に応じて伸ばすことで、種族を統一するコスト
     // （弱い個体で枠を埋めること）に見合う爆発力を持たせる。
