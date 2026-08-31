@@ -12,16 +12,24 @@ p{color:#b7a9ce}.now{color:#79e39c;font-weight:bold;min-height:1.6em}
 </head>
 <body><main>
 <h1>⚔ 効果音試聴室</h1>
-<p>各系統3変種。連打して、耳に痛くないか・重量があるか・反復感が少ないかを確認する。</p>
+<p>上段は現在ゲームで鳴る合成WAV、下段は<strong>まだゲーム本体では鳴らない</strong>CC0実録候補。連打して、耳に痛くないか・重量があるか・反復感が少ないかを確認する。</p>
+<p>候補は「風切り」「金属衝突」「鈍い打撃」を分けて収録している。採用後に初めてレイヤーしてゲーム用の短い一音に仕上げる。</p>
 <div id="families"></div><div class="now" id="now"></div>
 </main>
 <script>
-const descriptions={basun:'ばすん — 肉厚な打撃',gachan:'がちゃん — 金属衝突',zushi:'ずし — 重量のある決定打',zuba:'ずばっ — 素早い斬撃'};
+const current={basun:'ばすん — 肉厚な打撃',gachan:'がちゃん — 金属衝突',zushi:'ずし — 重量のある決定打',zuba:'ずばっ — 素早い斬撃'};
+const candidateGroups=[
+  { id:'starninjas-sword', label:'候補：剣の風切り — StarNinjas（実録ナイフ）', prefix:'candidate-starninjas-sword-' },
+  { id:'starninjas-clash', label:'候補：剣・盾の金属衝突 — StarNinjas（実録ナイフ）', prefix:'candidate-starninjas-clash-' },
+  { id:'antum-thwack', label:'候補：鈍い打撃 — AntumDeluge（物を叩いた実録）', prefix:'candidate-antum-thwack-' },
+];
 const root=document.getElementById('families'), now=document.getElementById('now');
-for(const [name,desc] of Object.entries(descriptions)){
+function addGroup(desc, files, path){
   const box=document.createElement('section');box.className='family';
-  box.innerHTML=`<h2>${desc}</h2><div class="row">${['a','b','c'].map(v=>`<button data-file="${name}-${v}.wav">▶ 変種 ${v.toUpperCase()}</button>`).join('')}</div>`;
+  box.innerHTML=`<h2>${desc}</h2><div class="row">${files.map(({file,label})=>`<button data-path="${path}" data-file="${file}">▶ ${label}</button>`).join('')}</div>`;
   root.appendChild(box);
 }
-root.addEventListener('click',e=>{const b=e.target.closest('[data-file]');if(!b)return;const a=new Audio('../assets/sfx/'+b.dataset.file);a.volume=.65;a.play();now.textContent='再生中: '+b.dataset.file;});
+for(const [name,desc] of Object.entries(current)) addGroup(desc,['a','b','c'].map(v=>({file:`${name}-${v}.wav`,label:`現行 ${v.toUpperCase()}`})),'../assets/sfx/');
+for(const group of candidateGroups) addGroup(group.label,Array.from({length:10},(_,i)=>{const n=String(i+1).padStart(2,'0');return {file:`${group.prefix}${n}.wav`,label:`候補 ${n}`};}),'../assets/sfx/candidates/');
+root.addEventListener('click',e=>{const b=e.target.closest('[data-file]');if(!b)return;const a=new Audio(b.dataset.path+b.dataset.file);a.volume=.65;a.play();now.textContent='再生中: '+b.dataset.file;});
 </script></body></html>
