@@ -12,8 +12,13 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if ((await page.locator('#sound-toggle').innerText()).includes('OFF')) errors.push('初期状態がミュート');
 
   await page.click('[data-action="new"]');
-  const unlocked = await page.evaluate(() => !!Sound.ctx || !(window.AudioContext || window.webkitAudioContext));
+  const audioState = await page.evaluate(() => ({
+    unlocked: !!Sound.ctx || !(window.AudioContext || window.webkitAudioContext),
+    samples: Sound.samples.size
+  }));
+  const unlocked = audioState.unlocked;
   if (!unlocked) errors.push('最初の操作で音声を解禁できない');
+  if (audioState.samples !== 12) errors.push(`衝撃WAVの事前読込が${audioState.samples}/12`);
 
   await page.locator('#sound-volume').evaluate(el => {
     el.value = '35';
@@ -27,7 +32,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   await page.reload();
   if (!(await page.locator('#sound-toggle').innerText()).includes('OFF')) errors.push('ミュート設定が復元されない');
 
-  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 音声解禁・音量・ミュート保存');
+  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 音声解禁・衝撃WAV・音量・ミュート保存');
   await browser.close();
   process.exit(errors.length ? 1 : 0);
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

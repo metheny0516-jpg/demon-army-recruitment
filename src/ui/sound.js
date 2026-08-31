@@ -5,6 +5,9 @@ const Sound = {
   master: null,
   noiseBuffer: null,
   active: new Set(),
+  media: new Set(),
+  samples: new Map(),
+  sampleSeq: 0,
   volume: 0.55,
   muted: false,
 
@@ -94,6 +97,7 @@ const Sound = {
         for (let i = 0; i < noise.length; i++) noise[i] = Math.random() * 2 - 1;
       }
       this.applyGain(true);
+      this.preloadSamples();
     }
     if (this.ctx.state !== "running" && this.ctx.resume) {
       const resumed = this.ctx.resume();
@@ -107,6 +111,38 @@ const Sound = {
     const value = this.muted ? 0 : this.volume;
     if (immediate || !this.master.gain.setTargetAtTime) this.master.gain.value = value;
     else this.master.gain.setTargetAtTime(value, this.ctx.currentTime, 0.015);
+    for (const audio of this.media) audio.volume = value * .82;
+  },
+
+  preloadSamples() {
+    if (typeof Audio === "undefined" || this.samples.size) return;
+    for (const family of ["basun", "gachan", "zushi", "zuba"]) {
+      for (const variant of ["a", "b", "c"]) {
+        const url = `assets/sfx/${family}-${variant}.wav`;
+        const audio = new Audio();
+        audio.preload = "auto";
+        audio.src = url;
+        if (audio.load) audio.load();
+        this.samples.set(url, audio);
+      }
+    }
+  },
+
+  playSample(family, data = {}) {
+    if (this.muted || typeof Audio === "undefined") return false;
+    this.preloadSamples();
+    const variant = ["a", "b", "c"][this.sampleSeq++ % 3];
+    const url = `assets/sfx/${family}-${variant}.wav`;
+    const prototype = this.samples.get(url);
+    const audio = prototype && prototype.cloneNode ? prototype.cloneNode() : new Audio(url);
+    audio.volume = this.volume * (family === "zushi" ? .9 : .78);
+    audio.playbackRate = Math.min(1.35, Math.sqrt(Math.max(1, data.speed || 1)));
+    this.media.add(audio);
+    const cleanup = () => this.media.delete(audio);
+    if (audio.addEventListener) audio.addEventListener("ended", cleanup, { once: true });
+    const played = audio.play();
+    if (played && played.catch) played.catch(cleanup);
+    return true;
   },
 
   tone(freq, duration, opts = {}) {
@@ -161,6 +197,10 @@ const Sound = {
       try { node.stop(); } catch (e) {}
     }
     this.active.clear();
+    for (const audio of this.media) {
+      try { audio.pause(); audio.currentTime = 0; } catch (e) {}
+    }
+    this.media.clear();
   },
 
   chord(freqs, duration, opts = {}) {
@@ -169,6 +209,11 @@ const Sound = {
 
   cue(name, data = {}) {
     if (this.muted) return;
+    if (name === "attack") {
+      const family = (data.emphasis || 0) >= 3 ? "zushi" : (data.emphasis || 0) >= 2 ? "basun" : "zuba";
+      if (this.playSample(family, data)) return;
+    }
+    if (name === "guard" && this.playSample("gachan", data)) return;
     const pace = 1 / Math.sqrt(Math.max(1, data.speed || 1));
     switch (name) {
       case "click":
@@ -280,7 +325,7 @@ const Sound = {
       case "battle_start": if (options.final) this.cue("final", data); break;
       case "round_start": this.cue("round", data); break;
       case "attack": this.cue("attack", { ...data, enemy: options.fromSide === "enemy" }); break;
-      case "splash": this.cue("magic", data); break;
+      case "splash": this.cue(event.label === "仲間割れ" ? "attack" : "magic", data); break;
       case "death": this.cue("death", data); break;
       case "revive": this.cue("revive", data); break;
       case "heal": this.cue("heal", data); break;

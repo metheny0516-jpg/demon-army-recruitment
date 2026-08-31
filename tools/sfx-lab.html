@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>魔王採用試験 効果音試聴室</title>
+<style>
+body{margin:0;background:#14101c;color:#ece7f5;font-family:system-ui,sans-serif}main{max-width:760px;margin:auto;padding:24px}
+h1{color:#f0c46a}.family{background:#241d38;border:1px solid #453a63;border-radius:12px;padding:16px;margin:12px 0}
+.row{display:flex;gap:8px;flex-wrap:wrap}button{min-width:110px;padding:12px;border:1px solid #7655a8;border-radius:8px;background:#392755;color:#fff;font-size:16px;cursor:pointer}
+p{color:#b7a9ce}.now{color:#79e39c;font-weight:bold;min-height:1.6em}
+</style>
+</head>
+<body><main>
+<h1>⚔ 効果音試聴室</h1>
+<p>各系統3変種。連打して、耳に痛くないか・重量があるか・反復感が少ないかを確認する。</p>
+<div id="families"></div><div class="now" id="now"></div>
+</main>
+<script>
+const descriptions={basun:'ばすん — 肉厚な打撃',gachan:'がちゃん — 金属衝突',zushi:'ずし — 重量のある決定打',zuba:'ずばっ — 素早い斬撃'};
+const root=document.getElementById('families'), now=document.getElementById('now');
+for(const [name,desc] of Object.entries(descriptions)){
+  const box=document.createElement('section');box.className='family';
+  box.innerHTML=`<h2>${desc}</h2><div class="row">${['a','b','c'].map(v=>`<button data-file="${name}-${v}.wav">▶ 変種 ${v.toUpperCase()}</button>`).join('')}</div>`;
+  root.appendChild(box);
+}
+root.addEventListener('click',e=>{const b=e.target.closest('[data-file]');if(!b)return;const a=new Audio('../assets/sfx/'+b.dataset.file);a.volume=.65;a.play();now.textContent='再生中: '+b.dataset.file;});
+</script></body></html>
