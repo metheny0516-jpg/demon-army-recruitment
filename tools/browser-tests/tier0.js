@@ -8,6 +8,7 @@ const ok=(c,m)=>console.log((c?'  ✓ ':'  ✗ ')+m);
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
+  await page.locator('[data-action="missionpick"]').last().click();
 
   // ── 2) 解雇ボタンの間隔と大きさ ──
   console.log('▼ 解雇ボタンの誤タップ対策（編成画面）');

@@ -18,6 +18,7 @@ const App = {
     if (!st) return this.showTitle();
     switch (st.phase) {
       case "recruit": return UI.recruit();
+      case "mission": return UI.mission();
       case "formation": return UI.formation();
       case "result": return UI.result();
       case "event": return UI.event();
@@ -59,8 +60,11 @@ const App = {
 
       case "toformation":
         Game.state.applicants = [];
-        Game.state.phase = "formation";
-        Game.save();
+        Game.prepareMissions(true);
+        return this.render();
+
+      case "missionpick":
+        Game.selectMission(Number(data.index));
         return this.render();
 
       case "up":

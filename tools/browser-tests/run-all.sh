@@ -10,7 +10,7 @@ GAME="$(pwd)"
 # Chromium が既定の場所にない場合: CHROME=/path/to/chrome sh tools/browser-tests/run-all.sh
 SP="${SP:-$(pwd)}"
 export GAME SP
-for t in smoke autoplay clear scene cutin contrib retry softlock resume tier0 reroll eventui; do
+for t in smoke autoplay mission clear scene cutin contrib retry softlock resume tier0 reroll eventui; do
   printf "%-10s " "$t:"
   node "tools/browser-tests/$t.js" 2>&1 | tail -1
 done

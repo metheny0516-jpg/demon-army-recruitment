@@ -11,6 +11,8 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   // 最終ステージ直前に強引に進め、クリア画面を確認する
   await page.evaluate(() => {
     Game.state.stage = 8;
+    Game.state.conquest = 7;
+    Game.state.turn = 8;
     Game.state.gold = 999;
     Game.state.roster.forEach(m => { m.hp = 9999; m.atk = 999; m.def = 99; m.spd = 99; });
     Game.state.phase = 'formation';

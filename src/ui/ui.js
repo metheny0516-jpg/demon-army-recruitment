@@ -63,11 +63,13 @@ const UI = {
   // ── 部品 ────────────────────────────
   hud() {
     const st = Game.state;
-    const sd = ENEMY_STAGES[Math.min(st.stage, ENEMY_STAGES.length) - 1];
+    const sd = Game.stageData();
     const salary = st.roster.reduce((s, m) => s + m.salary, 0);
     return `<div class="hud">
       <span>第 <b>${st.generation}</b> 代魔王軍</span>
-      <span>戦い <b>${Math.min(st.stage, ENEMY_STAGES.length)} / ${ENEMY_STAGES.length}</b></span>
+      <span>作戦 <b>${st.turn}</b></span>
+      <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
+      <span>警戒度 <b>${st.alert}</b></span>
       <span class="gold">所持金 <b>${st.gold}G</b></span>
       <span>給与総額 <b>${salary}G</b>/戦</span>
       <span>部隊 <b>${st.roster.length}/5</b></span>
@@ -170,14 +172,15 @@ const UI = {
     const sd = Game.stageData();
     const mine = Game.state.roster;
     return `<div class="panel">
-      <h3>次の敵：${U.esc(sd.army)} <span class="muted">（${U.esc(sd.region)}／報酬 ${sd.reward}G）</span></h3>
+      <h3>${U.esc(sd.missionTitle || "次の戦い")}：${U.esc(sd.army)}
+        <span class="muted">（${U.esc(sd.region)}／報酬 ${sd.reward}G）</span></h3>
       <div class="vs">
         <div class="side"><h4>魔王軍（上が前衛）</h4><ul>${
           mine.length ? mine.map(m => `<li>${this.icon(m.race)} ${U.esc(m.name)} <span class="muted">HP${m.hp} 攻${m.atk}</span></li>`).join("")
                       : `<li class="muted">誰もいない</li>`
         }</ul></div>
         <div class="mid">VS</div>
-        <div class="side"><h4>勇者軍</h4><ul>${
+        <div class="side"><h4>敵軍</h4><ul>${
           sd.units.map(e => `<li>🗡 ${U.esc(e.name)} <span class="muted">HP${e.hp} 攻${e.atk}</span></li>`).join("")
         }</ul></div>
       </div>
@@ -223,7 +226,7 @@ const UI = {
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
         <div class="muted">${
-          st.stage === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
+          st.turn === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
           : st.hiresLeft > 1 ? `先の戦いで欠員が出た。${st.hiresLeft}名まで補充できる。`
           : "3名が魔王軍への入隊を希望している。採用できるのは1名だけだ。"}</div>
       </div>
@@ -233,12 +236,47 @@ const UI = {
         <button data-action="reroll" ${Game.canReroll() ? "" : "disabled"}>
           📢 求人を出し直す（広告費 ${Game.rerollCost()}G）</button>
         <button data-action="skip" ${st.roster.length === 0 ? "disabled" : ""}>誰も採用しない（面接を打ち切る）</button>
-        <button data-action="toformation" ${st.roster.length === 0 ? "disabled" : ""}>部隊編成へ進む</button>
+        <button data-action="toformation" ${st.roster.length === 0 ? "disabled" : ""}>作戦会議へ進む</button>
         ${st.roster.length === 0 ? `<span class="muted">部隊が空では出撃できない。まず1体は採用せよ。</span>` : ""}
       </div>
       <div class="spacer"></div>
       ${rosterPanel}
       ${this.synergyPanel(st.roster)}`);
+  },
+
+  mission() {
+    const st = Game.state;
+    const offers = st.missionOffers.length ? st.missionOffers : Game.prepareMissions(true);
+    const salary = Game.salaryTotal();
+    const cards = offers.map((m, i) => {
+      const net = m.reward - salary;
+      const consequence = m.missionKind === "invade"
+        ? `王国攻略 +${m.conquestDelta}`
+        : m.missionKind === "suppress"
+          ? `生存者の忠誠 +${m.loyaltyDelta}`
+          : "軍資金を優先";
+      return `<div class="mission-card mission-${U.esc(m.missionKind)}">
+        <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : "🏰"}
+          危険度 ${U.esc(m.difficulty)}</div>
+        <h3>${U.esc(m.missionTitle)}</h3>
+        <div class="mission-army">${U.esc(m.army)} <span class="muted">— ${U.esc(m.region)}</span></div>
+        <p>${U.esc(m.description)}</p>
+        <dl class="mission-economy">
+          <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
+          <dt>現在の給与</dt><dd>${salary}G</dd>
+          <dt>差引見込</dt><dd class="${net >= 0 ? "positive" : "negative"}">${net >= 0 ? "+" : ""}${net}G</dd>
+          <dt>作戦結果</dt><dd>${U.esc(consequence)}</dd>
+          <dt>警戒度</dt><dd>+${m.alertDelta}</dd>
+        </dl>
+        <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
+      </div>`;
+    }).join("");
+    this.set(`${this.hud()}
+      <div class="panel">
+        <h2>🗺 作戦会議</h2>
+        <div class="muted">次に何をするか選べ。寄り道すれば軍を養えるが、警戒度が上がるほど以後の敵も強くなる。</div>
+      </div>
+      <div class="mission-grid">${cards}</div>`);
   },
 
   formation() {
@@ -257,7 +295,7 @@ const UI = {
     const empty = st.roster.length === 0;
     this.set(`${this.hud()}
       <div class="panel">
-        <h2>⚔ 部隊編成</h2>
+        <h2>⚔ 部隊編成 <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || "作戦未選択")}</span></h2>
         <div class="muted">並び順が配置。上にいるほど敵に狙われやすい。壁役を前に、魔法使いを後ろに。</div>
       </div>
       ${empty ? `<div class="panel"><b style="color:var(--red)">部隊が空だ。</b> このまま出撃すれば即敗北する。</div>` : ""}
@@ -314,7 +352,7 @@ const UI = {
       <div class="panel">
         <h3>まだ終わりではない</h3>
         <div class="muted">
-          第${st.stage}戦の採用面接まで時を巻き戻せる。応募者を選び直し、並べ直せ。<br>
+          第${st.turn}作戦の採用面接まで時を巻き戻せる。応募者と作戦を選び直し、並べ直せ。<br>
           ただし軍の立て直しには金がかかる：所持金 <b class="gold">${goldNow}G → ${goldAfter}G</b><br>
           この機会は<b>このランで1度きり</b>だ。
         </div>
@@ -363,6 +401,8 @@ const UI = {
         <dl class="history-item" style="border:none;padding:0;background:none">
           <dt>在位</dt><dd>${record.reignYears}年</dd>
           <dt>勝利数</dt><dd>${record.battlesWon}戦</dd>
+          <dt>王国攻略</dt><dd>${record.conquest || 0}/${Game.MAX_CONQUEST}</dd>
+          <dt>最終警戒度</dt><dd>${record.alert || 0}</dd>
           <dt>最大戦力</dt><dd>${record.maxPower}</dd>
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
@@ -388,6 +428,8 @@ const UI = {
         <dl>
           <dt>在位</dt><dd>${r.reignYears}年</dd>
           <dt>最大戦力</dt><dd>${r.maxPower}</dd>
+          <dt>勝利数</dt><dd>${r.battlesWon || 0}戦</dd>
+          <dt>王国攻略</dt><dd>${r.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>主力種族</dt><dd>${U.esc(r.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(r.region)}</dd>
           <dt>死因</dt><dd>${U.esc(r.cause)}</dd>

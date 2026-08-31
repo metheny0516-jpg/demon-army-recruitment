@@ -10,6 +10,8 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.evaluate(() => {
     Game.state.stage = 5;
+    Game.state.conquest = 4;
+    Game.state.turn = 5;
     Game.state.roster.forEach((m,i) => { m.hp = 60; m.atk = 14 + i*3; m.def = 4; });
     Game.state.phase = 'formation';
     App.render();

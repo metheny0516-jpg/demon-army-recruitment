@@ -14,6 +14,8 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   // 中盤戦らしい見た目にするため、強めの部隊で6戦目をぶつける
   await page.evaluate(() => {
     Game.state.stage = 6;
+    Game.state.conquest = 5;
+    Game.state.turn = 6;
     Game.state.roster.forEach(m => { m.hp = 70; m.atk = 22; m.def = 5; });
     Game.state.phase = 'formation';
     App.render();

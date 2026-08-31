@@ -3,7 +3,7 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/monsters.js','src/data/synergies.js','src/data/enemies.js','src/data/events.js',
+const files = ['src/data/traits.js','src/data/monsters.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/events.js',
                'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -75,6 +75,18 @@ function runOnce(strat, stats){
       Game.hire(chooseIndex(st.applicants, st.roster, strat));
     }
     if (st.phase === 'recruit') Game.skipHire();
+    if (st.phase === 'mission') {
+      let kind = 'invade';
+      const salary = Game.salaryTotal();
+      if (strat.mission === 'raid' && (st.missionCounts.raid || 0) < 4) kind = 'raid';
+      if (strat.mission === 'careful') {
+        const lowLoyalty = st.roster.some(m => m.loyalty < 45);
+        if (lowLoyalty && (st.missionCounts.suppress || 0) < 2) kind = 'suppress';
+        else if (st.gold < salary + 5 && (st.missionCounts.raid || 0) < 4) kind = 'raid';
+      }
+      const index = st.missionOffers.findIndex(m => m.missionKind === kind);
+      Game.selectMission(index >= 0 ? index : 2);
+    }
     if (st.phase === 'formation') {
       st.roster.sort((a,b)=> b.hp - a.hp);           // HP高い順に前へ
       for (const s of Synergy.active(st.roster)) stats.syn[s.name] = (stats.syn[s.name]||0)+1;
@@ -114,6 +126,8 @@ const strategies = [
   {name:'魔法職寄せ', kind:'caster'},
   {name:'精鋭3体', kind:'elite'},
   {name:'中盤で精鋭に転換', kind:'pivot'},
+  {name:'略奪4回→侵攻', kind:'greedy', mission:'raid'},
+  {name:'慎重経営', kind:'greedy', mission:'careful'},
 ];
 const N = Number(process.argv[2] || 400);
 for (const s of strategies) {

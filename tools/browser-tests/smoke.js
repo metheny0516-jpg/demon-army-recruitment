@@ -30,8 +30,9 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     await page.click('[data-action="hire"]');
     if (!(await page.locator('[data-action="hire"]').count())) throw new Error('2回目の面接が出ない');
   });
-  await step('2人目採用 → 編成画面', async () => {
+  await step('2人目採用 → 作戦会議 → 編成画面', async () => {
     await page.click('[data-action="hire"]');
+    await page.locator('[data-action="missionpick"]').last().click();
     await page.waitForSelector('[data-action="deploy"]');
   });
   await page.screenshot({ path: process.env.SP + '/shot-formation.png', fullPage: true });
@@ -67,6 +68,9 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
         await page.click('[data-action="nextrecruit"]');
         if (await page.locator('[data-action="hire"]').count()) await page.locator('[data-action="hire"]').first().click();
         else await page.click('[data-action="skip"]');
+      }
+      if (await page.locator('[data-action="missionpick"]').count()) {
+        await page.locator('[data-action="missionpick"]').last().click();
       }
       if (await page.locator('[data-action="deploy"]').count()) {
         await page.click('[data-action="deploy"]');

@@ -35,6 +35,12 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
         continue;
       }
 
+      if (await page.locator('[data-action="missionpick"]').count()) {
+        await page.locator('[data-action="missionpick"]').last().click();
+        await page.waitForTimeout(40);
+        continue;
+      }
+
       if (await page.locator('[data-action="skip"]').count()) { await click('[data-action="skip"]'); continue; }
       break;
     }

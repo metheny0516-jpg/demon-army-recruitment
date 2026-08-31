@@ -6,12 +6,20 @@ const Game = {
   armyPower(roster) { return roster.reduce((s, m) => s + this.power(m), 0); },
 
   RETRIES_PER_RUN: 1,
+  MAX_CONQUEST: ENEMY_STAGES.length,
 
   newRun() {
     const history = Storage.loadHistory();
     this.state = {
       generation: history.length + 1,
       stage: 1,
+      turn: 1,
+      conquest: 0,
+      alert: 0,
+      battlesWon: 0,
+      missionOffers: [],
+      selectedMission: null,
+      missionCounts: { raid: 0, suppress: 0, invade: 0 },
       gold: 10,
       roster: [],
       applicants: [],
@@ -98,25 +106,136 @@ const Game = {
   migrateState() {
     const st = this.state;
     if (!st || typeof st !== "object") return;
+    const legacyCampaign = st.conquest === undefined;
+    if (legacyCampaign) {
+      const legacyStage = U.clamp(Number(st.stage) || 1, 1, ENEMY_STAGES.length);
+      st.conquest = legacyStage - 1;
+      st.turn = legacyStage;
+      st.battlesWon = Math.max(0, legacyStage - 1);
+      st.alert = 0;
+      st.missionOffers = [];
+      st.selectedMission = null;
+      st.missionCounts = { raid: 0, suppress: 0, invade: st.conquest };
+      // 旧セーブの編成画面には選択済み作戦が無い。安全に作戦会議へ戻す。
+      if (st.phase === "formation") st.phase = "mission";
+    }
     const defaults = {
       roster: [], applicants: [], hiresLeft: 1, maxPower: 0, raceCounts: {}, uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, checkpoint: null,
-      pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: []
+      pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
+      turn: 1, conquest: 0, alert: 0, battlesWon: 0,
+      missionOffers: [], selectedMission: null,
+      missionCounts: { raid: 0, suppress: 0, invade: 0 }
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
     }
     if (!Array.isArray(st.roster)) st.roster = [];
     if (!Array.isArray(st.applicants)) st.applicants = [];
+    if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
     if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
+    if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
+      st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
+    }
+    st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
     for (const m of [...st.roster, ...st.applicants]) {
       m.unpaid = !!m.unpaid;
       m.unpaidStreak = m.unpaidStreak || 0;
     }
   },
 
-  stageData() { return ENEMY_STAGES[this.state.stage - 1]; },
+  stageData() {
+    if (this.state.selectedMission) return this.state.selectedMission;
+    return ENEMY_STAGES[Math.min(this.state.conquest, ENEMY_STAGES.length - 1)];
+  },
+
+  salaryTotal() {
+    return this.state.roster.reduce((sum, m) => sum + m.salary, 0);
+  },
+
+  // 応募者の質は征服だけでなく経過作戦でも上がる。ただし寄り道だけで
+  // 無限に膨張しないよう、従来の8段階を上限にする。
+  campaignLevel() {
+    const st = this.state;
+    return U.clamp(Math.max(st.conquest + 1, Math.ceil(st.turn * 0.75)), 1, ENEMY_STAGES.length);
+  },
+
+  // ── 作戦会議 ────────────────────────────
+  prepareMissions(force) {
+    const st = this.state;
+    if (!force && Array.isArray(st.missionOffers) && st.missionOffers.length === MISSION_TYPES.length) {
+      st.phase = "mission";
+      return st.missionOffers;
+    }
+    st.selectedMission = null;
+    st.missionOffers = MISSION_TYPES.map(type => this.buildMission(type));
+    st.phase = "mission";
+    this.save();
+    return st.missionOffers;
+  },
+
+  buildMission(type) {
+    const st = this.state;
+    const baseIndex = U.clamp(st.conquest + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1);
+    const base = ENEMY_STAGES[baseIndex];
+    const scale = type.enemyMult * (1 + st.alert * 0.02);
+    const stat = (value, min) => Math.max(min, Math.round(value * scale));
+    const units = base.units.map((unit, index) => ({
+      ...unit,
+      name: type.enemyNames ? type.enemyNames[index % type.enemyNames.length] : unit.name,
+      hp: stat(unit.hp, 1),
+      atk: stat(unit.atk, 1),
+      def: stat(unit.def, 0),
+      spd: stat(unit.spd, 1)
+    }));
+    const jitter = U.randInt(type.rewardJitter[0], type.rewardJitter[1]);
+    // 略奪は「給与を払ったうえで少し蓄えられる」資金調達策にする。
+    // 固定額だけでは大所帯ほど赤字になり、寄り道する意味が逆転してしまう。
+    const payrollSupport = Math.round(this.salaryTotal() * (type.payrollCoverage || 0));
+    const reward = Math.max(1, Math.round(base.reward * type.rewardMult) + payrollSupport + jitter);
+    const variant = type.armies ? U.randInt(0, type.armies.length - 1) : 0;
+    const isInvade = type.id === "invade";
+    return {
+      stage: st.turn,
+      missionKind: type.id,
+      missionTitle: type.title,
+      description: U.pick(type.descriptions),
+      difficulty: type.difficulty,
+      army: isInvade ? base.army : type.armies[variant],
+      region: isInvade ? base.region : type.regions[variant],
+      reward,
+      alertDelta: type.alertDelta,
+      conquestDelta: type.conquestDelta,
+      loyaltyDelta: type.loyaltyDelta,
+      baseStage: base.stage,
+      units
+    };
+  },
+
+  selectMission(index) {
+    const st = this.state;
+    if (st.phase !== "mission") return false;
+    const mission = st.missionOffers[index];
+    if (!mission) return false;
+    st.selectedMission = JSON.parse(JSON.stringify(mission));
+    st.phase = "formation";
+    this.save();
+    return true;
+  },
+
+  finishRecruitment() {
+    const st = this.state;
+    st.hiresLeft = 0;
+    st.applicants = [];
+    if (st.roster.length === 0) {
+      st.phase = "formation";
+      this.save();
+      return;
+    }
+    st.missionOffers = [];
+    this.prepareMissions(true);
+  },
 
   // ── 応募者生成 ────────────────────────────
   genApplicants() {
@@ -127,11 +246,12 @@ const Game = {
 
   rollApplicant() {
     const st = this.state;
-    // ステージが進むほど高ティアが出やすい
+    const level = this.campaignLevel();
+    // 作戦と征服が進むほど高ティアが出やすい
     const weights = MONSTER_TEMPLATES.map(t => {
-      if (t.tier === 1) return st.stage <= 3 ? 6 : 2;
-      if (t.tier === 2) return st.stage <= 2 ? 2 : 5;
-      return st.stage <= 2 ? 0.5 : (st.stage <= 4 ? 2 : 5);
+      if (t.tier === 1) return level <= 3 ? 6 : 2;
+      if (t.tier === 2) return level <= 2 ? 2 : 5;
+      return level <= 2 ? 0.5 : (level <= 4 ? 2 : 5);
     });
     const total = weights.reduce((a, b) => a + b, 0);
     let r = U.rand() * total;
@@ -140,8 +260,8 @@ const Game = {
       r -= weights[i];
       if (r <= 0) { tpl = MONSTER_TEMPLATES[i]; break; }
     }
-    // ステージ補正：後から来る応募者ほど強い
-    const scale = 1 + 0.12 * (st.stage - 1);
+    // 進行補正：後から来る応募者ほど強い
+    const scale = 1 + 0.12 * (level - 1);
     const vary = v => Math.max(1, Math.round(v * scale * (0.85 + U.rand() * 0.3)));
     const traits = [tpl.fixedTrait];
     if (tpl.traitPool.length > 0 && U.chance(0.5)) {
@@ -158,7 +278,7 @@ const Game = {
       atk: vary(tpl.base.atk),
       def: Math.max(0, Math.round(tpl.base.def * (0.8 + U.rand() * 0.4))),
       spd: Math.max(1, Math.round(tpl.base.spd * (0.85 + U.rand() * 0.3))),
-      salary: U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(st.stage / 4),
+      salary: U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(level / 4),
       loyalty: U.randInt(tpl.loyalty[0], tpl.loyalty[1]),
       traits,
       tags: tpl.tags.slice(),
@@ -231,19 +351,14 @@ const Game = {
       st.rerollsThisPhase = 0;   // 新しい面接なので広告費もリセット
       this.genApplicants();
     } else {
-      st.applicants = [];
-      st.phase = "formation";
+      this.finishRecruitment();
     }
     this.save();
     return true;
   },
 
   skipHire() {
-    const st = this.state;
-    st.hiresLeft = 0;
-    st.applicants = [];
-    st.phase = "formation";
-    this.save();
+    this.finishRecruitment();
   },
 
   fire(uid) {
@@ -264,6 +379,11 @@ const Game = {
   deploy() {
     const st = this.state;
     if (st.roster.length === 0) return null;
+    // 旧セーブやテストが直接 formation を作った場合だけ、次の侵攻作戦を補う。
+    if (!st.selectedMission) {
+      const invade = MISSION_TYPES.find(m => m.id === "invade");
+      st.selectedMission = this.buildMission(invade);
+    }
     const notes = [];
 
     // キングスライム合体（出撃時・永続）
@@ -290,10 +410,14 @@ const Game = {
       st.gold += stageData.reward;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
       this.processCasualties(result.contribution, notes);
+      this.applyMissionOutcome(stageData, notes);
       this.paySalaries(notes);
       this.processDepartures(notes);
-      st.stage += 1;
-      if (st.stage > ENEMY_STAGES.length) {
+      st.battlesWon += 1;
+      st.turn += 1;
+      st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
+      st.missionOffers = [];
+      if (st.conquest >= this.MAX_CONQUEST) {
         st.phase = "clear";   // 記録の確定は deploy() の末尾でまとめて行う
       } else {
         st.phase = "result";
@@ -306,6 +430,8 @@ const Game = {
 
     st.lastBattle = {
       victory: result.victory,
+      missionKind: stageData.missionKind,
+      missionTitle: stageData.missionTitle,
       army: stageData.army,
       region: stageData.region,
       reward: result.victory ? stageData.reward : 0,
@@ -327,6 +453,26 @@ const Game = {
       this.save();
     }
     return { result, notes, stageData };
+  },
+
+  applyMissionOutcome(mission, notes) {
+    const st = this.state;
+    st.alert = Math.max(0, st.alert + (mission.alertDelta || 0));
+    st.conquest = U.clamp(st.conquest + (mission.conquestDelta || 0), 0, this.MAX_CONQUEST);
+    const kind = mission.missionKind || "invade";
+    st.missionCounts[kind] = (st.missionCounts[kind] || 0) + 1;
+    if (mission.conquestDelta) {
+      notes.push(`王国攻略 ${st.conquest}/${this.MAX_CONQUEST}。王都へ一歩近づいた`);
+    }
+    if (mission.loyaltyDelta) {
+      for (const m of st.roster) {
+        m.loyalty = U.clamp(m.loyalty + mission.loyaltyDelta, 0, 100);
+      }
+      notes.push(`反乱鎮圧の威光により、生存者全員の忠誠+${mission.loyaltyDelta}`);
+    }
+    if (mission.alertDelta) {
+      notes.push(`王国警戒度+${mission.alertDelta}（現在 ${st.alert}）`);
+    }
   },
 
   // 戦果に応じて各モンスターの一言を選ぶ。
@@ -471,18 +617,22 @@ const Game = {
   // ── ラン終了と魔界史 ──────────────────────
   endRun(cleared) {
     const st = this.state;
-    const won = cleared ? ENEMY_STAGES.length : st.stage - 1;
+    const won = st.battlesWon || 0;
+    const finalMission = st.selectedMission || this.stageData();
     const mainRace = Object.entries(st.raceCounts)
       .sort((a, b) => b[1] - a[1])[0]?.[0] || "なし";
     const record = {
       gen: st.generation,
       cleared,
       battlesWon: won,
+      conquest: st.conquest || 0,
+      alert: st.alert || 0,
+      missionCounts: { ...(st.missionCounts || {}) },
       reignYears: won * 4 + U.randInt(1, 3),
       maxPower: st.maxPower,
       mainRace,
-      region: cleared ? "王都（制圧）" : this.stageData().region,
-      cause: cleared ? "人間界を征服し引退" : `${this.stageData().army}に敗北`,
+      region: cleared ? "王都（制圧）" : finalMission.region,
+      cause: cleared ? "人間界を征服し引退" : `${finalMission.army}に敗北`,
       retriesUsed: st.retriesUsed || 0,
       fallenTotal: st.fallenTotal || 0,
       fallenRoll: (st.fallenRoll || []).map(f => f.name),
@@ -586,6 +736,8 @@ const Game = {
     st.rerollsThisPhase = 0;
     st.pendingEvent = null;
     st.eventOutcome = null;
+    st.selectedMission = null;
+    st.missionOffers = [];
     this.saveCheckpoint();   // ここが「一戦手前」の戻り先になる
     this.save();
   }

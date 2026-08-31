@@ -53,7 +53,7 @@ const BattleScene = {
     return `
       <div class="hud">
         <span>第 <b>${Game.state.generation}</b> 代魔王軍</span>
-        <span>第 <b>${stageData.stage}</b> 戦</span>
+        <span>第 <b>${stageData.stage}</b> 作戦</span>
         <span class="muted">${U.esc(stageData.region)}</span>
       </div>
       <div class="scene" id="scene">

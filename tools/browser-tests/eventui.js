@@ -27,6 +27,9 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
       await page.click('[data-action="afterresult"]'); await page.waitForTimeout(120);
     }
     if (await page.locator('[data-action="eventpick"]').count()) { fired=true; break; }
+    if (await page.locator('[data-action="missionpick"]').count()) {
+      await page.locator('[data-action="missionpick"]').last().click(); await page.waitForTimeout(100);
+    }
     // イベントが出なければ次の戦闘へ
     if (await page.locator('[data-action="deploy"]:not([disabled])').count()) {
       await page.click('[data-action="deploy"]'); await page.click('[data-action="skiplog"]');

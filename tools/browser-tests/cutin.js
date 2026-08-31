@@ -18,6 +18,8 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
       traits:['coward','pack'], tags:[], quote:'', unpaid:false
     }));
     Game.state.stage = 5;
+    Game.state.conquest = 4;
+    Game.state.turn = 5;
     Game.state.phase = 'formation';
     App.render();
   });
