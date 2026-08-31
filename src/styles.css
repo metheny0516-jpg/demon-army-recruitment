@@ -650,6 +650,8 @@ button.wide { width: 100%; }
 .promotion-panel { border-color: var(--gold); }
 .promotion-row { padding: 8px 0; border-top: 1px solid var(--border); }
 .promotion-row:first-of-type { border-top: 0; }
+.incident-panel { border-color: #9c433f; background: rgba(120, 35, 30, .12); }
+.incident { color: #ff9e8f; font-weight: bold; }
 .mission-card {
   background: #171226;
   border: 1px solid var(--line);

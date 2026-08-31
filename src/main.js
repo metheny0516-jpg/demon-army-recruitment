@@ -67,6 +67,14 @@ const App = {
         Game.selectMission(Number(data.index));
         return this.render();
 
+      case "backrecruit":
+        Game.backToRecruit();
+        return this.render();
+
+      case "backmission":
+        Game.backToMissions();
+        return this.render();
+
       case "up":
         Game.moveDeployed(Number(data.uid), -1);
         return this.render();

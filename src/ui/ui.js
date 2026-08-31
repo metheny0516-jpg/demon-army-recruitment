@@ -71,7 +71,7 @@ const UI = {
       <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
       <span>警戒度 <b>${st.alert}</b></span>
       <span class="gold">所持金 <b>${st.gold}G</b></span>
-      <span>軍維持費 <b>${salary}G</b>/戦</span>
+      <span>出撃隊給与 <b>${salary}G</b>/戦</span>
       <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
       <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
       <span class="muted">${U.esc(sd.region)}</span>
@@ -235,6 +235,7 @@ const UI = {
         <div class="muted">${
           st.turn === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
           : st.hiresLeft > 1 ? `先の戦いで欠員が出た。${st.hiresLeft}名まで補充できる。`
+          : st.hiresLeft === 0 ? "今回の採用は終了。軍団を確認したら作戦会議へ戻れ。"
           : "3名が魔王軍への入隊を希望している。採用できるのは1名だけだ。"}</div>
       </div>
       <div class="cards">${cards}</div>
@@ -270,7 +271,7 @@ const UI = {
         <p>${U.esc(m.description)}</p>
         <dl class="mission-economy">
           <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
-          <dt>現在の維持費</dt><dd>${salary}G</dd>
+          <dt>出撃隊給与</dt><dd>${salary}G</dd>
           <dt>差引見込</dt><dd class="${net >= 0 ? "positive" : "negative"}">${net >= 0 ? "+" : ""}${net}G</dd>
           <dt>作戦結果</dt><dd>${U.esc(consequence)}</dd>
           <dt>警戒度</dt><dd>+${m.alertDelta}</dd>
@@ -284,7 +285,9 @@ const UI = {
         <h2>🗺 作戦会議</h2>
         <div class="muted">次に何をするか選べ。寄り道すれば軍を養えるが、警戒度が上がるほど以後の敵も強くなる。</div>
       </div>
-      <div class="mission-grid">${cards}</div>`);
+      <div class="mission-grid">${cards}</div>
+      <div class="spacer"></div>
+      <button class="wide ghost" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`);
   },
 
   formation() {
@@ -303,7 +306,7 @@ const UI = {
       </div>`
     })).join("");
     const reserveCards = reserves.map(m => this.monsterCard(m, {
-      badge: "控え（兵站費1G）",
+      badge: "控え（給与0G）",
       footer: `<div class="card-actions">
         <button class="small primary" data-action="toggledeploy" data-uid="${m.uid}"
           ${active.length >= Game.MAX_DEPLOY ? "disabled" : ""}>出撃隊へ</button>
@@ -314,7 +317,7 @@ const UI = {
     this.set(`${this.hud()}
       <div class="panel">
         <h2>⚔ 出撃隊編成 <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || "作戦未選択")}</span></h2>
-        <div class="muted">軍団${st.roster.length}体から最大5体を選抜。並びの上ほど狙われやすい。控えは1体1Gの兵站費。</div>
+        <div class="muted">軍団${st.roster.length}体から最大5体を選抜。並びの上ほど狙われやすい。控えには給与を払わない。</div>
       </div>
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 控えから最低1体を選べ。</div>` : ""}
       <div class="army-section"><h3>出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
@@ -323,6 +326,8 @@ const UI = {
       <div class="spacer"></div>
       ${this.synergyPanel(active)}
       ${this.enemyPreview()}
+      <button class="wide ghost" data-action="backmission">← 作戦会議へ戻る</button>
+      <div class="spacer"></div>
       <button class="primary wide" data-action="deploy" ${empty ? "disabled" : ""}>出撃する</button>
       ${st.roster.length === 0 ? `<div class="spacer"></div><button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}`);
   },
@@ -345,6 +350,8 @@ const UI = {
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
       ${this.contributionPanel(b.contribution)}
+      ${(b.incidents && b.incidents.length) ? `<div class="panel incident-panel"><h3>💥 この戦いの不祥事</h3>
+        ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}
       ${(st.lastPromotions && st.lastPromotions.length) ? `<div class="panel promotion-panel">
         <h3>👑 魔王軍人事</h3>
         ${st.lastPromotions.map(p => `<div class="promotion-row"><b>${U.esc(p.name)}</b> を
@@ -432,6 +439,7 @@ const UI = {
           <dt>最大戦力</dt><dd>${record.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${record.maxArmySize || (record.finalRoster || []).length}体</dd>
           <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
+          <dt>戦場の不祥事</dt><dd>${record.battleIncidentTotal || 0}件</dd>
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
           <dt>死因</dt><dd>${U.esc(record.cause)}</dd>
@@ -458,6 +466,7 @@ const UI = {
           <dt>最大戦力</dt><dd>${r.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
           <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
+          <dt>戦場の不祥事</dt><dd>${r.battleIncidentTotal || 0}件</dd>
           <dt>勝利数</dt><dd>${r.battlesWon || 0}戦</dd>
           <dt>王国攻略</dt><dd>${r.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>主力種族</dt><dd>${U.esc(r.mainRace)}</dd>

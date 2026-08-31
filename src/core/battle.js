@@ -19,6 +19,7 @@
 //   revive       { unitId, hp, maxHp }              蘇生（状態差分から自動検出）
 //   heal         { unitId, amount, hp, maxHp }      回復（同上）
 //   note         { }                                特性の発動などテキストのみ
+//   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
 //   result       { victory }
 // ───────────────────────────────────────────────────────
 const Battle = {
@@ -137,9 +138,35 @@ const Battle = {
       return dmg;
     };
 
+    const tryIncident = (unit, allies) => {
+      if (unit.side !== "player" || unit.flags.incidentUsed) return false;
+      const candidates = BATTLE_HAPPENINGS.filter(h => h.check(unit));
+      const generalPresent = allies.some(a => a.alive && a.rankId === "general");
+      for (const happening of candidates) {
+        const chance = happening.chance * (generalPresent ? 0.35 : 1);
+        if (!U.chance(chance)) continue;
+        let target = null;
+        if (happening.kind === "friendly_fire") {
+          const victims = allies.filter(a => a.alive && a !== unit);
+          if (!victims.length) continue;
+          target = U.pick(victims);
+        }
+        unit.flags.incidentUsed = true;
+        emit("incident", {
+          id: happening.id, name: happening.name, unitId: unit.id,
+          targetId: target && target.id, emphasis: 3,
+          text: happening.text(unit, target), cls: "incident"
+        });
+        if (target) applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true });
+        return true;
+      }
+      return false;
+    };
+
     const act = (unit, allies, enemies, round) => {
       const living = enemies.filter(u => u.alive);
       if (living.length === 0) return;
+      if (tryIncident(unit, allies)) return;
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = U.chance(0.6) ? living[0] : U.pick(living);
 
@@ -238,6 +265,7 @@ const Battle = {
       log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
       rounds: Math.min(round, this.MAX_ROUNDS),
       activeSynergies: activeSyn.map(s => s.name),
+      incidents: timeline.filter(e => e.type === "incident").map(e => ({ id: e.id, name: e.name, text: e.text })),
       // 誰がどれだけ働いたか（結果画面のMVP表示用）。新しい状態を戦闘中に
       // 持ち回る必要はなく、既に確定したタイムラインから導出するだけでよい。
       contribution: this.summarizeContribution(timeline, playerUnits)
@@ -245,7 +273,7 @@ const Battle = {
   },
 
   summarizeContribution(timeline, playerUnits) {
-    const hits = timeline.filter(e => e.type === "attack" || e.type === "splash");
+    const hits = timeline.filter(e => (e.type === "attack" || e.type === "splash") && e.label !== "仲間割れ");
     return playerUnits.map(u => {
       const dealt = hits.filter(e => e.fromId === u.id).reduce((s, e) => s + e.dmg, 0);
       const taken = hits.filter(e => e.toId === u.id).reduce((s, e) => s + e.dmg, 0);

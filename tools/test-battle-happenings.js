@@ -1,0 +1,15 @@
+const fs = require('fs'), vm = require('vm');
+const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/core/util.js','src/core/synergy.js','src/core/battle.js'];
+const ctx = { console, Math: Object.create(Math) };
+vm.createContext(ctx);
+for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
+vm.runInContext('U.chance = () => true; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
+const Battle = vm.runInContext('Battle', ctx);
+const assert = (condition, message) => { if (!condition) throw new Error(message); console.log(`✓ ${message}`); };
+const unit = (uid, name, loyalty, unpaid) => Battle.makeUnit({ uid, name, race:'ゴブリン', hp:40, atk:8, def:2, spd:8-uid, salary:2, loyalty, unpaid, traits:[], tags:[], rankId:'soldier' }, 'player');
+const enemy = () => Battle.makeUnit({ name:'訓練かかし', hp:100, atk:1, def:0, spd:1, traits:[], tags:[] }, 'enemy');
+let result = Battle.simulate([unit(1, '未払い兵', 60, true)], [enemy()]);
+assert(result.incidents.some(i => i.id === 'strike'), '給与未払いで戦場ストライキが発生');
+result = Battle.simulate([unit(2, '反乱兵', 10, false), unit(3, '巻き添え', 80, false)], [enemy()]);
+assert(result.incidents.some(i => i.id === 'mutiny'), '低忠誠で仲間割れが発生');
+assert(result.timeline.some(e => e.type === 'splash' && e.label === '仲間割れ'), '仲間へのダメージを構造化イベントで記録');

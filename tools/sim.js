@@ -3,7 +3,7 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/events.js',
+const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/events.js',
                'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -96,6 +96,7 @@ function runOnce(strat, stats){
       const stageNow = st.stage;
       const out = Game.deploy();
       if (!out) break;
+      stats.incidents += (out.result.incidents || []).length;
       if (st.roster.some(m => m.unpaid)) stats.unpaid++;
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
@@ -134,14 +135,14 @@ const strategies = [
 ];
 const N = Number(process.argv[2] || 400);
 for (const s of strategies) {
-  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, maxArmy:0 };
+  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, maxArmy:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
   const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
 }

@@ -1,6 +1,6 @@
 // 戦功・三段階昇進・将軍シナジーをブラウザなしで検証する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/events.js',
+const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/events.js',
   'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {

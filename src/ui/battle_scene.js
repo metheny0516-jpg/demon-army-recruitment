@@ -10,7 +10,7 @@ const BattleScene = {
   DURATION: { 0: 300, 1: 400, 2: 560, 3: 760 },
   SPECIAL_DURATION: {
     battle_start: 260, round_start: 420, synergy: 1450,
-    note: 170, death: 460, revive: 780, survive: 420, heal: 300, result: 900
+    note: 170, incident: 1300, death: 460, revive: 780, survive: 420, heal: 300, result: 900
   },
 
   // 長期戦がだらけないための自動圧縮。シナジー同士が噛み合って乱戦が
@@ -181,6 +181,10 @@ const BattleScene = {
       }
       case "synergy":
         this.cutin(ev.name, ev.desc, ev.id);
+        break;
+      case "incident":
+        this.cutin(ev.name, "魔王軍で事件発生！", ev.id);
+        this.shake();
         break;
       case "result":
         this.banner(ev.victory);

@@ -1,6 +1,6 @@
 // 軍団20体・出撃隊5体の状態契約をブラウザなしで検証する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/events.js',
+const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/events.js',
   'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -27,9 +27,18 @@ st.maxArmySize = 10;
 
 assert(Game.MAX_ARMY === 20 && Game.MAX_DEPLOY === 5, '軍団20体・出撃5体の上限');
 assert(Game.activeRoster().length === 5, '出撃隊だけを抽出');
-assert(Game.salaryTotal() === 20, '出撃5体15G＋控え5体5Gの維持費');
+assert(Game.salaryTotal() === 15, '給与は出撃5体分だけで控えは0G');
+st.gold = 100;
+Game.paySalaries([]);
+assert(st.roster.find(m => m.uid === 1).loyalty === 72 && st.roster.find(m => m.uid === 6).loyalty === 70,
+  '給与支払いと忠誠上昇は出撃隊だけが対象');
 assert(!Game.toggleDeploy(6), '満員の出撃隊へ6体目を追加できない');
 Game.toggleDeploy(5);
 assert(Game.toggleDeploy(6) && Game.activeRoster().map(m => m.uid).join(',') === '1,2,3,4,6', '控えとの入れ替え');
 Game.processCasualties([{ uid: 2, name: '兵2', race: 'ゴブリン', survived: false }], []);
 assert(!st.roster.some(m => m.uid === 2) && !st.activeUids.includes(2), '戦死者を軍団と出撃隊の両方から除外');
+st.phase = 'mission';
+assert(Game.backToRecruit() && st.phase === 'recruit', '作戦会議から面接・軍団確認へ戻れる');
+st.phase = 'formation';
+st.selectedMission = { missionKind: 'invade' };
+assert(Game.backToMissions() && st.phase === 'mission' && st.selectedMission === null, '編成から作戦会議へ戻れる');

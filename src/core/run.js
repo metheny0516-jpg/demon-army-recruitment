@@ -44,6 +44,7 @@ const Game = {
       lastFallen: [],
       lastPromotions: [],
       generalsMade: [],
+      battleIncidentTotal: 0,
       checkpoint: null
     };
     this.genApplicants();
@@ -132,6 +133,7 @@ const Game = {
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
       generalsMade: [],
+      battleIncidentTotal: 0,
       turn: 1, conquest: 0, alert: 0, battlesWon: 0,
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 }
@@ -171,7 +173,7 @@ const Game = {
 
   salaryTotal() {
     const active = new Set(this.state.activeUids);
-    return this.state.roster.reduce((sum, m) => sum + (active.has(m.uid) ? m.salary : 1), 0);
+    return this.state.roster.reduce((sum, m) => sum + (active.has(m.uid) ? m.salary : 0), 0);
   },
 
   activeRoster() {
@@ -263,6 +265,24 @@ const Game = {
     st.selectedMission = JSON.parse(JSON.stringify(mission));
     st.phase = "formation";
     this.save();
+    return true;
+  },
+
+  backToRecruit() {
+    const st = this.state;
+    if (st.phase !== "mission") return false;
+    st.phase = "recruit";
+    st.hiresLeft = 0;
+    st.applicants = [];
+    this.save();
+    return true;
+  },
+
+  backToMissions() {
+    const st = this.state;
+    if (st.phase !== "formation") return false;
+    st.selectedMission = null;
+    this.prepareMissions(true); // 出撃隊変更後の維持費と敵情報で作り直す
     return true;
   },
 
@@ -508,10 +528,12 @@ const Game = {
       reward: result.victory ? stageData.reward : 0,
       goldBefore,
       synergies: result.activeSynergies,
+      incidents: result.incidents || [],
       notes,
       logLength: result.log.length,
       contribution: this.attachVoices(result.contribution, result.victory)
     };
+    st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
 
     // 記録の確定とセーブの後始末は必ず最後に行う。先に endRun してから
     // save すると、消したはずのセーブが書き戻ってしまう。
@@ -672,10 +694,11 @@ const Game = {
   paySalaries(notes) {
     const st = this.state;
     const total = this.salaryTotal();
+    const paidRoster = this.activeRoster();
     if (total === 0) return;
     if (st.gold >= total) {
       st.gold -= total;
-      for (const m of st.roster) {
+      for (const m of paidRoster) {
         m.unpaid = false;
         m.unpaidStreak = 0;
         m.loyalty = U.clamp(m.loyalty + 2, 0, 100);
@@ -685,14 +708,14 @@ const Game = {
       // 連続で未払いにするほど痛手が大きくなる。固定値だと8戦のランでは
       // 忠誠0に届かず、離脱の脅しが空砲になっていた（実測 300ラン中1回）。
       let worst = 0;
-      for (const m of st.roster) {
+      for (const m of paidRoster) {
         m.unpaid = true;
         m.unpaidStreak = (m.unpaidStreak || 0) + 1;
         const penalty = 15 + 15 * (m.unpaidStreak - 1);
         worst = Math.max(worst, penalty);
         m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
       }
-      notes.push(`金庫が足りない！ 給与${total}G が未払いに……忠誠が最大 ${worst} 下がった`);
+      notes.push(`金庫が足りない！ 出撃隊の給与${total}G が未払いに……忠誠が最大 ${worst} 下がった`);
     }
   },
 
@@ -759,6 +782,7 @@ const Game = {
       fallenTotal: st.fallenTotal || 0,
       fallenRoll: (st.fallenRoll || []).map(f => f.name),
       generalsMade: (st.generalsMade || []).map(g => ({ name: g.name, race: g.race })),
+      battleIncidentTotal: st.battleIncidentTotal || 0,
       finalRoster: st.roster.map(m => ({ name: m.name, race: m.race, job: m.job, rankId: m.rankId, merit: m.merit || 0 })),
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
       date: new Date().toISOString().slice(0, 10)
