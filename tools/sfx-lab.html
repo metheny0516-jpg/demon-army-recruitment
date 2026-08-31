@@ -19,9 +19,10 @@ p{color:#b7a9ce}.now{color:#79e39c;font-weight:bold;min-height:1.6em}
 <script>
 const current={basun:'ばすん — 肉厚な打撃',gachan:'がちゃん — 金属衝突',zushi:'ずし — 重量のある決定打',zuba:'ずばっ — 素早い斬撃'};
 const candidateGroups=[
-  { id:'starninjas-sword', label:'候補：剣の風切り — StarNinjas（実録ナイフ）', prefix:'candidate-starninjas-sword-' },
-  { id:'starninjas-clash', label:'候補：剣・盾の金属衝突 — StarNinjas（実録ナイフ）', prefix:'candidate-starninjas-clash-' },
-  { id:'antum-thwack', label:'候補：鈍い打撃 — AntumDeluge（物を叩いた実録）', prefix:'candidate-antum-thwack-' },
+  { id:'starninjas-sword', label:'候補：剣の風切り — StarNinjas（実録ナイフ）', prefix:'candidate-starninjas-sword-', count:10 },
+  { id:'starninjas-clash', label:'候補：剣・盾の金属衝突 — StarNinjas（実録ナイフ）', prefix:'candidate-starninjas-clash-', count:10 },
+  { id:'antum-thwack', label:'候補：鈍い打撃 — AntumDeluge（物を叩いた実録）', prefix:'candidate-antum-thwack-', count:10 },
+  { id:'artisticdude-swish', label:'候補：ズバッ／しゃり — artisticdude（衣類・木材の実録）', prefix:'candidate-artisticdude-swish-', count:13 },
 ];
 const root=document.getElementById('families'), now=document.getElementById('now');
 function addGroup(desc, files, path){
@@ -30,6 +31,6 @@ function addGroup(desc, files, path){
   root.appendChild(box);
 }
 for(const [name,desc] of Object.entries(current)) addGroup(desc,['a','b','c'].map(v=>({file:`${name}-${v}.wav`,label:`現行 ${v.toUpperCase()}`})),'../assets/sfx/');
-for(const group of candidateGroups) addGroup(group.label,Array.from({length:10},(_,i)=>{const n=String(i+1).padStart(2,'0');return {file:`${group.prefix}${n}.wav`,label:`候補 ${n}`};}),'../assets/sfx/candidates/');
+for(const group of candidateGroups) addGroup(group.label,Array.from({length:group.count},(_,i)=>{const n=String(i+1).padStart(2,'0');return {file:`${group.prefix}${n}.wav`,label:`候補 ${n}`};}),'../assets/sfx/candidates/');
 root.addEventListener('click',e=>{const b=e.target.closest('[data-file]');if(!b)return;const a=new Audio(b.dataset.path+b.dataset.file);a.volume=.65;a.play();now.textContent='再生中: '+b.dataset.file;});
 </script></body></html>

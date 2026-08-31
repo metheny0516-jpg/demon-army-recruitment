@@ -24,4 +24,13 @@
 - ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
 - 原音: 物を叩いて録音した10種。配布元のPCM WAVをそのまま収録（44.1kHz・16bit・mono）。
 
+### `candidate-artisticdude-swish-01.wav` 〜 `13.wav`
+
+- 原題: [Swishes Sound Pack](https://opengameart.org/content/swishes-sound-pack)
+- 作者: artisticdude
+- 取得日: 2026-08-31
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: 衣類ハンガーや木材を振って作られた、軽い4種と重い9種の短いスイッシュ。
+- 変換: 44.1kHz・24bit・stereo WAVを、試聴条件に合わせて44.1kHz・16bit・mono WAVへ機械的に変換しただけ。音の加工・編集・正規化は行っていない。
+
 候補は比較試聴のためだけに分離してあり、採用するまで `src/ui/sound.js` から読み込まない。採用時は、元ページ・取得日・ライセンスをこの台帳に残したまま、ゲーム用に切り出し・レイヤーした成果物を別名で追加する。

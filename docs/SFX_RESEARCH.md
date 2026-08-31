@@ -45,8 +45,9 @@ Microsoft Researchの衝撃音研究では、モーダル成分だけでなく�
 | 斬撃の起点 | [20 Sword Sound Effects](https://opengameart.org/content/20-sword-sound-effects-attacks-and-clashes) / StarNinjas | ナイフ2本の風切り | `candidate-starninjas-sword-01`〜`10` |
 | 防御・金属衝突 | 同上 / StarNinjas | ナイフ2本の衝突（盾受けにも使える） | `candidate-starninjas-clash-01`〜`10` |
 | 肉・鈍器の命中 | [Thwack Sounds](https://opengameart.org/content/thwack-sounds) / AntumDeluge | 物を叩いた打撃 | `candidate-antum-thwack-01`〜`10` |
+| 斬撃の抜け | [Swishes Sound Pack](https://opengameart.org/content/swishes-sound-pack) / artisticdude | 衣類ハンガーや木材を振った、金属感の少ない短いスイッシュ13種 | `candidate-artisticdude-swish-01`〜`13` |
 
-OGGで配布されていた剣系20音だけは、試聴条件を揃えるため44.1kHz・16bit・mono WAVへ機械的に変換した。切り出し、EQ、圧縮、音量の正規化はまだ行っていない。
+OGGで配布されていた剣系20音と、24bitステレオで配布されていたスイッシュ13音は、試聴条件を揃えるため44.1kHz・16bit・mono WAVへ機械的に変換した。切り出し、EQ、圧縮、音量の正規化はまだ行っていない。
 
 ### 採用候補から外した配布元
 

@@ -245,6 +245,7 @@ WAVは `tools/generate-sfx.js` から再生成でき、外部素材は使って�
 
 1. CC0実録候補を `assets/sfx/candidates/` へ別名で追加し、`tools/sfx-lab.html` に現行12音とのA/B試聴を作成した（ゲーム本体ではまだ未使用）。
    ライセンスは `assets/sfx/LICENSES.md`、調査の判断根拠は `docs/SFX_RESEARCH.md` を参照。
+   金属感を抑えた「ズバッ／しゃり」候補として、`candidate-artisticdude-swish-01`〜`13`（衣類ハンガー・木材の実録）も追加済み。
 2. **保留（全候補をオーナーが後で確認）**。初見では鈍い打撃の `candidate-antum-thwack-04` が有力。
    剣の候補は金属感が強すぎるため、「ズバッ／しゃり」と聞こえる、現実の金属衝突そのものではないゲーム的な手触りを探す。
    ロマサガ／FFは機能的な参考試聴に留め、音源の抽出・サンプル利用・模倣コピーは行わない。
