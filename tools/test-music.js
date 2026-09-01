@@ -222,8 +222,11 @@ function bars(state, count) {
   Music.trackFailed = false;
   const before = mediaPlayed;
   assert(Music.start(), '実曲BGMを開始できない');
-  assert(fs.existsSync(Music.TRACK_URL), `BGM素材が無い: ${Music.TRACK_URL}`);
-  assert(Music.track && Music.track.src === Music.TRACK_URL, 'CC0実曲が再生要素へ設定されない');
+  const battleTrack = Music.TRACKS.battle.url;
+  assert(fs.existsSync(Music.TRACKS.campaign.url), `通常BGM素材が無い: ${Music.TRACKS.campaign.url}`);
+  assert(fs.existsSync(battleTrack), `戦闘BGM素材が無い: ${battleTrack}`);
+  assert(Music.TRACKS.campaign.url !== battleTrack, '通常進行と戦闘が同じBGM素材を使っている');
+  assert(Music.track && Music.track.src === battleTrack, '戦闘用CC0実曲が再生要素へ設定されない');
   assert(Music.track.loop === true, '実曲がループ再生になっていない');
   assert(mediaPlayed > before, '実曲の play() が呼ばれない');
   assert(Music.trackGain && Music.trackTone, '実曲が Sound.master へ接続されない');
@@ -238,7 +241,18 @@ function bars(state, count) {
   Music.suspend();
 }
 
-// 11. 軍団差を伝える合成アクセントも、実曲の後ろで消えきらないかを測る。
+// 11. 場面に応じて音源そのものが切り替わり、通常進行へ戻せる。
+{
+  Sound.muted = false;
+  Music.apply(Music.describe(army([unit()]), { scene: 'recruit' }));
+  assert(Music.track.src === Music.TRACKS.campaign.url, '採用画面で通常BGMへ戻らない');
+  Music.apply(Music.describe(army([unit()]), { scene: 'battle' }));
+  assert(Music.track.src === Music.TRACKS.battle.url, '戦闘開始時に戦闘BGMへ切り替わらない');
+  assert(Music.track.currentTime === 0, '戦闘BGMが曲頭から始まらない');
+  Music.suspend();
+}
+
+// 12. 軍団差を伝える合成アクセントも、実曲の後ろで消えきらないかを測る。
 {
   Sound.muted = false;
   Music.desc = Music.describe(army([unit(), unit(), unit()]), { scene: 'battle' });
@@ -259,7 +273,7 @@ function bars(state, count) {
 }
 
 
-// 12. 低音が「聞こえない帯域」に閉じ込められていないかを測る。
+// 13. 低音が「聞こえない帯域」に閉じ込められていないかを測る。
 //     旧実装は足音・行進ベースの基音が32〜110Hz中心で、スマホの小型スピーカーは
 //     この帯域をほぼ再生できない。音量を上げても解決しない（実際にオーナーの
 //     実機で確認済み）。基音を実際に再生される帯域まで上げ、オクターブ上の

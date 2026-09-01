@@ -11,11 +11,12 @@ const Music = {
   // レイヤー名。実素材へ差し替えるときもこの名前と gain の意味を保つこと。
   LAYERS: ["drum", "bass", "brass", "choir", "bells", "slime"],
 
-  // CC0 の実曲を主役にし、下の Web Audio パートは軍団の状態を伝える薄い差分に留める。
-  // Raiders March は 123 BPM / E minor / 32小節のループ。
-  TRACK_URL: "assets/bgm/raiders-march.ogg",
-  TRACK_BPM: 123,
-  TRACK_GAIN: 1.08,
+  // 通常進行と戦闘は旋律そのものを分ける。軍団状態を伝える Web Audio レイヤーは
+  // どちらにも重ね、「場面差」と「自分の編成が鳴る」の両方を残す。
+  TRACKS: {
+    campaign: { url: "assets/bgm/raiders-march.ogg", bpm: 123, gain: 1.08 },
+    battle: { url: "assets/bgm/battle-theme.ogg", bpm: 126, gain: .98 }
+  },
   SCENE_GAIN: {
     title: .72, recruit: .78, mission: .86, battle: .96,
     final: 1, victory: .9, defeat: .62
@@ -111,6 +112,7 @@ const Music = {
   trackTone: null,
   trackDirect: false,
   trackFailed: false,
+  trackKey: null,
   timer: null,
   step: 0,
   nextTime: 0,
@@ -184,6 +186,7 @@ const Music = {
       this.out.connect(Sound.master);
     }
     this.ensureTrack();
+    this.syncTrackSource();
     this.syncTrack();
     if (this.track && this.track.paused !== false) {
       const played = this.track.play();
@@ -203,7 +206,9 @@ const Music = {
     const audio = new Audio();
     audio.preload = "auto";
     audio.loop = true;
-    audio.src = this.TRACK_URL;
+    const spec = this.trackSpec();
+    audio.src = spec.url;
+    this.trackKey = this.trackName();
     audio.preservesPitch = false;
     audio.mozPreservesPitch = false;
     audio.webkitPreservesPitch = false;
@@ -232,15 +237,41 @@ const Music = {
     return true;
   },
 
+  trackName() {
+    return this.desc && (this.desc.scene === "battle" || this.desc.scene === "final")
+      ? "battle" : "campaign";
+  },
+
+  trackSpec() {
+    return this.TRACKS[this.trackName()] || this.TRACKS.campaign;
+  },
+
+  syncTrackSource() {
+    if (!this.track || !this.desc) return;
+    const name = this.trackName();
+    if (this.trackKey === name) return;
+    const wasPlaying = this.track.paused === false;
+    if (this.track.pause) this.track.pause();
+    this.track.src = this.TRACKS[name].url;
+    this.track.currentTime = 0;
+    this.trackKey = name;
+    this.trackFailed = false;
+    if (this.track.load) this.track.load();
+    if (wasPlaying && this.enabled) {
+      const played = this.track.play();
+      if (played && played.catch) played.catch(() => {});
+    }
+  },
+
   trackLevel() {
     if (!this.desc) return 0;
     const scene = this.SCENE_GAIN[this.desc.scene] == null ? .78 : this.SCENE_GAIN[this.desc.scene];
     // 不満な軍団は演奏が少し痩せる。ただし実曲そのものは止めず、行軍の芯は残す。
-    return this.TRACK_GAIN * scene * (1 - this.desc.unrest * .16);
+    return this.trackSpec().gain * scene * (1 - this.desc.unrest * .16);
   },
 
   trackRate() {
-    return this.desc ? this.clamp(this.desc.bpm / this.TRACK_BPM, .86, 1.1) : 1;
+    return this.desc ? this.clamp(this.desc.bpm / this.trackSpec().bpm, .86, 1.1) : 1;
   },
 
   syncTrack() {
