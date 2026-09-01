@@ -32,9 +32,14 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!(after.length > before.length)) errors.push('台詞がタイプ表示されない');
   if (await page.evaluate(() => window.__mormoCues) < 1) errors.push('タイプ表示にモルモの声が付かない');
 
-  await scene.click();
+  const next = page.locator('.mormo-scene-next');
+  await next.click();
   if (!(await page.locator('.mormo-scene-next').innerText()).includes('次へ')) errors.push('1回目のタップで全文表示にならない');
-  await scene.click();
+  await page.locator('.mormo-scene-backdrop').dispatchEvent('click');
+  if (await page.locator('#mormo-scene').count() !== 1) errors.push('画面余白のクリックでモルモ報告が閉じる');
+  await page.waitForTimeout(1800);
+  if (await page.locator('#mormo-scene').count() !== 1) errors.push('入力なしでモルモ報告が自動的に閉じる');
+  await next.click();
   if (await page.locator('#mormo-scene').count()) errors.push('2回目のタップで報告が閉じない');
   if (await page.locator('[data-action="hire"]').count() !== 3) errors.push('報告後に採用画面へ進まない');
 
@@ -47,7 +52,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   await page.keyboard.press('Enter');
   if (await page.locator('#mormo-scene').count()) errors.push('キーボードで報告を進められない');
 
-  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ モルモ: 全画面報告・タイプ表示・発話音・スキップ・作戦遷移');
+  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ モルモ: 全画面報告・タイプ表示・発話音・明示送り・作戦遷移');
   await browser.close();
   process.exit(errors.length ? 1 : 0);
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

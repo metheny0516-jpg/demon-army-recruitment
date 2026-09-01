@@ -5,7 +5,6 @@ const MormoScene = {
   active: false,
   typing: false,
   timer: null,
-  autoTimer: null,
   text: "",
   index: 0,
   keyHandler: null,
@@ -40,8 +39,10 @@ const MormoScene = {
       </div>`;
     document.body.appendChild(scene);
     document.body.classList.add("mormo-speaking");
-    scene.addEventListener("click", ev => {
+    const continueButton = scene.querySelector(".mormo-scene-next");
+    if (continueButton) continueButton.addEventListener("click", ev => {
       ev.preventDefault();
+      ev.stopPropagation();
       if (typeof Sound !== "undefined") {
         Sound.unlock();
         Sound.cue("click");
@@ -83,7 +84,6 @@ const MormoScene = {
       button.classList.add("ready");
       button.focus({ preventScroll: true });
     }
-    this.autoTimer = setTimeout(() => this.close(), 1500);
   },
 
   reveal() {
@@ -103,8 +103,7 @@ const MormoScene = {
 
   close() {
     if (this.timer) clearTimeout(this.timer);
-    if (this.autoTimer) clearTimeout(this.autoTimer);
-    this.timer = this.autoTimer = null;
+    this.timer = null;
     const scene = typeof document !== "undefined" && document.getElementById("mormo-scene");
     if (scene) scene.remove();
     if (typeof document !== "undefined") {
