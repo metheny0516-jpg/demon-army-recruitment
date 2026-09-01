@@ -66,8 +66,10 @@ const UI = {
     const st = Game.state;
     const sd = Game.stageData();
     const salary = Game.salaryTotal();
+    const opening = st.openingPrototype;
     return `<div class="hud">
       <span>第 <b>${st.generation}</b> 代魔王軍</span>
+      ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
       <span>作戦 <b>${st.turn}</b></span>
       <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
       <span>警戒度 <b>${st.alert}</b></span>
@@ -75,7 +77,7 @@ const UI = {
       <span class="food">食料 <b>${st.food}</b></span>
       <span class="materials">建材 <b>${st.materials}</b></span>
       <span>施設 <b>Lv.${st.facilityLevel}</b></span>
-      <span>給与・手当 <b>${salary}G</b>/戦</span>
+      <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
       <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
       <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
       <span class="muted">${U.esc(sd.region)}</span>
@@ -420,6 +422,8 @@ const UI = {
 
   formation() {
     const st = Game.state;
+    const opening = st.openingPrototype;
+    const preparation = opening && st.phase === "preparation";
     const active = Game.activeRoster();
     const activeIds = new Set(st.activeUids);
     const combatMembers = Game.departmentRoster("combat");
@@ -461,10 +465,17 @@ const UI = {
     const empty = active.length === 0;
     const payroll = Game.payrollPolicy();
     const payrollQuote = Game.payrollQuote();
+    const deadline = st.day === 1 ? "勇者到着まであと2日"
+      : st.day === 2 ? "明日、勇者が到着" : "本日、勇者襲来";
+    const openingActions = st.day < Game.OPENING_DAYS
+      ? `<button class="wide" data-action="openingbattle" data-kind="raid" ${empty || st.expeditionUsedToday ? "disabled" : ""}>🔥 ${st.expeditionUsedToday ? "本日の遠征は完了" : "任意遠征：辺境を略奪"}</button>
+         <div class="spacer"></div>
+         <button class="primary wide" data-action="endday" data-day="${st.day}">本日の業務を終了</button>`
+      : `<button class="primary wide" data-action="openingbattle" data-kind="invade" ${empty ? "disabled" : ""}>⚔ 防衛戦を開始する</button>`;
     this.set(`${this.hud()}
       <div class="panel">
-        <h2>🏢 部門編成 <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || "作戦未選択")}</span></h2>
-        <div class="muted">戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。</div>
+        <h2>${opening ? `📅 ${st.day}日目：${deadline}` : "🏢 部門編成"} <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || (opening ? "準備日" : "作戦未選択"))}</span></h2>
+        <div class="muted">${opening ? "配置と給与方針は翌日も維持される。変えたい所だけ直し、業務終了で日次決算を行う。" : "戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。"}</div>
         ${this.departmentSummary()}
       </div>
       ${this.payrollPanel()}
@@ -481,9 +492,9 @@ const UI = {
       <div class="spacer"></div>
       ${this.synergyPanel(active)}
       ${this.enemyPreview()}
-      <button class="wide ghost" data-action="backmission">← 作戦会議へ戻る</button>
+      ${opening ? "" : `<button class="wide ghost" data-action="backmission">← 作戦会議へ戻る</button>`}
       <div class="spacer"></div>
-      <button class="primary wide" data-action="deploy" ${empty || !payrollQuote.affordable ? "disabled" : ""}>${U.esc(payroll.name)}で出撃する</button>
+      ${preparation ? openingActions : `<button class="primary wide" data-action="deploy" ${empty || (!opening && !payrollQuote.affordable) ? "disabled" : ""}>${opening ? (st.day === Game.OPENING_DAYS ? "防衛戦へ出撃する" : "遠征へ出撃する") : `${U.esc(payroll.name)}で出撃する`}</button>`}
       ${st.roster.length === 0 ? `<div class="spacer"></div><button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}`);
   },
 

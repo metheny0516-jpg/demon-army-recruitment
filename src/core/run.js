@@ -31,6 +31,7 @@ const Game = {
       openingPrototype: true,
       dailySettledDay: 0,
       expeditionUsedToday: false,
+      openingDefenseWon: false,
       conquest: 0,
       alert: 0,
       battlesWon: 0,
@@ -164,7 +165,7 @@ const Game = {
       generalsMade: [],
       battleIncidentTotal: 0,
       turn: 1, conquest: 0, alert: 0, battlesWon: 0,
-      day: 1, openingPrototype: false, dailySettledDay: 0, expeditionUsedToday: false,
+      day: 1, openingPrototype: false, dailySettledDay: 0, expeditionUsedToday: false, openingDefenseWon: false,
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
@@ -191,6 +192,7 @@ const Game = {
     st.dailySettledDay = Math.max(0, Number(st.dailySettledDay) || 0);
     st.openingPrototype = !!st.openingPrototype;
     st.expeditionUsedToday = !!st.expeditionUsedToday;
+    st.openingDefenseWon = !!st.openingDefenseWon;
     if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
     if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
@@ -239,14 +241,17 @@ const Game = {
 
   payrollQuote(policyId) {
     const policy = PAYROLL_POLICIES[policyId] || this.payrollPolicy();
-    const base = this.salaryTotal();
+    const daily = this.state.openingPrototype && this.state.phase === "preparation";
+    const base = daily
+      ? this.salaryAssignments().reduce((sum, entry) => sum + this.dailyShare(entry.amount, this.state.day), 0)
+      : this.salaryTotal();
     const cost = policy.id === "advance" ? Math.ceil(base * policy.costRate) : base * policy.costRate;
     return { policy, base, cost, affordable: policy.id !== "advance" || this.state.gold >= cost };
   },
 
   setPayrollPolicy(policyId) {
     const st = this.state;
-    if (st.phase !== "formation" || !PAYROLL_POLICIES[policyId]) return false;
+    if (!["formation", "preparation"].includes(st.phase) || !PAYROLL_POLICIES[policyId]) return false;
     st.payrollPolicy = policyId;
     this.save();
     return true;
@@ -454,6 +459,10 @@ const Game = {
     const st = this.state;
     st.hiresLeft = 0;
     st.applicants = [];
+    if (st.openingPrototype) {
+      this.beginOpeningPreparation();
+      return;
+    }
     if (st.roster.length === 0) {
       st.phase = "formation";
       this.save();
@@ -506,6 +515,18 @@ const Game = {
     st.missionOffers = [];
     st.phase = "preparation";
     this.save();
+    return true;
+  },
+
+  prepareOpeningBattle(kind) {
+    const st = this.state;
+    if (!st || !st.openingPrototype || st.phase !== "preparation") return false;
+    if (st.day < this.OPENING_DAYS && (kind !== "raid" || st.expeditionUsedToday)) return false;
+    if (st.day === this.OPENING_DAYS && kind !== "invade") return false;
+    const type = MISSION_TYPES.find(m => m.id === kind);
+    if (!type) return false;
+    st.selectedMission = this.buildMission(type);
+    st.phase = "formation";
     return true;
   },
 
@@ -691,6 +712,7 @@ const Game = {
   deploy() {
     const st = this.state;
     if (this.activeRoster().length === 0) return null;
+    const openingBattle = !!st.openingPrototype;
     // 旧セーブやテストが直接 formation を作った場合だけ、次の侵攻作戦を補う。
     if (!st.selectedMission) {
       const invade = MISSION_TYPES.find(m => m.id === "invade");
@@ -700,7 +722,7 @@ const Game = {
 
     // 未払いはこの戦闘から特性・不祥事・BGMへ効く。厚遇は戦う前に実際に支払う。
     // 支払い後に合体するスライムも含め、画面で提示した給与総額と実額を一致させる。
-    if (!this.preparePayrollForBattle(notes)) return null;
+    if (!openingBattle && !this.preparePayrollForBattle(notes)) return null;
 
     // キングスライム合体（出撃時・永続）
     const kingSyn = SYNERGIES.find(s => s.id === "king_slime");
@@ -729,14 +751,32 @@ const Game = {
       this.processCasualties(result.contribution, notes);
       this.awardMerit(result.contribution, notes);
       this.applyMissionOutcome(stageData, notes);
-      this.processDepartments(stageData, notes);
-      this.paySalaries(notes);
-      this.processDepartures(notes);
+      if (openingBattle) {
+        const foodReward = Math.max(0, stageData.foodReward || 0);
+        const materialReward = Math.max(0, stageData.materialReward || 0);
+        st.food += foodReward;
+        st.materials += materialReward;
+        if (foodReward || materialReward) notes.push(`作戦資源：食料 +${foodReward} / 建材 +${materialReward}`);
+      }
+      if (!openingBattle) {
+        this.processDepartments(stageData, notes);
+        this.paySalaries(notes);
+        this.processDepartures(notes);
+      }
       st.battlesWon += 1;
-      st.turn += 1;
+      if (!openingBattle) st.turn += 1;
       st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
       st.missionOffers = [];
-      if (st.conquest >= this.MAX_CONQUEST) {
+      if (openingBattle && st.day < this.OPENING_DAYS) {
+        st.expeditionUsedToday = true;
+        st.phase = "result";
+      } else if (openingBattle) {
+        st.openingDefenseWon = true;
+        this.advanceDay(st.day);
+        st.turn += 1;
+        st.phase = "result";
+        this.genApplicants();
+      } else if (st.conquest >= this.MAX_CONQUEST) {
         st.phase = "clear";   // 記録の確定は deploy() の末尾でまとめて行う
       } else {
         st.phase = "result";
@@ -830,7 +870,8 @@ const Game = {
     // 供養代行：建設部門の死霊術師は、直前の戦没者を建材へ変える（墓石も城壁も石である）。
     // 戦死という損失が別部門の資源になる、いちばん短い接続。
     const mourners = builders.filter(m => m.tplId === "necromancer").length;
-    const salvage = mourners > 0 ? mourners * (st.pendingVacancies || 0) * 2 : 0;
+    const salvageTotal = mourners > 0 ? mourners * (st.pendingVacancies || 0) * 2 : 0;
+    const salvage = normalized ? this.dailyShare(salvageTotal, dailyDay) : salvageTotal;
     st.materials += salvage;
     const buildCapacity = normalized ? this.dailyShare(output.material, dailyDay) : output.material;
     const materialUsed = canBuild ? Math.min(st.materials, buildCapacity) : 0;
@@ -1068,6 +1109,7 @@ const Game = {
     if (!st || !st.openingPrototype || st.day > this.OPENING_DAYS) return false;
     if (expectedDay !== undefined && Number(expectedDay) !== st.day) return false;
     if (st.dailySettledDay >= st.day) return false;
+    if (st.day === this.OPENING_DAYS && !st.openingDefenseWon) return false;
     const notes = [];
     this.processDepartments({}, notes, st.day);
     this.paySalaries(notes, st.day);
@@ -1319,6 +1361,13 @@ const Game = {
   // 勝利後「次へ」→ 採用フェーズへ
   // 結果画面の「次へ」。ハプニングが起きればそちらを先に見せる。
   afterResult() {
+    const st = this.state;
+    if (st.openingPrototype && st.day < this.OPENING_DAYS) {
+      st.phase = "preparation";
+      st.selectedMission = null;
+      this.save();
+      return "preparation";
+    }
     if (this.maybeEvent()) return "event";
     this.nextRecruit();
     return "recruit";

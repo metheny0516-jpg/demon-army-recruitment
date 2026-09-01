@@ -76,6 +76,20 @@ function runOnce(strat, stats){
       Game.hire(chooseIndex(st.applicants, st.roster, strat));
     }
     if (st.phase === 'recruit') Game.skipHire();
+    if (st.phase === 'preparation') {
+      if (strat.departments === 'balanced' && st.roster.length >= 3) {
+        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
+        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
+        Game.assignDepartment(support[0].uid, 'life');
+        Game.assignDepartment(support[1].uid, 'construction');
+      }
+      const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
+      best.sort((a,b)=> b.hp - a.hp);
+      st.activeUids = best.map(m => m.uid);
+      Game.setPayrollPolicy('regular');
+      if (st.day < Game.OPENING_DAYS) Game.advanceDay(st.day);
+      else Game.prepareOpeningBattle('invade');
+    }
     if (st.phase === 'mission') {
       let kind = 'invade';
       const salary = Game.salaryTotal();

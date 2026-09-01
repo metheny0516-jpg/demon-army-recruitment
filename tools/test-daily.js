@@ -44,13 +44,31 @@ assert(JSON.stringify(once) === JSON.stringify({ gold: st.gold, food: st.food, b
 assert(st.day === 2 && st.phase === 'preparation', '1日目から2日目へ進む');
 assert(JSON.stringify(st.roster.map(m => [m.uid, m.department])) === assignments, '配置は翌日に維持される');
 assert(Game.advanceDay(2) && st.day === 3, '2日目から3日目へ進む');
+assert(Game.advanceDay(3) === false, '3日目は防衛戦なしで日を終えられない');
+st.openingDefenseWon = true;
 assert(Game.advanceDay(3) && st.openingPrototype === false, '3日目の決算後に従来進行へ戻れる');
 assert(before.gold - st.gold === 7, '3日分の給与合計は旧1ターン分と一致する');
 assert(st.buildProgress === 3, '3日分の建設進行は旧1ターン分と一致する');
 
 const legacy = JSON.parse(JSON.stringify(st));
-delete legacy.day; delete legacy.openingPrototype; delete legacy.dailySettledDay; delete legacy.expeditionUsedToday;
+delete legacy.day; delete legacy.openingPrototype; delete legacy.dailySettledDay; delete legacy.expeditionUsedToday; delete legacy.openingDefenseWon;
 Game.state = legacy;
 Game.migrateState();
 assert(Game.state.day === 1 && Game.state.openingPrototype === false, 'dayのない既存セーブは従来進行として読める');
+
+Game.newRun('standard');
+const opening = Game.state;
+opening.roster = [{ uid: 1, tplId: 'orc', name: '門番', race: 'オーク', job: '門番', hp: 999, atk: 999, def: 99, spd: 99,
+  salary: 3, loyalty: 80, traits: [], tags: [], department: 'combat', unpaid: false, unpaidStreak: 0 }];
+opening.activeUids = [1];
+Game.beginOpeningPreparation();
+assert(Game.prepareOpeningBattle('raid'), '準備日は既存の略奪作戦を任意遠征に流用できる');
+opening.phase = 'preparation'; opening.selectedMission = null;
+assert(Game.advanceDay(1) && Game.advanceDay(2), '戦闘なしでも3日目まで到達できる');
+assert(Game.prepareOpeningBattle('raid') === false, '3日目は任意遠征を選べない');
+assert(Game.prepareOpeningBattle('invade'), '3日目は最初の侵攻編成による防衛戦を強制する');
+const defense = Game.deploy();
+assert(defense && defense.result.victory, '防衛戦が既存戦闘エンジンで決着する');
+assert(opening.openingPrototype === false && opening.phase === 'result' && opening.conquest === 1 && opening.turn === 2,
+  '防衛戦後は最初の侵攻を終えた従来進行へ安全に戻る');
 console.log('✓ 日次進行テスト完了');

@@ -21,7 +21,7 @@ const App = {
   // 編成・昇進・未払い・忠誠・警戒度は Music 側が状態から読み取る。
   MUSIC_SCENES: {
     recruit: "recruit", event: "recruit",
-    mission: "mission", formation: "mission",
+    mission: "mission", formation: "mission", preparation: "mission",
     result: "mission", defeat: "defeat",
     gameover: "defeat", clear: "victory"
   },
@@ -86,6 +86,7 @@ const App = {
       case "recruit": return UI.recruit();
       case "mission": return UI.mission();
       case "formation": return UI.formation();
+      case "preparation": return UI.formation();
       case "result": return UI.result();
       case "event": return UI.event();
       case "defeat": return UI.defeat();
@@ -132,7 +133,12 @@ const App = {
 
       case "hire":
         Game.hire(Number(data.index));
-        return this.render();
+        this.render();
+        if (Game.state.phase === "preparation" && Game.state.day === 1) {
+          return this.report("report", "魔王様、勇者到着まであと2日デス。\n配置と給与方針はそのまま翌日へ持ち越せます。今日は仕込みに徹するか、辺境へ遠征するかお選びください。",
+            { kicker: "1日目・準備日", title: "宰相モルモ・期限報告" });
+        }
+        return;
 
       case "reroll":
         Game.reroll();
@@ -143,9 +149,31 @@ const App = {
         return this.render();
 
       case "toformation":
+        if (Game.beginOpeningPreparation()) {
+          this.render();
+          return this.report("report", "魔王様、勇者到着まであと2日デス。\n配置と給与方針はそのまま翌日へ持ち越せます。今日は仕込みに徹するか、辺境へ遠征するかお選びください。",
+            { kicker: "1日目・準備日", title: "宰相モルモ・期限報告" });
+        }
         Game.state.applicants = [];
         Game.prepareMissions(true);
         return this.render();
+
+      case "endday": {
+        const report = Game.advanceDay(Number(data.day));
+        if (!report) return;
+        this.render();
+        const day = Game.state.day;
+        const text = day === 2
+          ? "魔王様、明日、勇者が到着します。\n本日の配置は引き継いであります。必要な所だけ直してくださいネ。"
+          : "うわああああ！ 魔王様、本日、勇者襲来デス！\nこの2日で整えた軍団で、魔王城を守りましょう！";
+        return this.report(day === 3 ? "panic" : "worried", text,
+          { kicker: `${day}日目${day === 3 ? "・防衛戦" : "・準備日"}`, title: "宰相モルモ・期限報告" });
+      }
+
+      case "openingbattle":
+        if (!Game.prepareOpeningBattle(data.kind)) return;
+        this.render();
+        return this.formationReport();
 
       case "missionpick":
         Game.selectMission(Number(data.index));
@@ -206,6 +234,10 @@ const App = {
       case "afterresult":
         Game.afterResult();
         this.render();
+        if (Game.state.phase === "preparation") {
+          return this.report("report", "遠征隊が帰還しました。\nまだ今日の業務は終わっていません。配置を確認したら、日次決算へ進めましょう。",
+            { kicker: `${Game.state.day}日目・遠征帰還`, title: "宰相モルモ" });
+        }
         if (Game.state.phase === "event") {
           const ev = Game.currentEvent();
           return this.report("angry", `魔王様、大変デス！\n${ev ? ev.title : "城内事件"}が起きました！`,
