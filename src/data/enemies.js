@@ -106,7 +106,8 @@ const ENEMY_STAGES = [
     stage: 8, army: "勇者アレン一行", region: "王都", reward: 50,
     units: [
       { name: "戦士ドルフ", icon: "🪓", hp: 90, atk: 18, def: 10, spd: 7 },
-      { name: "勇者アレン", icon: "👑", hp: 120, atk: 24, def: 12, spd: 10, traits: ["hero_awaken"] },
+      { name: "勇者アレン", icon: "👑", hp: 120, atk: 24, def: 12, spd: 10, traits: ["hero_awaken"],
+        introQuote: "ここが最後の一線だ。魔王よ、僕たちの世界は渡さない！" },
       { name: "聖女エル", icon: "✨", hp: 70, atk: 12, def: 8, spd: 6 },
       { name: "賢者ミラ", icon: "📖", hp: 60, atk: 20, def: 6, spd: 8 }
     ]

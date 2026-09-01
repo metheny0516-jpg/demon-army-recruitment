@@ -10,6 +10,7 @@
 //   text/cls … ログ表示用。無いイベントはログに出ない。
 //
 //   battle_start { player:[Snap], enemy:[Snap] }   Snapは下の snap() 参照
+//   dialogue     { unitId,name,side,quote }         データ指定された開戦台詞
 //   synergy      { name, desc }                     シナジー発動（カットイン）
 //   round_start  { round }
 //   attack       { fromId, toId, dmg, hp, maxHp, dead, traits:[名前] }
@@ -47,6 +48,7 @@ const Battle = {
       unpaid: !!m.unpaid,
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
+      introQuote: m.introQuote || "",
       mods: { dmgMult: 1, takenMult: 1, fireballAll: false, necroFull: false },
       flags: {},
       alive: true
@@ -70,7 +72,7 @@ const Battle = {
 
     const snap = u => ({
       id: u.id, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon, side: u.side,
-      hp: u.hp, maxHp: u.maxHp, traits: u.traits.slice()
+      hp: u.hp, maxHp: u.maxHp, traits: u.traits.slice(), introQuote: u.introQuote
     });
 
     // シナジー適用（merge型は出撃時に処理済み）
@@ -80,6 +82,13 @@ const Battle = {
       player: playerUnits.map(snap),
       enemy: enemyUnits.map(snap)
     });
+    for (const u of [...enemyUnits, ...playerUnits]) {
+      if (!u.introQuote) continue;
+      emit("dialogue", {
+        unitId: u.id, name: u.name, side: u.side, quote: u.introQuote,
+        emphasis: 2, text: `${u.name}「${u.introQuote}」`, cls: "dialogue"
+      });
+    }
     for (const s of activeSyn) {
       emit("synergy", {
         id: s.id, name: s.name, desc: s.desc, emphasis: 3,

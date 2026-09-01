@@ -10,7 +10,7 @@ const BattleScene = {
   DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   SPECIAL_DURATION: {
     battle_start: 500, round_start: 1150, synergy: 1650,
-    note: 260, incident: 1700, death: 750, revive: 1100, survive: 650, heal: 500, result: 1200
+    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1100, survive: 650, heal: 500, result: 1200
   },
 
   // 長期戦がだらけないための自動圧縮。シナジー同士が噛み合って乱戦が
@@ -167,6 +167,13 @@ const BattleScene = {
       case "round_start":
         this.roundBanner(ev.round);
         break;
+      case "dialogue": {
+        const speaker = this.units[ev.unitId];
+        this.clearFocus();
+        if (speaker) speaker.el.classList.add("acting");
+        this.showAction(`${ev.name}「${ev.quote}」`, 1700);
+        break;
+      }
       case "attack":
       case "splash": {
         const from = this.units[ev.fromId], to = this.units[ev.toId];
@@ -267,14 +274,14 @@ const BattleScene = {
     this.showAction(`${from.name}の${action}　→　${to.name}`);
   },
 
-  showAction(text) {
+  showAction(text, duration) {
     const c = document.getElementById("action-caption");
     if (!c) return;
     c.textContent = text;
     c.classList.remove("show");
     void c.offsetWidth;
     c.classList.add("show");
-    this.timers.push(setTimeout(() => c.classList.remove("show"), (600 * this.autoScale) / this.speed));
+    this.timers.push(setTimeout(() => c.classList.remove("show"), ((duration || 600) * this.autoScale) / this.speed));
   },
 
   battleIntro() {
