@@ -55,10 +55,49 @@ function resolve(id, optionIndex) {
   assert(Game.state.eventOutcome.length > 0, `${id} に結果テキストがある`);
 }
 
-for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit']) {
+for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
+  'seasoning_disaster', 'cleaning_dispute', 'iron_ants']) {
   const ev = event(id);
   assert(!!ev, `部門事件 ${id} が登録されている`);
   assert(ev.options.length === 3, `${id} にリスクの異なる3択がある`);
+}
+
+// 生活適性・食事不要・前職・建設適性が、同じ事件の結果を変える。
+{
+  const st = reset([
+    unit({ uid: 1, tplId: 'skeleton', name: '骨休め', race: 'スケルトン', department: 'combat', loyalty: 60 }),
+    unit({ uid: 2, tplId: 'kobold', name: '猟犬番', race: 'コボルト', job: '猟犬係', department: 'life', loyalty: 60 })
+  ]);
+  st.lastDepartmentReport = { foodShortage: 0, foodProduced: 5, facilityBefore: 0, facilityAfter: 0 };
+  assert(event('seasoning_disaster').check(st), '食料を作った勤務の後に味付け失敗が候補になる');
+  resolve('seasoning_disaster', 0);
+  assert(st.roster[0].loyalty === 60, '食事不要の人材は失敗料理の忠誠低下を受けない');
+  assert(st.roster[1].loyalty === 57, '高い生活適性で失敗料理の被害を軽減する');
+}
+
+{
+  const st = reset([
+    unit({ uid: 1, tplId: 'slime', name: '清掃史', race: 'スライム', job: '井戸の掃除係', department: 'life' }),
+    unit({ uid: 2, tplId: 'kobold', name: '毛玉', race: 'コボルト', job: '猟犬係', department: 'life' })
+  ]);
+  const ev = event('cleaning_dispute');
+  assert(ev.check(st), '生活担当と同僚がいると掃除論争が候補になる');
+  assert(ev.cast(st).actor === 1, '掃除経験者が論争の当事者として優先される');
+  resolve('cleaning_dispute', 1);
+  assert(st.food === 2 && st.roster[0].loyalty === 78, '掃除の職歴が衛生改善と忠誠に変わる');
+}
+
+{
+  const st = reset([
+    unit({ uid: 1 }),
+    unit({ uid: 2, tplId: 'ogre', name: '解体王', race: 'オーガ', job: '重量物運搬', department: 'construction', hp: 30 })
+  ]);
+  st.materials = 3;
+  const ev = event('iron_ants');
+  assert(ev.check(st), '建材と建設担当が揃うと鉄アリが候補になる');
+  assert(ev.cast(st).actor === 2, '建設適性の高い担当者が駆除役になる');
+  resolve('iron_ants', 1);
+  assert(st.materials === 6 && st.roster[1].hp === 29, '高い建設適性なら小傷で建材3を回収する');
 }
 
 // 食料不足 → 腹の減る人材が事件を起こし、戦力を生活へ回す選択が生まれる。

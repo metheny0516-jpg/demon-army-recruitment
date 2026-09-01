@@ -473,5 +473,181 @@ const EVENTS = [
         }
       }
     ]
+  },
+
+  {
+    id: "seasoning_disaster",
+    title: "まかないの味付け大失敗",
+    weight: 3,
+    check(st) {
+      const report = st.lastDepartmentReport;
+      return !!report && report.foodProduced > 0 && Game.departmentRoster("life").length > 0;
+    },
+    cast(st) {
+      const workers = Game.departmentRoster("life");
+      if (!workers.length) return null;
+      const best = Math.max(...workers.map(m => Aptitude.of(m).food));
+      return { actor: U.pick(workers.filter(m => Aptitude.of(m).food === best)).uid };
+    },
+    text(st, c) {
+      const skilled = Aptitude.of(c.actor).food >= 4;
+      return `${c.actor.name}が今日のまかないを一口すすり、無言で鍋の蓋を閉じた。\n`
+        + (skilled
+          ? `生活適性の高さで食べ物の形には戻したらしい。味だけが戻らなかった。`
+          : `モルモの角が、湯気だけで少し曲がった。料理ではなく事故の報告である。`);
+    },
+    options: [
+      {
+        label: "予定どおり配膳する",
+        apply(st, c) {
+          const penalty = Aptitude.of(c.actor).food >= 4 ? 3 : 8;
+          let affected = 0;
+          for (const m of st.roster) {
+            if (Aptitude.of(m).appetite === 0) continue;
+            m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
+            affected++;
+          }
+          return `${affected}名が完食し、忠誠-${penalty}。食料は減らさずに済んだ。\n`
+            + `食事を必要としない者だけが、今日ほど自分の体質に感謝した日はない。`;
+        }
+      },
+      {
+        label: "作り直す（食料2）",
+        check(st) { return st.food >= 2; },
+        apply(st, c) {
+          st.food -= 2;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 12, 0, 100);
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 3, 0, 100);
+          return `食料2を使って作り直した。全員の忠誠+3、${c.actor.name}はさらに+12。\n`
+            + `二鍋目は普通だった。普通がこれほど尊いとは。`;
+        }
+      },
+      {
+        label: "正式な炊事責任者に任命する（給与+1G）",
+        apply(st, c) {
+          c.actor.salary += 1;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 18, 0, 100);
+          st.food += 1;
+          return `${c.actor.name}を炊事責任者に任命した。給与+1G、忠誠+18、試作品から食料1を回収。\n`
+            + `失敗を役職で解決するのは、魔王軍にも人間界にもある。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "cleaning_dispute",
+    title: "掃除当番論争",
+    weight: 3,
+    check(st) {
+      const workers = Game.departmentRoster("life");
+      return workers.length >= 1 && st.roster.length >= 2;
+    },
+    cast(st) {
+      const workers = Game.departmentRoster("life");
+      const cleaners = workers.filter(m => (m.job || "").includes("掃除"));
+      const actor = U.pick(cleaners.length ? cleaners : workers);
+      const others = st.roster.filter(m => m.uid !== actor.uid);
+      const differentRace = others.filter(m => m.race !== actor.race);
+      const other = U.pick(differentRace.length ? differentRace : others);
+      return other ? { actor: actor.uid, other: other.uid } : null;
+    },
+    text(st, c) {
+      const accusation = c.actor.race === c.other.race
+        ? `廊下の汚れを互いの勤務態度のせいにしている。`
+        : `廊下の汚れを互いの種族のせいにしている。`;
+      return `${c.actor.name}（${c.actor.race}）と${c.other.name}（${c.other.race}）が、${accusation}\n`
+        + `論争は掃除当番表より長く、廊下はまだ汚い。`;
+    },
+    options: [
+      {
+        label: "交代制の当番表を作る（食料1）",
+        check(st) { return st.food >= 1; },
+        apply(st, c) {
+          st.food -= 1;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 10, 0, 100);
+          c.other.loyalty = U.clamp(c.other.loyalty + 10, 0, 100);
+          return `食料1を当番手当として出した。二人の忠誠+10。\n当番表は読める者が少ないので、絵で描かれた。`;
+        }
+      },
+      {
+        label: "履歴書の職歴で担当を決める",
+        apply(st, c) {
+          const cleaner = [c.actor, c.other].find(m => (m.job || "").includes("掃除"));
+          if (cleaner) {
+            cleaner.loyalty = U.clamp(cleaner.loyalty + 18, 0, 100);
+            st.food += 2;
+            return `${cleaner.name}の職歴「${cleaner.job}」が初めて正式に評価された。忠誠+18、衛生改善で食料+2。`;
+          }
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 8, 0, 100);
+          c.other.loyalty = U.clamp(c.other.loyalty - 8, 0, 100);
+          return `二人の履歴書に掃除経験はなかった。押しつけ合いが再開し、両者の忠誠-8。`;
+        }
+      },
+      {
+        label: "片方を建設部門へ異動する",
+        apply(st, c) {
+          const moved = Aptitude.of(c.actor).material >= Aptitude.of(c.other).material ? c.actor : c.other;
+          Game.assignDepartment(moved.uid, "construction");
+          moved.loyalty = U.clamp(moved.loyalty - 5, 0, 100);
+          const stayed = moved.uid === c.actor.uid ? c.other : c.actor;
+          stayed.loyalty = U.clamp(stayed.loyalty + 8, 0, 100);
+          return `${moved.name}を建設部門へ異動した。本人の忠誠-5、残った${stayed.name}の忠誠+8。\n`
+            + `廊下は静かになった。建設現場が騒がしくなった。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "iron_ants",
+    title: "鉄アリ発生",
+    weight: 3,
+    check(st) { return st.materials >= 1 && Game.departmentRoster("construction").length > 0; },
+    cast(st) {
+      const builders = Game.departmentRoster("construction");
+      if (!builders.length) return null;
+      const best = Math.max(...builders.map(m => Aptitude.of(m).material));
+      return { actor: U.pick(builders.filter(m => Aptitude.of(m).material === best)).uid };
+    },
+    text(st, c) {
+      return `建材置き場から、鉄をかじる音がする。${c.actor.name}が鉄アリの巣を見つけた。\n`
+        + `すでに建材の角が丸い。アリの顎だけが四角く育っている。`;
+    },
+    options: [
+      {
+        label: "被害ごと焼き払う（建材2）",
+        check(st) { return st.materials >= 2; },
+        apply(st, c) {
+          st.materials -= 2;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 5, 0, 100);
+          return `巣と建材2をまとめて焼却した。${c.actor.name}の忠誠+5。\n`
+            + `問題は消えた。資材も消えた。`;
+        }
+      },
+      {
+        label: "建築担当に巣を解体させる",
+        apply(st, c) {
+          const skilled = Aptitude.of(c.actor).material >= 4;
+          const gain = skilled ? 3 : 1;
+          st.materials += gain;
+          c.actor.hp = Math.max(1, c.actor.hp - (skilled ? 1 : 4));
+          c.actor.loyalty = U.clamp(c.actor.loyalty + (skilled ? 12 : 4), 0, 100);
+          return `${c.actor.name}が巣を解体し、建材${gain}を回収した。最大HP-${skilled ? 1 : 4}、忠誠+${skilled ? 12 : 4}。\n`
+            + (skilled ? `適材適所である。アリには不適だった。` : `回収量より噛み跡の方が多い。`);
+        }
+      },
+      {
+        label: "地上の鍛冶屋へ売る（建材1）",
+        check(st) { return st.materials >= 1; },
+        apply(st, c) {
+          st.materials -= 1;
+          st.gold += 4;
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 6, 0, 100);
+          return `巣を建材1ごと売り払い、4Gを得た。${c.actor.name}の忠誠-6。\n`
+            + `鍛冶屋は返品不可の札を見落とした。`;
+        }
+      }
+    ]
   }
 ];
