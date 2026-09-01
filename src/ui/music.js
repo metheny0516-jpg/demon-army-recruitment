@@ -11,14 +11,26 @@ const Music = {
   // レイヤー名。実素材へ差し替えるときもこの名前と gain の意味を保つこと。
   LAYERS: ["drum", "bass", "brass", "choir", "bells", "slime"],
 
+  // CC0 の実曲を主役にし、下の Web Audio パートは軍団の状態を伝える薄い差分に留める。
+  // Raiders March は 123 BPM / E minor / 32小節のループ。
+  TRACK_URL: "assets/bgm/raiders-march.ogg",
+  TRACK_BPM: 123,
+  TRACK_GAIN: 1.08,
+  SCENE_GAIN: {
+    title: .72, recruit: .78, mission: .86, battle: .96,
+    final: 1, victory: .9, defeat: .62
+  },
+
   SCENES: {
-    title:   { bpm: 84,  root: 110.00, drive: .35 },
-    recruit: { bpm: 92,  root: 110.00, drive: .45 },
-    mission: { bpm: 100, root: 110.00, drive: .55 },
-    battle:  { bpm: 128, root: 110.00, drive: .85 },
-    final:   { bpm: 142, root: 97.999, drive: 1.0 },
-    victory: { bpm: 116, root: 130.81, drive: .7 },
-    defeat:  { bpm: 62,  root: 97.999, drive: .25 }
+    // 実曲の速度を大きく変えると音質が落ちるため、場面差は約±8%に収める。
+    // root は実曲の E minor に合わせる。再生速度ぶんの移調は freq() 側で追従する。
+    title:   { bpm: 114, root: 82.407, drive: .35 },
+    recruit: { bpm: 117, root: 82.407, drive: .45 },
+    mission: { bpm: 121, root: 82.407, drive: .55 },
+    battle:  { bpm: 126, root: 82.407, drive: .85 },
+    final:   { bpm: 132, root: 82.407, drive: 1.0 },
+    victory: { bpm: 123, root: 82.407, drive: .7 },
+    defeat:  { bpm: 108, root: 82.407, drive: .25 }
   },
 
   // 自然的短音階。行進曲なので短調で通す。
@@ -84,7 +96,8 @@ const Music = {
   // BGM側が埋もれて聞こえなくなる。効果音より控えめに、しかし無音とは
   // はっきり区別できる音量に上げてある（元は .3 で、上のhiss()の減衰バグと
   // 重なって実質ほぼ無音になっていた）。
-  MIX: .55,
+  // 合成レイヤーは実曲より十分小さくし、「曲」ではなく編成差の手触りにする。
+  MIX: .2,
   LOOKAHEAD: .14,
   TICK: 25,
 
@@ -92,6 +105,12 @@ const Music = {
   desc: null,
   out: null,
   ctx: null,
+  track: null,
+  trackNode: null,
+  trackGain: null,
+  trackTone: null,
+  trackDirect: false,
+  trackFailed: false,
   timer: null,
   step: 0,
   nextTime: 0,
@@ -164,18 +183,93 @@ const Music = {
       this.out.gain.value = this.MIX;
       this.out.connect(Sound.master);
     }
-    if (this.timer) return true;
-    this.nextTime = this.ctx.currentTime + .06;
-    this.step = 0;
-    this.timer = setInterval(() => this.tick(), this.TICK);
-    this.tick();
+    this.ensureTrack();
+    this.syncTrack();
+    if (this.track && this.track.paused !== false) {
+      const played = this.track.play();
+      if (played && played.catch) played.catch(() => {});
+    }
+    if (!this.timer) {
+      this.nextTime = this.ctx.currentTime + .06;
+      this.step = 0;
+      this.timer = setInterval(() => this.tick(), this.TICK);
+      this.tick();
+    }
     return true;
+  },
+
+  ensureTrack() {
+    if (this.track || this.trackFailed || typeof Audio === "undefined") return !!this.track;
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.loop = true;
+    audio.src = this.TRACK_URL;
+    audio.preservesPitch = false;
+    audio.mozPreservesPitch = false;
+    audio.webkitPreservesPitch = false;
+    if (audio.addEventListener) audio.addEventListener("error", () => { this.trackFailed = true; });
+    if (audio.load) audio.load();
+    this.track = audio;
+
+    // MediaElementSource が使えるブラウザでは Sound.master を通し、スライダーと
+    // ミュートを効果音と完全に共有する。file:// 等で作れない場合だけ直接音量へ落とす。
+    if (this.ctx && this.ctx.createMediaElementSource && this.ctx.createBiquadFilter) {
+      try {
+        this.trackNode = this.ctx.createMediaElementSource(audio);
+        this.trackTone = this.ctx.createBiquadFilter();
+        this.trackTone.type = "lowpass";
+        this.trackGain = this.ctx.createGain();
+        this.trackNode.connect(this.trackTone);
+        this.trackTone.connect(this.trackGain);
+        this.trackGain.connect(Sound.master);
+        audio.volume = 1;
+      } catch (e) {
+        this.trackDirect = true;
+      }
+    } else {
+      this.trackDirect = true;
+    }
+    return true;
+  },
+
+  trackLevel() {
+    if (!this.desc) return 0;
+    const scene = this.SCENE_GAIN[this.desc.scene] == null ? .78 : this.SCENE_GAIN[this.desc.scene];
+    // 不満な軍団は演奏が少し痩せる。ただし実曲そのものは止めず、行軍の芯は残す。
+    return this.TRACK_GAIN * scene * (1 - this.desc.unrest * .16);
+  },
+
+  trackRate() {
+    return this.desc ? this.clamp(this.desc.bpm / this.TRACK_BPM, .86, 1.1) : 1;
+  },
+
+  syncTrack() {
+    if (!this.track || !this.desc) return;
+    const level = this.trackLevel();
+    this.track.playbackRate = this.trackRate();
+    if (this.trackGain) {
+      if (this.trackGain.gain.setTargetAtTime) this.trackGain.gain.setTargetAtTime(level, this.ctx.currentTime, .12);
+      else this.trackGain.gain.value = level;
+    }
+    if (this.trackTone) {
+      // アンデッドと敗北は高域を少し曇らせる。外部曲を壊さない範囲の色付け。
+      const undeadDarkness = this.clamp(this.desc.layers.choir.gain, 0, 1) * 3200;
+      const defeatDarkness = this.desc.scene === "defeat" ? 5200 : 0;
+      const cutoff = Math.max(5200, 18000 - undeadDarkness - defeatDarkness - this.desc.unrest * 1800);
+      if (this.trackTone.frequency.setTargetAtTime) this.trackTone.frequency.setTargetAtTime(cutoff, this.ctx.currentTime, .15);
+      else this.trackTone.frequency.value = cutoff;
+    }
+    if (this.trackDirect) {
+      const master = typeof Sound !== "undefined" && !Sound.muted ? Sound.volume : 0;
+      this.track.volume = this.clamp(master * level, 0, 1);
+    }
   },
 
   suspend() {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
     for (const node of this.voices) { try { node.stop(); } catch (e) {} }
     this.voices.clear();
+    if (this.track && this.track.pause) this.track.pause();
   },
 
   stop() { this.suspend(); },
@@ -205,7 +299,8 @@ const Music = {
     const scale = this.SCALE;
     const idx = ((deg % scale.length) + scale.length) % scale.length;
     const oct = octave + Math.floor(deg / scale.length);
-    return this.desc.root * Math.pow(2, (scale[idx] + oct * 12) / 12);
+    // preservesPitch=false の実曲と同じ比率で移調し、薄い合成レイヤーを調内に保つ。
+    return this.desc.root * this.trackRate() * Math.pow(2, (scale[idx] + oct * 12) / 12);
   },
 
   scheduleStep(step, time) {

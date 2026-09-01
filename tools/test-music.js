@@ -5,6 +5,7 @@
 const fs = require('fs'), vm = require('vm');
 
 let started = 0;
+let mediaPlayed = 0;
 let byType = { triangle: 0 };
 // hiss()（スネア・ハイハット・踏み込みのクリック等、ノイズ由来の中高域）が
 // 実際に amp.gain へ書き込む値だけを拾う。voice()（オシレーター由来の音程）とは
@@ -45,14 +46,16 @@ class AudioContext {
   createGain() { return new GainNode(); }
   createOscillator() { return new OscillatorNode(); }
   createBufferSource() { return new BufferSourceNode(); }
+  createMediaElementSource() { return new AudioNode(); }
   createBiquadFilter() { return new FilterNode(); }
   createBuffer(c, len) { return { getChannelData: () => new Float32Array(len) }; }
   resume() { return Promise.resolve(); }
 }
 class AudioElement {
-  constructor(src = '') { this.src = src; this.volume = 1; this.playbackRate = 1; this.currentTime = 0; }
+  constructor(src = '') { this.src = src; this.volume = 1; this.playbackRate = 1; this.currentTime = 0; this.paused = true; }
   load() {} cloneNode() { return new AudioElement(this.src); } addEventListener() {}
-  play() { return Promise.resolve(); } pause() {}
+  play() { this.paused = false; mediaPlayed++; return Promise.resolve(); }
+  pause() { this.paused = true; }
 }
 
 const store = {};
@@ -209,11 +212,33 @@ function bars(state, count) {
 }
 
 
-// 10. 実際に「聞こえる音量か」を測る。
-//     オシレーターが started() したかだけを見るテスト（1〜9）は、内部の減衰計算で
-//     音量が実質ゼロまで沈んでいても検出できない。実際にこのバグを踏んだ:
-//     hiss() 内部に二重の減衰があり、スネア・ハイハットが効果音の1/10未満まで
-//     沈んでいた。実プレイでは「BGMが鳴らない」のと区別がつかなかった。
+// 10. CC0 の実曲が主役として読み込まれ、効果音と同じ master へ繋がる。
+//     合成レイヤーのピークだけを測っても、完成音源の実効音量は保証できない。
+{
+  Sound.muted = false;
+  Music.desc = Music.describe(army([unit(), unit(), unit()]), { scene: 'battle' });
+  Music.track = null;
+  Music.trackNode = Music.trackGain = Music.trackTone = null;
+  Music.trackFailed = false;
+  const before = mediaPlayed;
+  assert(Music.start(), '実曲BGMを開始できない');
+  assert(fs.existsSync(Music.TRACK_URL), `BGM素材が無い: ${Music.TRACK_URL}`);
+  assert(Music.track && Music.track.src === Music.TRACK_URL, 'CC0実曲が再生要素へ設定されない');
+  assert(Music.track.loop === true, '実曲がループ再生になっていない');
+  assert(mediaPlayed > before, '実曲の play() が呼ばれない');
+  assert(Music.trackGain && Music.trackTone, '実曲が Sound.master へ接続されない');
+  const effective = Music.trackLevel() * Sound.volume;
+  assert(effective >= .45, `実曲BGMの実効レベルが小さすぎる: ${effective.toFixed(3)}`);
+  assert(Music.trackLevel() > Music.MIX * 3, '合成レイヤーが実曲より前へ出ている');
+
+  const paidLevel = Music.trackLevel();
+  Music.desc = Music.describe(army([unit({ unpaid: true, loyalty: 5 })]), { scene: 'battle' });
+  assert(Music.trackLevel() < paidLevel, '未払いでも実曲の演奏が痩せない');
+  assert(Music.trackRate() >= .86 && Music.trackRate() <= 1.1, '実曲を音質が崩れる速度まで変えている');
+  Music.suspend();
+}
+
+// 11. 軍団差を伝える合成アクセントも、実曲の後ろで消えきらないかを測る。
 {
   Sound.muted = false;
   Music.desc = Music.describe(army([unit(), unit(), unit()]), { scene: 'battle' });
@@ -228,14 +253,13 @@ function bars(state, count) {
   assert(hissPeaks.length > 0, 'スネア・ハイハット系のノイズ音が1回も鳴っていない');
   const masterVolume = 0.55; // Sound の初期音量
   const loudest = Math.max(...hissPeaks) * Music.out.gain.value * masterVolume;
-  // 効果音1発の実効音量はおおむね 0.015〜0.03（tone/noiseのgainにSound.masterを掛けた値）。
-  // BGMは常時鳴る下敷きなので効果音より控えめでよいが、これを大きく下回ると
-  // 実プレイでは「鳴っていない」のと区別がつかない（修正前は0.0018程度だった）。
-  assert(loudest >= 0.008, `BGMのノイズ系（スネア・ハイハット等）の実効音量が小さすぎる: ${loudest.toFixed(4)}`);
+  // 実曲が音楽の芯を担うので、アクセントは効果音より控えめでよい。
+  // ただし修正前の0.0018程度まで沈むと編成差が消えるため、下限だけ守る。
+  assert(loudest >= 0.005, `BGMの編成アクセントが小さすぎる: ${loudest.toFixed(4)}`);
 }
 
 
-// 11. 低音が「聞こえない帯域」に閉じ込められていないかを測る。
+// 12. 低音が「聞こえない帯域」に閉じ込められていないかを測る。
 //     旧実装は足音・行進ベースの基音が32〜110Hz中心で、スマホの小型スピーカーは
 //     この帯域をほぼ再生できない。音量を上げても解決しない（実際にオーナーの
 //     実機で確認済み）。基音を実際に再生される帯域まで上げ、オクターブ上の

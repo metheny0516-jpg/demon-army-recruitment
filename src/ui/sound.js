@@ -112,6 +112,8 @@ const Sound = {
     if (immediate || !this.master.gain.setTargetAtTime) this.master.gain.value = value;
     else this.master.gain.setTargetAtTime(value, this.ctx.currentTime, 0.015);
     for (const audio of this.media) audio.volume = value * .82;
+    // BGMが MediaElementSource を使えない file:// 環境でも、共通スライダーへ追従させる。
+    if (typeof Music !== "undefined" && Music.syncTrack) Music.syncTrack();
   },
 
   preloadSamples() {

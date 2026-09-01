@@ -23,11 +23,22 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   const boot = await page.evaluate(() => ({
     scene: Music.desc && Music.desc.scene,
     running: !!Music.timer,
-    connected: !!Music.out
+    connected: !!Music.out,
+    track: !!Music.track,
+    trackRouted: !!Music.trackGain || Music.trackDirect,
+    trackPaused: Music.track ? Music.track.paused : null,
+    trackLoop: Music.track ? Music.track.loop : false,
+    trackSrc: Music.track ? Music.track.src : '',
+    effectiveLevel: Music.trackLevel() * Sound.volume
   }));
   if (boot.scene !== 'recruit') errors.push(`採用画面の場面名が ${boot.scene}`);
   if (!boot.running) errors.push('最初の操作で演奏が始まらない');
   if (!boot.connected) errors.push('BGMが出力へ繋がっていない');
+  if (!boot.track || !boot.trackRouted) errors.push('CC0実曲が出力へ繋がっていない');
+  if (boot.trackPaused) errors.push('最初の操作でCC0実曲が再生されない');
+  if (!boot.trackLoop) errors.push('CC0実曲がループになっていない');
+  if (!boot.trackSrc.endsWith('/assets/bgm/raiders-march.ogg')) errors.push(`想定外のBGM素材: ${boot.trackSrc}`);
+  if (boot.effectiveLevel < .4) errors.push(`BGMの実効レベルが小さすぎる: ${boot.effectiveLevel}`);
 
   // 採用すると出撃隊が増え、行進ベースが厚くなること
   const thin = await page.evaluate(() => Music.desc.layers.bass.density);
@@ -69,10 +80,12 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   const off = await page.evaluate(() => ({
     pressed: document.getElementById('bgm-toggle').getAttribute('aria-pressed'),
     struck: document.getElementById('bgm-toggle').classList.contains('bgm-off'),
-    timer: !!Music.timer
+    timer: !!Music.timer,
+    trackPaused: Music.track ? Music.track.paused : true
   }));
   if (off.pressed !== 'true' || !off.struck) errors.push('BGMオフの表示にならない');
   if (off.timer) errors.push('BGMを切っても演奏が止まらない');
+  if (!off.trackPaused) errors.push('BGMを切ってもCC0実曲が止まらない');
   await page.reload();
   await page.hover('#sound-control');
   if (await page.getAttribute('#bgm-toggle', 'aria-pressed') !== 'true') errors.push('BGM設定が復元されない');
