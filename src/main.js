@@ -101,9 +101,14 @@ const App = {
       case "new":
         Game.newRun();
         this.render();
-        return this.report("welcome",
-          "魔王軍の設立デス！\n強さだけでなく、戦闘・建設・生活のどこで働けるかも見て採用してくださいネ。",
-          { kicker: "第1回 魔王軍人事", title: "宰相モルモ" });
+        {
+          const returning = Game.state.applicants.find(m => m.legacy);
+          return this.report(returning ? "joy" : "welcome",
+            returning
+              ? `魔王軍の設立デス！\nそれと魔王様、魔界史に名を残した ${returning.name} が再応募してきましたヨ！ 能力と階級は新任からデスが、これは運命かもしれませんネ。`
+              : "魔王軍の設立デス！\n強さだけでなく、戦闘・建設・生活のどこで働けるかも見て採用してくださいネ。",
+            { kicker: returning ? "歴史が動いた" : "第1回 魔王軍人事", title: "宰相モルモ" });
+        }
 
       case "continue":
         if (Game.load()) {

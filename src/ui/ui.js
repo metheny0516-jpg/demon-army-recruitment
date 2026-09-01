@@ -110,6 +110,9 @@ const UI = {
     const nextRank = Game.nextRank(m);
     const merit = m.merit || 0;
     const meritText = nextRank ? `戦功 ${merit}/${nextRank.threshold}` : `戦功 ${merit}・最高位`;
+    const legacy = m.legacy
+      ? `<div class="general-ability">📜 第${m.legacy.generation}代・殿堂入り人材の再応募（戦功と階級は新任扱い）</div>`
+      : "";
     return `<div class="card">
       <div class="card-head">
         ${this.avatarHtml(m, opts.resume ? "photo" : "")}
@@ -119,6 +122,7 @@ const UI = {
         </div>
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
       </div>
+      ${legacy}
       ${opts.resume ? this.resumeHtml(m) : ""}
       <div class="stats">
         <div class="stat"><span class="k">HP</span><span class="v">${m.hp}</span></div>
@@ -595,6 +599,7 @@ const UI = {
           <dt>最大戦力</dt><dd>${record.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${record.maxArmySize || (record.finalRoster || []).length}体</dd>
           <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
+          <dt>殿堂入り</dt><dd>${record.hallOfFame ? `${U.esc(record.hallOfFame.name)}（戦功 ${record.hallOfFame.merit || 0}）` : "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${record.battleIncidentTotal || 0}件</dd>
           <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(record))}</dd>
           <dt>最終施設</dt><dd>Lv.${record.facilityLevel || 0}</dd>
@@ -625,6 +630,7 @@ const UI = {
           <dt>最大戦力</dt><dd>${r.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
           <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
+          <dt>殿堂入り</dt><dd>${r.hallOfFame ? `${U.esc(r.hallOfFame.name)}（戦功 ${r.hallOfFame.merit || 0}）` : "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${r.battleIncidentTotal || 0}件</dd>
           <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(r))}</dd>
           <dt>最終施設</dt><dd>Lv.${r.facilityLevel || 0}</dd>

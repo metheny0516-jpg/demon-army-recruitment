@@ -12,6 +12,7 @@ const Game = {
 
   newRun() {
     const history = Storage.loadHistory();
+    const legacyReturn = this.chooseLegacyReturn(history);
     this.state = {
       generation: history.length + 1,
       stage: 1,
@@ -47,6 +48,8 @@ const Game = {
       pendingEvent: null,
       eventOutcome: null,
       laborDispute: null,
+      legacyReturn,
+      legacyOffered: false,
       pendingVacancies: 0,
       fallenTotal: 0,
       fallenRoll: [],
@@ -150,7 +153,8 @@ const Game = {
       buildProgress: 0, facilityLevel: 0, lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
-      lastPayrollReport: null
+      lastPayrollReport: null,
+      legacyReturn: null, legacyOffered: false
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
@@ -439,9 +443,30 @@ const Game = {
     st.applicants = [];
     const n = this.applicantCount();
     for (let i = 0; i < n; i++) st.applicants.push(this.rollApplicant());
+    if (st.legacyReturn && !st.legacyOffered && st.applicants.length) {
+      const legacy = st.legacyReturn;
+      const returning = this.rollApplicant(legacy.tplId);
+      Object.assign(returning, {
+        name: legacy.name,
+        job: legacy.job || returning.job,
+        prevJob: legacy.prevJob || returning.prevJob,
+        motive: legacy.motive || returning.motive,
+        flaw: legacy.flaw || returning.flaw,
+        quote: legacy.quote || returning.quote,
+        legacy: {
+          generation: legacy.generation,
+          formerMerit: legacy.merit || 0,
+          formerRankId: legacy.rankId || "soldier"
+        }
+      });
+      const sameName = st.applicants.findIndex(m => m.name === returning.name);
+      const slot = sameName >= 0 ? sameName : U.randInt(0, st.applicants.length - 1);
+      st.applicants[slot] = returning;
+      st.legacyOffered = true;
+    }
   },
 
-  rollApplicant() {
+  rollApplicant(forcedTplId) {
     const st = this.state;
     const level = this.campaignLevel();
     // 作戦と征服が進むほど高ティアが出やすい
@@ -452,10 +477,12 @@ const Game = {
     });
     const total = weights.reduce((a, b) => a + b, 0);
     let r = U.rand() * total;
-    let tpl = MONSTER_TEMPLATES[0];
-    for (let i = 0; i < MONSTER_TEMPLATES.length; i++) {
-      r -= weights[i];
-      if (r <= 0) { tpl = MONSTER_TEMPLATES[i]; break; }
+    let tpl = MONSTER_TEMPLATES.find(t => t.id === forcedTplId) || MONSTER_TEMPLATES[0];
+    if (!forcedTplId) {
+      for (let i = 0; i < MONSTER_TEMPLATES.length; i++) {
+        r -= weights[i];
+        if (r <= 0) { tpl = MONSTER_TEMPLATES[i]; break; }
+      }
     }
     // 進行補正：後から来る応募者ほど強い
     const scale = 1 + 0.12 * (level - 1);
@@ -961,6 +988,29 @@ const Game = {
     }
   },
 
+  // 過去の英雄は能力ではなく「名前と経歴」を継ぐ。毎ラン一度だけ低確率で戻る。
+  chooseLegacyReturn(history) {
+    const candidates = (history || []).map(r => r && r.hallOfFame).filter(h =>
+      h && h.tplId && MONSTER_TEMPLATES.some(t => t.id === h.tplId)
+    );
+    return candidates.length > 0 && U.chance(0.25) ? { ...U.pick(candidates) } : null;
+  },
+
+  hallOfFameMember() {
+    const roster = this.state.roster || [];
+    if (!roster.length) return null;
+    const m = roster.reduce((best, current) => {
+      if (!best) return current;
+      const meritDiff = (current.merit || 0) - (best.merit || 0);
+      return meritDiff > 0 || (meritDiff === 0 && this.power(current) > this.power(best)) ? current : best;
+    }, null);
+    return {
+      name: m.name, tplId: m.tplId, race: m.race, job: m.job,
+      prevJob: m.prevJob, motive: m.motive, flaw: m.flaw, quote: m.quote,
+      generation: this.state.generation, merit: m.merit || 0, rankId: m.rankId || "soldier"
+    };
+  },
+
   preparePayrollForBattle(notes) {
     const st = this.state;
     const quote = this.payrollQuote();
@@ -1072,6 +1122,7 @@ const Game = {
         name: m.name, race: m.race, job: m.job, rankId: m.rankId,
         merit: m.merit || 0, department: this.departmentOf(m).id
       })),
+      hallOfFame: this.hallOfFameMember(),
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
       date: new Date().toISOString().slice(0, 10)
     };
