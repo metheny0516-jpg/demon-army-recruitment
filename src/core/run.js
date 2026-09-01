@@ -322,23 +322,29 @@ const Game = {
       st.phase = "mission";
       return st.missionOffers;
     }
+    const previous = new Map((st.missionOffers || []).map(m => [m.missionKind, m.formationId]));
     st.selectedMission = null;
-    st.missionOffers = MISSION_TYPES.map(type => this.buildMission(type));
+    st.missionOffers = MISSION_TYPES.map(type => this.buildMission(type, previous.get(type.id)));
     st.phase = "mission";
     this.save();
     return st.missionOffers;
   },
 
-  buildMission(type) {
+  buildMission(type, previousFormationId) {
     const st = this.state;
     const baseIndex = U.clamp(st.conquest + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1);
     const base = ENEMY_STAGES[baseIndex];
+    const formations = [
+      { id: "standard", name: "基本隊列", hint: "王国軍の標準的な隊列。", units: base.units },
+      ...(base.variants || [])
+    ];
+    const formation = formations.find(f => f.id === previousFormationId) || U.pick(formations);
     // 大軍は選抜の自由度が高いぶん敵にも察知される。隠し補正にせず
     // mission.armyPressure として作戦カードへ渡し、解雇・維持の判断材料にする。
     const armyPressure = Math.min(6, Math.max(0, st.roster.length - this.MAX_DEPLOY) * 2);
     const scale = type.enemyMult * (1 + st.alert * 0.02) * (1 + armyPressure / 100);
     const stat = (value, min) => Math.max(min, Math.round(value * scale));
-    const units = base.units.map((unit, index) => ({
+    const units = formation.units.map((unit, index) => ({
       ...unit,
       name: type.enemyNames ? type.enemyNames[index % type.enemyNames.length] : unit.name,
       hp: stat(unit.hp, 1),
@@ -369,6 +375,9 @@ const Game = {
       materialReward: type.materialReward || 0,
       armyPressure,
       baseStage: base.stage,
+      formationId: formation.id,
+      formationName: formation.name,
+      formationHint: formation.hint,
       units
     };
   },

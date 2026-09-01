@@ -293,6 +293,8 @@ const UI = {
     return `<div class="panel">
       <h3>${U.esc(sd.missionTitle || "次の戦い")}：${U.esc(sd.army)}
         <span class="muted">（${U.esc(sd.region)}／報酬 ${sd.reward}G）</span></h3>
+      <div class="mission-formation"><b>敵編成：${U.esc(sd.formationName || "基本隊列")}</b>
+        <span class="muted">— ${U.esc(sd.formationHint || "敵情を確認して出撃隊を選べ。")}</span></div>
       <div class="vs">
         <div class="side"><h4>魔王軍（上が前衛）</h4><ul>${
           mine.length ? mine.map(m => `<li>${this.icon(m.race)} ${U.esc(m.name)} <span class="muted">HP${m.hp} 攻${m.atk}</span></li>`).join("")
@@ -300,7 +302,7 @@ const UI = {
         }</ul></div>
         <div class="mid">VS</div>
         <div class="side"><h4>敵軍</h4><ul>${
-          sd.units.map(e => `<li>🗡 ${U.esc(e.name)} <span class="muted">HP${e.hp} 攻${e.atk}</span></li>`).join("")
+          sd.units.map(e => `<li>${U.esc(e.icon || "🗡")} ${U.esc(e.name)} <span class="muted">HP${e.hp} 攻${e.atk}</span></li>`).join("")
         }</ul></div>
       </div>
     </div>`;
@@ -381,6 +383,8 @@ const UI = {
           危険度 ${U.esc(m.difficulty)}</div>
         <h3>${U.esc(m.missionTitle)}</h3>
         <div class="mission-army">${U.esc(m.army)} <span class="muted">— ${U.esc(m.region)}</span></div>
+        <div class="mission-formation"><b>敵編成：${U.esc(m.formationName || "基本隊列")}</b><br>
+          <span class="muted">${U.esc(m.formationHint || "敵情を確認して出撃隊を選べ。")}</span></div>
         <p>${U.esc(m.description)}</p>
         <dl class="mission-economy">
           <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>

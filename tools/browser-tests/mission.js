@@ -14,6 +14,7 @@ const ok = (condition, message) => console.log((condition ? '  ✓ ' : '  ✗ ')
   const cards = page.locator('.mission-card');
   ok(await cards.count() === 3, '作戦が3種類提示される');
   ok(await page.locator('.mission-economy').count() === 3, '各作戦に収支見込が表示される');
+  ok(await page.locator('.mission-formation').count() === 3, '各作戦に敵編成名と特徴が事前表示される');
   const before = await page.evaluate(() => ({ alert: Game.state.alert, conquest: Game.state.conquest, turn: Game.state.turn }));
 
   await page.locator('[data-action="missionpick"]').first().click();
