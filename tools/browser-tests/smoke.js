@@ -16,10 +16,6 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   console.log('▼ スマホ縦(390x844)で通しプレイ');
   await step('タイトル表示', async () => {
     if (!(await page.locator('h1').innerText()).includes('魔王')) throw new Error('title missing');
-    const mormo = page.locator('.mormo-guide img').first();
-    if (!(await mormo.count()) || await mormo.evaluate(img => !img.complete || !img.naturalWidth)) {
-      throw new Error('モルモ画像が表示されていない');
-    }
   });
   await page.screenshot({ path: process.env.SP + '/shot-title.png' });
 
@@ -27,6 +23,10 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     await page.click('[data-action="new"]');
     const n = await page.locator('.card').count();
     if (n !== 3) throw new Error('applicants=' + n);
+    const mormo = page.locator('#mormo-scene .mormo-scene-portrait');
+    if (!(await mormo.count()) || await mormo.evaluate(img => !img.complete || !img.naturalWidth)) {
+      throw new Error('全画面のモルモ画像が表示されていない');
+    }
   });
   await page.screenshot({ path: process.env.SP + '/shot-recruit.png', fullPage: true });
 

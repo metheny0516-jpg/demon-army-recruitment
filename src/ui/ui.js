@@ -9,20 +9,6 @@ const UI = {
   },
   icon(race) { return this.RACE_ICON[race] || "❓"; },
 
-  MORMO_DIR: "assets/mormo/",
-
-  mormo(expression, text, title) {
-    const safeExpression = ["panic", "worried", "welcome", "report", "angry", "joy"].includes(expression)
-      ? expression : "report";
-    return `<aside class="mormo-guide mormo-${safeExpression}">
-      <img src="${this.MORMO_DIR}${safeExpression}.webp" alt="宰相モルモ">
-      <div class="mormo-bubble">
-        <div class="mormo-name">${U.esc(title || "宰相モルモ")}</div>
-        <div>${U.esc(text)}</div>
-      </div>
-    </aside>`;
-  },
-
   // ── 立ち絵 ────────────────────────────
   // portraits.js の一覧に載っている種族は assets/monsters/{tplId}.png を、
   // それ以外は絵文字を使う。一覧方式にしているのは、未収録の種族に対して
@@ -325,9 +311,6 @@ const UI = {
     this.set(`<div class="title-screen">
       <h1>魔王ワーク</h1>
       <p class="muted">採用して、配属して、働かせろ。<br>戦場も魔王城も、人材配置がすべてだ。</p>
-      ${this.mormo(hasSave ? "report" : "welcome",
-        hasSave ? "おかえりなさいませ、魔王様！ 続きの作戦報告を用意してありますヨ。"
-          : "魔王様、お待ちしておりました！ まずは魔王軍の設立デス！")}
       <div class="title-menu">
         <button class="primary wide" data-action="new">新規ゲーム（第${history.length + 1}代魔王）</button>
         ${hasSave ? `<button class="wide" data-action="continue">続きから</button>` : ""}
@@ -341,11 +324,6 @@ const UI = {
   recruit() {
     const st = Game.state;
     const full = !Game.canHire();
-    const recruitMessage = st.turn === 1
-      ? "本日の応募者デス！ 強さだけでなく、建設や生活の仕事も任せられそうか見てくださいネ。"
-      : st.pendingVacancies
-        ? "欠員募集デス……戦える方だけでなく、城と食卓を守る方も必要ですヨ。"
-        : "次の応募者をお連れしました。今の部門配属に足りない人材を考えましょう！";
     const cards = st.applicants.map((m, i) => this.monsterCard(m, {
       resume: true,
       footer: `<button class="primary wide" data-action="hire" data-index="${i}" ${full ? "disabled" : ""}>
@@ -364,7 +342,6 @@ const UI = {
         </span>`).join("")}</div>
     </div>` : "";
     this.set(`${this.hud()}
-      ${this.mormo(st.roster.length ? "report" : "welcome", recruitMessage)}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
         <div class="muted">${
@@ -418,11 +395,7 @@ const UI = {
         <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
       </div>`;
     }).join("");
-    const lowFood = st.food <= Game.foodNeed();
     this.set(`${this.hud()}
-      ${this.mormo(lowFood ? "worried" : "report", lowFood
-        ? "食料が心細いですネ……略奪か生活部門への配属を考えた方がよさそうデス。"
-        : "作戦ごとにG・食料・建材の取り分が違います。今の部門編成と相談してくださいネ。")}
       <div class="panel">
         <h2>🗺 作戦会議</h2>
         <div class="muted">次に何をするか選べ。寄り道すれば軍を養えるが、警戒度が上がるほど以後の敵も強くなる。</div>
@@ -474,26 +447,9 @@ const UI = {
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
     })).join("");
     const empty = active.length === 0;
-    const foodNeed = Game.foodNeed();
     const payroll = Game.payrollPolicy();
     const payrollQuote = Game.payrollQuote();
-    const hasOnlyCombat = st.roster.length >= 3 && builders.length === 0 && lifeWorkers.length === 0;
-    const adviceExpression = empty ? "panic"
-      : payroll.id === "withhold" ? "angry"
-        : (hasOnlyCombat || st.food <= foodNeed ? "worried" : payroll.id === "advance" ? "joy" : "report");
-    const advice = empty
-      ? "魔王様ぁ！ 戦闘部門の出撃隊が空デス！ 最低1名は出撃させてください！"
-      : payroll.id === "withhold"
-        ? "本当に払わないんですか！？ 血の気の多い者は強くなりますが、座り込む者も出ますヨ！"
-        : payroll.id === "advance"
-          ? `厚遇費 ${payrollQuote.cost}G デス！ 皆の足並みは揃いますが、敗北しても返金はありませんヨ。`
-          : hasOnlyCombat
-            ? "全員戦闘配属ですネ。目先は強いですが、食料も施設も育ちませんヨ……。"
-            : st.food <= foodNeed
-              ? "次の勤務後に食料不足の恐れがあります。生活部門へ回すか、食料の多い作戦を選びましょう。"
-              : "誰を戦わせ、誰に城と暮らしを任せるか――ここが魔王様の人事デス！";
     this.set(`${this.hud()}
-      ${this.mormo(adviceExpression, advice)}
       <div class="panel">
         <h2>🏢 部門編成 <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || "作戦未選択")}</span></h2>
         <div class="muted">戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。</div>
@@ -528,18 +484,9 @@ const UI = {
   result() {
     const st = Game.state;
     const b = st.lastBattle;
-    const report = st.lastDepartmentReport || {};
     const payrollReport = st.lastPayrollReport || {};
     const payrollPolicy = PAYROLL_POLICIES[payrollReport.policyId] || PAYROLL_POLICIES.regular;
-    const mormoExpression = report.foodShortage ? "panic"
-      : report.facilityAfter > report.facilityBefore ? "joy" : "report";
-    const mormoText = report.foodShortage
-      ? `魔王様ぁ！ 食料が${report.foodShortage}足りません！ このままでは皆の忠誠が危険デス！`
-      : report.facilityAfter > report.facilityBefore
-        ? `施設が完成しました！ ${Game.facilityInfo().name}デス！ 次の出撃隊が少し頑丈になりますヨ！`
-        : `各部門の勤務報告デス。食料${st.food}、建材${st.materials}、施設Lv.${st.facilityLevel}になりました。`;
     this.set(`${this.hud()}
-      ${this.mormo(mormoExpression, mormoText, "宰相モルモ・勤務報告")}
       <div class="banner win">
         <h2>勝利！</h2>
         <div>${U.esc(b.army)} を撃退した</div>
@@ -581,8 +528,7 @@ const UI = {
     const cp = st.checkpoint;
     const goldNow = cp ? cp.gold : st.gold;
     const goldAfter = Math.floor(goldNow / 2);
-    return this.set(`${this.mormo("panic", "うわああああ！ 魔王様ぁ！ まだ再起できます、採用と配属を見直しましょう！")}
-      <div class="banner lose">
+    return this.set(`<div class="banner lose">
         <h2>魔王軍、壊滅</h2>
         <div>${U.esc(b.army)} に敗北した</div>
       </div>
@@ -610,7 +556,6 @@ const UI = {
     // 選択済み → 結果を見せる
     if (!ev || st.eventOutcome) {
       return this.set(`${this.hud()}
-        ${this.mormo("report", st.eventOutcome || "事件はひとまず収まりました……たぶんデス。")}
         <div class="panel event-panel">
           <h2>⚡ その後</h2>
           <div class="event-text">${U.esc(st.eventOutcome || "")}</div>
@@ -624,7 +569,6 @@ const UI = {
     ).join("");
 
     this.set(`${this.hud()}
-      ${this.mormo("angry", `魔王様、大変デス！ ${ev.title}が起きました！`)}
       <div class="panel event-panel">
         <h2>⚡ ${U.esc(ev.title)}</h2>
         <div class="event-text">${U.esc(st.pendingEvent.text)}</div>
@@ -633,10 +577,7 @@ const UI = {
   },
 
   gameover(record, history) {
-    this.set(`${this.mormo(record.cleared ? "joy" : "worried", record.cleared
-        ? "やりましたネ、魔王様！ この軍団の歴史はずっと覚えておきますヨ！"
-        : "お疲れさまでした、魔王様……この失敗も、次の魔王軍の歴史に残しますネ。")}
-      <div class="banner ${record.cleared ? "win" : "lose"}">
+    this.set(`<div class="banner ${record.cleared ? "win" : "lose"}">
         <h2>${record.cleared ? "人間界を制圧した！" : "魔王軍、壊滅"}</h2>
         <div>${U.esc(record.cause)}</div>
       </div>

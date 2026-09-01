@@ -115,41 +115,144 @@ button.wide { width: 100%; }
 .hud .food, .mission-economy .food { color: #8ed9a6; }
 .hud .materials, .mission-economy .materials { color: #9fc5e8; }
 
-/* ── モルモ（全画面の進行役） ───────────── */
-.mormo-guide {
+/* モルモの報告はメニューの部品ではなく、場面転換そのものとして前面に出す。 */
+.mormo-speaking { overflow: hidden; }
+.mormo-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
   display: grid;
-  grid-template-columns: 118px minmax(0, 1fr);
-  align-items: end;
-  gap: 0;
-  margin: 0 0 12px;
-  text-align: left;
+  place-items: center;
+  overflow: hidden;
+  isolation: isolate;
 }
-.mormo-guide img {
-  width: 132px;
-  height: 132px;
+.mormo-scene-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(circle at 28% 35%, rgba(167, 123, 243, .28), transparent 42%),
+    linear-gradient(145deg, rgba(9, 6, 16, .97), rgba(31, 20, 48, .96));
+  backdrop-filter: blur(5px);
+  animation: mormoBackdrop .28s ease-out both;
+}
+.mormo-scene-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: .17;
+  background: repeating-linear-gradient(0deg, transparent 0 3px, #fff 4px, transparent 5px);
+  mix-blend-mode: overlay;
+}
+.mormo-scene-inner {
+  width: min(960px, 100%);
+  min-height: min(640px, 100dvh);
+  padding: clamp(18px, 4vw, 48px);
+  display: grid;
+  grid-template-columns: minmax(260px, .82fr) minmax(340px, 1.18fr);
+  align-items: center;
+  gap: clamp(10px, 4vw, 54px);
+}
+.mormo-scene-portrait-wrap {
+  position: relative;
+  align-self: stretch;
+  display: grid;
+  place-items: end center;
+  min-height: 440px;
+}
+.mormo-scene-aura {
+  position: absolute;
+  left: 50%;
+  bottom: 10%;
+  width: 82%;
+  aspect-ratio: 1;
+  border: 1px solid rgba(240, 196, 106, .35);
+  border-radius: 50%;
+  transform: translateX(-50%);
+  box-shadow: 0 0 70px rgba(167, 123, 243, .24), inset 0 0 45px rgba(240, 196, 106, .08);
+  animation: mormoAura 2.4s ease-in-out infinite;
+}
+.mormo-scene-portrait {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 430px);
+  height: min(72vh, 560px);
   object-fit: contain;
   object-position: bottom center;
-  align-self: end;
-  filter: drop-shadow(0 7px 8px rgba(0, 0, 0, .45));
-  z-index: 1;
+  filter: drop-shadow(0 18px 18px rgba(0, 0, 0, .62));
+  transform-origin: bottom center;
+  animation: mormoEntrance .42s cubic-bezier(.2,.8,.2,1) both, mormoAlive 2.2s .45s ease-in-out infinite;
 }
-.mormo-bubble {
+.mormo-scene-dialogue {
   position: relative;
-  min-height: 82px;
-  margin: 0 0 8px -8px;
-  padding: 13px 16px 13px 22px;
-  border: 1px solid #6c5a8e;
-  border-radius: 16px;
-  background: linear-gradient(145deg, #33284b, #241d38);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+  min-height: 260px;
+  padding: clamp(20px, 4vw, 38px);
+  border: 1px solid rgba(240, 196, 106, .55);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(52, 39, 77, .98), rgba(24, 18, 38, .98));
+  box-shadow: 0 22px 65px rgba(0, 0, 0, .52), inset 0 1px rgba(255, 255, 255, .07);
+  animation: mormoDialogue .35s .12s ease-out both;
 }
-.mormo-name { color: var(--gold); font-weight: bold; font-size: 12px; margin-bottom: 4px; }
-.title-screen .mormo-guide { max-width: 620px; margin: 18px auto 8px; }
+.mormo-scene-dialogue::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: 38%;
+  width: 34px;
+  height: 34px;
+  border-left: 1px solid rgba(240, 196, 106, .55);
+  border-bottom: 1px solid rgba(240, 196, 106, .55);
+  background: #2d2243;
+  transform: rotate(45deg);
+}
+.mormo-scene-kicker { color: var(--purple); font-size: 12px; font-weight: bold; letter-spacing: .18em; }
+.mormo-scene-name { color: var(--gold); font-size: clamp(18px, 2.5vw, 27px); font-weight: bold; margin: 2px 0 16px; }
+.mormo-scene-text {
+  min-height: 5.2em;
+  white-space: pre-wrap;
+  font-size: clamp(17px, 2.3vw, 23px);
+  line-height: 1.8;
+  font-weight: 600;
+  text-shadow: 0 2px 4px #000;
+}
+.mormo-scene-text::after { content: "▌"; color: var(--gold); animation: mormoCursor .55s step-end infinite; }
+.mormo-scene-next {
+  float: right;
+  min-width: 132px;
+  margin-top: 12px;
+  border-color: rgba(240, 196, 106, .45);
+  color: var(--dim);
+  background: rgba(15, 10, 25, .58);
+}
+.mormo-scene-next.ready { color: var(--gold); animation: mormoNext .7s ease-in-out infinite alternate; }
+.mormo-scene-panic .mormo-scene-backdrop,
+.mormo-scene-angry .mormo-scene-backdrop { filter: sepia(.15) saturate(1.35); }
+.mormo-scene-joy .mormo-scene-aura { box-shadow: 0 0 90px rgba(240, 196, 106, .36); }
+
+@keyframes mormoBackdrop { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mormoEntrance { from { opacity: 0; transform: translateX(-45px) scale(.92); } to { opacity: 1; transform: none; } }
+@keyframes mormoDialogue { from { opacity: 0; transform: translateX(38px); } to { opacity: 1; transform: none; } }
+@keyframes mormoAlive { 0%,100% { transform: translateY(0) rotate(-.25deg); } 50% { transform: translateY(-7px) rotate(.35deg); } }
+@keyframes mormoAura { 0%,100% { opacity: .55; transform: translateX(-50%) scale(.96); } 50% { opacity: 1; transform: translateX(-50%) scale(1.04); } }
+@keyframes mormoCursor { 50% { opacity: 0; } }
+@keyframes mormoNext { to { transform: translateY(3px); filter: brightness(1.25); } }
 
 @media (max-width: 560px) {
-  .mormo-guide { grid-template-columns: 82px minmax(0, 1fr); }
-  .mormo-guide img { width: 92px; height: 108px; }
-  .mormo-bubble { min-height: 72px; margin-left: -5px; padding: 10px 11px 10px 16px; font-size: 13px; }
+  .mormo-scene-inner {
+    min-height: 100dvh;
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(230px, 46vh) auto;
+    align-content: center;
+    gap: 0;
+    padding: 14px;
+  }
+  .mormo-scene-portrait-wrap { min-height: 0; align-self: stretch; }
+  .mormo-scene-portrait { width: min(82vw, 360px); height: 48vh; }
+  .mormo-scene-aura { width: min(68vw, 310px); }
+  .mormo-scene-dialogue { min-height: 225px; padding: 18px; border-radius: 16px; }
+  .mormo-scene-dialogue::before { left: 25%; top: -15px; transform: rotate(135deg); }
+  .mormo-scene-name { margin-bottom: 9px; }
+  .mormo-scene-text { min-height: 5.6em; font-size: 16px; line-height: 1.7; }
 }
 
 /* ── モンスターカード ─────────────────── */
@@ -708,7 +811,8 @@ button.wide { width: 100%; }
 /* 端末側で「視差効果を減らす」設定なら演出を抑える */
 @media (prefers-reduced-motion: reduce) {
   .bu, .bu::after, .scene, .scene-fx, .cutin, .fnum, .scene-result,
-  .action-caption, .round-banner, .scene-intro, .promotion-panel { animation: none !important; }
+  .action-caption, .round-banner, .scene-intro, .promotion-panel,
+  .mormo-scene *, .mormo-scene *::after { animation: none !important; }
   .bu.acting::after,
   .action-caption.show,
   .round-banner.show,

@@ -224,6 +224,13 @@ const Sound = {
       case "confirm":
         this.tone(440, .08 * pace, { type: "triangle", gain: .045, to: 660 });
         break;
+      case "mormo": {
+        // 台詞の一音ずつを読ませる軽い声。文字ごとに少し高さを揺らし、機械音を避ける。
+        const notes = [294, 330, 349, 392, 330];
+        const freq = notes[(data.index || 0) % notes.length];
+        this.tone(freq, .038, { type: "triangle", gain: .022, to: freq * .94 });
+        break;
+      }
       case "hire":
         this.noise(.075 * pace, { gain: .035, filter: 700 });
         this.tone(150, .11 * pace, { type: "square", gain: .05, to: 105, delay: .015 });

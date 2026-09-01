@@ -72,7 +72,7 @@ if (!Sound.unlock() || !Sound.ctx || !Sound.master) throw new Error('AudioContex
 if (Sound.samples.size !== 12) throw new Error(`WAVを事前読込できない: ${Sound.samples.size}`);
 
 for (const cue of ['click', 'confirm', 'hire', 'shuffle', 'dismiss', 'deploy', 'round', 'attack', 'magic', 'death',
-  'revive', 'heal', 'guard', 'synergy', 'promotion', 'incident', 'final', 'win', 'lose', 'skip']) {
+  'revive', 'heal', 'guard', 'synergy', 'promotion', 'incident', 'final', 'win', 'lose', 'skip', 'mormo']) {
   Sound.cue(cue, { emphasis: 3, id: 'general_command' });
 }
 if (started < 20) throw new Error(`生成された音が少なすぎる: ${started}`);
@@ -86,4 +86,4 @@ Sound.cue('win');
 if (started !== beforeMute) throw new Error('ミュート中に音を生成した');
 if (store.maou_muted !== '1') throw new Error('ミュート設定を保存できない');
 
-console.log('✓ 効果音20種・衝撃WAV12種・音量保存・ミュート');
+console.log('✓ 効果音21種・衝撃WAV12種・モルモ発話音・音量保存・ミュート');
