@@ -9,6 +9,20 @@ const UI = {
   },
   icon(race) { return this.RACE_ICON[race] || "❓"; },
 
+  MORMO_DIR: "assets/mormo/",
+
+  mormo(expression, text, title) {
+    const safeExpression = ["panic", "worried", "welcome", "report", "angry", "joy"].includes(expression)
+      ? expression : "report";
+    return `<aside class="mormo-guide mormo-${safeExpression}">
+      <img src="${this.MORMO_DIR}${safeExpression}.webp" alt="宰相モルモ">
+      <div class="mormo-bubble">
+        <div class="mormo-name">${U.esc(title || "宰相モルモ")}</div>
+        <div>${U.esc(text)}</div>
+      </div>
+    </aside>`;
+  },
+
   // ── 立ち絵 ────────────────────────────
   // portraits.js の一覧に載っている種族は assets/monsters/{tplId}.png を、
   // それ以外は絵文字を使う。一覧方式にしているのは、未収録の種族に対して
@@ -72,7 +86,10 @@ const UI = {
       <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
       <span>警戒度 <b>${st.alert}</b></span>
       <span class="gold">所持金 <b>${st.gold}G</b></span>
-      <span>出撃隊給与 <b>${salary}G</b>/戦</span>
+      <span class="food">食料 <b>${st.food}</b></span>
+      <span class="materials">建材 <b>${st.materials}</b></span>
+      <span>施設 <b>Lv.${st.facilityLevel}</b></span>
+      <span>給与・手当 <b>${salary}G</b>/戦</span>
       <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
       <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
       <span class="muted">${U.esc(sd.region)}</span>
@@ -127,6 +144,7 @@ const UI = {
         <span class="salary">希望給与 ${m.salary}G</span>
         <span class="loyal">忠誠 ${m.loyalty}</span>
         <span class="merit">${meritText}</span>
+        ${opts.resume ? "" : this.departmentTag(m)}
         ${unpaid}
       </div>
       <div class="traits">${this.traitHtml(m.traits)}</div>
@@ -163,6 +181,40 @@ const UI = {
       </div>`;
     }).join("");
     return `<div class="panel"><h3>戦果</h3><div class="contrib-list">${rows}</div></div>`;
+  },
+
+  departmentTag(m) {
+    const department = Game.departmentOf(m);
+    return `<span class="department-tag department-${department.id}">${department.icon} ${U.esc(department.shortName)}</span>`;
+  },
+
+  departmentButtons(m, current) {
+    return DEPARTMENT_ORDER.filter(id => id !== current).map(id => {
+      const department = DEPARTMENTS[id];
+      return `<button class="small department-button" data-action="assigndepartment"
+        data-uid="${m.uid}" data-department="${id}">${department.icon} ${U.esc(department.shortName)}へ</button>`;
+    }).join("");
+  },
+
+  departmentSummary() {
+    const st = Game.state;
+    const combat = Game.departmentRoster("combat").length;
+    const builders = Game.departmentRoster("construction").length;
+    const life = Game.departmentRoster("life").length;
+    const facility = Game.facilityInfo();
+    const next = FACILITY_LEVELS[st.facilityLevel + 1];
+    const buildText = next
+      ? `次の施設まで ${Math.max(0, next.buildThreshold - st.buildProgress)} 建材投入`
+      : "施設は最大レベル";
+    const foodNeed = st.roster.length ? Math.max(1, Math.ceil(st.roster.length / DEPARTMENT_RULES.foodPerRoster)) : 0;
+    return `<div class="department-overview">
+      <div><b>⚔ ${combat}</b><span>戦闘所属</span></div>
+      <div><b>🔨 ${builders}</b><span>建設所属</span></div>
+      <div><b>🍲 ${life}</b><span>生活所属</span></div>
+      <div><b>${U.esc(facility.name)}</b><span>HP+${Math.round((facility.hpMult - 1) * 100)}% / 防御+${facility.defBonus}</span></div>
+      <div><b>食料消費 ${foodNeed}</b><span>生活1名につき食料+${DEPARTMENTS.life.foodProduction}</span></div>
+      <div><b>${U.esc(buildText)}</b><span>建設1名につき建材投入+${DEPARTMENTS.construction.materialUse}</span></div>
+    </div>`;
   },
 
   // 敗北を「ただの死因」で終わらせず、次に変えられる判断を考えたくなる材料にする。
@@ -218,21 +270,29 @@ const UI = {
   // ── 画面 ────────────────────────────
   title(hasSave, history) {
     this.set(`<div class="title-screen">
-      <h1>魔王採用試験</h1>
-      <p class="muted">お前は魔王だ。自分では戦わない。<br>面接して、採用して、部下に戦わせろ。</p>
+      <h1>魔王ワーク</h1>
+      <p class="muted">採用して、配属して、働かせろ。<br>戦場も魔王城も、人材配置がすべてだ。</p>
+      ${this.mormo(hasSave ? "report" : "welcome",
+        hasSave ? "おかえりなさいませ、魔王様！ 続きの作戦報告を用意してありますヨ。"
+          : "魔王様、お待ちしておりました！ まずは魔王軍の設立デス！")}
       <div class="title-menu">
         <button class="primary wide" data-action="new">新規ゲーム（第${history.length + 1}代魔王）</button>
         ${hasSave ? `<button class="wide" data-action="continue">続きから</button>` : ""}
         <button class="wide ghost" data-action="history">魔界史（${history.length}代の記録）</button>
       </div>
       <div class="spacer"></div>
-      <p class="muted">最大20体の軍団から5体を選抜。勝てば報酬、しかし毎戦の維持費が待っている。<br>敗北すれば軍団は消滅し、歴史だけが残る。</p>
+      <p class="muted">軍団員を戦闘・建設・生活へ配属。勝てば資源、働けば給与と手当。<br>敗北すれば軍団は消滅し、歴史だけが残る。</p>
     </div>`);
   },
 
   recruit() {
     const st = Game.state;
     const full = !Game.canHire();
+    const recruitMessage = st.turn === 1
+      ? "本日の応募者デス！ 強さだけでなく、建設や生活の仕事も任せられそうか見てくださいネ。"
+      : st.pendingVacancies
+        ? "欠員募集デス……戦える方だけでなく、城と食卓を守る方も必要ですヨ。"
+        : "次の応募者をお連れしました。今の部門配属に足りない人材を考えましょう！";
     const cards = st.applicants.map((m, i) => this.monsterCard(m, {
       resume: true,
       footer: `<button class="primary wide" data-action="hire" data-index="${i}" ${full ? "disabled" : ""}>
@@ -251,6 +311,7 @@ const UI = {
         </span>`).join("")}</div>
     </div>` : "";
     this.set(`${this.hud()}
+      ${this.mormo(st.roster.length ? "report" : "welcome", recruitMessage)}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
         <div class="muted">${
@@ -270,6 +331,7 @@ const UI = {
       </div>
       <div class="spacer"></div>
       ${rosterPanel}
+      ${st.roster.length ? `<div class="panel"><h3>部門状況</h3>${this.departmentSummary()}</div>` : ""}
       ${this.synergyPanel(Game.activeRoster())}`);
   },
 
@@ -292,7 +354,9 @@ const UI = {
         <p>${U.esc(m.description)}</p>
         <dl class="mission-economy">
           <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
-          <dt>出撃隊給与</dt><dd>${salary}G</dd>
+          <dt>食料</dt><dd class="food">+${m.foodReward || 0}</dd>
+          <dt>建材</dt><dd class="materials">+${m.materialReward || 0}</dd>
+          <dt>給与・手当</dt><dd>${salary}G</dd>
           <dt>差引見込</dt><dd class="${net >= 0 ? "positive" : "negative"}">${net >= 0 ? "+" : ""}${net}G</dd>
           <dt>作戦結果</dt><dd>${U.esc(consequence)}</dd>
           <dt>警戒度</dt><dd>+${m.alertDelta}</dd>
@@ -301,11 +365,16 @@ const UI = {
         <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
       </div>`;
     }).join("");
+    const lowFood = st.food <= Math.max(1, Math.ceil(st.roster.length / DEPARTMENT_RULES.foodPerRoster));
     this.set(`${this.hud()}
+      ${this.mormo(lowFood ? "worried" : "report", lowFood
+        ? "食料が心細いですネ……略奪か生活部門への配属を考えた方がよさそうデス。"
+        : "作戦ごとにG・食料・建材の取り分が違います。今の部門編成と相談してくださいネ。")}
       <div class="panel">
         <h2>🗺 作戦会議</h2>
         <div class="muted">次に何をするか選べ。寄り道すれば軍を養えるが、警戒度が上がるほど以後の敵も強くなる。</div>
       </div>
+      <div class="panel"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
       <div class="mission-grid">${cards}</div>
       <div class="spacer"></div>
       <button class="wide ghost" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`);
@@ -315,35 +384,70 @@ const UI = {
     const st = Game.state;
     const active = Game.activeRoster();
     const activeIds = new Set(st.activeUids);
-    const reserves = st.roster.filter(m => !activeIds.has(m.uid));
+    const combatMembers = Game.departmentRoster("combat");
+    const reserves = combatMembers.filter(m => !activeIds.has(m.uid));
+    const builders = Game.departmentRoster("construction");
+    const lifeWorkers = Game.departmentRoster("life");
     const activeCards = active.map((m, i) => this.monsterCard(m, {
       badge: i === 0 ? "最前列（狙われやすい）" : `${i + 1}番目`,
       footer: `<div class="card-actions">
         <div class="row tight">
           <button class="small" data-action="up" data-uid="${m.uid}" ${i === 0 ? "disabled" : ""}>▲ 前へ</button>
           <button class="small" data-action="down" data-uid="${m.uid}" ${i === active.length - 1 ? "disabled" : ""}>▼ 後ろへ</button>
+          <button class="small" data-action="toggledeploy" data-uid="${m.uid}">控えへ</button>
         </div>
-        <button class="small" data-action="toggledeploy" data-uid="${m.uid}">控えへ</button>
+        <div class="row tight">${this.departmentButtons(m, "combat")}</div>
       </div>`
     })).join("");
     const reserveCards = reserves.map(m => this.monsterCard(m, {
       badge: "控え（給与0G）",
       footer: `<div class="card-actions">
-        <button class="small primary" data-action="toggledeploy" data-uid="${m.uid}"
-          ${active.length >= Game.MAX_DEPLOY ? "disabled" : ""}>出撃隊へ</button>
+        <div class="row tight">
+          <button class="small primary" data-action="toggledeploy" data-uid="${m.uid}"
+            ${active.length >= Game.MAX_DEPLOY ? "disabled" : ""}>出撃隊へ</button>
+          ${this.departmentButtons(m, "combat")}
+        </div>
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
       </div>`
     })).join("");
+    const builderCards = builders.map(m => this.monsterCard(m, {
+      badge: `建設手当 ${Math.max(1, Math.ceil(m.salary * DEPARTMENTS.construction.wageRate))}G`,
+      footer: `<div class="card-actions"><div class="row tight">${this.departmentButtons(m, "construction")}</div>
+        <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
+    })).join("");
+    const lifeCards = lifeWorkers.map(m => this.monsterCard(m, {
+      badge: `生活手当 ${Math.max(1, Math.ceil(m.salary * DEPARTMENTS.life.wageRate))}G`,
+      footer: `<div class="card-actions"><div class="row tight">${this.departmentButtons(m, "life")}</div>
+        <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
+    })).join("");
     const empty = active.length === 0;
+    const foodNeed = st.roster.length ? Math.max(1, Math.ceil(st.roster.length / DEPARTMENT_RULES.foodPerRoster)) : 0;
+    const hasOnlyCombat = st.roster.length >= 3 && builders.length === 0 && lifeWorkers.length === 0;
+    const adviceExpression = empty ? "panic" : (hasOnlyCombat || st.food <= foodNeed ? "worried" : "report");
+    const advice = empty
+      ? "魔王様ぁ！ 戦闘部門の出撃隊が空デス！ 最低1名は出撃させてください！"
+      : hasOnlyCombat
+        ? "全員戦闘配属ですネ。目先は強いですが、食料も施設も育ちませんヨ……。"
+        : st.food <= foodNeed
+          ? "次の勤務後に食料不足の恐れがあります。生活部門へ回すか、食料の多い作戦を選びましょう。"
+          : "誰を戦わせ、誰に城と暮らしを任せるか――ここが魔王様の人事デス！";
     this.set(`${this.hud()}
+      ${this.mormo(adviceExpression, advice)}
       <div class="panel">
-        <h2>⚔ 出撃隊編成 <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || "作戦未選択")}</span></h2>
-        <div class="muted">軍団${st.roster.length}体から最大5体を選抜。並びの上ほど狙われやすい。控えには給与を払わない。</div>
+        <h2>🏢 部門編成 <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || "作戦未選択")}</span></h2>
+        <div class="muted">戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。</div>
+        ${this.departmentSummary()}
       </div>
-      ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 控えから最低1体を選べ。</div>` : ""}
-      <div class="army-section"><h3>出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
-      <div class="army-section reserve-section"><h3>控え ${reserves.length}/${Game.MAX_ARMY - active.length}</h3>
-        <div class="cards">${reserveCards || `<div class="muted">控えはいない</div>`}</div></div>
+      ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
+      <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
+      <div class="army-section reserve-section"><h3>⚔ 戦闘部門・控え ${reserves.length}</h3>
+        <div class="cards">${reserveCards || `<div class="muted">戦闘部門の控えはいない</div>`}</div></div>
+      <div class="army-section department-section department-construction-section"><h3>🔨 建設・施設部門 ${builders.length}</h3>
+        <div class="muted department-help">勝利後、1名につき備蓄建材を${DEPARTMENTS.construction.materialUse}投入。施設効果は次の出撃隊全員に付く。</div>
+        <div class="cards">${builderCards || `<div class="department-empty">建材はあっても、働く者がいなければ城は育たない。</div>`}</div></div>
+      <div class="army-section department-section department-life-section"><h3>🍲 食料・生活部門 ${lifeWorkers.length}</h3>
+        <div class="muted department-help">勝利後、1名につき食料を${DEPARTMENTS.life.foodProduction}調達。食事が足りれば軍団全員の忠誠も少し上がる。</div>
+        <div class="cards">${lifeCards || `<div class="department-empty">現在は自炊。食料が尽きれば全員の忠誠が下がる。</div>`}</div></div>
       <div class="spacer"></div>
       ${this.synergyPanel(active)}
       ${this.enemyPreview()}
@@ -362,7 +466,16 @@ const UI = {
   result() {
     const st = Game.state;
     const b = st.lastBattle;
+    const report = st.lastDepartmentReport || {};
+    const mormoExpression = report.foodShortage ? "panic"
+      : report.facilityAfter > report.facilityBefore ? "joy" : "report";
+    const mormoText = report.foodShortage
+      ? `魔王様ぁ！ 食料が${report.foodShortage}足りません！ このままでは皆の忠誠が危険デス！`
+      : report.facilityAfter > report.facilityBefore
+        ? `施設が完成しました！ ${Game.facilityInfo().name}デス！ 次の出撃隊が少し頑丈になりますヨ！`
+        : `各部門の勤務報告デス。食料${st.food}、建材${st.materials}、施設Lv.${st.facilityLevel}になりました。`;
     this.set(`${this.hud()}
+      ${this.mormo(mormoExpression, mormoText, "宰相モルモ・勤務報告")}
       <div class="banner win">
         <h2>勝利！</h2>
         <div>${U.esc(b.army)} を撃退した</div>
@@ -399,7 +512,8 @@ const UI = {
     const cp = st.checkpoint;
     const goldNow = cp ? cp.gold : st.gold;
     const goldAfter = Math.floor(goldNow / 2);
-    return this.set(`<div class="banner lose">
+    return this.set(`${this.mormo("panic", "うわああああ！ 魔王様ぁ！ まだ再起できます、採用と配属を見直しましょう！")}
+      <div class="banner lose">
         <h2>魔王軍、壊滅</h2>
         <div>${U.esc(b.army)} に敗北した</div>
       </div>
@@ -427,6 +541,7 @@ const UI = {
     // 選択済み → 結果を見せる
     if (!ev || st.eventOutcome) {
       return this.set(`${this.hud()}
+        ${this.mormo("report", st.eventOutcome || "事件はひとまず収まりました……たぶんデス。")}
         <div class="panel event-panel">
           <h2>⚡ その後</h2>
           <div class="event-text">${U.esc(st.eventOutcome || "")}</div>
@@ -440,6 +555,7 @@ const UI = {
     ).join("");
 
     this.set(`${this.hud()}
+      ${this.mormo("angry", `魔王様、大変デス！ ${ev.title}が起きました！`)}
       <div class="panel event-panel">
         <h2>⚡ ${U.esc(ev.title)}</h2>
         <div class="event-text">${U.esc(st.pendingEvent.text)}</div>
@@ -448,7 +564,10 @@ const UI = {
   },
 
   gameover(record, history) {
-    this.set(`<div class="banner ${record.cleared ? "win" : "lose"}">
+    this.set(`${this.mormo(record.cleared ? "joy" : "worried", record.cleared
+        ? "やりましたネ、魔王様！ この軍団の歴史はずっと覚えておきますヨ！"
+        : "お疲れさまでした、魔王様……この失敗も、次の魔王軍の歴史に残しますネ。")}
+      <div class="banner ${record.cleared ? "win" : "lose"}">
         <h2>${record.cleared ? "人間界を制圧した！" : "魔王軍、壊滅"}</h2>
         <div>${U.esc(record.cause)}</div>
       </div>
@@ -463,6 +582,7 @@ const UI = {
           <dt>最大兵員数</dt><dd>${record.maxArmySize || (record.finalRoster || []).length}体</dd>
           <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${record.battleIncidentTotal || 0}件</dd>
+          <dt>最終施設</dt><dd>Lv.${record.facilityLevel || 0}</dd>
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
           <dt>死因</dt><dd>${U.esc(record.cause)}</dd>
@@ -491,6 +611,7 @@ const UI = {
           <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
           <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${r.battleIncidentTotal || 0}件</dd>
+          <dt>最終施設</dt><dd>Lv.${r.facilityLevel || 0}</dd>
           <dt>勝利数</dt><dd>${r.battlesWon || 0}戦</dd>
           <dt>王国攻略</dt><dd>${r.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>主力種族</dt><dd>${U.esc(r.mainRace)}</dd>

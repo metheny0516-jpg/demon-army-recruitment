@@ -1,4 +1,4 @@
-/* 魔王採用試験（仮） - PC/スマホ両対応。画像素材なしでCSSのみで表現する。 */
+/* 魔王ワーク（仮） - PC/スマホ両対応。 */
 :root {
   --bg: #14101c;
   --bg2: #1e1830;
@@ -112,6 +112,45 @@ button.wide { width: 100%; }
 }
 .hud b { font-size: 15px; }
 .hud .gold { color: var(--gold); }
+.hud .food, .mission-economy .food { color: #8ed9a6; }
+.hud .materials, .mission-economy .materials { color: #9fc5e8; }
+
+/* ── モルモ（全画面の進行役） ───────────── */
+.mormo-guide {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  align-items: end;
+  gap: 0;
+  margin: 0 0 12px;
+  text-align: left;
+}
+.mormo-guide img {
+  width: 132px;
+  height: 132px;
+  object-fit: contain;
+  object-position: bottom center;
+  align-self: end;
+  filter: drop-shadow(0 7px 8px rgba(0, 0, 0, .45));
+  z-index: 1;
+}
+.mormo-bubble {
+  position: relative;
+  min-height: 82px;
+  margin: 0 0 8px -8px;
+  padding: 13px 16px 13px 22px;
+  border: 1px solid #6c5a8e;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #33284b, #241d38);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+}
+.mormo-name { color: var(--gold); font-weight: bold; font-size: 12px; margin-bottom: 4px; }
+.title-screen .mormo-guide { max-width: 620px; margin: 18px auto 8px; }
+
+@media (max-width: 560px) {
+  .mormo-guide { grid-template-columns: 82px minmax(0, 1fr); }
+  .mormo-guide img { width: 92px; height: 108px; }
+  .mormo-bubble { min-height: 72px; margin-left: -5px; padding: 10px 11px 10px 16px; font-size: 13px; }
+}
 
 /* ── モンスターカード ─────────────────── */
 .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
@@ -173,6 +212,18 @@ button.wide { width: 100%; }
 .meta .salary { color: var(--gold); }
 .meta .loyal { color: var(--blue); }
 .meta .unpaid { color: var(--red); font-weight: bold; }
+.department-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 11px;
+}
+.department-combat { color: #efb1a4; }
+.department-construction { color: #d8b477; }
+.department-life { color: #9bd7ae; }
 
 .traits { display: flex; flex-direction: column; gap: 4px; }
 .trait {
@@ -820,6 +871,44 @@ button.wide { width: 100%; }
 
 .army-section { margin-top: 14px; }
 .army-section > h3 { margin: 0 0 8px; }
+.department-overview {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 10px;
+}
+.department-overview > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #1a1528;
+}
+.department-overview b { color: var(--gold); font-size: 13px; }
+.department-overview span { color: var(--dim); font-size: 11px; }
+.department-section {
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--purple);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, .12);
+}
+.department-combat-section { border-left-color: #bd6652; }
+.department-construction-section { border-left-color: #c7964d; }
+.department-life-section { border-left-color: #5d9b70; }
+.department-help { margin: -3px 0 9px; }
+.department-empty {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  color: var(--dim);
+  font-size: 13px;
+}
+.department-section .card-actions { flex-wrap: wrap; }
+.department-button { white-space: nowrap; }
 .reserve-section {
   padding: 12px;
   border: 1px dashed var(--border);
@@ -903,6 +992,11 @@ button.wide { width: 100%; }
 @media (max-width: 760px) {
   .mission-grid { grid-template-columns: 1fr; }
   .mission-card p { min-height: 0; }
+  .department-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 420px) {
+  .department-overview { grid-template-columns: 1fr; }
 }
 
 /* 倒れたが蘇生で生還した者。戦死とは区別する（蘇生系特性の価値を見せるため） */

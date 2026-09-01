@@ -16,6 +16,10 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   console.log('▼ スマホ縦(390x844)で通しプレイ');
   await step('タイトル表示', async () => {
     if (!(await page.locator('h1').innerText()).includes('魔王')) throw new Error('title missing');
+    const mormo = page.locator('.mormo-guide img').first();
+    if (!(await mormo.count()) || await mormo.evaluate(img => !img.complete || !img.naturalWidth)) {
+      throw new Error('モルモ画像が表示されていない');
+    }
   });
   await page.screenshot({ path: process.env.SP + '/shot-title.png' });
 
@@ -42,6 +46,12 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     await page.locator('[data-action="down"]').first().click();
     const after = await page.locator('.card-name').first().innerText();
     if (before === after) throw new Error('並び替えが効いていない');
+  });
+
+  await step('生活部門へ配属', async () => {
+    await page.locator('.department-combat-section [data-action="assigndepartment"][data-department="life"]').first().click();
+    if (await page.locator('.department-life-section .card').count() !== 1) throw new Error('生活部門へ移動できない');
+    if (await page.locator('.department-combat-section .card').count() < 1) throw new Error('出撃隊が空になった');
   });
 
   await step('出撃 → 戦闘ログ', async () => {

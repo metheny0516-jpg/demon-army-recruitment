@@ -3,7 +3,7 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/events.js',
+const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/departments.js','src/data/events.js',
                'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -89,7 +89,13 @@ function runOnce(strat, stats){
       Game.selectMission(index >= 0 ? index : 2);
     }
     if (st.phase === 'formation') {
-      const best = st.roster.slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
+      if (strat.departments === 'balanced' && st.roster.length >= 3) {
+        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
+        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
+        Game.assignDepartment(support[0].uid, 'life');
+        Game.assignDepartment(support[1].uid, 'construction');
+      }
+      const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);                // 強い5体を選び、HP高い順に前へ
       st.activeUids = best.map(m => m.uid);
       for (const s of Synergy.active(Game.activeRoster())) stats.syn[s.name] = (stats.syn[s.name]||0)+1;
@@ -97,6 +103,7 @@ function runOnce(strat, stats){
       const out = Game.deploy();
       if (!out) break;
       stats.incidents += (out.result.incidents || []).length;
+      if (st.lastDepartmentReport && st.lastDepartmentReport.foodShortage) stats.foodShortages++;
       if (st.roster.some(m => m.unpaid)) stats.unpaid++;
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
@@ -132,17 +139,19 @@ const strategies = [
   {name:'中盤で精鋭に転換', kind:'pivot'},
   {name:'略奪4回→侵攻', kind:'greedy', mission:'raid'},
   {name:'慎重経営', kind:'greedy', mission:'careful'},
+  {name:'三部門均衡', kind:'greedy', mission:'careful', departments:'balanced'},
 ];
 const N = Number(process.argv[2] || 400);
 for (const s of strategies) {
-  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, maxArmy:0 };
+  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
   const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
+  const facility = (res.reduce((a,r)=>a+(r.facilityLevel||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  平均施設Lv ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
 }

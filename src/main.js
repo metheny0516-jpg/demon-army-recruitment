@@ -106,6 +106,10 @@ const App = {
         Game.toggleDeploy(Number(data.uid));
         return this.render();
 
+      case "assigndepartment":
+        Game.assignDepartment(Number(data.uid), data.department);
+        return this.render();
+
       case "fire":
         Game.fire(Number(data.uid));
         return this.render();

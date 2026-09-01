@@ -23,6 +23,11 @@ const Game = {
       selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       gold: 10,
+      food: DEPARTMENT_RULES.startingFood,
+      materials: 0,
+      buildProgress: 0,
+      facilityLevel: 0,
+      lastDepartmentReport: null,
       roster: [],
       activeUids: [],
       applicants: [],
@@ -136,7 +141,9 @@ const Game = {
       battleIncidentTotal: 0,
       turn: 1, conquest: 0, alert: 0, battlesWon: 0,
       missionOffers: [], selectedMission: null,
-      missionCounts: { raid: 0, suppress: 0, invade: 0 }
+      missionCounts: { raid: 0, suppress: 0, invade: 0 },
+      food: DEPARTMENT_RULES.startingFood, materials: 0,
+      buildProgress: 0, facilityLevel: 0, lastDepartmentReport: null
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
@@ -150,11 +157,14 @@ const Game = {
     if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
     }
-    const rosterIds = new Set(st.roster.map(m => m.uid));
+    for (const m of [...st.roster, ...st.applicants]) {
+      if (!DEPARTMENTS[m.department]) m.department = "combat";
+    }
+    const rosterIds = new Set(st.roster.filter(m => m.department === "combat").map(m => m.uid));
     st.activeUids = st.activeUids.filter((uid, i, ids) => rosterIds.has(uid) && ids.indexOf(uid) === i)
       .slice(0, this.MAX_DEPLOY);
     if (st.activeUids.length === 0 && st.roster.length) {
-      st.activeUids = st.roster.slice(0, this.MAX_DEPLOY).map(m => m.uid);
+      st.activeUids = st.roster.filter(m => m.department === "combat").slice(0, this.MAX_DEPLOY).map(m => m.uid);
     }
     st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
     st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
@@ -172,8 +182,47 @@ const Game = {
   },
 
   salaryTotal() {
+    return this.salaryAssignments().reduce((sum, entry) => sum + entry.amount, 0);
+  },
+
+  departmentOf(monster) {
+    return DEPARTMENTS[monster && monster.department] || DEPARTMENTS.combat;
+  },
+
+  departmentRoster(id) {
+    return this.state.roster.filter(m => this.departmentOf(m).id === id);
+  },
+
+  salaryAssignments() {
     const active = new Set(this.state.activeUids);
-    return this.state.roster.reduce((sum, m) => sum + (active.has(m.uid) ? m.salary : 0), 0);
+    const out = [];
+    for (const m of this.state.roster) {
+      const dept = this.departmentOf(m);
+      if (active.has(m.uid)) {
+        out.push({ monster: m, amount: m.salary, department: "combat" });
+      } else if (dept.id !== "combat") {
+        out.push({
+          monster: m,
+          amount: Math.max(1, Math.ceil(m.salary * dept.wageRate)),
+          department: dept.id
+        });
+      }
+    }
+    return out;
+  },
+
+  facilityInfo(level) {
+    const wanted = level === undefined ? this.state.facilityLevel : level;
+    return FACILITY_LEVELS[U.clamp(Number(wanted) || 0, 0, FACILITY_LEVELS.length - 1)];
+  },
+
+  preparedRoster() {
+    const facility = this.facilityInfo();
+    return this.activeRoster().map(m => ({
+      ...m,
+      hp: Math.max(1, Math.round(m.hp * facility.hpMult)),
+      def: Math.max(0, m.def + facility.defBonus)
+    }));
   },
 
   activeRoster() {
@@ -251,6 +300,8 @@ const Game = {
       alertDelta: type.alertDelta,
       conquestDelta: type.conquestDelta,
       loyaltyDelta: type.loyaltyDelta,
+      foodReward: type.foodReward || 0,
+      materialReward: type.materialReward || 0,
       armyPressure,
       baseStage: base.stage,
       units
@@ -349,6 +400,7 @@ const Game = {
       motive: U.pick(tpl.motives),
       flaw: U.pick(tpl.flaws),
       unpaid: false,
+      department: "combat",
       merit: 0,
       rankId: "soldier"
     };
@@ -436,13 +488,28 @@ const Game = {
 
   toggleDeploy(uid) {
     const st = this.state;
-    if (!st.roster.some(m => m.uid === uid)) return false;
+    const monster = st.roster.find(m => m.uid === uid);
+    if (!monster || this.departmentOf(monster).id !== "combat") return false;
     const index = st.activeUids.indexOf(uid);
     if (index >= 0) {
       st.activeUids.splice(index, 1);
     } else {
       if (st.activeUids.length >= this.MAX_DEPLOY) return false;
       st.activeUids.push(uid);
+    }
+    this.save();
+    return true;
+  },
+
+  assignDepartment(uid, departmentId) {
+    const st = this.state;
+    const monster = st.roster.find(m => m.uid === uid);
+    if (!monster || !DEPARTMENTS[departmentId]) return false;
+    monster.department = departmentId;
+    if (departmentId === "combat") {
+      if (!st.activeUids.includes(uid) && st.activeUids.length < this.MAX_DEPLOY) st.activeUids.push(uid);
+    } else {
+      st.activeUids = st.activeUids.filter(id => id !== uid);
     }
     this.save();
     return true;
@@ -483,7 +550,7 @@ const Game = {
       kingMerged = this.mergeKingSlime(notes);
     }
 
-    const playerUnits = this.rosterAsUnits().map(m => Battle.makeUnit(m, "player"));
+    const playerUnits = this.preparedRoster().map(m => Battle.makeUnit(m, "player"));
     const stageData = this.stageData();
     const enemyUnits = stageData.units.map(e => Battle.makeUnit(e, "enemy"));
 
@@ -502,6 +569,7 @@ const Game = {
       this.processCasualties(result.contribution, notes);
       this.awardMerit(result.contribution, notes);
       this.applyMissionOutcome(stageData, notes);
+      this.processDepartments(stageData, notes);
       this.paySalaries(notes);
       this.processDepartures(notes);
       st.battlesWon += 1;
@@ -566,6 +634,73 @@ const Game = {
     }
     if (mission.alertDelta) {
       notes.push(`王国警戒度+${mission.alertDelta}（現在 ${st.alert}）`);
+    }
+  },
+
+  // 戦闘で得た資源を、非戦闘部門が次の戦いへつなぐ。
+  // 生活は食料を生み、建設は備蓄建材を施設進捗へ変換する。
+  processDepartments(mission, notes) {
+    const st = this.state;
+    const lifeWorkers = this.departmentRoster("life");
+    const builders = this.departmentRoster("construction");
+    const foodReward = Math.max(0, mission.foodReward || 0);
+    const materialReward = Math.max(0, mission.materialReward || 0);
+    const foodProduced = lifeWorkers.length * DEPARTMENTS.life.foodProduction;
+    const foodConsumed = st.roster.length
+      ? Math.max(1, Math.ceil(st.roster.length / DEPARTMENT_RULES.foodPerRoster))
+      : 0;
+
+    st.food += foodReward + foodProduced;
+    const foodShortage = Math.max(0, foodConsumed - st.food);
+    st.food = Math.max(0, st.food - foodConsumed);
+    let loyaltyDelta = 0;
+    if (foodShortage > 0) {
+      loyaltyDelta = -Math.min(24, foodShortage * DEPARTMENT_RULES.foodShortageLoyaltyPenalty);
+    } else if (lifeWorkers.length > 0) {
+      loyaltyDelta = 1;
+    }
+    if (loyaltyDelta) {
+      for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + loyaltyDelta, 0, 100);
+    }
+
+    st.materials += materialReward;
+    const beforeLevel = st.facilityLevel;
+    const maxLevel = FACILITY_LEVELS.length - 1;
+    const canBuild = st.facilityLevel < maxLevel;
+    const materialUsed = canBuild
+      ? Math.min(st.materials, builders.length * DEPARTMENTS.construction.materialUse)
+      : 0;
+    st.materials -= materialUsed;
+    st.buildProgress += materialUsed;
+    while (st.facilityLevel < maxLevel
+      && st.buildProgress >= FACILITY_LEVELS[st.facilityLevel + 1].buildThreshold) {
+      st.facilityLevel += 1;
+    }
+
+    st.lastDepartmentReport = {
+      foodReward,
+      foodProduced,
+      foodConsumed,
+      foodShortage,
+      loyaltyDelta,
+      materialReward,
+      materialUsed,
+      facilityBefore: beforeLevel,
+      facilityAfter: st.facilityLevel,
+      builders: builders.length,
+      lifeWorkers: lifeWorkers.length
+    };
+
+    notes.push(`生活部門：食料 +${foodReward + foodProduced} / 消費 ${foodConsumed}（備蓄 ${st.food}）`);
+    if (foodShortage > 0) {
+      notes.push(`食料不足 ${foodShortage}！ 軍団全員の忠誠${loyaltyDelta}`);
+    } else if (lifeWorkers.length > 0) {
+      notes.push(`生活部門の温かい食事で軍団全員の忠誠+1`);
+    }
+    notes.push(`建設部門：建材 +${materialReward} / 投入 ${materialUsed}（備蓄 ${st.materials}）`);
+    if (st.facilityLevel > beforeLevel) {
+      const facility = this.facilityInfo();
+      notes.push(`施設完成【${facility.name}】出撃隊 HP+${Math.round((facility.hpMult - 1) * 100)}%・防御+${facility.defBonus}`);
     }
   },
 
@@ -674,6 +809,7 @@ const Game = {
       motive: "みんなで、ひとつに、なりました",
       flaw: "もう、もどれない",
       unpaid: false,
+      department: "combat",
       merit,
       rankId: rank.id
     };
@@ -694,8 +830,9 @@ const Game = {
 
   paySalaries(notes) {
     const st = this.state;
-    const total = this.salaryTotal();
-    const paidRoster = this.activeRoster();
+    const assignments = this.salaryAssignments();
+    const total = assignments.reduce((sum, entry) => sum + entry.amount, 0);
+    const paidRoster = assignments.map(entry => entry.monster);
     if (total === 0) return;
     if (st.gold >= total) {
       st.gold -= total;
@@ -704,7 +841,7 @@ const Game = {
         m.unpaidStreak = 0;
         m.loyalty = U.clamp(m.loyalty + 2, 0, 100);
       }
-      notes.push(`給与 ${total}G を支払った（所持金 ${st.gold}G）全員の忠誠+2`);
+      notes.push(`給与・部門手当 ${total}G を支払った（所持金 ${st.gold}G）勤務者の忠誠+2`);
     } else {
       // 連続で未払いにするほど痛手が大きくなる。固定値だと8戦のランでは
       // 忠誠0に届かず、離脱の脅しが空砲になっていた（実測 300ラン中1回）。
@@ -716,7 +853,7 @@ const Game = {
         worst = Math.max(worst, penalty);
         m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
       }
-      notes.push(`金庫が足りない！ 出撃隊の給与${total}G が未払いに……忠誠が最大 ${worst} 下がった`);
+      notes.push(`金庫が足りない！ 給与・部門手当${total}G が未払いに……勤務者の忠誠が最大 ${worst} 下がった`);
     }
   },
 
@@ -784,7 +921,13 @@ const Game = {
       fallenRoll: (st.fallenRoll || []).map(f => f.name),
       generalsMade: (st.generalsMade || []).map(g => ({ name: g.name, race: g.race })),
       battleIncidentTotal: st.battleIncidentTotal || 0,
-      finalRoster: st.roster.map(m => ({ name: m.name, race: m.race, job: m.job, rankId: m.rankId, merit: m.merit || 0 })),
+      facilityLevel: st.facilityLevel || 0,
+      finalResources: { food: st.food || 0, materials: st.materials || 0 },
+      departmentCounts: Object.fromEntries(DEPARTMENT_ORDER.map(id => [id, this.departmentRoster(id).length])),
+      finalRoster: st.roster.map(m => ({
+        name: m.name, race: m.race, job: m.job, rankId: m.rankId,
+        merit: m.merit || 0, department: this.departmentOf(m).id
+      })),
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
       date: new Date().toISOString().slice(0, 10)
     };

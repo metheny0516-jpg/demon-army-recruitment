@@ -6,7 +6,7 @@ global.localStorage = { setItem() {}, getItem() { return null; }, removeItem() {
 
 const files = [
   "src/core/util.js", "src/data/traits.js", "src/data/monsters.js",
-  "src/data/synergies.js", "src/data/enemies.js", "src/core/storage.js",
+  "src/data/synergies.js", "src/data/enemies.js", "src/data/departments.js", "src/core/storage.js",
   "src/core/synergy.js", "src/core/battle.js", "src/core/run.js"
 ];
 const source = files.map(file => fs.readFileSync(file, "utf8")).join("\n");
