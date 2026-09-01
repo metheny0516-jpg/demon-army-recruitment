@@ -46,6 +46,7 @@ const Game = {
       rerollsThisPhase: 0,
       pendingEvent: null,
       eventOutcome: null,
+      laborDispute: null,
       pendingVacancies: 0,
       fallenTotal: 0,
       fallenRoll: [],
@@ -137,7 +138,7 @@ const Game = {
     const defaults = {
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0, raceCounts: {}, uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
-      rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, checkpoint: null,
+      rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
       generalsMade: [],

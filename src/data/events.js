@@ -69,10 +69,127 @@ const EVENTS = [
   },
 
   {
+    id: "wage_protest",
+    title: "給与抗議",
+    weight: 9,
+    check(st) {
+      return !st.laborDispute && st.roster.some(m => (m.unpaidStreak || 0) >= 2);
+    },
+    cast(st) {
+      const pool = st.roster.filter(m => (m.unpaidStreak || 0) >= 2);
+      if (!pool.length) return null;
+      const longest = Math.max(...pool.map(m => m.unpaidStreak || 0));
+      return { actor: U.pick(pool.filter(m => (m.unpaidStreak || 0) === longest)).uid };
+    },
+    text(st, c) {
+      const accountants = st.roster.filter(m => Aptitude.of(m).wage > 0).length;
+      return `${c.actor.name}が未払い${c.actor.unpaidStreak}回分の給与明細を掲げ、食堂前で抗議を始めた。\n`
+        + (accountants
+          ? `会計経験者${accountants}名が金額を検算したため、モルモは「だいたい」で逃げられない。`
+          : `要求額はどんぶり勘定だが、払っていない事実だけは正確だった。`);
+    },
+    options: [
+      {
+        label: "緊急清算する（6G）",
+        check(st) { return st.gold >= 6; },
+        apply(st, c) {
+          st.gold -= 6;
+          c.actor.unpaid = false;
+          c.actor.unpaidStreak = 0;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 25, 0, 100);
+          return `6Gを清算し、${c.actor.name}の未払いを解消した。忠誠+25。\n抗議の横断幕は食堂のテーブルクロスへ戻った。`;
+        }
+      },
+      {
+        label: "給与+2Gの労働協約を結ぶ",
+        apply(st, c) {
+          c.actor.salary += 2;
+          c.actor.unpaid = false;
+          c.actor.unpaidStreak = 0;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 15, 0, 100);
+          return `${c.actor.name}の給与を今後+2Gとし、未払いを協約へ振り替えた。忠誠+15。\n`
+            + `モルモは「振り替え」の意味を聞かないことにした。`;
+        }
+      },
+      {
+        label: "要求書を無視する",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 10, 0, 100);
+          st.laborDispute = { stage: "march", actorUid: c.actor.uid, startedTurn: st.turn };
+          return `要求書は魔王印のない紙として返却された。${c.actor.name}の忠誠-10。\n`
+            + `翌朝、廊下の奥から行進の練習が聞こえ始めた。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "strike_march",
+    title: "ストライキ行進",
+    weight: 30,
+    check(st) { return !!st.laborDispute && st.laborDispute.stage === "march" && st.roster.length > 0; },
+    cast(st) {
+      const wanted = st.laborDispute && st.laborDispute.actorUid;
+      const actor = st.roster.find(m => m.uid === wanted)
+        || st.roster.slice().sort((a, b) => (a.loyalty || 0) - (b.loyalty || 0))[0];
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      const unpaid = st.roster.filter(m => m.unpaid || (m.unpaidStreak || 0) > 0).length;
+      return `${c.actor.name}を先頭に、鍋と盾を打ち鳴らすストライキ行進が玉座の間へ到着した。\n`
+        + `参加者は未払い経験者${unpaid}名と、昼休みなので付いてきた者たち。要求は「払え、休ませろ、食堂の椅子を増やせ」。`;
+    },
+    options: [
+      {
+        label: "全員へ緊急支給する（8G）",
+        check(st) { return st.gold >= 8; },
+        apply(st) {
+          st.gold -= 8;
+          for (const m of st.roster) {
+            if (m.unpaid || (m.unpaidStreak || 0) > 0) m.loyalty = U.clamp(m.loyalty + 18, 0, 100);
+            m.unpaid = false;
+            m.unpaidStreak = 0;
+          }
+          st.laborDispute = null;
+          return `8Gを緊急支給し、全員の未払いを解消した。対象者の忠誠+18。\n行進は給料袋を数える会へ変更された。`;
+        }
+      },
+      {
+        label: "代表を生活部門の労務担当にする（給与+1G）",
+        apply(st, c) {
+          Game.assignDepartment(c.actor.uid, "life");
+          c.actor.salary += 1;
+          c.actor.unpaid = false;
+          c.actor.unpaidStreak = 0;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 30, 0, 100);
+          for (const m of st.roster) if (m.uid !== c.actor.uid) m.loyalty = U.clamp(m.loyalty + 5, 0, 100);
+          st.laborDispute = null;
+          return `${c.actor.name}を生活部門の労務担当へ異動。給与+1G、本人の忠誠+30、全員+5。\n`
+            + `戦力は一人減ったが、苦情の提出先が初めてできた。`;
+        }
+      },
+      {
+        label: "魔王親衛隊に鎮圧させる",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 45, 0, 100);
+          for (const m of st.roster) if (m.uid !== c.actor.uid) m.loyalty = U.clamp(m.loyalty - 8, 0, 100);
+          st.laborDispute = null;
+          return `行進を強制解散。${c.actor.name}の忠誠-45、ほか全員-8。\n廊下は静かになった。要求書は地下で増刷されている。`;
+        }
+      }
+    ]
+  },
+
+  {
     id: "wage_demand",
     title: "賃上げ要求",
     weight: 4,
-    check(st) { return st.roster.some(m => m.unpaid || m.loyalty < 55); },
+    check(st) {
+      return !st.laborDispute
+        && !st.roster.some(m => (m.unpaidStreak || 0) >= 2)
+        && st.roster.some(m =>
+        (m.unpaid && (m.unpaidStreak || 0) < 2) || (!m.unpaid && m.loyalty < 55));
+    },
     cast(st) {
       const pool = st.roster.filter(m => m.unpaid || m.loyalty < 55);
       return pool.length ? { actor: U.pick(pool).uid } : null;
