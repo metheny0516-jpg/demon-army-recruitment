@@ -623,15 +623,23 @@ const UI = {
 
   history(list) {
     const discovered = new Set();
+    const discoveredSynergies = new Set();
     for (const r of list) {
       for (const id of (r.recruitedTplIds || [])) discovered.add(id);
       for (const m of (r.finalRoster || [])) if (m.tplId) discovered.add(m.tplId);
       if (r.hallOfFame && r.hallOfFame.tplId) discovered.add(r.hallOfFame.tplId);
+      for (const id of (r.discoveredSynergyIds || [])) discoveredSynergies.add(id);
     }
     const catalog = MONSTER_TEMPLATES.map(t => discovered.has(t.id)
       ? `<div class="history-item cleared"><div class="gen">${this.icon(t.race)} ${U.esc(t.race)}</div>
           <div class="muted">採用記録あり／職種例：${U.esc(t.jobs.slice(0, 2).join("・"))}</div></div>`
       : `<div class="history-item"><div class="gen">？ 未登録の魔族</div><div class="muted">採用すると記録される</div></div>`
+    ).join("");
+    const synergyCatalog = SYNERGIES.map(s => discoveredSynergies.has(s.id)
+      ? `<div class="history-item cleared"><div class="gen">✨ ${U.esc(s.name)}</div>
+          <div class="muted">${U.esc(s.desc)}</div></div>`
+      : `<div class="history-item"><div class="gen">？ 未発見のシナジー</div>
+          <div class="muted">編成の組み合わせで発見できる</div></div>`
     ).join("");
     const items = list.slice().reverse().map(r => `
       <div class="history-item ${r.cleared ? "cleared" : ""}">
@@ -662,6 +670,11 @@ const UI = {
         <h2>📚 魔物採用図鑑 ${discovered.size}/${MONSTER_TEMPLATES.length}</h2>
         <div class="muted">過去の魔王軍で一度でも採用した種族だけが登録される。</div>
         <div class="history-list">${catalog}</div>
+      </div>
+      <div class="panel">
+        <h2>✨ シナジー図鑑 ${discoveredSynergies.size}/${SYNERGIES.length}</h2>
+        <div class="muted">実戦で一度でも発動させた組み合わせだけが登録される。</div>
+        <div class="history-list">${synergyCatalog}</div>
       </div>
       ${items || `<div class="panel muted">まだ何の記録もない。歴史はこれから始まる。</div>`}
       <div class="spacer"></div>

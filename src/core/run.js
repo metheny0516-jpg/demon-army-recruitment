@@ -41,6 +41,7 @@ const Game = {
       maxArmySize: 0,
       raceCounts: {},
       recruitedTplIds: [],
+      discoveredSynergyIds: [],
       uidSeq: 1,
       lastBattle: null,
       retriesLeft: this.RETRIES_PER_RUN,
@@ -140,7 +141,7 @@ const Game = {
       if (st.phase === "formation") st.phase = "mission";
     }
     const defaults = {
-      roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0, raceCounts: {}, recruitedTplIds: [], uidSeq: 1,
+      roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
@@ -166,6 +167,7 @@ const Game = {
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
     if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
     if (!Array.isArray(st.recruitedTplIds)) st.recruitedTplIds = [];
+    if (!Array.isArray(st.discoveredSynergyIds)) st.discoveredSynergyIds = [];
     for (const m of st.roster) {
       if (m.tplId && !st.recruitedTplIds.includes(m.tplId)) st.recruitedTplIds.push(m.tplId);
     }
@@ -679,6 +681,7 @@ const Game = {
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);
+    this.recordDiscoveredSynergies(result);
 
     // 最大戦力を記録（魔界史用）
     st.maxPower = Math.max(st.maxPower, this.armyPower(this.activeRoster()));
@@ -994,6 +997,15 @@ const Game = {
     }
   },
 
+  recordDiscoveredSynergies(result) {
+    const found = (result.timeline || []).filter(e => e.type === "synergy" && e.id).map(e => e.id);
+    for (const id of found) {
+      if (SYNERGIES.some(s => s.id === id) && !this.state.discoveredSynergyIds.includes(id)) {
+        this.state.discoveredSynergyIds.push(id);
+      }
+    }
+  },
+
   // 過去の英雄は能力ではなく「名前と経歴」を継ぐ。毎ラン一度だけ低確率で戻る。
   chooseLegacyReturn(history) {
     const candidates = (history || []).map(r => r && r.hallOfFame).filter(h =>
@@ -1129,6 +1141,7 @@ const Game = {
         merit: m.merit || 0, department: this.departmentOf(m).id
       })),
       recruitedTplIds: (st.recruitedTplIds || []).slice(),
+      discoveredSynergyIds: (st.discoveredSynergyIds || []).slice(),
       hallOfFame: this.hallOfFameMember(),
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
       date: new Date().toISOString().slice(0, 10)
