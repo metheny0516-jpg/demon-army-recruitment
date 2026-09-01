@@ -1002,3 +1002,18 @@ button.wide { width: 100%; }
 /* 倒れたが蘇生で生還した者。戦死とは区別する（蘇生系特性の価値を見せるため） */
 .contrib-badge.revived { background: #123a2a; color: #8ef0a8; border: 1px solid #2a7a52; }
 .fallen-panel { border-left: 4px solid #6a2020; }
+
+/* 部門適性チップ。応募者カードでも軍団カードでも同じ見え方にする */
+.aptitudes { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; align-items: center; }
+.aptitudes .apt {
+  font-size: 11px; padding: 1px 6px; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.05); white-space: nowrap;
+}
+.aptitudes .apt-food { border-color: rgba(140, 220, 150, 0.5); color: #b8e6bf; }
+.aptitudes .apt-material { border-color: rgba(220, 180, 120, 0.5); color: #e8cfa4; }
+.aptitudes .apt-wage { border-color: rgba(240, 210, 120, 0.55); color: #f2dc9a; }
+.aptitudes .apt-recruit { border-color: rgba(160, 190, 240, 0.5); color: #c3d6f5; }
+.aptitudes .apt-appetite { border-color: rgba(230, 140, 140, 0.4); color: #e9b4b4; }
+.aptitudes .apt-appetite.none { border-color: rgba(180, 180, 200, 0.35); color: #b9b9cc; }
+.aptitudes .apt-note { font-size: 11px; color: #9a94ac; }
+.department-overview .warn b { color: #ff9a9a; }

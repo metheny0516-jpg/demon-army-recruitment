@@ -193,17 +193,52 @@ const Game = {
     return this.state.roster.filter(m => this.departmentOf(m).id === id);
   },
 
+  // 軍団全体の部門適性の合計。UI・給与・部門処理はすべてここを通す。
+  // 「何人置いたか」ではなく「誰を置いたか」で数字が変わる唯一の入口。
+  departmentOutput() {
+    const st = this.state;
+    const out = { food: 0, material: 0, wage: 0, recruit: 0, appetite: 0, contributors: [] };
+    for (const m of st.roster) {
+      const deptId = this.departmentOf(m).id;
+      const c = Aptitude.contribution(m, deptId);
+      out.food += c.food;
+      out.material += c.material;
+      out.wage += c.wage;
+      out.recruit += c.recruit;
+      out.appetite += c.appetite;
+      if (c.food || c.material || c.wage || c.recruit) {
+        out.contributors.push({ uid: m.uid, name: m.name, department: deptId, ...c });
+      }
+    }
+    // 給与割引だけは青天井にしない。無給の軍団は経営judgementが消えるため上限60%。
+    out.wage = Math.min(60, out.wage);
+    return out;
+  },
+
+  // 食料消費は頭数ではなく食う量で決まる。アンデッドは0、オーガは3。
+  // 分母3は旧仕様（頭数÷3）と同じ尺度を保つためのもので、軍団規模の感覚を壊さない。
+  foodNeed() {
+    const appetite = this.departmentOutput().appetite;
+    return appetite > 0 ? Math.max(1, Math.ceil(appetite / DEPARTMENT_RULES.foodPerRoster)) : 0;
+  },
+
+  wageDiscount() {
+    return this.departmentOutput().wage;
+  },
+
   salaryAssignments() {
     const active = new Set(this.state.activeUids);
+    const discount = this.wageDiscount();
+    const cut = amount => Math.max(1, Math.round(amount * (1 - discount / 100)));
     const out = [];
     for (const m of this.state.roster) {
       const dept = this.departmentOf(m);
       if (active.has(m.uid)) {
-        out.push({ monster: m, amount: m.salary, department: "combat" });
+        out.push({ monster: m, amount: cut(m.salary), department: "combat" });
       } else if (dept.id !== "combat") {
         out.push({
           monster: m,
-          amount: Math.max(1, Math.ceil(m.salary * dept.wageRate)),
+          amount: cut(Math.max(1, Math.ceil(m.salary * dept.wageRate))),
           department: dept.id
         });
       }
@@ -351,10 +386,17 @@ const Game = {
   },
 
   // ── 応募者生成 ────────────────────────────
+  // 応募者は基本3名。非戦闘部門に人事適性を持つ者が居ると、その人数だけ増える（上限6名）。
+  // 「人事担当（死者）を生活部門に置いたら応募が増えた」という発見を作るための接続。
+  applicantCount() {
+    return U.clamp(3 + this.departmentOutput().recruit, 3, 6);
+  },
+
   genApplicants() {
     const st = this.state;
     st.applicants = [];
-    for (let i = 0; i < 3; i++) st.applicants.push(this.rollApplicant());
+    const n = this.applicantCount();
+    for (let i = 0; i < n; i++) st.applicants.push(this.rollApplicant());
   },
 
   rollApplicant() {
@@ -643,12 +685,11 @@ const Game = {
     const st = this.state;
     const lifeWorkers = this.departmentRoster("life");
     const builders = this.departmentRoster("construction");
+    const output = this.departmentOutput();
     const foodReward = Math.max(0, mission.foodReward || 0);
     const materialReward = Math.max(0, mission.materialReward || 0);
-    const foodProduced = lifeWorkers.length * DEPARTMENTS.life.foodProduction;
-    const foodConsumed = st.roster.length
-      ? Math.max(1, Math.ceil(st.roster.length / DEPARTMENT_RULES.foodPerRoster))
-      : 0;
+    const foodProduced = output.food;
+    const foodConsumed = this.foodNeed();
 
     st.food += foodReward + foodProduced;
     const foodShortage = Math.max(0, foodConsumed - st.food);
@@ -667,9 +708,13 @@ const Game = {
     const beforeLevel = st.facilityLevel;
     const maxLevel = FACILITY_LEVELS.length - 1;
     const canBuild = st.facilityLevel < maxLevel;
-    const materialUsed = canBuild
-      ? Math.min(st.materials, builders.length * DEPARTMENTS.construction.materialUse)
-      : 0;
+    // 供養代行：建設部門の死霊術師は、直前の戦没者を建材へ変える（墓石も城壁も石である）。
+    // 戦死という損失が別部門の資源になる、いちばん短い接続。
+    const mourners = builders.filter(m => m.tplId === "necromancer").length;
+    const salvage = mourners > 0 ? mourners * (st.pendingVacancies || 0) * 2 : 0;
+    st.materials += salvage;
+    const buildCapacity = output.material;
+    const materialUsed = canBuild ? Math.min(st.materials, buildCapacity) : 0;
     st.materials -= materialUsed;
     st.buildProgress += materialUsed;
     while (st.facilityLevel < maxLevel
@@ -685,6 +730,10 @@ const Game = {
       loyaltyDelta,
       materialReward,
       materialUsed,
+      buildCapacity,
+      salvage,
+      wageDiscount: output.wage,
+      recruitBonus: output.recruit,
       facilityBefore: beforeLevel,
       facilityAfter: st.facilityLevel,
       builders: builders.length,
@@ -692,12 +741,17 @@ const Game = {
     };
 
     notes.push(`生活部門：食料 +${foodReward + foodProduced} / 消費 ${foodConsumed}（備蓄 ${st.food}）`);
+    if (output.wage > 0) notes.push(`経理部の働きで給与総額を ${output.wage}% 圧縮した`);
     if (foodShortage > 0) {
       notes.push(`食料不足 ${foodShortage}！ 軍団全員の忠誠${loyaltyDelta}`);
     } else if (lifeWorkers.length > 0) {
       notes.push(`生活部門の温かい食事で軍団全員の忠誠+1`);
     }
-    notes.push(`建設部門：建材 +${materialReward} / 投入 ${materialUsed}（備蓄 ${st.materials}）`);
+    if (salvage > 0) {
+      notes.push(`供養代行：戦没者を弔い、墓石ぶんの建材 +${salvage} を得た……`);
+    }
+    notes.push(`建設部門：建材 +${materialReward} / 投入 ${materialUsed}`
+      + `（施工能力 ${buildCapacity}・備蓄 ${st.materials}）`);
     if (st.facilityLevel > beforeLevel) {
       const facility = this.facilityInfo();
       notes.push(`施設完成【${facility.name}】出撃隊 HP+${Math.round((facility.hpMult - 1) * 100)}%・防御+${facility.defBonus}`);
