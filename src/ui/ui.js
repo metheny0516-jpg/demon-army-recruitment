@@ -641,6 +641,13 @@ const UI = {
       : `<div class="history-item"><div class="gen">？ 未発見のシナジー</div>
           <div class="muted">編成の組み合わせで発見できる</div></div>`
     ).join("");
+    const achievementResults = ACHIEVEMENTS.map(a => ({ a, achieved: !!a.check(list) }));
+    const achievementCount = achievementResults.filter(x => x.achieved).length;
+    const achievements = achievementResults.map(({ a, achieved }) => `
+      <div class="history-item ${achieved ? "cleared" : ""}">
+        <div class="gen">${achieved ? "🏆" : "⬜"} ${U.esc(a.name)}</div>
+        <div class="muted">${U.esc(a.desc)}</div>
+      </div>`).join("");
     const items = list.slice().reverse().map(r => `
       <div class="history-item ${r.cleared ? "cleared" : ""}">
         <div class="gen">第${r.gen}代魔王軍 ${r.cleared ? "👑 人間界制圧" : ""}</div>
@@ -675,6 +682,11 @@ const UI = {
         <h2>✨ シナジー図鑑 ${discoveredSynergies.size}/${SYNERGIES.length}</h2>
         <div class="muted">実戦で一度でも発動させた組み合わせだけが登録される。</div>
         <div class="history-list">${synergyCatalog}</div>
+      </div>
+      <div class="panel">
+        <h2>🏆 魔王実績 ${achievementCount}/${ACHIEVEMENTS.length}</h2>
+        <div class="muted">能力ボーナスはない。次の魔王軍で狙う、別の滅び方と勝ち方の目標。</div>
+        <div class="history-list">${achievements}</div>
       </div>
       ${items || `<div class="panel muted">まだ何の記録もない。歴史はこれから始まる。</div>`}
       <div class="spacer"></div>
