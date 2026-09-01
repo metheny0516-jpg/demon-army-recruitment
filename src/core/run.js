@@ -40,6 +40,7 @@ const Game = {
       maxPower: 0,
       maxArmySize: 0,
       raceCounts: {},
+      recruitedTplIds: [],
       uidSeq: 1,
       lastBattle: null,
       retriesLeft: this.RETRIES_PER_RUN,
@@ -139,7 +140,7 @@ const Game = {
       if (st.phase === "formation") st.phase = "mission";
     }
     const defaults = {
-      roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0, raceCounts: {}, uidSeq: 1,
+      roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0, raceCounts: {}, recruitedTplIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
@@ -164,6 +165,10 @@ const Game = {
     if (!Array.isArray(st.applicants)) st.applicants = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
     if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
+    if (!Array.isArray(st.recruitedTplIds)) st.recruitedTplIds = [];
+    for (const m of st.roster) {
+      if (m.tplId && !st.recruitedTplIds.includes(m.tplId)) st.recruitedTplIds.push(m.tplId);
+    }
     if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
     if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
@@ -574,6 +579,7 @@ const Game = {
     st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
     if (st.activeUids.length < this.MAX_DEPLOY) st.activeUids.push(m.uid);
     st.raceCounts[m.race] = (st.raceCounts[m.race] || 0) + 1;
+    if (m.tplId && !st.recruitedTplIds.includes(m.tplId)) st.recruitedTplIds.push(m.tplId);
     st.hiresLeft = (st.hiresLeft || 1) - 1;
     // 設立期など採用枠が残っていれば、続けて次の応募者を面接する
     if (st.hiresLeft > 0 && this.canHire()) {
@@ -1119,9 +1125,10 @@ const Game = {
       finalResources: { food: st.food || 0, materials: st.materials || 0 },
       departmentCounts: Object.fromEntries(DEPARTMENT_ORDER.map(id => [id, this.departmentRoster(id).length])),
       finalRoster: st.roster.map(m => ({
-        name: m.name, race: m.race, job: m.job, rankId: m.rankId,
+        name: m.name, tplId: m.tplId, race: m.race, job: m.job, rankId: m.rankId,
         merit: m.merit || 0, department: this.departmentOf(m).id
       })),
+      recruitedTplIds: (st.recruitedTplIds || []).slice(),
       hallOfFame: this.hallOfFameMember(),
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
       date: new Date().toISOString().slice(0, 10)

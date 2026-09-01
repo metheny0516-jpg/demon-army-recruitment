@@ -622,6 +622,17 @@ const UI = {
   },
 
   history(list) {
+    const discovered = new Set();
+    for (const r of list) {
+      for (const id of (r.recruitedTplIds || [])) discovered.add(id);
+      for (const m of (r.finalRoster || [])) if (m.tplId) discovered.add(m.tplId);
+      if (r.hallOfFame && r.hallOfFame.tplId) discovered.add(r.hallOfFame.tplId);
+    }
+    const catalog = MONSTER_TEMPLATES.map(t => discovered.has(t.id)
+      ? `<div class="history-item cleared"><div class="gen">${this.icon(t.race)} ${U.esc(t.race)}</div>
+          <div class="muted">採用記録あり／職種例：${U.esc(t.jobs.slice(0, 2).join("・"))}</div></div>`
+      : `<div class="history-item"><div class="gen">？ 未登録の魔族</div><div class="muted">採用すると記録される</div></div>`
+    ).join("");
     const items = list.slice().reverse().map(r => `
       <div class="history-item ${r.cleared ? "cleared" : ""}">
         <div class="gen">第${r.gen}代魔王軍 ${r.cleared ? "👑 人間界制圧" : ""}</div>
@@ -646,6 +657,11 @@ const UI = {
     this.set(`<div class="panel">
         <h2>📖 魔界史</h2>
         <div class="muted">これまでに滅んだ（あるいは君臨した）魔王軍の記録。</div>
+      </div>
+      <div class="panel">
+        <h2>📚 魔物採用図鑑 ${discovered.size}/${MONSTER_TEMPLATES.length}</h2>
+        <div class="muted">過去の魔王軍で一度でも採用した種族だけが登録される。</div>
+        <div class="history-list">${catalog}</div>
       </div>
       ${items || `<div class="panel muted">まだ何の記録もない。歴史はこれから始まる。</div>`}
       <div class="spacer"></div>
