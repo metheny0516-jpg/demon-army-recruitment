@@ -147,6 +147,7 @@ const UI = {
         ${opts.resume ? "" : this.departmentTag(m)}
         ${unpaid}
       </div>
+      ${this.aptitudeHtml(m)}
       <div class="traits">${this.traitHtml(m.traits)}</div>
       ${rank.id === "general" ? `<div class="general-ability">⚔ 将軍の号令：出撃中、味方全員の与ダメージ+15%</div>` : ""}
       ${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}
@@ -183,6 +184,22 @@ const UI = {
     return `<div class="panel"><h3>戦果</h3><div class="contrib-list">${rows}</div></div>`;
   },
 
+  // 「誰をどこへ置くか」を判断するには、置く前に適性が見えていないといけない。
+  // 応募者カードにも出すので、採用の時点で「こいつは建設要員だ」と考えられる。
+  aptitudeHtml(m) {
+    const apt = Aptitude.of(m);
+    const chips = [];
+    if (apt.food > 0) chips.push(`<span class="apt apt-food">🍲 食料+${apt.food}</span>`);
+    if (apt.material > 0) chips.push(`<span class="apt apt-material">🔨 施工+${apt.material}</span>`);
+    if (apt.wage > 0) chips.push(`<span class="apt apt-wage">💰 給与-${apt.wage}%</span>`);
+    if (apt.recruit > 0) chips.push(`<span class="apt apt-recruit">📋 応募+${apt.recruit}</span>`);
+    chips.push(apt.appetite > 0
+      ? `<span class="apt apt-appetite">🍖 食う量 ${apt.appetite}</span>`
+      : `<span class="apt apt-appetite none">🍖 食事不要</span>`);
+    const note = apt.labels.length ? `<span class="apt-note">${U.esc(apt.labels.join("・"))}</span>` : "";
+    return `<div class="aptitudes">${chips.join("")}${note}</div>`;
+  },
+
   departmentTag(m) {
     const department = Game.departmentOf(m);
     return `<span class="department-tag department-${department.id}">${department.icon} ${U.esc(department.shortName)}</span>`;
@@ -206,14 +223,18 @@ const UI = {
     const buildText = next
       ? `次の施設まで ${Math.max(0, next.buildThreshold - st.buildProgress)} 建材投入`
       : "施設は最大レベル";
-    const foodNeed = st.roster.length ? Math.max(1, Math.ceil(st.roster.length / DEPARTMENT_RULES.foodPerRoster)) : 0;
+    const output = Game.departmentOutput();
+    const foodNeed = Game.foodNeed();
+    const balance = output.food - foodNeed;
     return `<div class="department-overview">
       <div><b>⚔ ${combat}</b><span>戦闘所属</span></div>
       <div><b>🔨 ${builders}</b><span>建設所属</span></div>
       <div><b>🍲 ${life}</b><span>生活所属</span></div>
       <div><b>${U.esc(facility.name)}</b><span>HP+${Math.round((facility.hpMult - 1) * 100)}% / 防御+${facility.defBonus}</span></div>
-      <div><b>食料消費 ${foodNeed}</b><span>生活1名につき食料+${DEPARTMENTS.life.foodProduction}</span></div>
-      <div><b>${U.esc(buildText)}</b><span>建設1名につき建材投入+${DEPARTMENTS.construction.materialUse}</span></div>
+      <div class="${balance < 0 ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `不足 ${-balance}！` : `余剰 ${balance}`}</span></div>
+      <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
+      ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>経理部の圧縮</span></div>` : ""}
+      ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>人事部の集客</span></div>` : ""}
     </div>`;
   },
 
@@ -365,7 +386,7 @@ const UI = {
         <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
       </div>`;
     }).join("");
-    const lowFood = st.food <= Math.max(1, Math.ceil(st.roster.length / DEPARTMENT_RULES.foodPerRoster));
+    const lowFood = st.food <= Game.foodNeed();
     this.set(`${this.hud()}
       ${this.mormo(lowFood ? "worried" : "report", lowFood
         ? "食料が心細いですネ……略奪か生活部門への配属を考えた方がよさそうデス。"
@@ -421,7 +442,7 @@ const UI = {
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
     })).join("");
     const empty = active.length === 0;
-    const foodNeed = st.roster.length ? Math.max(1, Math.ceil(st.roster.length / DEPARTMENT_RULES.foodPerRoster)) : 0;
+    const foodNeed = Game.foodNeed();
     const hasOnlyCombat = st.roster.length >= 3 && builders.length === 0 && lifeWorkers.length === 0;
     const adviceExpression = empty ? "panic" : (hasOnlyCombat || st.food <= foodNeed ? "worried" : "report");
     const advice = empty
@@ -443,10 +464,10 @@ const UI = {
       <div class="army-section reserve-section"><h3>⚔ 戦闘部門・控え ${reserves.length}</h3>
         <div class="cards">${reserveCards || `<div class="muted">戦闘部門の控えはいない</div>`}</div></div>
       <div class="army-section department-section department-construction-section"><h3>🔨 建設・施設部門 ${builders.length}</h3>
-        <div class="muted department-help">勝利後、1名につき備蓄建材を${DEPARTMENTS.construction.materialUse}投入。施設効果は次の出撃隊全員に付く。</div>
+        <div class="muted department-help">勝利後、施工能力のぶんだけ備蓄建材を投入する。能力は種族と前職で決まる（オーガの重量物運搬は桁が違う）。施設効果は次の出撃隊全員に付く。</div>
         <div class="cards">${builderCards || `<div class="department-empty">建材はあっても、働く者がいなければ城は育たない。</div>`}</div></div>
       <div class="army-section department-section department-life-section"><h3>🍲 食料・生活部門 ${lifeWorkers.length}</h3>
-        <div class="muted department-help">勝利後、1名につき食料を${DEPARTMENTS.life.foodProduction}調達。食事が足りれば軍団全員の忠誠も少し上がる。</div>
+        <div class="muted department-help">勝利後、食料適性のぶんだけ調達する。食う量は種族ごとに違い、アンデッドは何も食べない。足りれば軍団全員の忠誠も少し上がる。</div>
         <div class="cards">${lifeCards || `<div class="department-empty">現在は自炊。食料が尽きれば全員の忠誠が下がる。</div>`}</div></div>
       <div class="spacer"></div>
       ${this.synergyPanel(active)}
