@@ -9,6 +9,14 @@ const Game = {
   MAX_CONQUEST: ENEMY_STAGES.length,
   MAX_ARMY: 20,
   MAX_DEPLOY: 5,
+  OPENING_DAYS: 3,
+
+  // 旧1ターン分を3日へ整数のまま配る。1,1,1 のような少量も3日合計で元量に戻る。
+  dailyShare(total, day) {
+    const n = Math.max(0, Number(total) || 0);
+    const d = U.clamp(Number(day) || 1, 1, this.OPENING_DAYS);
+    return Math.floor(n * d / this.OPENING_DAYS) - Math.floor(n * (d - 1) / this.OPENING_DAYS);
+  },
 
   newRun(demonKingId) {
     const history = Storage.loadHistory();
@@ -19,6 +27,10 @@ const Game = {
       generation: history.length + 1,
       stage: 1,
       turn: 1,
+      day: 1,
+      openingPrototype: true,
+      dailySettledDay: 0,
+      expeditionUsedToday: false,
       conquest: 0,
       alert: 0,
       battlesWon: 0,
@@ -152,6 +164,7 @@ const Game = {
       generalsMade: [],
       battleIncidentTotal: 0,
       turn: 1, conquest: 0, alert: 0, battlesWon: 0,
+      day: 1, openingPrototype: false, dailySettledDay: 0, expeditionUsedToday: false,
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
@@ -174,6 +187,10 @@ const Game = {
     for (const m of st.roster) {
       if (m.tplId && !st.recruitedTplIds.includes(m.tplId)) st.recruitedTplIds.push(m.tplId);
     }
+    st.day = Math.max(1, Number(st.day) || 1);
+    st.dailySettledDay = Math.max(0, Number(st.dailySettledDay) || 0);
+    st.openingPrototype = !!st.openingPrototype;
+    st.expeditionUsedToday = !!st.expeditionUsedToday;
     if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
     if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
@@ -481,6 +498,17 @@ const Game = {
     }
   },
 
+  beginOpeningPreparation() {
+    const st = this.state;
+    if (!st || !st.openingPrototype || st.day > this.OPENING_DAYS) return false;
+    st.applicants = [];
+    st.selectedMission = null;
+    st.missionOffers = [];
+    st.phase = "preparation";
+    this.save();
+    return true;
+  },
+
   rollApplicant(forcedTplId) {
     const st = this.state;
     const level = this.campaignLevel();
@@ -771,15 +799,16 @@ const Game = {
 
   // 戦闘で得た資源を、非戦闘部門が次の戦いへつなぐ。
   // 生活は食料を生み、建設は備蓄建材を施設進捗へ変換する。
-  processDepartments(mission, notes) {
+  processDepartments(mission, notes, dailyDay) {
     const st = this.state;
     const lifeWorkers = this.departmentRoster("life");
     const builders = this.departmentRoster("construction");
     const output = this.departmentOutput();
     const foodReward = Math.max(0, mission.foodReward || 0);
     const materialReward = Math.max(0, mission.materialReward || 0);
-    const foodProduced = output.food;
-    const foodConsumed = this.foodNeed();
+    const normalized = dailyDay !== undefined;
+    const foodProduced = normalized ? this.dailyShare(output.food, dailyDay) : output.food;
+    const foodConsumed = normalized ? this.dailyShare(this.foodNeed(), dailyDay) : this.foodNeed();
 
     st.food += foodReward + foodProduced;
     const foodShortage = Math.max(0, foodConsumed - st.food);
@@ -788,7 +817,7 @@ const Game = {
     if (foodShortage > 0) {
       loyaltyDelta = -Math.min(24, foodShortage * DEPARTMENT_RULES.foodShortageLoyaltyPenalty);
     } else if (lifeWorkers.length > 0) {
-      loyaltyDelta = 1;
+      loyaltyDelta = normalized ? this.dailyShare(1, dailyDay) : 1;
     }
     if (loyaltyDelta) {
       for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + loyaltyDelta, 0, 100);
@@ -803,7 +832,7 @@ const Game = {
     const mourners = builders.filter(m => m.tplId === "necromancer").length;
     const salvage = mourners > 0 ? mourners * (st.pendingVacancies || 0) * 2 : 0;
     st.materials += salvage;
-    const buildCapacity = output.material;
+    const buildCapacity = normalized ? this.dailyShare(output.material, dailyDay) : output.material;
     const materialUsed = canBuild ? Math.min(st.materials, buildCapacity) : 0;
     st.materials -= materialUsed;
     st.buildProgress += materialUsed;
@@ -973,36 +1002,87 @@ const Game = {
     return true;
   },
 
-  paySalaries(notes) {
+  paySalaries(notes, dailyDay) {
     const st = this.state;
-    const assignments = this.salaryAssignments();
+    const assignments = this.salaryAssignments().map(entry => ({
+      ...entry,
+      amount: dailyDay === undefined ? entry.amount : this.dailyShare(entry.amount, dailyDay)
+    }));
     const total = assignments.reduce((sum, entry) => sum + entry.amount, 0);
     const paidRoster = assignments.map(entry => entry.monster);
     if (total === 0) return;
     const policy = this.payrollPolicy();
-    if (policy.id === "advance") return; // 出撃前に支払い済み
+    if (policy.id === "advance" && dailyDay === undefined) return; // 従来進行では出撃前に支払い済み
     if (policy.id === "withhold") {
+      if (dailyDay !== undefined) {
+        const penalty = this.dailyShare(15, dailyDay);
+        for (const m of paidRoster) {
+          m.unpaid = true;
+          m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
+          if (dailyDay === this.OPENING_DAYS) m.unpaidStreak = (m.unpaidStreak || 0) + 1;
+        }
+        st.lastPayrollReport = { policyId: policy.id, base: total, paid: 0, loyaltyDelta: -penalty };
+        notes.push(`魔王命令により本日の給与を未払い。勤務者の忠誠-${penalty}`);
+        return;
+      }
       const worst = this.applyUnpaidPenalty(paidRoster);
       st.lastPayrollReport = { policyId: policy.id, base: total, paid: 0, loyaltyDelta: -worst };
       notes.push(`魔王命令により給与・部門手当${total}Gを意図的に未払い。勤務者の忠誠が最大 ${worst} 下がった`);
       return;
     }
-    if (st.gold >= total) {
-      st.gold -= total;
+    const payable = policy.id === "advance" ? Math.ceil(total * policy.costRate) : total;
+    if (st.gold >= payable) {
+      st.gold -= payable;
+      const loyaltyGain = dailyDay === undefined
+        ? (policy.id === "advance" ? 8 : 2)
+        : this.dailyShare(policy.id === "advance" ? 8 : 2, dailyDay);
       for (const m of paidRoster) {
         m.unpaid = false;
         m.unpaidStreak = 0;
-        m.loyalty = U.clamp(m.loyalty + 2, 0, 100);
+        m.loyalty = U.clamp(m.loyalty + loyaltyGain, 0, 100);
       }
-      st.lastPayrollReport = { policyId: policy.id, base: total, paid: total, loyaltyDelta: 2 };
-      notes.push(`給与・部門手当 ${total}G を支払った（所持金 ${st.gold}G）勤務者の忠誠+2`);
+      st.lastPayrollReport = { policyId: policy.id, base: total, paid: payable, loyaltyDelta: loyaltyGain };
+      notes.push(`給与・部門手当 ${payable}G を支払った（所持金 ${st.gold}G）勤務者の忠誠+${loyaltyGain}`);
     } else {
       // 連続で未払いにするほど痛手が大きくなる。固定値だと8戦のランでは
       // 忠誠0に届かず、離脱の脅しが空砲になっていた（実測 300ラン中1回）。
-      const worst = this.applyUnpaidPenalty(paidRoster);
+      let worst;
+      if (dailyDay !== undefined) {
+        worst = this.dailyShare(15, dailyDay);
+        for (const m of paidRoster) {
+          m.unpaid = true;
+          m.loyalty = U.clamp(m.loyalty - worst, 0, 100);
+          if (dailyDay === this.OPENING_DAYS) m.unpaidStreak = (m.unpaidStreak || 0) + 1;
+        }
+      } else {
+        worst = this.applyUnpaidPenalty(paidRoster);
+      }
       st.lastPayrollReport = { policyId: policy.id, base: total, paid: 0, loyaltyDelta: -worst, insufficient: true };
       notes.push(`金庫が足りない！ 給与・部門手当${total}G が未払いに……勤務者の忠誠が最大 ${worst} 下がった`);
     }
+  },
+
+  // 日次決算の唯一の入口。同じ日は一度しか処理せず、戦闘の有無とは切り離す。
+  advanceDay(expectedDay) {
+    const st = this.state;
+    if (!st || !st.openingPrototype || st.day > this.OPENING_DAYS) return false;
+    if (expectedDay !== undefined && Number(expectedDay) !== st.day) return false;
+    if (st.dailySettledDay >= st.day) return false;
+    const notes = [];
+    this.processDepartments({}, notes, st.day);
+    this.paySalaries(notes, st.day);
+    this.processDepartures(notes);
+    st.dailySettledDay = st.day;
+    st.lastDailyReport = { day: st.day, notes: notes.slice() };
+    if (st.day < this.OPENING_DAYS) {
+      st.day += 1;
+      st.expeditionUsedToday = false;
+      st.phase = "preparation";
+    } else {
+      st.openingPrototype = false;
+    }
+    this.save();
+    return st.lastDailyReport;
   },
 
   recordDiscoveredSynergies(result) {
