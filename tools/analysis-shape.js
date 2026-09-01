@@ -1,6 +1,6 @@
 // 戦闘の「形」を測る: ラウンド数・ログ行数・1ラウンドあたりの単調さ
 const fs=require('fs'), vm=require('vm');
-const files=['src/data/traits.js','src/data/monsters.js','src/data/synergies.js','src/data/enemies.js','src/data/departments.js',
+const files=['src/data/traits.js','src/data/monsters.js','src/data/synergies.js','src/data/enemies.js','src/data/departments.js','src/data/demon_kings.js',
              'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
 const store={};
 const ctx={console,Math,Date,JSON,localStorage:{getItem:k=>k in store?store[k]:null,setItem:(k,v)=>{store[k]=String(v)},removeItem:k=>{delete store[k]}}};

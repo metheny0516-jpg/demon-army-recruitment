@@ -96,6 +96,7 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
 | 昇進階級 | `src/data/promotions.js` |
 | ハプニング | `src/data/events.js` |
 | 実績 | `src/data/achievements.js` |
+| 魔王 | `src/data/demon_kings.js` |
 | 立ち絵 | `assets/monsters/{id}.png` ＋ `src/data/portraits.js` |
 
 ロジック側を触らずに済む形を保つこと。
@@ -369,6 +370,14 @@ P2直後の帯12〜57.5%とほぼ同じで、イベント追加によるバラ�
 施設Lv.3、戦功22殿堂入り、全種族採用、全シナジー発動の7件。報酬による恒久能力上昇は付けない。
 新しい実績は既存の遊び方を試す目標になるものだけ追加し、単純な作業回数稼ぎは避ける。
 
+### 複数魔王（最小実装完了）
+
+`DEMON_KINGS` は `{ id, name, icon, desc, start: { gold, food, materials, hires } }`。
+新規ゲームのボタンからIDを `Game.newRun(id)` へ渡す。ラン状態は `demonKingId`、魔界史は
+`demonKingId / demonKingName` を保存する。旧セーブ・不明IDは `standard`（若き魔王）へ戻す。
+人事魔王は7G・食料4・初回採用3名、築城魔王は6G・食料3・建材5。数値ボーナスの上下版ではなく、
+人手と給与、建設と手元資金という既存の三部門判断へ接続する。追加魔王も開始時の不足の形を変えること。
+
 ### 戦闘中のハプニング（完了）
 
 定義は `src/data/battle_happenings.js`。1体につき1戦闘1回までで、未払いはストライキ、
@@ -614,7 +623,7 @@ P3（部門・食料・施設由来の事件）は完了。
 9. BGMの音源を暫定合成から実録ループへ差し替える（`Music.apply()` の中身だけ）。
    敵側のレイヤー（最終決戦で勇者アレンのテーマが混ざる）、
    魔界史に「その代の軍団の曲」を残して聴き比べる、も候補。
-10. 当初構想の未着手分: 装備、複数魔王
+10. 当初構想の未着手分: 装備
 
 ---
 

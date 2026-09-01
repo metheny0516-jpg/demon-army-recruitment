@@ -99,14 +99,15 @@ const App = {
     if (typeof Sound !== "undefined") Sound.ui(action);
     switch (action) {
       case "new":
-        Game.newRun();
+        Game.newRun(data.king);
         this.render();
         {
           const returning = Game.state.applicants.find(m => m.legacy);
+          const king = Game.demonKing();
           return this.report(returning ? "joy" : "welcome",
             returning
-              ? `魔王軍の設立デス！\nそれと魔王様、魔界史に名を残した ${returning.name} が再応募してきましたヨ！ 能力と階級は新任からデスが、これは運命かもしれませんネ。`
-              : "魔王軍の設立デス！\n強さだけでなく、戦闘・建設・生活のどこで働けるかも見て採用してくださいネ。",
+              ? `${king.name}様の魔王軍設立デス！\nそれと魔界史に名を残した ${returning.name} が再応募してきましたヨ！ 能力と階級は新任からデスが、これは運命かもしれませんネ。`
+              : `${king.name}様の魔王軍設立デス！\n${king.desc}\n強さだけでなく、どこで働けるかも見て採用してくださいネ。`,
             { kicker: returning ? "歴史が動いた" : "第1回 魔王軍人事", title: "宰相モルモ" });
         }
 

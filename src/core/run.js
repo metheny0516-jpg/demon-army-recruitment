@@ -10,10 +10,12 @@ const Game = {
   MAX_ARMY: 20,
   MAX_DEPLOY: 5,
 
-  newRun() {
+  newRun(demonKingId) {
     const history = Storage.loadHistory();
     const legacyReturn = this.chooseLegacyReturn(history);
+    const demonKing = DEMON_KINGS.find(k => k.id === demonKingId) || DEMON_KINGS[0];
     this.state = {
+      demonKingId: demonKing.id,
       generation: history.length + 1,
       stage: 1,
       turn: 1,
@@ -23,9 +25,9 @@ const Game = {
       missionOffers: [],
       selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
-      gold: 10,
-      food: DEPARTMENT_RULES.startingFood,
-      materials: 0,
+      gold: demonKing.start.gold,
+      food: demonKing.start.food,
+      materials: demonKing.start.materials,
       buildProgress: 0,
       facilityLevel: 0,
       lastDepartmentReport: null,
@@ -36,7 +38,7 @@ const Game = {
       activeUids: [],
       applicants: [],
       phase: "recruit",
-      hiresLeft: 2,
+      hiresLeft: demonKing.start.hires,
       maxPower: 0,
       maxArmySize: 0,
       raceCounts: {},
@@ -141,6 +143,7 @@ const Game = {
       if (st.phase === "formation") st.phase = "mission";
     }
     const defaults = {
+      demonKingId: "standard",
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
@@ -176,6 +179,7 @@ const Game = {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
     }
     if (!PAYROLL_POLICIES[st.payrollPolicy]) st.payrollPolicy = "regular";
+    if (!DEMON_KINGS.some(k => k.id === st.demonKingId)) st.demonKingId = "standard";
     if (typeof st.payrollChoices !== "object" || Array.isArray(st.payrollChoices)) {
       st.payrollChoices = { regular: 0, withhold: 0, advance: 0 };
     }
@@ -206,6 +210,10 @@ const Game = {
 
   salaryTotal() {
     return this.salaryAssignments().reduce((sum, entry) => sum + entry.amount, 0);
+  },
+
+  demonKing() {
+    return DEMON_KINGS.find(k => k.id === this.state.demonKingId) || DEMON_KINGS[0];
   },
 
   payrollPolicy() {
@@ -1117,6 +1125,8 @@ const Game = {
       .sort((a, b) => b[1] - a[1])[0]?.[0] || "なし";
     const record = {
       gen: st.generation,
+      demonKingId: this.demonKing().id,
+      demonKingName: this.demonKing().name,
       cleared,
       battlesWon: won,
       conquest: st.conquest || 0,

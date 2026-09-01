@@ -314,11 +314,15 @@ const UI = {
 
   // ── 画面 ────────────────────────────
   title(hasSave, history) {
+    const kingChoices = DEMON_KINGS.map(k => `<button class="wide ${k.id === "standard" ? "primary" : ""}"
+      data-action="new" data-king="${U.esc(k.id)}">${k.icon} ${U.esc(k.name)}で新規ゲーム
+      <small>${U.esc(k.desc)}</small></button>`).join("");
     this.set(`<div class="title-screen">
       <h1>魔王ワーク</h1>
       <p class="muted">採用して、配属して、働かせろ。<br>戦場も魔王城も、人材配置がすべてだ。</p>
       <div class="title-menu">
-        <button class="primary wide" data-action="new">新規ゲーム（第${history.length + 1}代魔王）</button>
+        <div class="muted">第${history.length + 1}代魔王を選ぶ</div>
+        ${kingChoices}
         ${hasSave ? `<button class="wide" data-action="continue">続きから</button>` : ""}
         <button class="wide ghost" data-action="history">魔界史（${history.length}代の記録）</button>
       </div>
@@ -593,6 +597,7 @@ const UI = {
         <h3>第${record.gen}代魔王軍の記録</h3>
         <dl class="history-item" style="border:none;padding:0;background:none">
           <dt>在位</dt><dd>${record.reignYears}年</dd>
+          <dt>魔王</dt><dd>${U.esc(record.demonKingName || "若き魔王")}</dd>
           <dt>勝利数</dt><dd>${record.battlesWon}戦</dd>
           <dt>王国攻略</dt><dd>${record.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>最終警戒度</dt><dd>${record.alert || 0}</dd>
@@ -653,6 +658,7 @@ const UI = {
         <div class="gen">第${r.gen}代魔王軍 ${r.cleared ? "👑 人間界制圧" : ""}</div>
         <dl>
           <dt>在位</dt><dd>${r.reignYears}年</dd>
+          <dt>魔王</dt><dd>${U.esc(r.demonKingName || "若き魔王")}</dd>
           <dt>最大戦力</dt><dd>${r.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
           <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
