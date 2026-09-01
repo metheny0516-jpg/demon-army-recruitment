@@ -2,8 +2,9 @@ const fs=require('fs'), vm=require('vm');
 const store={};
 const ctx={console,Math,Date,JSON,localStorage:{getItem:k=>k in store?store[k]:null,setItem:(k,v)=>{store[k]=String(v)},removeItem:k=>{delete store[k]}}};
 vm.createContext(ctx);
-for(const f of ['src/data/traits.js','src/data/monsters.js','src/data/portraits.js','src/data/synergies.js',
-                'src/data/enemies.js','src/data/departments.js','src/data/events.js','src/core/util.js','src/core/storage.js',
+for(const f of ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/portraits.js',
+                'src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js',
+                'src/data/departments.js','src/data/events.js','src/core/util.js','src/core/storage.js',
                 'src/core/synergy.js','src/core/battle.js','src/core/run.js'])
   vm.runInContext(fs.readFileSync(f,'utf8'),ctx,{filename:f});
 const Game=vm.runInContext('Game',ctx), EVENTS=vm.runInContext('EVENTS',ctx);
@@ -24,6 +25,19 @@ for(let i=0;i<N;i++){
       Game.hire(idx);
     }
     if(st.phase==='recruit') Game.skipHire();
+    if(st.phase==='mission') {
+      // 部門由来イベントも実際のランで観測するため、3体以上なら生活・建設を最低1名ずつ置く。
+      if(st.roster.length >= 3 && Game.departmentRoster('life').length === 0) {
+        const support = st.roster.slice().sort((a,b)=>power(a)-power(b))[0];
+        Game.assignDepartment(support.uid, 'life');
+      }
+      if(st.roster.length >= 3 && Game.departmentRoster('construction').length === 0) {
+        const support = st.roster.filter(m=>m.department==='combat').sort((a,b)=>power(a)-power(b))[0];
+        if(support) Game.assignDepartment(support.uid, 'construction');
+      }
+      const invade = st.missionOffers.findIndex(m => m.missionKind === 'invade');
+      Game.selectMission(invade >= 0 ? invade : 0);
+    }
     if(st.phase==='formation'){
       const out=Game.deploy(); if(!out) break;
       battles++;
@@ -50,7 +64,7 @@ for(let i=0;i<N;i++){
   if(hadDep) runsWithDeparture++;
 }
 console.log(`${N}ラン / ${battles}戦 / ハプニング${events}回\n`);
-console.log('▼ イベントの出現回数（全8種が出るか）');
+console.log(`▼ イベントの出現回数（全${EVENTS.length}種が出るか）`);
 for(const e of EVENTS) console.log(`  ${e.title.padEnd(12)} ${String(seen[e.id]||0).padStart(4)}回  ${seen[e.id]?'✓':'✗ 一度も出ていない'}`);
 console.log('\n▼ 未払いと離脱（修正前は 300ラン中1回=0.3%）');
 console.log(`  未払いの戦闘   : ${unpaidBattles} (${(unpaidBattles/battles*100).toFixed(0)}%)`);

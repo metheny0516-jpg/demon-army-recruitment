@@ -1,0 +1,117 @@
+// P3: 配属・食料・施設の結果が、次の選択を生む事件へ接続しているか。
+const fs = require('fs'), vm = require('vm');
+const files = [
+  'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
+  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js',
+  'src/data/missions.js', 'src/data/departments.js', 'src/data/events.js',
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js',
+  'src/core/battle.js', 'src/core/run.js'
+];
+const store = {};
+const ctx = { console, Math, Date, JSON, localStorage: {
+  getItem: key => store[key] || null,
+  setItem: (key, value) => { store[key] = String(value); },
+  removeItem: key => { delete store[key]; }
+} };
+vm.createContext(ctx);
+for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
+const Game = vm.runInContext('Game', ctx);
+const EVENTS = vm.runInContext('EVENTS', ctx);
+const event = id => EVENTS.find(e => e.id === id);
+const assert = (condition, message) => {
+  if (!condition) throw new Error(message);
+  console.log(`✓ ${message}`);
+};
+
+function unit(over = {}) {
+  return Object.assign({
+    uid: 1, tplId: 'goblin', name: 'テスト係', race: 'ゴブリン', job: '雑用',
+    hp: 20, atk: 4, def: 2, spd: 3, salary: 4, loyalty: 60,
+    traits: [], tags: [], department: 'combat', unpaid: false, unpaidStreak: 0,
+    merit: 0, rankId: 'soldier'
+  }, over);
+}
+
+function reset(roster) {
+  Game.newRun();
+  const st = Game.state;
+  st.roster = roster;
+  st.activeUids = roster.filter(m => m.department === 'combat').map(m => m.uid).slice(0, 5);
+  st.gold = 10;
+  st.food = 0;
+  st.materials = 0;
+  st.lastDepartmentReport = null;
+  st.pendingEvent = null;
+  st.eventOutcome = null;
+  return st;
+}
+
+function resolve(id, optionIndex) {
+  const ev = event(id);
+  const cast = ev.cast(Game.state);
+  Game.state.pendingEvent = { id, cast, text: ev.text(Game.state, Game.resolveCast(cast)) };
+  Game.state.phase = 'event';
+  assert(Game.chooseEvent(optionIndex), `${id} を選択して解決できる`);
+  assert(Game.state.eventOutcome.length > 0, `${id} に結果テキストがある`);
+}
+
+for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit']) {
+  const ev = event(id);
+  assert(!!ev, `部門事件 ${id} が登録されている`);
+  assert(ev.options.length === 3, `${id} にリスクの異なる3択がある`);
+}
+
+// 食料不足 → 腹の減る人材が事件を起こし、戦力を生活へ回す選択が生まれる。
+{
+  const st = reset([
+    unit({ uid: 1, tplId: 'ogre', name: '腹太', race: 'オーガ', job: '重量物運搬', salary: 6 }),
+    unit({ uid: 2, name: '小腹', department: 'life' })
+  ]);
+  const ev = event('kitchen_takeover');
+  assert(!ev.check(st), '勤務報告に食料不足がなければ食堂占拠は起きない');
+  st.lastDepartmentReport = { foodShortage: 2, foodProduced: 1, facilityBefore: 0, facilityAfter: 0 };
+  assert(ev.check(st), '食料不足から食堂占拠が候補になる');
+  assert(ev.cast(st).actor === 1, '最も大食いの戦闘要員が食堂を占拠する');
+  resolve('kitchen_takeover', 1);
+  assert(st.roster[0].department === 'life' && !st.activeUids.includes(1),
+    '占拠犯を生活部門へ異動すると出撃隊から外れる');
+  assert(st.roster[0].salary === 7 && st.food > 0, '炊事責任者への異動は給与と食料に返る');
+}
+
+// 生活部門の成功 → 食料を忠誠・G・将来備蓄のどれに使うか選べる。
+{
+  const st = reset([
+    unit({ uid: 1 }),
+    unit({ uid: 2, tplId: 'kobold', name: 'まかない', race: 'コボルト', job: '猟犬係', department: 'life' })
+  ]);
+  st.food = 6;
+  st.lastDepartmentReport = { foodShortage: 0, foodProduced: 5, facilityBefore: 0, facilityAfter: 0 };
+  const ev = event('surplus_rations');
+  assert(ev.check(st), '生活部門が余剰食料を作ると活用事件が候補になる');
+  st.roster[1].department = 'combat';
+  assert(!ev.check(st), '生活部門が空なら余剰食料事件は起きない');
+  st.roster[1].department = 'life';
+  const beforeGold = st.gold, beforeLoyalty = st.roster[1].loyalty;
+  resolve('surplus_rations', 1);
+  assert(st.food === 4 && st.gold === beforeGold + 5, '余剰食料をGへ変換できる');
+  assert(st.roster[1].loyalty === beforeLoyalty - 8, '横流しには担当者の忠誠コストがある');
+}
+
+// 施設完成 → 最も施工適性の高い人材を、金・将来給与・建材の選択へ接続する。
+{
+  const st = reset([
+    unit({ uid: 1 }),
+    unit({ uid: 2, tplId: 'ogre', name: '棟梁', race: 'オーガ', job: '重量物運搬', department: 'construction' })
+  ]);
+  st.facilityLevel = 1;
+  st.lastDepartmentReport = { foodShortage: 0, foodProduced: 0, facilityBefore: 0, facilityAfter: 1 };
+  const ev = event('facility_credit');
+  assert(ev.check(st), '施設完成と建設担当が揃うと功績争いが候補になる');
+  assert(ev.cast(st).actor === 2, '施工適性の高い担当者が功労者になる');
+  const beforeLoyalty = st.roster[1].loyalty;
+  resolve('facility_credit', 2);
+  assert(st.materials === 2, '式典予算を次の建材へ変換できる');
+  assert(st.roster[1].loyalty === beforeLoyalty - 20, '功労者を無視する選択には忠誠コストがある');
+}
+
+console.log('✓ P3: 食料不足・生活部門の余剰・施設完成が、次の経営判断へ接続');

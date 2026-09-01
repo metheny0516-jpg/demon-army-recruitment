@@ -304,5 +304,174 @@ const EVENTS = [
         }
       }
     ]
+  },
+
+  // ── 部門・資源から起きる事件 ────────────────────────
+  // 戦闘や給与だけでなく、「前の勤務で誰をどこへ置いたか」が次の事件になる。
+  {
+    id: "kitchen_takeover",
+    title: "食堂占拠",
+    weight: 4,
+    check(st) {
+      const report = st.lastDepartmentReport;
+      return !!report && report.foodShortage > 0
+        && st.roster.some(m => Aptitude.of(m).appetite > 0);
+    },
+    cast(st) {
+      // 戦闘部門の腹ペコを優先する。「戦力を生活へ回すか」が選択になるため。
+      const hungry = st.roster.filter(m => Aptitude.of(m).appetite > 0);
+      const combat = hungry.filter(m => Game.departmentOf(m).id === "combat");
+      const pool = combat.length ? combat : hungry;
+      if (!pool.length) return null;
+      const maxAppetite = Math.max(...pool.map(m => Aptitude.of(m).appetite));
+      return { actor: U.pick(pool.filter(m => Aptitude.of(m).appetite === maxAppetite)).uid };
+    },
+    text(st, c) {
+      const shortage = st.lastDepartmentReport.foodShortage;
+      return `食料が${shortage}足りず、${c.actor.name}が食堂に立てこもった。\n`
+        + `「腹が減った。食わせるまで、ここは俺たちの城だ」――城の中で城を取られた。`;
+    },
+    options: [
+      {
+        label: "地上から緊急購入する（4G）",
+        check(st) { return st.gold >= 4; },
+        apply(st) {
+          st.gold -= 4;
+          st.food += 4;
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 5, 0, 100);
+          return `4Gで食料4をかき集めた。全員の忠誠+5。\n食堂は解放されたが、請求書だけが残った。`;
+        }
+      },
+      {
+        label: "占拠犯を生活部門の炊事責任者にする（給与+1G）",
+        apply(st, c) {
+          Game.assignDepartment(c.actor.uid, "life");
+          const food = Math.max(1, Aptitude.of(c.actor).food);
+          c.actor.salary += 1;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 15, 0, 100);
+          st.food += food;
+          return `${c.actor.name}を生活部門へ異動した。給与+1G、忠誠+15、食料+${food}。\n`
+            + `占拠犯が、そのまま食堂長になった。魔王軍ではよくある人事だ。`;
+        }
+      },
+      {
+        label: "兵糧攻めにする",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 30, 0, 100);
+          for (const m of st.roster) {
+            if (m.uid !== c.actor.uid) m.loyalty = U.clamp(m.loyalty - 5, 0, 100);
+          }
+          return `${c.actor.name}が折れた。忠誠-30、見ていた全員の忠誠-5。\n`
+            + `食料は増えなかった。空腹と恨みだけが残った。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "surplus_rations",
+    title: "余った食料の行方",
+    weight: 3,
+    check(st) {
+      const report = st.lastDepartmentReport;
+      return !!report && report.foodProduced > 0 && report.foodShortage === 0
+        && st.food >= Math.max(3, Game.foodNeed() + 2)
+        && Game.departmentRoster("life").length > 0;
+    },
+    cast(st) {
+      const workers = Game.departmentRoster("life");
+      if (!workers.length) return null;
+      const best = Math.max(...workers.map(m => Aptitude.of(m).food));
+      return { actor: U.pick(workers.filter(m => Aptitude.of(m).food === best)).uid };
+    },
+    text(st, c) {
+      return `${c.actor.name}が、生活部門で余った食料${st.food}個の処分伺いを持ってきた。\n`
+        + `「備蓄に回しますか、皆で食べますか。それとも……地上では高く売れますヨ」`;
+    },
+    options: [
+      {
+        label: "魔王軍宴会を開く（食料3）",
+        check(st) { return st.food >= 3; },
+        apply(st) {
+          st.food -= 3;
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 10, 0, 100);
+          return `食料3を使って宴会を開いた。全員の忠誠+10。\n翌朝、戦闘部門の半分が食堂で寝ていた。`;
+        }
+      },
+      {
+        label: "地上へ横流しする（食料2）",
+        check(st) { return st.food >= 2; },
+        apply(st, c) {
+          st.food -= 2;
+          st.gold += 5;
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 8, 0, 100);
+          return `食料2を横流しして5Gを得た。${c.actor.name}の忠誠-8。\n`
+            + `帳簿には「自然蒸発」と記された。食料は蒸発しない。`;
+        }
+      },
+      {
+        label: "非常食として封印する",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 3, 0, 100);
+          return `食料はそのまま備蓄した。${c.actor.name}の忠誠+3。\n`
+            + `堅実な判断すぎて、モルモは報告書のオチを失った。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "facility_credit",
+    title: "施設完成の功績争い",
+    weight: 4,
+    check(st) {
+      const report = st.lastDepartmentReport;
+      return !!report && report.facilityAfter > report.facilityBefore
+        && Game.departmentRoster("construction").length > 0;
+    },
+    cast(st) {
+      const builders = Game.departmentRoster("construction");
+      if (!builders.length) return null;
+      const best = Math.max(...builders.map(m => Aptitude.of(m).material));
+      return { actor: U.pick(builders.filter(m => Aptitude.of(m).material === best)).uid };
+    },
+    text(st, c) {
+      const facility = FACILITY_LEVELS[st.facilityLevel] || FACILITY_LEVELS[0];
+      return `新施設「${facility.name}」が完成した。${c.actor.name}が泥だらけで表彰を待っている。\n`
+        + `一方、モルモは完成報告書の功績欄に、すでに魔王様の名前を書いてしまった。`;
+    },
+    options: [
+      {
+        label: "完成報奨金を出す（3G）",
+        check(st) { return st.gold >= 3; },
+        apply(st, c) {
+          st.gold -= 3;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 30, 0, 100);
+          return `${c.actor.name}へ3Gを支給した。忠誠+30。\n`
+            + `建設部門では、次の工事の希望者が急に増えた。`;
+        }
+      },
+      {
+        label: "功労者の名を施設につける（給与+1G）",
+        apply(st, c) {
+          c.actor.salary += 1;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 18, 0, 100);
+          for (const m of Game.departmentRoster("construction")) {
+            if (m.uid !== c.actor.uid) m.loyalty = U.clamp(m.loyalty + 5, 0, 100);
+          }
+          return `施設は「${c.actor.name}記念」と命名された。給与+1G、忠誠+18。\n`
+            + `看板だけは、建物より立派に作られた。`;
+        }
+      },
+      {
+        label: "式典を中止し、予算を建材へ戻す",
+        apply(st, c) {
+          st.materials += 2;
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 20, 0, 100);
+          return `式典予算を建材2へ戻した。${c.actor.name}の忠誠-20。\n`
+            + `合理的な判断だった。誰も拍手はしなかった。`;
+        }
+      }
+    ]
   }
 ];
