@@ -238,6 +238,38 @@ const UI = {
     </div>`;
   },
 
+  payrollPanel() {
+    const st = Game.state;
+    const selected = Game.payrollPolicy();
+    const options = PAYROLL_POLICY_ORDER.map(id => {
+      const quote = Game.payrollQuote(id);
+      const policy = quote.policy;
+      const costText = id === "withhold" ? "支払 0G"
+        : id === "advance" ? `今すぐ ${quote.cost}G` : `勝利後 ${quote.cost}G`;
+      return `<button class="payroll-option ${selected.id === id ? "selected" : ""}"
+        data-action="payrollpolicy" data-policy="${id}" ${!quote.affordable ? "disabled" : ""}>
+        <span class="payroll-title">${policy.icon} ${U.esc(policy.name)}</span>
+        <span class="payroll-cost">${U.esc(costText)}</span>
+        <span class="payroll-desc">${U.esc(policy.description)}</span>
+      </button>`;
+    }).join("");
+    const advance = Game.payrollQuote("advance");
+    return `<div class="panel payroll-panel">
+      <h3>💰 今回の給与方針</h3>
+      <div class="muted">出撃前に決める。未払いはこの戦闘から特性・ストライキ・行進曲へ反映される。</div>
+      <div class="payroll-options">${options}</div>
+      ${!advance.affordable ? `<div class="payroll-warning">厚遇には ${advance.cost}G 必要（現在 ${st.gold}G）</div>` : ""}
+    </div>`;
+  },
+
+  payrollHistory(record) {
+    const choices = record && record.payrollChoices || {};
+    return PAYROLL_POLICY_ORDER
+      .filter(id => (choices[id] || 0) > 0)
+      .map(id => `${PAYROLL_POLICIES[id].short}${choices[id]}回`)
+      .join("・") || "記録なし";
+  },
+
   // 敗北を「ただの死因」で終わらせず、次に変えられる判断を考えたくなる材料にする。
   nearMissPanel(nearMiss) {
     if (!nearMiss || !nearMiss.enemyMaxHp) return "";
@@ -443,15 +475,23 @@ const UI = {
     })).join("");
     const empty = active.length === 0;
     const foodNeed = Game.foodNeed();
+    const payroll = Game.payrollPolicy();
+    const payrollQuote = Game.payrollQuote();
     const hasOnlyCombat = st.roster.length >= 3 && builders.length === 0 && lifeWorkers.length === 0;
-    const adviceExpression = empty ? "panic" : (hasOnlyCombat || st.food <= foodNeed ? "worried" : "report");
+    const adviceExpression = empty ? "panic"
+      : payroll.id === "withhold" ? "angry"
+        : (hasOnlyCombat || st.food <= foodNeed ? "worried" : payroll.id === "advance" ? "joy" : "report");
     const advice = empty
       ? "魔王様ぁ！ 戦闘部門の出撃隊が空デス！ 最低1名は出撃させてください！"
-      : hasOnlyCombat
-        ? "全員戦闘配属ですネ。目先は強いですが、食料も施設も育ちませんヨ……。"
-        : st.food <= foodNeed
-          ? "次の勤務後に食料不足の恐れがあります。生活部門へ回すか、食料の多い作戦を選びましょう。"
-          : "誰を戦わせ、誰に城と暮らしを任せるか――ここが魔王様の人事デス！";
+      : payroll.id === "withhold"
+        ? "本当に払わないんですか！？ 血の気の多い者は強くなりますが、座り込む者も出ますヨ！"
+        : payroll.id === "advance"
+          ? `厚遇費 ${payrollQuote.cost}G デス！ 皆の足並みは揃いますが、敗北しても返金はありませんヨ。`
+          : hasOnlyCombat
+            ? "全員戦闘配属ですネ。目先は強いですが、食料も施設も育ちませんヨ……。"
+            : st.food <= foodNeed
+              ? "次の勤務後に食料不足の恐れがあります。生活部門へ回すか、食料の多い作戦を選びましょう。"
+              : "誰を戦わせ、誰に城と暮らしを任せるか――ここが魔王様の人事デス！";
     this.set(`${this.hud()}
       ${this.mormo(adviceExpression, advice)}
       <div class="panel">
@@ -459,6 +499,7 @@ const UI = {
         <div class="muted">戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。</div>
         ${this.departmentSummary()}
       </div>
+      ${this.payrollPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
       <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
       <div class="army-section reserve-section"><h3>⚔ 戦闘部門・控え ${reserves.length}</h3>
@@ -474,7 +515,7 @@ const UI = {
       ${this.enemyPreview()}
       <button class="wide ghost" data-action="backmission">← 作戦会議へ戻る</button>
       <div class="spacer"></div>
-      <button class="primary wide" data-action="deploy" ${empty ? "disabled" : ""}>出撃する</button>
+      <button class="primary wide" data-action="deploy" ${empty || !payrollQuote.affordable ? "disabled" : ""}>${U.esc(payroll.name)}で出撃する</button>
       ${st.roster.length === 0 ? `<div class="spacer"></div><button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}`);
   },
 
@@ -488,6 +529,8 @@ const UI = {
     const st = Game.state;
     const b = st.lastBattle;
     const report = st.lastDepartmentReport || {};
+    const payrollReport = st.lastPayrollReport || {};
+    const payrollPolicy = PAYROLL_POLICIES[payrollReport.policyId] || PAYROLL_POLICIES.regular;
     const mormoExpression = report.foodShortage ? "panic"
       : report.facilityAfter > report.facilityBefore ? "joy" : "report";
     const mormoText = report.foodShortage
@@ -501,6 +544,11 @@ const UI = {
         <h2>勝利！</h2>
         <div>${U.esc(b.army)} を撃退した</div>
         <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
+      </div>
+      <div class="panel payroll-result">
+        <h3>${payrollPolicy.icon} 給与報告：${U.esc(payrollPolicy.name)}</h3>
+        <div>支払額 <b>${payrollReport.paid || 0}G</b>／通常額 ${payrollReport.base || 0}G</div>
+        <div class="${(payrollReport.loyaltyDelta || 0) < 0 ? "negative" : "positive"}">勤務者の忠誠 ${payrollReport.loyaltyDelta > 0 ? "+" : ""}${payrollReport.loyaltyDelta || 0}</div>
       </div>
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
@@ -603,6 +651,7 @@ const UI = {
           <dt>最大兵員数</dt><dd>${record.maxArmySize || (record.finalRoster || []).length}体</dd>
           <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${record.battleIncidentTotal || 0}件</dd>
+          <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(record))}</dd>
           <dt>最終施設</dt><dd>Lv.${record.facilityLevel || 0}</dd>
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
@@ -632,6 +681,7 @@ const UI = {
           <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
           <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${r.battleIncidentTotal || 0}件</dd>
+          <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(r))}</dd>
           <dt>最終施設</dt><dd>Lv.${r.facilityLevel || 0}</dd>
           <dt>勝利数</dt><dd>${r.battlesWon || 0}戦</dd>
           <dt>王国攻略</dt><dd>${r.conquest || 0}/${Game.MAX_CONQUEST}</dd>

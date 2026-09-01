@@ -44,6 +44,37 @@ const DEPARTMENT_RULES = {
   foodShortageLoyaltyPenalty: 8
 };
 
+// 給与を固定の後処理ではなく、出撃前の戦術にする。
+// 通常支給は既存挙動を保ち、未払いと厚遇だけが明示的なリスク・投資になる。
+const PAYROLL_POLICIES = {
+  regular: {
+    id: "regular",
+    icon: "📜",
+    name: "通常支給",
+    short: "通常",
+    description: "勝利後に通常額を支払う。足りなければ自動的に未払い。",
+    costRate: 1
+  },
+  withhold: {
+    id: "withhold",
+    icon: "🔥",
+    name: "今回は未払い",
+    short: "未払い",
+    description: "0G。出撃時から未払い扱い。血の気は乗るが、ストライキと忠誠低下を招く。",
+    costRate: 0
+  },
+  advance: {
+    id: "advance",
+    icon: "✨",
+    name: "前払い・厚遇",
+    short: "厚遇",
+    description: "通常額の1.5倍を出撃前に支払い、未払いを解消して勤務者の忠誠+8。",
+    costRate: 1.5
+  }
+};
+
+const PAYROLL_POLICY_ORDER = ["regular", "withhold", "advance"];
+
 // ── 部門適性 ─────────────────────────────────
 // 「誰を置いても同じ」を無くすための層。人数ではなく、その人材が何者かで部門効果が変わる。
 //

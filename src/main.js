@@ -110,6 +110,10 @@ const App = {
         Game.assignDepartment(Number(data.uid), data.department);
         return this.render();
 
+      case "payrollpolicy":
+        Game.setPayrollPolicy(data.policy);
+        return this.render();
+
       case "fire":
         Game.fire(Number(data.uid));
         return this.render();

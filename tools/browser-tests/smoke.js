@@ -54,7 +54,20 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     if (await page.locator('.department-combat-section .card').count() < 1) throw new Error('出撃隊が空になった');
   });
 
+  await step('給与方針を意図的未払いへ変更', async () => {
+    if (await page.locator('[data-action="payrollpolicy"]').count() !== 3) throw new Error('給与方針が3択でない');
+    await page.locator('[data-action="payrollpolicy"][data-policy="withhold"]').click();
+    if (!(await page.locator('.payroll-option.selected').innerText()).includes('今回は未払い')) {
+      throw new Error('未払い方針を選択できない');
+    }
+    if (!(await page.locator('[data-action="deploy"]').innerText()).includes('今回は未払い')) {
+      throw new Error('出撃ボタンへ給与方針が反映されない');
+    }
+  });
+
   await step('出撃 → 戦闘ログ', async () => {
+    // smoke は画面遷移の契約テスト。ランダム敗北で後半のセーブ検証を飛ばさない。
+    await page.evaluate(() => Game.activeRoster().forEach(m => { m.hp = 999; m.atk = 99; m.def = 50; }));
     await page.click('[data-action="deploy"]');
     await page.waitForSelector('#log');
     await page.click('[data-action="skiplog"]');

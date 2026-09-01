@@ -28,6 +28,9 @@ const Game = {
       buildProgress: 0,
       facilityLevel: 0,
       lastDepartmentReport: null,
+      payrollPolicy: "regular",
+      payrollChoices: { regular: 0, withhold: 0, advance: 0 },
+      lastPayrollReport: null,
       roster: [],
       activeUids: [],
       applicants: [],
@@ -143,7 +146,10 @@ const Game = {
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
-      buildProgress: 0, facilityLevel: 0, lastDepartmentReport: null
+      buildProgress: 0, facilityLevel: 0, lastDepartmentReport: null,
+      payrollPolicy: "regular",
+      payrollChoices: { regular: 0, withhold: 0, advance: 0 },
+      lastPayrollReport: null
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
@@ -157,6 +163,11 @@ const Game = {
     if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
     }
+    if (!PAYROLL_POLICIES[st.payrollPolicy]) st.payrollPolicy = "regular";
+    if (typeof st.payrollChoices !== "object" || Array.isArray(st.payrollChoices)) {
+      st.payrollChoices = { regular: 0, withhold: 0, advance: 0 };
+    }
+    for (const id of PAYROLL_POLICY_ORDER) st.payrollChoices[id] = Number(st.payrollChoices[id]) || 0;
     for (const m of [...st.roster, ...st.applicants]) {
       if (!DEPARTMENTS[m.department]) m.department = "combat";
     }
@@ -183,6 +194,25 @@ const Game = {
 
   salaryTotal() {
     return this.salaryAssignments().reduce((sum, entry) => sum + entry.amount, 0);
+  },
+
+  payrollPolicy() {
+    return PAYROLL_POLICIES[this.state.payrollPolicy] || PAYROLL_POLICIES.regular;
+  },
+
+  payrollQuote(policyId) {
+    const policy = PAYROLL_POLICIES[policyId] || this.payrollPolicy();
+    const base = this.salaryTotal();
+    const cost = policy.id === "advance" ? Math.ceil(base * policy.costRate) : base * policy.costRate;
+    return { policy, base, cost, affordable: policy.id !== "advance" || this.state.gold >= cost };
+  },
+
+  setPayrollPolicy(policyId) {
+    const st = this.state;
+    if (st.phase !== "formation" || !PAYROLL_POLICIES[policyId]) return false;
+    st.payrollPolicy = policyId;
+    this.save();
+    return true;
   },
 
   departmentOf(monster) {
@@ -349,6 +379,8 @@ const Game = {
     const mission = st.missionOffers[index];
     if (!mission) return false;
     st.selectedMission = JSON.parse(JSON.stringify(mission));
+    st.payrollPolicy = "regular";
+    st.lastPayrollReport = null;
     st.phase = "formation";
     this.save();
     return true;
@@ -584,6 +616,10 @@ const Game = {
       st.selectedMission = this.buildMission(invade);
     }
     const notes = [];
+
+    // 未払いはこの戦闘から特性・不祥事・BGMへ効く。厚遇は戦う前に実際に支払う。
+    // 支払い後に合体するスライムも含め、画面で提示した給与総額と実額を一致させる。
+    if (!this.preparePayrollForBattle(notes)) return null;
 
     // キングスライム合体（出撃時・永続）
     const kingSyn = SYNERGIES.find(s => s.id === "king_slime");
@@ -862,7 +898,8 @@ const Game = {
       prevJob: `スライム3体（${slimes.map(m => m.name).join("・")}）`,
       motive: "みんなで、ひとつに、なりました",
       flaw: "もう、もどれない",
-      unpaid: false,
+      unpaid: slimes.some(m => m.unpaid),
+      unpaidStreak: Math.max(0, ...slimes.map(m => m.unpaidStreak || 0)),
       department: "combat",
       merit,
       rankId: rank.id
@@ -888,6 +925,14 @@ const Game = {
     const total = assignments.reduce((sum, entry) => sum + entry.amount, 0);
     const paidRoster = assignments.map(entry => entry.monster);
     if (total === 0) return;
+    const policy = this.payrollPolicy();
+    if (policy.id === "advance") return; // 出撃前に支払い済み
+    if (policy.id === "withhold") {
+      const worst = this.applyUnpaidPenalty(paidRoster);
+      st.lastPayrollReport = { policyId: policy.id, base: total, paid: 0, loyaltyDelta: -worst };
+      notes.push(`魔王命令により給与・部門手当${total}Gを意図的に未払い。勤務者の忠誠が最大 ${worst} 下がった`);
+      return;
+    }
     if (st.gold >= total) {
       st.gold -= total;
       for (const m of paidRoster) {
@@ -895,20 +940,54 @@ const Game = {
         m.unpaidStreak = 0;
         m.loyalty = U.clamp(m.loyalty + 2, 0, 100);
       }
+      st.lastPayrollReport = { policyId: policy.id, base: total, paid: total, loyaltyDelta: 2 };
       notes.push(`給与・部門手当 ${total}G を支払った（所持金 ${st.gold}G）勤務者の忠誠+2`);
     } else {
       // 連続で未払いにするほど痛手が大きくなる。固定値だと8戦のランでは
       // 忠誠0に届かず、離脱の脅しが空砲になっていた（実測 300ラン中1回）。
-      let worst = 0;
-      for (const m of paidRoster) {
-        m.unpaid = true;
-        m.unpaidStreak = (m.unpaidStreak || 0) + 1;
-        const penalty = 15 + 15 * (m.unpaidStreak - 1);
-        worst = Math.max(worst, penalty);
-        m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
-      }
+      const worst = this.applyUnpaidPenalty(paidRoster);
+      st.lastPayrollReport = { policyId: policy.id, base: total, paid: 0, loyaltyDelta: -worst, insufficient: true };
       notes.push(`金庫が足りない！ 給与・部門手当${total}G が未払いに……勤務者の忠誠が最大 ${worst} 下がった`);
     }
+  },
+
+  preparePayrollForBattle(notes) {
+    const st = this.state;
+    const quote = this.payrollQuote();
+    const policy = quote.policy;
+    const assignments = this.salaryAssignments();
+    const workers = assignments.map(entry => entry.monster);
+    if (policy.id === "advance") {
+      if (!quote.affordable) return false;
+      st.gold -= quote.cost;
+      for (const m of workers) {
+        m.unpaid = false;
+        m.unpaidStreak = 0;
+        m.loyalty = U.clamp(m.loyalty + 8, 0, 100);
+      }
+      st.lastPayrollReport = { policyId: policy.id, base: quote.base, paid: quote.cost, loyaltyDelta: 8 };
+      notes.push(`給与・部門手当を ${quote.cost}G で前払い・厚遇した（所持金 ${st.gold}G）勤務者の忠誠+8`);
+    } else if (policy.id === "withhold") {
+      for (const m of workers) m.unpaid = true;
+      st.lastPayrollReport = { policyId: policy.id, base: quote.base, paid: 0, loyaltyDelta: 0, pending: true };
+      notes.push(`魔王命令：今回は給与を払わない。勤務者は未払いのまま出撃する`);
+    } else {
+      st.lastPayrollReport = { policyId: policy.id, base: quote.base, paid: 0, loyaltyDelta: 0, pending: true };
+    }
+    st.payrollChoices[policy.id] = (st.payrollChoices[policy.id] || 0) + 1;
+    return true;
+  },
+
+  applyUnpaidPenalty(roster) {
+    let worst = 0;
+    for (const m of roster) {
+      m.unpaid = true;
+      m.unpaidStreak = (m.unpaidStreak || 0) + 1;
+      const penalty = 15 + 15 * (m.unpaidStreak - 1);
+      worst = Math.max(worst, penalty);
+      m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
+    }
+    return worst;
   },
 
   // 戦死した者を軍から外す。給与計算より前に呼ぶので、死者に給料は出ない。
@@ -965,6 +1044,7 @@ const Game = {
       conquest: st.conquest || 0,
       alert: st.alert || 0,
       missionCounts: { ...(st.missionCounts || {}) },
+      payrollChoices: { ...(st.payrollChoices || {}) },
       reignYears: won * 4 + U.randInt(1, 3),
       maxPower: st.maxPower,
       mainRace,

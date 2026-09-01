@@ -98,6 +98,16 @@ function runOnce(strat, stats){
       const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);                // 強い5体を選び、HP高い順に前へ
       st.activeUids = best.map(m => m.uid);
+      let payroll = 'regular';
+      if (strat.payroll === 'exploit') {
+        const avgLoyalty = st.roster.length
+          ? st.roster.reduce((sum,m)=>sum + m.loyalty, 0) / st.roster.length : 100;
+        const hasRage = Game.activeRoster().some(m => m.traits.includes('rage_unpaid'));
+        if (hasRage && avgLoyalty >= 55) payroll = 'withhold';
+        else if (avgLoyalty < 45 && Game.payrollQuote('advance').affordable) payroll = 'advance';
+      }
+      Game.setPayrollPolicy(payroll);
+      stats.payroll[payroll] = (stats.payroll[payroll] || 0) + 1;
       for (const s of Synergy.active(Game.activeRoster())) stats.syn[s.name] = (stats.syn[s.name]||0)+1;
       const stageNow = st.stage;
       const out = Game.deploy();
@@ -140,10 +150,11 @@ const strategies = [
   {name:'略奪4回→侵攻', kind:'greedy', mission:'raid'},
   {name:'慎重経営', kind:'greedy', mission:'careful'},
   {name:'三部門均衡', kind:'greedy', mission:'careful', departments:'balanced'},
+  {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
 ];
 const N = Number(process.argv[2] || 400);
 for (const s of strategies) {
-  const stats = { syn:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0 };
+  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -154,4 +165,5 @@ for (const s of strategies) {
   console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  平均施設Lv ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
+  console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);
 }
