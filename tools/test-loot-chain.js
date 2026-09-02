@@ -47,6 +47,26 @@ assert(result.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === '
 assert(result.resourceChanges.gold === 1 && result.chainSummary.maxChain >= 4,
   '予約金貨と最大CHAINをタイムラインから集計する');
 
+const raider = make('略奪隊長', 'player', { hp:100, atk:50, spd:12, traits:['pickpocket', 'greedy'] });
+const wing1 = make('略奪兵A', 'player', { hp:100, atk:50, spd:10 });
+const wing2 = make('略奪兵B', 'player', { hp:100, atk:50, spd:8 });
+result = Battle.simulate([raider, wing1, wing2], [
+  make('標的A', 'enemy', { hp:10, atk:1, spd:1 }),
+  make('標的B', 'enemy', { hp:10, atk:1, spd:1 }),
+  make('標的C', 'enemy', { hp:200, atk:1, spd:1 })
+], { extortionLedger:true });
+const coordinatedLoot = result.timeline.filter(e => e.type === 'resource_gain' && e.label === '略奪者の連携');
+const ledger = result.timeline.find(e => e.type === 'facility_trigger' && e.facilityId === 'extortion_ledger');
+assert(coordinatedLoot.length >= 2, 'ゴブリン3体以上なら敵撃破ごとに略奪者の連携で1Gを予約する');
+assert(ledger && ledger.amount === 3, '予約金貨が初めて3Gへ達した瞬間に恐喝帳簿が発火する');
+assert(ledger.parentEventId === result.timeline.filter(e => e.type === 'resource_gain' && e.resource === 'gold')[2].eventId,
+  '3G目の金貨獲得を恐喝帳簿の原因にする');
+const ledgerIndex = result.timeline.indexOf(ledger);
+const boosted = result.timeline.slice(ledgerIndex + 1).find(e => e.type === 'attack' && (e.traits || []).includes('恐喝帳簿'));
+assert(boosted && boosted.dmg >= 70, '恐喝帳簿が次の味方攻撃だけを40%強化する');
+assert(result.timeline.filter(e => e.type === 'facility_trigger' && e.facilityId === 'extortion_ledger').length === 1,
+  '恐喝帳簿は1戦闘1回だけ発火する');
+
 const goblin = (atk, hp) => ({
   uid: 1, tplId: 'goblin', name: 'テスト略奪兵', race: 'ゴブリン', job: '盗賊',
   hp, atk, def: 0, spd: 99, salary: 0, loyalty: 90,

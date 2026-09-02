@@ -293,13 +293,16 @@ const UI = {
 
   synergyPanel(roster) {
     const act = Synergy.active(roster);
-    if (act.length === 0) {
-      return `<div class="panel"><h3>発動中のシナジー</h3>
-        <div class="muted">まだ何も発動していない。種族、頭数、給与額の組み合わせで何かが起きるかもしれない……</div></div>`;
-    }
-    return `<div class="panel"><h3>発動中のシナジー</h3><div class="syn-list">${
-      act.map(s => `<div class="syn"><b>${U.esc(s.name)}</b><div class="d">${U.esc(s.desc)}</div></div>`).join("")
-    }</div></div>`;
+    const activeIds = new Set(act.map(s => s.id));
+    const inactive = SYNERGIES.filter(s => !activeIds.has(s.id));
+    const activeHtml = act.length
+      ? `<div class="syn-list">${act.map(s => `<div class="syn"><b>${U.esc(s.name)}</b>
+          <div class="d">条件：${U.esc(s.condition || "特殊条件")}／${U.esc(s.desc)}</div></div>`).join("")}</div>`
+      : `<div class="muted">現在発動中のシナジーはない。</div>`;
+    const candidates = inactive.map(s => `<div class="syn"><b>${U.esc(s.name)}</b>
+      <div class="d">条件：${U.esc(s.condition || "特殊条件")}／${U.esc(s.desc)}</div></div>`).join("");
+    return `<div class="panel"><h3>発動中のシナジー</h3>${activeHtml}
+      <details><summary>組み合わせ候補を見る</summary><div class="syn-list">${candidates}</div></details></div>`;
   },
 
   enemyPreview() {
@@ -486,6 +489,7 @@ const UI = {
       active.some(m => (m.traits || []).includes("necromancy")) ? "死亡者1名を蘇生" : "",
       active.some(m => (m.traits || []).includes("soul_harvest")) ? "蘇生→魂消費→アンデッド強化" : ""
     ].filter(Boolean);
+    const ledgerReady = st.facilityLevel >= 1 && active.some(m => (m.job || "").includes("会計"));
     const deadline = st.day === 1 ? "勇者到着まであと2日"
       : st.day === 2 ? "明日、勇者が到着" : "本日、勇者襲来";
     const openingActions = st.day < Game.OPENING_DAYS
@@ -505,6 +509,8 @@ const UI = {
         ${rationHints.length ? `<div class="synergy-hint">発火見込み：${rationHints.map(U.esc).join(" → ")}</div>` : ""}</div>`}
       ${!opening && deathHints.length ? `<div class="panel"><b>💀 死亡反応</b>
         <div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div></div>` : ""}
+      ${!opening && ledgerReady ? `<div class="panel"><b>📒 恐喝帳簿</b>
+        <div class="synergy-hint">予約金貨3G到達 → 次の味方攻撃+40%</div></div>` : ""}
       ${this.payrollPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
       <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>

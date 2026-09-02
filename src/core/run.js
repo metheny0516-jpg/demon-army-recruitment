@@ -789,7 +789,9 @@ const Game = {
       feastUid: battleRations.consumed >= 4
         ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null
     } : null;
-    const result = Battle.simulate(playerUnits, enemyUnits, { rations: rationContext });
+    const extortionLedger = st.facilityLevel >= 1
+      && this.activeRoster().some(m => (m.job || "").includes("会計"));
+    const result = Battle.simulate(playerUnits, enemyUnits, { rations: rationContext, extortionLedger });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);

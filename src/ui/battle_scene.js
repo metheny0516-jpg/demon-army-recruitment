@@ -9,7 +9,7 @@ const BattleScene = {
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
   DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   SPECIAL_DURATION: {
-    battle_start: 500, round_start: 1150, synergy: 1650,
+    battle_start: 500, round_start: 1150, synergy: 1650, facility_trigger: 1250,
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1100, survive: 650,
     heal: 500, overkill: 950, result: 1200
   },
@@ -229,6 +229,10 @@ const BattleScene = {
       case "synergy":
         this.pulse(ev.id);
         this.cutin(ev.name, ev.desc, ev.id);
+        break;
+      case "facility_trigger":
+        this.pulse("overkill");
+        this.cutin(ev.name, "次の味方攻撃+40%", "facility");
         break;
       case "resource_gain": {
         const u = this.units[ev.sourceId];

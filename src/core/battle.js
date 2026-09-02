@@ -144,6 +144,29 @@ const Battle = {
 
     // シナジー適用（merge型は出撃時に処理済み）
     const activeSyn = Synergy.applyAll(playerUnits);
+    const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
+    let reservedGold = 0;
+    let ledgerTriggered = false;
+    let ledgerBoost = null;
+    const gainBattleResource = (unit, resource, value, label, parent) => {
+      const resourceName = resource === "gold" ? "G" : resource;
+      const event = emitCausal("resource_gain", {
+        sourceId: unit.id, resource, amount: value, reserved: true, label,
+        emphasis: 1, text: `　${unit.name}の【${label}】 ${value}${resourceName}を略奪予約`, cls: "loot"
+      }, parent);
+      if (resource === "gold") {
+        const before = reservedGold;
+        reservedGold += value;
+        if (options.extortionLedger && !ledgerTriggered && before < 3 && reservedGold >= 3) {
+          ledgerTriggered = true;
+          ledgerBoost = emitCausal("facility_trigger", {
+            facilityId: "extortion_ledger", name: "恐喝帳簿", amount: reservedGold, emphasis: 2,
+            text: `　施設【恐喝帳簿】 予約金貨${reservedGold}G到達、次の味方攻撃+40%`, cls: "synergy"
+          }, event);
+        }
+      }
+      return event;
+    };
 
     emit("battle_start", {
       player: playerUnits.map(snap),
@@ -248,8 +271,9 @@ const Battle = {
       if (survived) {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
       }
+      let deathEvent = null;
       if (dead) {
-        const deathEvent = emitCausal("death", {
+        deathEvent = emitCausal("death", {
           unitId: target.id, emphasis: 2,
           text: `　${target.name} は倒れた！`, cls: "death"
         }, damageEvent);
@@ -271,7 +295,7 @@ const Battle = {
           }
         }
       }
-      return { dmg, event: damageEvent };
+      return { dmg, event: damageEvent, deathEvent, overkillEvent };
     };
 
     const tryIncident = (unit, allies) => {
@@ -315,6 +339,12 @@ const Battle = {
         const tr = TRAITS[tid];
         if (tr && tr.modDealt) tr.modDealt(ctx);
       }
+      const ledgerParent = unit.side === "player" ? ledgerBoost : null;
+      if (ledgerParent) {
+        ctx.mult *= 1.4;
+        ctx.notes.push("恐喝帳簿");
+        ledgerBoost = null;
+      }
       const variance = 0.9 + U.rand() * 0.2;
       const raw = unit.atk * ctx.mult * variance * (actionOpts.mult || 1);
       const amount = Math.max(1, Math.round(raw) - Math.floor(target.def / 2));
@@ -324,21 +354,20 @@ const Battle = {
       const applied = applyDamage(unit, target, amount, "attack", {
         traits: ctx.notes,
         label: actionOpts.label || null,
-        parentEvent: actionOpts.parentEvent || null
+        parentEvent: actionOpts.parentEvent || ledgerParent || null
       });
       const dmg = applied.dmg;
 
       // 攻撃後フック（火球・悪戯など）
       const triggeredEvents = [];
+      if (applied.deathEvent && goblinRaid && unit.race === "ゴブリン" && target.side === "enemy") {
+        triggeredEvents.push(gainBattleResource(unit, "gold", 1, "略奪者の連携", applied.deathEvent));
+      }
       const post = {
         attacker: unit, target, dmg, enemies, log: note, pick: U.pick,
         dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg,
         gainResource: (resource, value, label) => {
-          const resourceName = resource === "gold" ? "G" : resource;
-          const event = emitCausal("resource_gain", {
-            sourceId: unit.id, resource, amount: value, reserved: true, label,
-            emphasis: 1, text: `　${unit.name}の【${label}】 ${value}${resourceName}を略奪予約`, cls: "loot"
-          }, applied.event);
+          const event = gainBattleResource(unit, resource, value, label, applied.event);
           triggeredEvents.push(event);
           return event;
         }
