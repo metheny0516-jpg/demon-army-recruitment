@@ -791,7 +791,9 @@ const Game = {
     } : null;
     const extortionLedger = st.facilityLevel >= 1
       && this.activeRoster().some(m => (m.job || "").includes("会計"));
-    const result = Battle.simulate(playerUnits, enemyUnits, { rations: rationContext, extortionLedger });
+    const graveyard = st.facilityLevel >= 1
+      && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
+    const result = Battle.simulate(playerUnits, enemyUnits, { rations: rationContext, extortionLedger, graveyard });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);
@@ -862,7 +864,8 @@ const Game = {
       contribution: this.attachVoices(result.contribution, result.victory),
       nearMiss: result.nearMiss,
       chainSummary: result.chainSummary,
-      overkillSummary: result.overkillSummary
+      overkillSummary: result.overkillSummary,
+      summonCount: result.summonCount || 0
     };
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
 

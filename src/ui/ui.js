@@ -490,6 +490,7 @@ const UI = {
       active.some(m => (m.traits || []).includes("soul_harvest")) ? "蘇生→魂消費→アンデッド強化" : ""
     ].filter(Boolean);
     const ledgerReady = st.facilityLevel >= 1 && active.some(m => (m.job || "").includes("会計"));
+    const graveyardReady = st.facilityLevel >= 1 && builders.some(m => m.tplId === "necromancer");
     const deadline = st.day === 1 ? "勇者到着まであと2日"
       : st.day === 2 ? "明日、勇者が到着" : "本日、勇者襲来";
     const openingActions = st.day < Game.OPENING_DAYS
@@ -511,6 +512,8 @@ const UI = {
         <div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div></div>` : ""}
       ${!opening && ledgerReady ? `<div class="panel"><b>📒 恐喝帳簿</b>
         <div class="synergy-hint">予約金貨3G到達 → 次の味方攻撃+40%</div></div>` : ""}
+      ${!opening && graveyardReady ? `<div class="panel"><b>🪦 墓地</b>
+        <div class="synergy-hint">最初の味方死亡 → ラウンド終了時に骸骨従者を1体召喚</div></div>` : ""}
       ${this.payrollPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
       <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
@@ -556,6 +559,7 @@ const UI = {
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
       ${this.overkillPanel(b.overkillSummary)}
+      ${b.summonCount ? `<div class="panel"><h3>💀 召喚</h3><div>骸骨従者 ${b.summonCount}体</div></div>` : ""}
       ${this.contributionPanel(b.contribution)}
       ${(b.incidents && b.incidents.length) ? `<div class="panel incident-panel"><h3>💥 この戦いの不祥事</h3>
         ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}

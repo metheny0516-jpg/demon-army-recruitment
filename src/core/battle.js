@@ -22,6 +22,7 @@
 //   death        { unitId }
 //   overkill     { fromId,toId,excess,percent,rank }  致死時の余剰ダメージ
 //   revive       { unitId, hp, maxHp }              蘇生（状態差分から自動検出）
+//   summon       { unit:Snap, sourceUnitId }         戦闘専用ユニットの追加
 //   heal         { unitId, amount, hp, maxHp }      回復（同上）
 //   note         { }                                特性の発動などテキストのみ
 //   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
@@ -102,9 +103,16 @@ const Battle = {
     // 特性から呼ばれるテキスト専用ログ（traits.js の ctx.log がこれ）
     const note = (text, cls) => emit("note", { text, cls: cls || "info", emphasis: cls === "revive" ? 2 : 0 });
     const soulState = { player: { amount: 0 }, enemy: { amount: 0 } };
+    let graveyardDeath = null;
+    let graveyardUsed = false;
+    let nextSummonId = 1;
 
     const reactToDeath = (target, deathEvent) => {
-      if (target.flags.soulCounted || target.flags.summoned) return;
+      if (target.flags.summoned) return;
+      if (options.graveyard && target.side === "player" && !graveyardDeath) {
+        graveyardDeath = { target, deathEvent };
+      }
+      if (target.flags.soulCounted) return;
       const allies = target.side === "player" ? playerUnits : enemyUnits;
       const keeper = allies.find(u => u.alive && u.traits.includes("gravekeeper"));
       if (!keeper) return;
@@ -116,9 +124,9 @@ const Battle = {
       }, deathEvent);
     };
 
-    const reactToRevive = (revived, reviveEvent) => {
-      const allies = revived.side === "player" ? playerUnits : enemyUnits;
-      const state = soulState[revived.side];
+    const reactToUndeadArrival = (arrived, arrivalEvent) => {
+      const allies = arrived.side === "player" ? playerUnits : enemyUnits;
+      const state = soulState[arrived.side];
       const collector = allies.find(u => u.alive && u.traits.includes("soul_harvest")
         && (u.flags.soulHarvestStacks || 0) < 5);
       if (!collector || state.amount <= 0) return;
@@ -130,7 +138,7 @@ const Battle = {
         sourceId: collector.id, traitId: "soul_harvest", name: "魂の徴収",
         stacks: collector.flags.soulHarvestStacks, affectedIds: undead.map(u => u.id), emphasis: 2,
         text: `　${collector.name}の【魂の徴収】 アンデッド${undead.length}体を強化（${collector.flags.soulHarvestStacks}/5）`, cls: "trait"
-      }, reviveEvent);
+      }, arrivalEvent);
       emitCausal("resource_consume", {
         sourceId: collector.id, resource: "soul", amount: 1, remaining: state.amount,
         emphasis: 1, text: `　魂1を消費（残り${state.amount}）`, cls: "trait"
@@ -139,7 +147,9 @@ const Battle = {
 
     const snap = u => ({
       id: u.id, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon, side: u.side,
-      hp: u.hp, maxHp: u.maxHp, traits: u.traits.slice(), introQuote: u.introQuote
+      hp: u.hp, maxHp: u.maxHp, atk: u.atk, def: u.def, spd: u.spd,
+      traits: u.traits.slice(), tags: u.tags.slice(), introQuote: u.introQuote,
+      summoned: !!u.flags.summoned
     });
 
     // シナジー適用（merge型は出撃時に処理済み）
@@ -160,7 +170,8 @@ const Battle = {
         if (options.extortionLedger && !ledgerTriggered && before < 3 && reservedGold >= 3) {
           ledgerTriggered = true;
           ledgerBoost = emitCausal("facility_trigger", {
-            facilityId: "extortion_ledger", name: "恐喝帳簿", amount: reservedGold, emphasis: 2,
+            facilityId: "extortion_ledger", name: "恐喝帳簿", desc: "次の味方攻撃+40%",
+            amount: reservedGold, emphasis: 2,
             text: `　施設【恐喝帳簿】 予約金貨${reservedGold}G到達、次の味方攻撃+40%`, cls: "synergy"
           }, event);
         }
@@ -435,10 +446,34 @@ const Battle = {
           }, death || null);
           delete s.u.flags.reviveSourceId;
           delete s.u.flags.reviveTraitId;
-          reactToRevive(s.u, reviveEvent);
+          reactToUndeadArrival(s.u, reviveEvent);
         } else if (s.u.alive && s.u.hp > s.hp) {
           emitCausal("heal", { unitId: s.u.id, amount: s.u.hp - s.hp, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 1 }, null);
         }
+      }
+
+      if (options.graveyard && graveyardDeath && !graveyardUsed) {
+        graveyardUsed = true;
+        const source = graveyardDeath.target;
+        const summoned = Battle.makeUnit({
+          uid: null, tplId: "skeleton", name: `${source.name}の骸骨従者`, race: "骸骨兵",
+          icon: null, job: "墓地の従者",
+          hp: Math.max(1, Math.round(source.maxHp * 0.3)),
+          atk: Math.max(1, Math.round(source.atk * 0.5)), def: 0, spd: 5,
+          salary: 0, loyalty: 100, traits: [], tags: ["undead"]
+        }, "player");
+        summoned.id = `ps${nextSummonId++}`;
+        summoned.flags.summoned = true;
+        playerUnits.push(summoned);
+        const facilityEvent = emitCausal("facility_trigger", {
+          facilityId: "graveyard", name: "墓地", desc: "戦死者を骸骨従者として召喚", emphasis: 2,
+          text: `　施設【墓地】 ${source.name}の遺骸が動き出す！`, cls: "synergy"
+        }, graveyardDeath.deathEvent);
+        const summonEvent = emitCausal("summon", {
+          sourceUnitId: source.id, unit: snap(summoned), emphasis: 3,
+          text: `　${summoned.name}を召喚！`, cls: "revive"
+        }, facilityEvent);
+        reactToUndeadArrival(summoned, summonEvent);
       }
 
       if (round === 1 && feastTrigger) {
@@ -486,6 +521,7 @@ const Battle = {
       nearMiss: this.summarizeNearMiss(timeline),
       chainSummary: this.summarizeChains(timeline),
       overkillSummary: this.summarizeOverkill(timeline),
+      summonCount: timeline.filter(e => e.type === "summon").length,
       resourceChanges: this.summarizeResourceChanges(timeline)
     };
   },
@@ -572,7 +608,7 @@ const Battle = {
 
   summarizeContribution(timeline, playerUnits) {
     const hits = timeline.filter(e => (e.type === "attack" || e.type === "splash") && e.label !== "仲間割れ");
-    return playerUnits.map(u => {
+    return playerUnits.filter(u => !u.flags.summoned).map(u => {
       const dealt = hits.filter(e => e.fromId === u.id).reduce((s, e) => s + e.dmg, 0);
       const taken = hits.filter(e => e.toId === u.id).reduce((s, e) => s + e.dmg, 0);
       const kills = hits.filter(e => e.fromId === u.id && e.dead).length;

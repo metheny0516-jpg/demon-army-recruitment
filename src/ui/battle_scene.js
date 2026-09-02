@@ -11,7 +11,7 @@ const BattleScene = {
   SPECIAL_DURATION: {
     battle_start: 500, round_start: 1150, synergy: 1650, facility_trigger: 1250,
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1100, survive: 650,
-    heal: 500, overkill: 950, result: 1200
+    heal: 500, summon: 1150, overkill: 950, result: 1200
   },
 
   // 長期戦がだらけないための自動圧縮。シナジー同士が噛み合って乱戦が
@@ -106,6 +106,17 @@ const BattleScene = {
     </div>`;
   },
 
+  registerUnit(u) {
+    this.units[u.id] = {
+      el: document.getElementById("bu-" + u.id),
+      fill: document.getElementById("hp-" + u.id),
+      pop: document.getElementById("pop-" + u.id),
+      side: u.side,
+      name: u.name
+    };
+    this.setHp(this.units[u.id], u.hp, u.maxHp);
+  },
+
   // ── 再生 ──────────────────────────────────
   play(timeline, onDone) {
     this.stop();
@@ -117,15 +128,7 @@ const BattleScene = {
     const start = timeline.find(e => e.type === "battle_start");
     document.getElementById("band-enemy").innerHTML = start.enemy.map(u => this.unitHtml(u)).join("");
     document.getElementById("band-player").innerHTML = start.player.map(u => this.unitHtml(u)).join("");
-    for (const u of [...start.enemy, ...start.player]) {
-      this.units[u.id] = {
-        el: document.getElementById("bu-" + u.id),
-        fill: document.getElementById("hp-" + u.id),
-        pop: document.getElementById("pop-" + u.id),
-        side: u.side,
-        name: u.name
-      };
-    }
+    for (const u of [...start.enemy, ...start.player]) this.registerUnit(u);
     this.updateSpeedBtn();
 
     const rawTotal = timeline.reduce((sum, ev) => sum + this.durationOf(ev), 0);
@@ -212,6 +215,19 @@ const BattleScene = {
         }
         break;
       }
+      case "summon": {
+        const data = ev.unit;
+        const band = document.getElementById(data.side === "player" ? "band-player" : "band-enemy");
+        if (band && !this.units[data.id]) {
+          band.insertAdjacentHTML("beforeend", this.unitHtml(data));
+          this.registerUnit(data);
+          const summoned = this.units[data.id];
+          summoned.el.classList.add("pop");
+          this.float(summoned, "召喚！", "heal");
+          this.pulse("revive");
+        }
+        break;
+      }
       case "heal": {
         const u = this.units[ev.unitId];
         if (u) { this.setHp(u, ev.hp, ev.maxHp); this.float(u, "+" + ev.amount, "heal"); }
@@ -232,7 +248,7 @@ const BattleScene = {
         break;
       case "facility_trigger":
         this.pulse("overkill");
-        this.cutin(ev.name, "次の味方攻撃+40%", "facility");
+        this.cutin(ev.name, ev.desc || "次の味方攻撃+40%", "facility");
         break;
       case "resource_gain": {
         const u = this.units[ev.sourceId];
