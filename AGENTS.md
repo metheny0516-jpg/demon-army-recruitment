@@ -8,7 +8,7 @@ the game. It takes precedence over individual feature specifications, UI details
 balance values, content volume, implementation convenience, and this README when they
 conflict.
 
-Use its eight questions in section 15 as a gate for proposed features. Optimize for the
+Use its ten questions in section 15 as a gate for proposed features. Optimize for the
 core KPI, 「もう1回遊びたいか」: prefer simple rules, surprising interactions,
 player-discovered combinations, emergent stories, and replayability over feature count.
 Do not silently dilute or contradict the product vision. If a request appears to conflict
