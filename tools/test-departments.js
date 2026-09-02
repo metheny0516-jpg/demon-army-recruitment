@@ -50,12 +50,14 @@ const output = Game.departmentOutput();
 assert(output.food === 3 && output.material === 3, '部門出力は所属者の適性合計');
 assert(output.appetite === 4 && Game.foodNeed() === 2, '食料消費は頭数ではなく食う量で決まる');
 
-st.food = 0;
+st.food = 1;
 st.materials = 2;
 st.buildProgress = 2;
 const notes = [];
-Game.processDepartments({ foodReward: 0, materialReward: 1 }, notes);
-assert(st.food === 1, '調達した食料3から消費2を引いて1が残る');
+const rations = Game.prepareBattleRations(notes);
+assert(rations.consumed === 1 && st.food === 0, '出撃者ぶんの戦闘糧食を前払いする');
+Game.processDepartments({ foodReward: 0, materialReward: 1 }, notes, undefined, rations);
+assert(st.food === 2, '調達した食料3から非出撃者ぶん1を引いて2が残る');
 assert(st.roster.every(m => m.loyalty === 61), '食事が足りると軍団全員の忠誠+1');
 assert(st.facilityLevel === 1 && st.buildProgress === 5 && st.materials === 0,
   'オーク1名の施工能力3が建材を投入して仮設兵舎を完成');

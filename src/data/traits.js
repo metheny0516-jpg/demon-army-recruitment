@@ -90,6 +90,18 @@ const TRAITS = {
       ctx.extraAction(0.7, gold, "強欲");
     }
   },
+  big_eater: {
+    name: "大食漢",
+    desc: "戦闘糧食を食べられた戦闘では与ダメージ+25%"
+  },
+  demon_cook: {
+    name: "魔界料理人",
+    desc: "戦闘糧食1消費につき、最も食欲旺盛な味方の与ダメージ+8%（最大80%）"
+  },
+  hunger_demon: {
+    name: "飢餓の悪魔",
+    desc: "戦闘糧食で食料が0になった瞬間、全軍与ダメージ×2・被ダメージ+30%"
+  },
   tough_skin: {
     name: "硬皮",
     desc: "受けるダメージ-2（最低1）",

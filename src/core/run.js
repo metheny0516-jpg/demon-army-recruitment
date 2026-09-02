@@ -207,6 +207,8 @@ const Game = {
       if (!DEPARTMENTS[m.department]) m.department = "combat";
       if (!Array.isArray(m.traits)) m.traits = [];
       if (m.tplId === "goblin" && !m.traits.includes("pickpocket")) m.traits.push("pickpocket");
+      if (m.tplId === "ogre" && !m.traits.includes("big_eater")) m.traits.push("big_eater");
+      if ((m.job || "").includes("料理人") && !m.traits.includes("demon_cook")) m.traits.push("demon_cook");
     }
     const rosterIds = new Set(st.roster.filter(m => m.department === "combat").map(m => m.uid));
     st.activeUids = st.activeUids.filter((uid, i, ids) => rosterIds.has(uid) && ids.indexOf(uid) === i)
@@ -296,6 +298,32 @@ const Game = {
     return appetite > 0 ? Math.max(1, Math.ceil(appetite / DEPARTMENT_RULES.foodPerRoster)) : 0;
   },
 
+  foodNeedFor(monsters) {
+    const appetite = (monsters || []).reduce((sum, m) => sum + Aptitude.of(m).appetite, 0);
+    return appetite > 0 ? Math.max(1, Math.ceil(appetite / DEPARTMENT_RULES.foodPerRoster)) : 0;
+  },
+
+  battleRationQuote() {
+    const foodBefore = Math.max(0, this.state.food || 0);
+    const totalNeed = this.foodNeed();
+    const need = this.foodNeedFor(this.activeRoster());
+    const consumed = Math.min(foodBefore, need);
+    return {
+      need, totalNeed, remainingNeed: Math.max(0, totalNeed - need),
+      consumed, shortage: Math.max(0, need - consumed), foodBefore,
+      foodAfter: foodBefore - consumed,
+      emptied: foodBefore > 0 && foodBefore - consumed === 0
+    };
+  },
+
+  prepareBattleRations(notes) {
+    const quote = this.battleRationQuote();
+    this.state.food = quote.foodAfter;
+    notes.push(`戦闘糧食 ${quote.consumed}/${quote.need} を前払い（備蓄 ${this.state.food}）`);
+    if (quote.shortage) notes.push(`戦闘糧食が ${quote.shortage} 不足`);
+    return quote;
+  },
+
   wageDiscount() {
     return this.departmentOutput().wage;
   },
@@ -325,13 +353,25 @@ const Game = {
     return FACILITY_LEVELS[U.clamp(Number(wanted) || 0, 0, FACILITY_LEVELS.length - 1)];
   },
 
-  preparedRoster() {
+  preparedRoster(rations) {
     const facility = this.facilityInfo();
-    return this.activeRoster().map(m => ({
-      ...m,
-      hp: Math.max(1, Math.round(m.hp * facility.hpMult)),
-      def: Math.max(0, m.def + facility.defBonus)
-    }));
+    const active = this.activeRoster();
+    const cook = active.find(m => (m.traits || []).includes("demon_cook"));
+    const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
+    const foodTarget = active.slice().sort((a, b) => Aptitude.of(b).appetite - Aptitude.of(a).appetite)[0];
+    const foodBoost = cook && rations ? Math.min(0.8, rations.consumed * 0.08) : 0;
+    return active.map(m => {
+      let dmgMult = 1, takenMult = 1;
+      if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= 1.25;
+      if (foodTarget && m.uid === foodTarget.uid) dmgMult *= 1 + foodBoost;
+      if (rations && rations.emptied && hungering) { dmgMult *= 2; takenMult *= 1.3; }
+      return {
+        ...m,
+        hp: Math.max(1, Math.round(m.hp * facility.hpMult)),
+        def: Math.max(0, m.def + facility.defBonus),
+        battleDmgMult: dmgMult, battleTakenMult: takenMult
+      };
+    });
   },
 
   activeRoster() {
@@ -553,17 +593,19 @@ const Game = {
     // 進行補正：後から来る応募者ほど強い
     const scale = 1 + 0.12 * (level - 1);
     const vary = v => Math.max(1, Math.round(v * scale * (0.85 + U.rand() * 0.3)));
+    const job = U.pick(tpl.jobs);
     const traits = (tpl.fixedTraits || [tpl.fixedTrait]).filter(Boolean).slice();
     if (tpl.traitPool.length > 0 && U.chance(0.5)) {
       const extra = U.pick(tpl.traitPool);
       if (!traits.includes(extra)) traits.push(extra);
     }
+    if (job.includes("料理人") && !traits.includes("demon_cook")) traits.push("demon_cook");
     return {
       uid: st.uidSeq++,
       tplId: tpl.id,
       name: this.uniqueName(tpl.names),
       race: tpl.race,
-      job: U.pick(tpl.jobs),
+      job,
       hp: vary(tpl.base.hp),
       atk: vary(tpl.base.atk),
       def: Math.max(0, Math.round(tpl.base.def * (0.8 + U.rand() * 0.4))),
@@ -733,11 +775,20 @@ const Game = {
       kingMerged = this.mergeKingSlime(notes);
     }
 
-    const playerUnits = this.preparedRoster().map(m => Battle.makeUnit(m, "player"));
+    const battleRations = openingBattle ? null : this.prepareBattleRations(notes);
+    const playerUnits = this.preparedRoster(battleRations).map(m => Battle.makeUnit(m, "player"));
     const stageData = this.stageData();
     const enemyUnits = stageData.units.map(e => Battle.makeUnit(e, "enemy"));
 
-    const result = Battle.simulate(playerUnits, enemyUnits);
+    const rationContext = battleRations ? {
+      ...battleRations,
+      cookUid: playerUnits.find(u => u.traits.includes("demon_cook"))?.uid || null,
+      bigEaterUids: playerUnits.filter(u => u.traits.includes("big_eater")).map(u => u.uid),
+      hungerUid: playerUnits.find(u => u.traits.includes("hunger_demon"))?.uid || null,
+      feastUid: battleRations.consumed >= 4
+        ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null
+    } : null;
+    const result = Battle.simulate(playerUnits, enemyUnits, { rations: rationContext });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);
@@ -763,7 +814,7 @@ const Game = {
         if (foodReward || materialReward) notes.push(`作戦資源：食料 +${foodReward} / 建材 +${materialReward}`);
       }
       if (!openingBattle) {
-        this.processDepartments(stageData, notes);
+      this.processDepartments(stageData, notes, undefined, battleRations);
         this.paySalaries(notes);
         this.processDepartures(notes);
       }
@@ -799,6 +850,7 @@ const Game = {
       region: stageData.region,
       reward: result.victory ? stageData.reward : 0,
       lootGold: result.victory ? lootGold : 0,
+      battleRations,
       goldBefore,
       synergies: result.activeSynergies,
       incidents: result.incidents || [],
@@ -845,7 +897,7 @@ const Game = {
 
   // 戦闘で得た資源を、非戦闘部門が次の戦いへつなぐ。
   // 生活は食料を生み、建設は備蓄建材を施設進捗へ変換する。
-  processDepartments(mission, notes, dailyDay) {
+  processDepartments(mission, notes, dailyDay, battleRations) {
     const st = this.state;
     const lifeWorkers = this.departmentRoster("life");
     const builders = this.departmentRoster("construction");
@@ -854,10 +906,16 @@ const Game = {
     const materialReward = Math.max(0, mission.materialReward || 0);
     const normalized = dailyDay !== undefined;
     const foodProduced = normalized ? this.dailyShare(output.food, dailyDay) : output.food;
-    const foodConsumed = normalized ? this.dailyShare(this.foodNeed(), dailyDay) : this.foodNeed();
+    const postBattleRoster = st.roster.filter(m => !st.activeUids.includes(m.uid));
+    const remainingNeed = battleRations
+      ? battleRations.remainingNeed
+      : this.foodNeedFor(postBattleRoster);
+    const foodConsumed = normalized ? this.dailyShare(this.foodNeed(), dailyDay) : remainingNeed;
 
     st.food += foodReward + foodProduced;
-    const foodShortage = Math.max(0, foodConsumed - st.food);
+    const pantryShortage = Math.max(0, foodConsumed - st.food);
+    const rationShortage = normalized ? 0 : Math.max(0, battleRations?.shortage || 0);
+    const foodShortage = pantryShortage + rationShortage;
     st.food = Math.max(0, st.food - foodConsumed);
     let loyaltyDelta = 0;
     if (foodShortage > 0) {

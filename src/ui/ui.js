@@ -465,6 +465,13 @@ const UI = {
     const empty = active.length === 0;
     const payroll = Game.payrollPolicy();
     const payrollQuote = Game.payrollQuote();
+    const rations = Game.battleRationQuote();
+    const rationHints = [
+      active.some(m => (m.traits || []).includes("big_eater")) && rations.consumed > 0 ? "大食漢" : "",
+      active.some(m => (m.traits || []).includes("demon_cook")) && rations.consumed > 0 ? "魔界料理人" : "",
+      active.some(m => (m.traits || []).includes("hunger_demon")) && rations.emptied ? "飢餓の悪魔" : "",
+      rations.consumed >= 4 ? "暴食の宴" : ""
+    ].filter(Boolean);
     const deadline = st.day === 1 ? "勇者到着まであと2日"
       : st.day === 2 ? "明日、勇者が到着" : "本日、勇者襲来";
     const openingActions = st.day < Game.OPENING_DAYS
@@ -478,6 +485,10 @@ const UI = {
         <div class="muted">${opening ? "配置と給与方針は翌日も維持される。変えたい所だけ直し、業務終了で日次決算を行う。" : "戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。"}</div>
         ${this.departmentSummary()}
       </div>
+      ${opening ? "" : `<div class="panel"><b>🍖 戦闘糧食 ${rations.consumed}/${rations.need}</b>
+        <span class="muted"> — 出撃時に備蓄 ${rations.foodBefore} → ${rations.foodAfter}</span>
+        ${rations.shortage ? `<div class="warn">不足 ${rations.shortage}</div>` : ""}
+        ${rationHints.length ? `<div class="synergy-hint">発火見込み：${rationHints.map(U.esc).join(" → ")}</div>` : ""}</div>`}
       ${this.payrollPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
       <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>

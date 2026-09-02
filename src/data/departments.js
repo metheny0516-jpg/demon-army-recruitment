@@ -151,6 +151,10 @@ const Aptitude = {
       out.recruit += entry.recruit || 0;
       out.labels.push(entry.label);
     }
+    if ((monster && monster.traits || []).includes("big_eater")) {
+      out.appetite += 3;
+      out.labels.push("大食漢");
+    }
     return out;
   },
 

@@ -52,13 +52,18 @@ const Battle = {
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
       introQuote: m.introQuote || "",
-      mods: { dmgMult: 1, takenMult: 1, fireballAll: false, necroFull: false },
+      mods: {
+        dmgMult: m.battleDmgMult || 1,
+        takenMult: m.battleTakenMult || 1,
+        fireballAll: false, necroFull: false
+      },
       flags: {},
       alive: true
     };
   },
 
-  simulate(playerUnits, enemyUnits) {
+  simulate(playerUnits, enemyUnits, options) {
+    options = options || {};
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
     enemyUnits.forEach((u, i) => { u.id = "e" + i; });
 
@@ -100,6 +105,37 @@ const Battle = {
       player: playerUnits.map(snap),
       enemy: enemyUnits.map(snap)
     });
+    let feastTrigger = null;
+    const rations = options.rations;
+    if (rations) {
+      const rationEvent = emitCausal("resource_consume", {
+        resource: "food", amount: rations.consumed, need: rations.need, shortage: rations.shortage,
+        emphasis: rations.emptied ? 2 : 1,
+        text: `戦闘糧食 ${rations.consumed}/${rations.need} を消費`, cls: "food"
+      }, null);
+      const byUid = uid => playerUnits.find(u => u.uid === uid);
+      for (const uid of rations.bigEaterUids || []) {
+        const u = byUid(uid);
+        if (!u || rations.consumed <= 0) continue;
+        emitCausal("trait_trigger", { sourceId: u.id, traitId: "big_eater", name: "大食漢", emphasis: 1,
+          text: `　${u.name}の【大食漢】 腹いっぱいで与ダメージ上昇`, cls: "trait" }, rationEvent);
+      }
+      const cook = byUid(rations.cookUid);
+      if (cook && rations.consumed > 0) {
+        emitCausal("trait_trigger", { sourceId: cook.id, traitId: "demon_cook", name: "魔界料理人", emphasis: 1,
+          text: `　${cook.name}の【魔界料理人】 食事を火力へ変換`, cls: "trait" }, rationEvent);
+      }
+      const hunger = byUid(rations.hungerUid);
+      if (hunger && rations.emptied) {
+        emitCausal("trait_trigger", { sourceId: hunger.id, traitId: "hunger_demon", name: "飢餓の悪魔", emphasis: 3,
+          text: `　${hunger.name}の【飢餓の悪魔】 備蓄が尽き、全軍が飢えて暴走！`, cls: "trait" }, rationEvent);
+      }
+      const feast = byUid(rations.feastUid);
+      if (feast && rations.consumed >= 4) {
+        feastTrigger = emitCausal("trait_trigger", { sourceId: feast.id, traitId: "glutton_feast", name: "暴食の宴", emphasis: 2,
+          text: `　【暴食の宴】 ${feast.name}が食後の追加行動を狙う`, cls: "trait" }, rationEvent);
+      }
+    }
     for (const u of [...enemyUnits, ...playerUnits]) {
       if (!u.introQuote) continue;
       emit("dialogue", {
@@ -293,6 +329,15 @@ const Battle = {
           emitCausal("revive", { unitId: s.u.id, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 3 }, death || null);
         } else if (s.u.alive && s.u.hp > s.hp) {
           emitCausal("heal", { unitId: s.u.id, amount: s.u.hp - s.hp, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 1 }, null);
+        }
+      }
+
+      if (round === 1 && feastTrigger) {
+        const feastUnit = playerUnits.find(u => u.id === feastTrigger.sourceId && u.alive);
+        if (feastUnit && !wiped(enemyUnits)) {
+          act(feastUnit, playerUnits, enemyUnits, round, {
+            mult: 1, parentEvent: feastTrigger, label: "暴食の宴", isExtra: true
+          });
         }
       }
 

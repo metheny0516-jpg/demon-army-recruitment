@@ -5,7 +5,7 @@
 const MONSTER_TEMPLATES = [
   {
     id: "goblin", race: "ゴブリン", tier: 1, tags: [],
-    jobs: ["盗賊", "斥候", "暴れ者", "会計係（どんぶり勘定）", "見張り（居眠り可）"],
+    jobs: ["盗賊", "斥候", "暴れ者", "会計係（どんぶり勘定）", "見張り（居眠り可）", "魔界料理人（味見が多い）"],
     base: { hp: 20, atk: 8, def: 3, spd: 7 },
     salary: [2, 3], loyalty: [55, 80],
     fixedTraits: ["coward", "pickpocket"], traitPool: ["pack", "greedy"],
@@ -206,7 +206,7 @@ const MONSTER_TEMPLATES = [
     jobs: ["妖術師", "斥候", "いたずら屋", "契約書偽造係", "呪いの品カタログ営業"],
     base: { hp: 16, atk: 7, def: 2, spd: 10 },
     salary: [3, 4], loyalty: [40, 70],
-    fixedTrait: "mischief", traitPool: ["coward"],
+    fixedTrait: "mischief", traitPool: ["coward", "hunger_demon"],
     prevJobs: ["契約書の作成補助（悪魔法務）", "通行料の徴収（無許可）", "祭りの案内係（迷わせた）", "前魔王軍・嫌がらせ課",
       "詐欺同然の福引係（村八分）", "呪いのアイテム販売員（返品殺到）", "小悪魔養成学校（成績最下位で除籍）", "占い師（当たらなさすぎて廃業）"],
     motives: ["面白そうだったので", "人間が困る顔が見たくて", "実は前の職場を追われまして。ヒヒッ", "契約内容、確認させてもらえます？",
@@ -305,7 +305,7 @@ const MONSTER_TEMPLATES = [
     jobs: ["重戦士", "破城槌", "門番", "重量物運搬", "壁（本業）"],
     base: { hp: 45, atk: 14, def: 6, spd: 4 },
     salary: [7, 9], loyalty: [45, 70],
-    fixedTrait: "brute", traitPool: ["tough_skin"],
+    fixedTraits: ["brute", "big_eater"], traitPool: ["tough_skin"],
     prevJobs: ["城門の門番（30年）", "岩運び（採掘場）", "見世物小屋（脱走）", "橋の下（住居兼職場）",
       "橋の下の住人（家賃滞納なし・そこが家）", "見世物小屋の看板怪物（脱走してそのまま職探し）", "食堂の食べ放題テスター（出禁）", "岩運び（採掘場を素手で崩し独立）"],
     motives: ["メシが多いと聞いた", "門番なら任せろ", "壊す仕事はあるか", "寝床があればいい",
