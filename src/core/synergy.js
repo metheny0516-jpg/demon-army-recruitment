@@ -23,6 +23,10 @@ const Synergy = {
   sandbox(units) {
     return (units || []).map(u => ({
       ...u,
+      // ロスターのモンスターは alive を持たない（戦闘ユニットだけが持つ）。
+      // 編成の予告では全員が生きている前提で測る。これが無いと《群れの本能》のように
+      // 「生存中の味方」を数える特性が常に0になる
+      alive: u.alive !== false,
       traits: (u.traits || []).slice(),
       tags: (u.tags || []).slice(),
       mods: { dmgMult: 1, takenMult: 1 }
@@ -52,6 +56,35 @@ const Synergy = {
       const after = this.measure(without, synergy);
       return !after || after.dmgMult < base.dmgMult || after.takenMult > base.takenMult;
     });
+  },
+
+  // 編成だけで決まる特性の効き目（《群れの本能》《忠犬》《血の気》など）を測る。
+  // シナジーと同じく、説明文からではなく **実際に modDealt を呼んで** 倍率を読む。
+  // 敵の状態やラウンドで変わるもの（卑怯者・先制・怪力）は、中立な状況を渡すことで
+  // 自然に外れる。編成画面で見せたいのは「今この並びだから効いている」ぶんだけ。
+  traitEffects(units) {
+    const squad = this.sandbox(units);
+    const effects = [];
+    for (const attacker of squad) {
+      let mult = 1;
+      const names = [];
+      for (const id of attacker.traits || []) {
+        const trait = typeof TRAITS !== "undefined" ? TRAITS[id] : null;
+        if (!trait || !trait.modDealt) continue;
+        const ctx = {
+          attacker, allies: squad, enemies: [],
+          target: { hp: 100, maxHp: 100, alive: true, race: "", traits: [], tags: [] },
+          round: 2, mult: 1, notes: [], rng: () => 0.5
+        };
+        try { trait.modDealt(ctx); } catch (e) { continue; }   // 状況を必要とする特性は測らない
+        if (ctx.mult > 1) {
+          mult *= ctx.mult;
+          names.push({ id, name: trait.name, mult: ctx.mult, note: ctx.notes[ctx.notes.length - 1] || trait.name });
+        }
+      }
+      if (names.length) effects.push({ uid: attacker.uid, name: attacker.name, race: attacker.race, mult, traits: names });
+    }
+    return effects;
   },
 
   // 発動中なら「いまの効き目」と「もう1体増やしたとき／1体入れ替えたときの効き目」、

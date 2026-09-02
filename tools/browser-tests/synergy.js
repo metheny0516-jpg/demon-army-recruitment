@@ -26,7 +26,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
       const t = template(id);
       return { uid, tplId: id, name, race: t.race, job: '', hp: t.base.hp, atk: t.base.atk,
         def: t.base.def, spd: t.base.spd, salary: t.salary[0], loyalty: 70, merit: 0, rankId: 'soldier',
-        traits: [...(t.fixedTraits || [t.fixedTrait]).filter(Boolean)], tags: (t.tags || []).slice(),
+        traits: [...(t.fixedTraits || [t.fixedTrait]).filter(Boolean), 'pack'], tags: (t.tags || []).slice(),
         quote: '', unpaid: false, department: 'combat' };
     };
     Game.state.roster = list.map((id, i) => make(id, i + 1, id + (i + 1)));
@@ -47,6 +47,16 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   if (!pure.includes('×1.45')) errors.push('純ゴブリン5体の倍率（×1.45）が読めない');
   if (/替えると|あと1体で/.test(pure.replace(/\n/g, ' ').split('組み合わせ候補')[0])) {
     errors.push('これ以上伸びない編成に伸ばし方を出している');
+  }
+
+  // 編成で決まる特性（群れの本能）も見えること。混ぜると落ちるのが読めるか
+  if (!/いまの並びで効いている特性/.test(pure)) errors.push('特性の効き目の見出しが無い');
+  if (!/群れの本能/.test(pure)) errors.push('《群れの本能》が編成画面に出ない');
+  const packPure = (pure.match(/群れの本能[^\n]*×([\d.]+)/) || [])[1];
+  const packMixed = (mixed.match(/群れの本能[^\n]*×([\d.]+)/) || [])[1];
+  if (!packPure || !packMixed) errors.push('特性の倍率が読めない: ' + packPure + ' / ' + packMixed);
+  else if (!(Number(packPure) > Number(packMixed))) {
+    errors.push(`混ぜても特性の倍率が落ちて見えない: 純${packPure} 混成${packMixed}`);
   }
 
   const two = await build(['goblin', 'goblin', 'ogre']);

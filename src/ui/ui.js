@@ -407,6 +407,27 @@ const UI = {
     </div>`;
   },
 
+  // シナジーだけ見せても「混ぜると倍率を二重に失う」の片方しか見えない。
+  // 《群れの本能》のように編成で決まる特性も、実際に測った倍率で出す。
+  traitSynergyHtml(roster) {
+    const effects = Synergy.traitEffects(roster);
+    if (!effects.length) return "";
+    const groups = new Map();
+    for (const effect of effects) {
+      for (const trait of effect.traits) {
+        const key = `${trait.name}|${trait.mult.toFixed(2)}`;
+        if (!groups.has(key)) groups.set(key, { name: trait.name, mult: trait.mult, note: trait.note, members: [] });
+        groups.get(key).members.push(effect.name);
+      }
+    }
+    const rows = [...groups.values()]
+      .sort((a, b) => b.mult - a.mult)
+      .map(g => `<div class="trait-effect"><b>${U.esc(g.name)}</b>
+        <span class="trait-mult">×${g.mult.toFixed(2)}</span>
+        <span class="muted">${U.esc(g.members.join("・"))}</span></div>`).join("");
+    return `<div class="syn-reach"><h4>いまの並びで効いている特性</h4>${rows}</div>`;
+  },
+
   synergyPanel(roster) {
     const entries = Synergy.preview(roster, { slots: Game.MAX_DEPLOY });
     const act = entries.filter(e => e.active);
@@ -429,6 +450,7 @@ const UI = {
     const candidates = far.map(e => `<div class="syn"><b>${U.esc(e.name)}</b>
       <div class="d">条件：${U.esc(e.condition || "特殊条件")}／${U.esc(e.desc)}</div></div>`).join("");
     return `<div class="panel"><h3>発動中のシナジー</h3>${activeHtml}
+      ${this.traitSynergyHtml(roster)}
       ${nearHtml ? `<div class="syn-reach"><h4>あと少しで届く</h4><div class="syn-list">${nearHtml}</div></div>` : ""}
       <details><summary>組み合わせ候補を見る</summary><div class="syn-list">${candidates}</div></details></div>`;
   },

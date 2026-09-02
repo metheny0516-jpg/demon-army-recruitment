@@ -1187,6 +1187,9 @@ button.wide { width: 100%; }
   font-size: 11px; margin-left: 6px; padding: 1px 6px; border-radius: 8px;
   background: #2a1a3a; color: #c9a8f0; border: 1px solid #5a3a7a;
 }
+.trait-effect { font-size: 12px; margin: 2px 0; }
+.trait-effect .trait-mult { color: var(--gold); font-weight: bold; margin: 0 6px; }
+.trait-effect .muted { font-size: 11px; }
 .syn-reach { margin-top: 10px; }
 .syn-reach h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: normal; }
 

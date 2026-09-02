@@ -81,4 +81,33 @@ const few = find(Synergy.preview(elite, { slots: 5 }), 'elite_few');
 assert(few.active && Math.abs(few.now.dmgMult - 1.8) < 0.001 && Math.abs(few.now.takenMult - 0.6) < 0.001,
   '与ダメージと被ダメージの両方を測る（精鋭主義 ×1.80 / ×0.60）');
 
+// ── 7. 編成で決まる特性の効き目も実測する ──────────────────
+// シナジーだけでは「混ぜると倍率を二重に失う」の片方しか見えない
+// ロスターのモンスターは alive を持たない。テストも同じ形で測る
+// （alive: true を足した作り物で測ると、実際の編成画面では0になる不具合を見逃す）
+const packed = n => Array.from({ length: n }, (_, i) => ({
+  uid: i + 1, name: 'ゴブ' + (i + 1), race: 'ゴブリン', rankId: 'soldier', salary: 2,
+  loyalty: 70, traits: ['coward', 'pack'], tags: []
+}));
+const packThree = Synergy.traitEffects(packed(3));
+const fivePack = Synergy.traitEffects(packed(5));
+assert(packThree.length === 3 && Math.abs(packThree[0].mult - 1.2) < 0.001,
+  '《群れの本能》は同族3体で ×1.20');
+assert(Math.abs(fivePack[0].mult - 1.4) < 0.001, '同族5体なら ×1.40（頭数で伸びる）');
+const mixedSquad = [...packed(3), { uid: 90, name: 'オーガ', race: 'オーガ', rankId: 'soldier',
+  salary: 7, loyalty: 90, traits: ['loyal_dog'], tags: [] }];
+const mixedEffects = Synergy.traitEffects(mixedSquad);
+assert(mixedEffects.find(e => e.name === 'ゴブ1').mult < fivePack[0].mult,
+  '混ぜると《群れの本能》の倍率が落ちる（シナジーと二重に失う）');
+assert(mixedEffects.some(e => e.traits.some(t => t.name === '忠犬')),
+  '忠誠のように編成で決まる特性も測る');
+// 状況で決まる特性（卑怯者＝敵HP半分以下、先制＝ラウンド1）は編成画面に出さない
+assert(!packThree[0].traits.some(t => t.name === '卑怯者'),
+  '敵の状態で決まる特性は「いまの並びの効き目」に混ぜない');
+assert(Synergy.traitEffects([]).length === 0, '空の編成でも落ちない');
+const untouched = packed(2);
+const snapshot = JSON.stringify(untouched);
+Synergy.traitEffects(untouched);
+assert(JSON.stringify(untouched) === snapshot, '特性の測定も編成を書き換えない');
+
 console.log('シナジー予告テスト完了');
