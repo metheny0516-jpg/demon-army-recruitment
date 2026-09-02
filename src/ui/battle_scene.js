@@ -8,10 +8,14 @@
 const BattleScene = {
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
   DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
+  // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
+  // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
+  // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
     battle_start: 500, round_start: 1150, synergy: 1650, facility_trigger: 1250,
-    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1100, survive: 650,
-    heal: 500, summon: 1150, resource_forfeit: 850, overkill: 950, result: 1200
+    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
+    heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
+    resource_forfeit: 900, resource_consume: 750, overkill: 1250, result: 1200
   },
 
   // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
@@ -172,8 +176,9 @@ const BattleScene = {
     let mult = 1;
     // 深いCHAINほど1段を長く見せる（最大+50%）
     if (ev.chainDepth >= 3) mult += Math.min(0.5, 0.1 * (ev.chainDepth - 2));
-    // 蹂躙・粉砕+40%、消滅・魔王級+60%
-    if (ev.type === "overkill") mult += 0.2 * (ev.emphasis || 0);
+    // 蹂躙・粉砕+50%、消滅・魔王級+75%。小さな余剰は日常茶飯事なので短いままにし、
+    // 大きい余剰だけがはっきり長くなるようにする（尺は事件の大きさに比例）
+    if (ev.type === "overkill") mult += 0.25 * (ev.emphasis || 0);
     // カットインを読み切れる尺にする
     if (ev.type === "synergy" && ev.firstDiscovery) mult += 0.45;
     if (ev.type === "result" && ev.reversal) mult += 0.65;
@@ -318,7 +323,7 @@ const BattleScene = {
           u.el.classList.add("acting");
           this.float(u, `+${ev.amount}${unit}`, "heal");
         }
-        this.showAction(`${ev.label || "獲得"}　+${ev.amount}${unit}`, 650);
+        this.showAction(`${ev.label || "獲得"}　+${ev.amount}${unit}`, 900);
         break;
       }
       case "resource_forfeit": {
@@ -329,18 +334,18 @@ const BattleScene = {
           u.el.classList.add("targeted");
           this.float(u, `-${ev.amount}${unit}`, "damage");
         }
-        this.showAction(`${ev.label || "予約"}没収　-${ev.amount}${unit}`, 850);
+        this.showAction(`${ev.label || "予約"}没収　-${ev.amount}${unit}`, 900);
         break;
       }
       case "resource_consume": {
-        if (ev.resource === "soul") this.showAction(`魂を${ev.amount}消費`, 550);
+        if (ev.resource === "soul") this.showAction(`魂を${ev.amount}消費`, 750);
         break;
       }
       case "trait_trigger": {
         const u = this.units[ev.sourceId];
         this.clearFocus();
         if (u) u.el.classList.add("acting");
-        this.showAction(`【${ev.name}】発動！`, 700);
+        this.showAction(`【${ev.name}】発動！`, 1000);
         this.pulse(ev.traitId);
         break;
       }
@@ -351,10 +356,15 @@ const BattleScene = {
           target.el.classList.add("targeted");
           this.float(target, `${ev.percent}%`, "damage");
         }
-        this.showAction(`${ev.rank}　余剰${ev.excess}ダメージ`, 850);
+        this.showAction(`${ev.rank}　余剰${ev.excess}ダメージ`, 1100);
         this.pulse("overkill");
-        if (ev.percent >= 300) this.shake();
-        if (ev.percent >= 500) this.cutin(ev.rank, `${ev.percent}% OVERKILL`, "overkill");
+        // 実測でOVERKILLは1戦4回出るが、その97%は余剰100%未満の「日常」。
+        // 旧しきい値（揺れ300%・カットイン500%）は実プレイでほぼ発火しておらず、
+        // 見せ場が一度も立っていなかった。蹂躙以上（100%以上・約10戦に1回）を見せ場にする。
+        if (ev.percent >= 100) {
+          this.shake();
+          this.cutin(ev.rank, `${ev.percent}% OVERKILL`, "overkill");
+        }
         break;
       }
       case "incident": {
