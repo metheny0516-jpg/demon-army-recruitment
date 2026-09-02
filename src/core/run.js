@@ -984,7 +984,7 @@ const Game = {
 
   addMergeSynergy(result, synergy) {
     const event = {
-      type: "synergy", id: synergy.id, name: synergy.name, desc: synergy.desc, emphasis: 3,
+      eventId: `merge-${synergy.id}`, type: "synergy", id: synergy.id, name: synergy.name, desc: synergy.desc, emphasis: 3,
       text: `シナジー発動【${synergy.name}】 ${synergy.desc}`, cls: "synergy"
     };
     const startAt = result.timeline.findIndex(e => e.type === "battle_start");

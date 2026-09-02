@@ -143,6 +143,11 @@ Battle.simulate()  →  timeline[]  →  BattleScene.play(timeline)
 
 ### イベント一覧
 
+全イベントは戦闘内で一意な `eventId` を持つ。攻撃・追撃・死亡・蘇生など因果関係を持つイベントは、
+`parentEventId`、`chainId`、`chainDepth` も持つ。通常攻撃が深度1の起点になり、そこから生じた死亡や
+火球、蘇生は同じCHAINを引き継ぐ。戦闘結果の `chainSummary` はタイムラインだけから導出し、
+戦闘計算と別の連鎖状態を持たない。
+
 全イベント共通で `{ type, emphasis, text?, cls? }` を持つ。
 `emphasis` は **0=通常 / 1=小 / 2=大 / 3=決定的**。「どれくらい重要か」は戦闘側が決め、
 **「何秒見せるか」は描画側が決める**（責務の分割）。

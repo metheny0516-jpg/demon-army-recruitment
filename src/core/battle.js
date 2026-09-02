@@ -5,9 +5,12 @@
 // これによりレンダラを差し替えられる（DOM/CSS → Canvas → ネイティブ）。
 //
 // ── イベント契約 ──────────────────────────────────────────
-// 全イベント共通: { type, emphasis, text?, cls? }
+// 全イベント共通: { eventId, type, emphasis, text?, cls? }
 //   emphasis … 演出の強さ 0=通常 1=小 2=大 3=決定的。尺は描画側が決める。
 //   text/cls … ログ表示用。無いイベントはログに出ない。
+// 因果イベント共通: { parentEventId?, chainId, chainDepth }
+//   親を持たない攻撃などが chainDepth=1 の起点。死亡・追撃・蘇生は原因イベントを親に持つ。
+//   既存の type は変えず、将来のシナジー発火とCHAIN表示に使うメタデータだけを加える。
 //
 //   battle_start { player:[Snap], enemy:[Snap] }   Snapは下の snap() 参照
 //   dialogue     { unitId,name,side,quote }         データ指定された開戦台詞
@@ -60,12 +63,27 @@ const Battle = {
     enemyUnits.forEach((u, i) => { u.id = "e" + i; });
 
     const timeline = [];
+    let nextEventId = 1;
     const emit = (type, data) => {
       data = data || {};
       data.type = type;
+      if (!data.eventId) data.eventId = `ev${nextEventId++}`;
       if (data.emphasis === undefined) data.emphasis = 0;
       timeline.push(data);
       return data;
+    };
+    const emitCausal = (type, data, parent) => {
+      data = data || {};
+      if (parent) {
+        data.parentEventId = parent.eventId;
+        data.chainId = parent.chainId || parent.eventId;
+        data.chainDepth = (parent.chainDepth || 1) + 1;
+      } else {
+        data.chainDepth = 1;
+      }
+      const event = emit(type, data);
+      if (!event.chainId) event.chainId = event.eventId;
+      return event;
     };
     // 特性から呼ばれるテキスト専用ログ（traits.js の ctx.log がこれ）
     const note = (text, cls) => emit("note", { text, cls: cls || "info", emphasis: cls === "revive" ? 2 : 0 });
@@ -128,23 +146,23 @@ const Battle = {
       else if (opts.traits && opts.traits.length) emphasis = 1;
 
       const label = opts.label ? `【${opts.label}】` : "";
-      emit(kind, {
+      const damageEvent = emitCausal(kind, {
         fromId: attacker.id, toId: target.id, dmg,
         hp: target.hp, maxHp: target.maxHp, dead,
         traits: opts.traits || [], label: opts.label || null, emphasis,
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
-      });
+      }, opts.parentEvent || null);
       if (survived) {
-        emit("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 });
+        emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
       }
       if (dead) {
-        emit("death", {
+        emitCausal("death", {
           unitId: target.id, emphasis: 2,
           text: `　${target.name} は倒れた！`, cls: "death"
-        });
+        }, damageEvent);
       }
-      return dmg;
+      return { dmg, event: damageEvent };
     };
 
     const tryIncident = (unit, allies) => {
@@ -166,7 +184,7 @@ const Battle = {
           targetId: target && target.id, emphasis: 3,
           text: happening.text(unit, target), cls: "incident"
         });
-        if (target) applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true });
+        if (target) applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true, parentEvent: timeline[timeline.length - 1] });
         return true;
       }
       return false;
@@ -193,12 +211,13 @@ const Battle = {
       if (ctx.notes.length) {
         note(`　${unit.name}の特性（${ctx.notes.join("・")}！）`, "trait");
       }
-      const dmg = applyDamage(unit, target, amount, "attack", { traits: ctx.notes });
+      const applied = applyDamage(unit, target, amount, "attack", { traits: ctx.notes });
+      const dmg = applied.dmg;
 
       // 攻撃後フック（火球・悪戯など）
       const post = {
         attacker: unit, target, dmg, enemies, log: note, pick: U.pick,
-        dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label })
+        dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
@@ -239,9 +258,10 @@ const Battle = {
       }
       for (const s of before) {
         if (!s.alive && s.u.alive) {
-          emit("revive", { unitId: s.u.id, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 3 });
+          const death = [...timeline].reverse().find(e => e.type === "death" && e.unitId === s.u.id);
+          emitCausal("revive", { unitId: s.u.id, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 3 }, death || null);
         } else if (s.u.alive && s.u.hp > s.hp) {
-          emit("heal", { unitId: s.u.id, amount: s.u.hp - s.hp, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 1 });
+          emitCausal("heal", { unitId: s.u.id, amount: s.u.hp - s.hp, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 1 }, null);
         }
       }
 
@@ -278,7 +298,28 @@ const Battle = {
       // 誰がどれだけ働いたか（結果画面のMVP表示用）。新しい状態を戦闘中に
       // 持ち回る必要はなく、既に確定したタイムラインから導出するだけでよい。
       contribution: this.summarizeContribution(timeline, playerUnits),
-      nearMiss: this.summarizeNearMiss(timeline)
+      nearMiss: this.summarizeNearMiss(timeline),
+      chainSummary: this.summarizeChains(timeline)
+    };
+  },
+
+  // 因果メタデータだけからCHAINを集計する。戦闘計算へ別状態を持ち込まない。
+  // 将来の能力発火も parentEventId / chainId / chainDepth を付ければ自動的に集計へ入る。
+  summarizeChains(timeline) {
+    const events = (timeline || []).filter(e => e.chainId && Number.isFinite(e.chainDepth));
+    const byChain = new Map();
+    for (const event of events) {
+      const current = byChain.get(event.chainId) || { chainId: event.chainId, maxDepth: 0, eventCount: 0 };
+      current.maxDepth = Math.max(current.maxDepth, event.chainDepth);
+      current.eventCount += 1;
+      byChain.set(event.chainId, current);
+    }
+    const chains = [...byChain.values()];
+    return {
+      maxChain: chains.reduce((max, chain) => Math.max(max, chain.maxDepth), 0),
+      chainCount: chains.length,
+      eventCount: events.length,
+      chains
     };
   },
 
