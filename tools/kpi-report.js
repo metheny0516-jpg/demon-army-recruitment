@@ -45,6 +45,44 @@ console.log(`  判定: ${mean('mercenariesHired') < 0.5
     ? 'ビルドを濃くする買い物になっている（同族が多い）'
     : '頭数だけ買っている → 同族の価値が伝わっていない可能性'}`);
 console.log('');
+// ── シナジー観測 ─────────────────────────────────────
+// 「種族統一ボーナスを厚くする」のではなく「異なる条件が繋がる」方向へ進めるための材料。
+// 見たいのは連鎖の深さそのものではなく、**1本の連鎖が何種類の条件をまたいだか**。
+console.log('■ シナジー接続（異なる条件がどれだけ繋がったか）');
+const kindsPerRun = runs.map(r => Object.keys(r.triggerKinds || {}).length);
+const kindsMean = kindsPerRun.reduce((a, b) => a + b, 0) / runs.length;
+console.log(`  発火したトリガー種類: 平均 ${fixed(kindsMean)}種/ラン（最大 ${Math.max(0, ...kindsPerRun)}種）`);
+console.log(`  最大CHAIN: 平均 ${fixed(mean('chainMax'))}（最高 ${Math.max(0, ...runs.map(r => r.chainMax || 0))}）`);
+console.log(`  代表CHAINを構成した異なる能力数: 平均 ${fixed(mean('chainAbilityMax'))}（最高 ${
+  Math.max(0, ...runs.map(r => r.chainAbilityMax || 0))}）`);
+// 何が発火していないかを見るため、種類ごとの回数を多い順に出す。
+// 一度も出てこない能力は「弱い」のではなく「繋がる条件が無い」可能性が高い
+const kindTotals = new Map();
+for (const r of runs) {
+  for (const [key, count] of Object.entries(r.triggerKinds || {})) {
+    kindTotals.set(key, (kindTotals.get(key) || 0) + count);
+  }
+}
+const ranked = [...kindTotals.entries()].sort((a, b) => b[1] - a[1]);
+if (ranked.length) {
+  console.log(`  内訳（多い順）: ${ranked.map(([k, v]) => `${k}×${v}`).join(' / ')}`);
+}
+// 「いちばん多くの条件をまたいだ1本」を全ランから拾う（新しい順ではなく最良）
+const sample = runs.reduce((best, r) => {
+  if (!r.chainSample || !(r.chainSample.abilities || []).length) return best;
+  return !best || r.chainAbilityMax > best.chainAbilityMax ? r : best;
+}, null);
+if (sample) {
+  console.log(`  いちばん条件をまたいだ代表CHAIN（第${sample.gen}代 / 深さ${sample.chainSample.depth}）:`);
+  console.log(`    ${sample.chainSample.abilities.join(' → ')}`);
+}
+const abilityMean = mean('chainAbilityMax');
+console.log(`  判定: ${kindsMean < 4
+  ? '発火するトリガーの種類が少ない → 条件そのものが足りない（能力追加＝CodeX側）'
+  : abilityMean < 3
+    ? 'トリガーは多いが連鎖が同じ能力で閉じている → 足りないのは「異なる条件をつなぐ橋」'
+    : '異なる条件が実際につながっている → いまの方向で厚みを増やしてよい'}`);
+console.log('');
 console.log('■ もう1回（リトライ率）');
 const quick = runs.filter(r => r.quickRetry).length;
 console.log(`  ラン終了後60秒以内に開始: ${quick}/${runs.length}（${fixed(quick / runs.length * 100, 0)}%）`);
@@ -66,15 +104,21 @@ for (const r of runs) {
 console.log(`  ラン終了時の攻略段階: ${Object.entries(stops).sort().map(([k, v]) => `${k}:${v}`).join(' ')}`);
 if (data.lastScreen) {
   const s = data.lastScreen;
-  console.log(`  最後にいた画面: ${s.phase}（攻略${s.conquest} / 第${s.turn}作戦 / ${s.day}日目）`);
+  console.log(`  最後にいた画面: ${s.phase}（攻略${s.conquest} / 第${s.turn}作戦 / ${s.day}日目 / 第${s.gen || 0}代）`);
+  console.log(`  ${s.phase === 'title' || s.phase === 'history'
+    ? '→ ランの外で閉じている。区切りまで遊べている合図'
+    : s.phase === 'recruit' || s.phase === 'formation' || s.phase === 'preparation'
+      ? '→ 準備画面で手が止まっている。選択肢が読めていない／決め手が無い可能性'
+      : '→ 戦闘・結果の途中で閉じている。テンポか、負けの納得感を疑う'}`);
 }
 console.log('');
 console.log('■ 各ランの明細（新しい順）');
-console.log('  代  結果  戦闘  試行  編成変更  速度  スキップ  報告早送り  分  60秒以内');
+console.log('  代  結果  戦闘  試行  編成変更  トリガー種  最大CHAIN  代表能力数  分  60秒以内');
 for (const r of runs.slice().reverse()) {
   console.log(`  ${String(r.gen).padStart(2)}  ${r.cleared ? '制圧' : '壊滅'}  ${
     String(r.battles).padStart(4)}  ${String(r.buildAttempts).padStart(4)}  ${
-    String(r.formationChanges).padStart(8)}  ${String(r.speedChanges).padStart(4)}  ${
-    String(r.logSkips).padStart(8)}  ${String(r.reportSkips).padStart(10)}  ${
+    String(r.formationChanges).padStart(8)}  ${
+    String(Object.keys(r.triggerKinds || {}).length).padStart(10)}  ${
+    String(r.chainMax || 0).padStart(9)}  ${String(r.chainAbilityMax || 0).padStart(10)}  ${
     String(Math.round((r.seconds || 0) / 60)).padStart(3)}  ${r.quickRetry ? '✓' : ''}`);
 }
