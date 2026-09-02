@@ -1150,6 +1150,12 @@ button.wide { width: 100%; }
 .contrib-badge.soul { background: #14303a; color: #8ed8f0; border: 1px solid #205a6a; }
 .contrib-badge.heal { background: #123a2a; color: #8ef0a8; border: 1px solid #2a7a52; }
 
+/* 魔界史の主要記録。勝敗・到達点の隣に2つだけ並べる */
+.record-highlights { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0 10px; }
+.record-highlights div { display: flex; flex-direction: column; }
+.record-highlights b { font-size: 18px; color: var(--gold); line-height: 1.2; }
+.record-highlights span { font-size: 11px; color: var(--muted); }
+
 /* 今回の壊れ方。主要記録は2つだけ、下に代表CHAIN経路を一本だけ出す */
 .breakthrough-panel .breakthrough-records {
   display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px;

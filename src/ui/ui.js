@@ -248,6 +248,18 @@ const UI = {
     </div>`;
   },
 
+  // 魔界史の主要記録は最大CHAINと最大OVERKILLの2つだけ（設計憲法 第11節）。
+  // 勝敗・到達点の隣に置き、総余剰・獲得G・召喚数などは主要記録へ増やさない。
+  // フィールドの無い旧レコードは0として表示する。
+  recordHighlights(record) {
+    const chain = Math.max(0, Number(record && record.maxChain) || 0);
+    const overkill = Math.max(0, Number(record && record.maxOverkill) || 0);
+    return `<div class="record-highlights">
+      <div><b>⛓ ${chain}</b><span>最大CHAIN</span></div>
+      <div><b>💥 ${overkill}%</b><span>最大OVERKILL</span></div>
+    </div>`;
+  },
+
   // 「今回どれだけ壊れたか」を一目で見せるパネル。勝利・敗北・ゲームオーバーで同じものを使う。
   // 主要記録は**最大CHAINと最大OVERKILLの2つだけ**。召喚・資源・蘇生は横並びに増やさず、
   // 下の詳細1行か個人貢献のバッジへ回す（記録が増えるほど、どれも読まれなくなる）。
@@ -686,6 +698,7 @@ const UI = {
       </div>
       <div class="panel">
         <h3>第${record.gen}代魔王軍の記録</h3>
+        ${this.recordHighlights(record)}
         <dl class="history-item" style="border:none;padding:0;background:none">
           <dt>在位</dt><dd>${record.reignYears}年</dd>
           <dt>魔王</dt><dd>${U.esc(record.demonKingName || "若き魔王")}</dd>
@@ -748,6 +761,7 @@ const UI = {
     const items = list.slice().reverse().map(r => `
       <div class="history-item ${r.cleared ? "cleared" : ""}">
         <div class="gen">第${r.gen}代魔王軍 ${r.cleared ? "👑 人間界制圧" : ""}</div>
+        ${this.recordHighlights(r)}
         <dl>
           <dt>在位</dt><dd>${r.reignYears}年</dd>
           <dt>魔王</dt><dd>${U.esc(r.demonKingName || "若き魔王")}</dd>

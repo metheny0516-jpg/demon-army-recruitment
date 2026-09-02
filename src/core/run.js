@@ -54,6 +54,8 @@ const Game = {
       hiresLeft: demonKing.start.hires,
       maxPower: 0,
       maxArmySize: 0,
+      maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
+      maxOverkill: 0,     // 同その2。%で持つ
       raceCounts: {},
       recruitedTplIds: [],
       discoveredSynergyIds: [],
@@ -157,7 +159,8 @@ const Game = {
     }
     const defaults = {
       demonKingId: "standard",
-      roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
+      roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0,
+      maxChain: 0, maxOverkill: 0, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
@@ -802,6 +805,12 @@ const Game = {
     // 最大戦力を記録（魔界史用）
     st.maxPower = Math.max(st.maxPower, this.armyPower(this.activeRoster()));
 
+    // ラン全体の主要記録は最大CHAINと最大OVERKILLの2つだけ（設計憲法 第11節）。
+    // 勝敗を問わず更新する。再起で巻き戻したときはチェックポイントごと戻るのが正しい
+    // （やり直した歴史の記録は残さない）ので、ここに別のテレメトリは持たない。
+    st.maxChain = Math.max(st.maxChain || 0, (result.chainSummary && result.chainSummary.maxChain) || 0);
+    st.maxOverkill = Math.max(st.maxOverkill || 0, (result.overkillSummary && result.overkillSummary.maxPercent) || 0);
+
     const goldBefore = st.gold;
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
     if (result.victory) {
@@ -1330,6 +1339,8 @@ const Game = {
       payrollChoices: { ...(st.payrollChoices || {}) },
       reignYears: won * 4 + U.randInt(1, 3),
       maxPower: st.maxPower,
+      maxChain: st.maxChain || 0,
+      maxOverkill: st.maxOverkill || 0,
       mainRace,
       region: cleared ? "王都（制圧）" : finalMission.region,
       cause: cleared ? "人間界を征服し引退" : `${finalMission.army}に敗北`,
