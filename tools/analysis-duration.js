@@ -19,13 +19,15 @@ const Game = vm.runInContext('Game', ctx);
 const Scene = vm.runInContext('BattleScene', ctx);
 const power = m => m.hp + m.atk * 3 + m.def * 2 + m.spd;
 
-function measuredMs(timeline, finalBattle) {
+// 尺の計画は BattleScene.plan() が唯一の真実。ここでは再現せず、そのまま呼ぶ。
+function measure(timeline, finalBattle) {
   Scene.isFinalBattle = finalBattle;
-  const raw = timeline.reduce((sum, event) => sum + Scene.durationOf(event), 0);
-  const scale = raw > Scene.AUTO_CAP_MS
-    ? Math.max(Scene.MIN_AUTO_SCALE, Scene.AUTO_CAP_MS / raw)
-    : 1;
-  return raw * scale;
+  const pacing = Scene.plan(timeline);
+  return {
+    ms: pacing.plannedMs,
+    // 契約の測定指標: 尺のうち「縮めない事件」が占める割合
+    protectedShare: pacing.plannedMs > 0 ? pacing.protectedMs / pacing.plannedMs : 0
+  };
 }
 
 const perStage = {};
@@ -40,18 +42,26 @@ for (let run = 0; run < 200; run++) {
       Game.hire(best);
     }
     if (st.phase === 'recruit') Game.skipHire();
+    if (st.phase === 'preparation') {
+      const best = Game.departmentRoster('combat').slice().sort((a, b) => power(b) - power(a))
+        .slice(0, Game.MAX_DEPLOY);
+      st.activeUids = best.map(m => m.uid);
+      Game.setPayrollPolicy('regular');
+      if (st.day < Game.OPENING_DAYS) Game.advanceDay(st.day);
+      else Game.prepareOpeningBattle('invade');
+    }
     if (st.phase === 'mission') {
       const invade = st.missionOffers.findIndex(m => m.missionKind === 'invade');
       Game.selectMission(invade >= 0 ? invade : 0);
     }
     if (st.phase === 'formation') {
-      st.activeUids = st.roster.slice().sort((a, b) => power(b) - power(a))
+      st.activeUids = Game.departmentRoster('combat').slice().sort((a, b) => power(b) - power(a))
         .slice(0, Game.MAX_DEPLOY).map(m => m.uid);
       const out = Game.deploy();
       if (!out) break;
       const stage = out.stageData.baseStage;
       const finalBattle = out.stageData.missionKind === 'invade' && stage === Game.MAX_CONQUEST;
-      (perStage[stage] ||= []).push(measuredMs(out.result.timeline, finalBattle));
+      (perStage[stage] ||= []).push(measure(out.result.timeline, finalBattle));
     }
     if (st.phase === 'result') Game.afterResult();
     if (st.phase === 'event') {
@@ -67,9 +77,10 @@ for (let run = 0; run < 200; run++) {
 }
 
 const avg = values => values.reduce((sum, n) => sum + n, 0) / values.length;
-console.log('敵段階  平均x1  平均x2  最長x1  標本');
+console.log('敵段階  平均x1  平均x2  最長x1  保護占有  標本');
 for (const stage of Object.keys(perStage).sort((a, b) => a - b)) {
-  const values = perStage[stage];
-  const mean = avg(values);
-  console.log(`${String(stage).padStart(4)}  ${(mean / 1000).toFixed(1).padStart(6)}秒  ${(mean / 2000).toFixed(1).padStart(6)}秒  ${(Math.max(...values) / 1000).toFixed(1).padStart(6)}秒  ${values.length}`);
+  const samples = perStage[stage];
+  const mean = avg(samples.map(s => s.ms));
+  const share = avg(samples.map(s => s.protectedShare));
+  console.log(`${String(stage).padStart(4)}  ${(mean / 1000).toFixed(1).padStart(6)}秒  ${(mean / 2000).toFixed(1).padStart(6)}秒  ${(Math.max(...samples.map(s => s.ms)) / 1000).toFixed(1).padStart(6)}秒  ${(share * 100).toFixed(0).padStart(6)}%  ${samples.length}`);
 }

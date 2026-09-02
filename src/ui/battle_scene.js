@@ -14,11 +14,19 @@ const BattleScene = {
     heal: 500, summon: 1150, resource_forfeit: 850, overkill: 950, result: 1200
   },
 
-  // 長期戦がだらけないための自動圧縮。シナジー同士が噛み合って乱戦が
-  // 長引いても、x1でこの秒数に収まるよう全体の尺を縮める（各イベントの
-  // 個別の尺はいじらない）。短い戦闘は一切圧縮されない。
-  AUTO_CAP_MS: 45000,
-  MIN_AUTO_SCALE: 0.62,
+  // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
+  // 長期戦がだらけても一律には速めない。x1の目標総尺を「予算」として置き、
+  // 超えたぶんは通常攻撃と何も反応しなかった区間からだけ削る。
+  // CHAIN・OVERKILL・初発見・逆転・蘇生・召喚・永久戦死は縮めず、大きさに応じて伸ばす。
+  BUDGET_MS: 45000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
+  MIN_COMPRESS: 0.45,   // 圧縮対象イベントの最小倍率（退屈な区間なので深く縮めてよい）
+
+  // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
+  PROTECTED_TYPES: new Set([
+    "battle_start", "dialogue", "synergy", "facility_trigger", "trait_trigger",
+    "resource_gain", "resource_forfeit", "resource_consume",
+    "overkill", "revive", "summon", "survive", "incident", "result"
+  ]),
 
   EFFECT_CLASSES: [
     "fx-goblin_horde", "fx-king_slime", "fx-legion_of_dead", "fx-arcane_circle",
@@ -27,7 +35,8 @@ const BattleScene = {
   ],
 
   speed: 1,
-  autoScale: 1,
+  eventScale: 1,
+  pacing: null,
   timers: [],
   units: {},      // id → { el, fill, data }
   state: null,
@@ -131,10 +140,8 @@ const BattleScene = {
     for (const u of [...start.enemy, ...start.player]) this.registerUnit(u);
     this.updateSpeedBtn();
 
-    const rawTotal = timeline.reduce((sum, ev) => sum + this.durationOf(ev), 0);
-    this.autoScale = rawTotal > this.AUTO_CAP_MS
-      ? Math.max(this.MIN_AUTO_SCALE, this.AUTO_CAP_MS / rawTotal)
-      : 1;
+    this.pacing = this.plan(timeline);
+    this.eventScale = 1;
 
     this.timeline = timeline;
     this.index = 0;
@@ -143,17 +150,70 @@ const BattleScene = {
 
   step() {
     if (this.index >= this.timeline.length) return this.finish();
+    const item = (this.pacing && this.pacing.items[this.index]) || { scale: 1 };
     const ev = this.timeline[this.index++];
+    // 付随演出（字幕・光・カットイン）もこのイベントの倍率で伸縮させる
+    this.eventScale = item.scale;
     const dur = this.render(ev);
-    const wait = Math.max(60, (dur * this.autoScale) / this.speed);
+    const wait = Math.max(60, (dur * item.scale) / this.speed);
     this.timers.push(setTimeout(() => this.step(), wait));
   },
 
   durationOf(ev) {
     if (ev.type === "battle_start" && this.isFinalBattle) return 1450;
-    return this.SPECIAL_DURATION[ev.type] !== undefined
+    const base = this.SPECIAL_DURATION[ev.type] !== undefined
       ? this.SPECIAL_DURATION[ev.type]
       : this.DURATION[ev.emphasis] || 300;
+    return Math.round(base * this.magnitude(ev));
+  },
+
+  // 事件の大きさに応じた延長倍率。加算で積む。
+  magnitude(ev) {
+    let mult = 1;
+    // 深いCHAINほど1段を長く見せる（最大+50%）
+    if (ev.chainDepth >= 3) mult += Math.min(0.5, 0.1 * (ev.chainDepth - 2));
+    // 蹂躙・粉砕+40%、消滅・魔王級+60%
+    if (ev.type === "overkill") mult += 0.2 * (ev.emphasis || 0);
+    // カットインを読み切れる尺にする
+    if (ev.type === "synergy" && ev.firstDiscovery) mult += 0.45;
+    if (ev.type === "result" && ev.reversal) mult += 0.65;
+    if (ev.type === "death" && ev.permanent) mult += 0.5;
+    return mult;
+  },
+
+  // 「縮めてはいけない事件か」。hasChildren は plan() が集計して渡す。
+  isProtected(ev, hasChildren) {
+    if (this.PROTECTED_TYPES.has(ev.type)) return true;
+    if (hasChildren) return true;                 // 何かが反応した起点（撃破攻撃は death が子）
+    if (ev.type === "death") return !!ev.permanent;
+    if (ev.type === "attack" || ev.type === "splash") return ev.chainDepth >= 3;
+    return ev.chainDepth >= 2;
+  },
+
+  // タイムライン全体の尺の計画。純関数（DOMを触らない）なのでテストから直接呼べる。
+  plan(timeline) {
+    const events = timeline || [];
+    const parents = new Set(events.filter(e => e.parentEventId).map(e => e.parentEventId));
+    const items = events.map(ev => ({
+      duration: this.durationOf(ev),
+      protected: this.isProtected(ev, !!(ev.eventId && parents.has(ev.eventId))),
+      scale: 1
+    }));
+    const sum = (list, fn) => list.reduce((total, item) => total + fn(item), 0);
+    const protectedMs = sum(items.filter(i => i.protected), i => i.duration);
+    const compressibleMs = sum(items.filter(i => !i.protected), i => i.duration);
+    const rawMs = protectedMs + compressibleMs;
+    let compressScale = 1;
+    if (rawMs > this.BUDGET_MS && compressibleMs > 0) {
+      // 保護区間だけで予算を超える戦闘は、圧縮対象を最小まで縮めたうえで予算超過を許す
+      const room = (this.BUDGET_MS - protectedMs) / compressibleMs;
+      compressScale = Math.min(1, Math.max(this.MIN_COMPRESS, room));
+    }
+    for (const item of items) if (!item.protected) item.scale = compressScale;
+    return {
+      items, rawMs, protectedMs, compressibleMs, compressScale,
+      plannedMs: sum(items, i => i.duration * i.scale)
+    };
   },
 
   // 1イベントを描画し、次までの尺(ms)を返す
@@ -349,7 +409,7 @@ const BattleScene = {
     c.classList.remove("show");
     void c.offsetWidth;
     c.classList.add("show");
-    this.timers.push(setTimeout(() => c.classList.remove("show"), ((duration || 600) * this.autoScale) / this.speed));
+    this.timers.push(setTimeout(() => c.classList.remove("show"), ((duration || 600) * this.eventScale) / this.speed));
   },
 
   battleIntro() {
@@ -358,7 +418,7 @@ const BattleScene = {
     intro.classList.remove("show");
     void intro.offsetWidth;
     intro.classList.add("show");
-    this.timers.push(setTimeout(() => intro.classList.remove("show"), (1400 * this.autoScale) / this.speed));
+    this.timers.push(setTimeout(() => intro.classList.remove("show"), (1400 * this.eventScale) / this.speed));
   },
 
   roundBanner(round) {
@@ -372,7 +432,7 @@ const BattleScene = {
     b.classList.remove("show");
     void b.offsetWidth;
     b.classList.add("show");
-    this.timers.push(setTimeout(() => b.classList.remove("show"), (1080 * this.autoScale) / this.speed));
+    this.timers.push(setTimeout(() => b.classList.remove("show"), (1080 * this.eventScale) / this.speed));
   },
 
   pulse(kind) {
@@ -394,7 +454,7 @@ const BattleScene = {
     s.classList.add("fx-active");
     this.timers.push(setTimeout(() => {
       s.classList.remove("fx-active", cls);
-    }, (1450 * this.autoScale) / this.speed));
+    }, (1450 * this.eventScale) / this.speed));
   },
 
   // ダメージ数字を浮かせる。カード内に絶対配置するので座標計測は不要。
@@ -430,7 +490,7 @@ const BattleScene = {
     c.classList.remove("show");
     void c.offsetWidth;
     c.classList.add("show");
-    this.timers.push(setTimeout(() => c.classList.remove("show"), (1300 * this.autoScale) / this.speed));
+    this.timers.push(setTimeout(() => c.classList.remove("show"), (1300 * this.eventScale) / this.speed));
   },
 
   banner(victory) {

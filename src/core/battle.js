@@ -19,7 +19,7 @@
 //   attack       { fromId, toId, dmg, hp, maxHp, dead, traits:[名前] }
 //   splash       { fromId, toId, dmg, hp, maxHp, dead, label }  火球などの追撃
 //   survive      { unitId, hp, maxHp }              白骨などで致死を耐えた
-//   death        { unitId }
+//   death        { unitId, permanent? }             permanent=味方が蘇生せず永久退場した
 //   overkill     { fromId,toId,excess,percent,rank }  致死時の余剰ダメージ
 //   revive       { unitId, hp, maxHp }              蘇生（状態差分から自動検出）
 //   summon       { unit:Snap, sourceUnitId }         戦闘専用ユニットの追加
@@ -28,7 +28,7 @@
 //   resource_forfeit { sourceId,resource,amount,label }  条件喪失による予約没収
 //   note         { }                                特性の発動などテキストのみ
 //   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
-//   result       { victory }
+//   result       { victory, reversal }              reversal=総HP3割以下から勝った
 // ───────────────────────────────────────────────────────
 const Battle = {
   MAX_ROUNDS: 30,
@@ -543,12 +543,19 @@ const Battle = {
         text: `　${unit.name}の最終戦死により【殉職手当】${unit.flags.martyrGold}Gを没収`, cls: "loot"
       }, death || null);
     }
+    // ここから下は「重要度の印」だけを付ける。計算・勝敗・乱数には一切関与しない。
+    // 描画側（BattleScene）が「縮めてはいけない事件か」を判別するために読む。
+    for (const unit of playerUnits) {
+      if (unit.flags.summoned || unit.alive) continue;   // 召喚物は軍団員ではない
+      const death = [...timeline].reverse().find(e => e.type === "death" && e.unitId === unit.id);
+      if (death) death.permanent = true;                 // 蘇生で戻らなかった＝軍団からの永久退場
+    }
     const resultText = wiped(enemyUnits) && victory ? "敵軍を全滅させた！ 魔王軍の勝利！"
       : wiped(playerUnits) ? "魔王軍は全滅した……"
       : victory ? "長期戦の末、判定勝ち！ 勇者軍は撤退した。"
       : "長期戦の末、判定負け……魔王軍は敗走した。";
     emit("result", {
-      victory, emphasis: 3,
+      victory, reversal: this.detectReversal(timeline, victory), emphasis: 3,
       text: resultText, cls: victory ? "result-win" : "result-lose"
     });
 
@@ -569,6 +576,39 @@ const Battle = {
       summonCount: timeline.filter(e => e.type === "summon").length,
       resourceChanges: this.summarizeResourceChanges(timeline)
     };
+  },
+
+  // 「追い詰められてからの勝ち」だったかを、戦闘後にタイムラインから導出する。
+  // summarizeNearMiss() と同じ再生方式で、戦闘中に別状態を持ち回らない。
+  // victory を省略した場合は timeline の result から読む（手組みタイムライン用）。
+  detectReversal(timeline, victory) {
+    const events = timeline || [];
+    if (victory === undefined) {
+      const result = [...events].reverse().find(e => e.type === "result");
+      victory = !!(result && result.victory);
+    }
+    if (!victory) return false;
+
+    const start = events.find(e => e.type === "battle_start");
+    const allies = (start && start.player) || [];   // 召喚物は開始時にいないので自然に除外される
+    const maxHp = allies.reduce((sum, u) => sum + u.maxHp, 0);
+    if (!allies.length || maxHp <= 0) return false;
+
+    const hp = new Map(allies.map(u => [u.id, u.hp]));
+    const setHp = (id, value) => {
+      if (hp.has(id) && Number.isFinite(value)) hp.set(id, Math.max(0, value));
+    };
+    const ratio = () => [...hp.values()].reduce((sum, value) => sum + value, 0) / maxHp;
+    let lowest = ratio();
+    for (const event of events) {
+      if (event.type === "attack" || event.type === "splash") setHp(event.toId, event.hp);
+      else if (event.type === "heal" || event.type === "revive" || event.type === "survive") setHp(event.unitId, event.hp);
+      lowest = Math.min(lowest, ratio());
+    }
+    // 総HPの3割以下まで追い込まれてからの勝ちを「逆転」と呼ぶ。
+    // 全滅救済（総HP0）からの勝利もこの条件に自然に含まれる。
+    const REVERSAL_HP_RATIO = 0.30;
+    return lowest <= REVERSAL_HP_RATIO;
   },
 
   // 因果メタデータだけからCHAINを集計する。戦闘計算へ別状態を持ち込まない。

@@ -32,7 +32,7 @@
 - 作戦別の報酬・給与・差引見込の表示
 - 求人の出し直し（1回無料、以降 2G→4G→8G）
 - 自動戦闘＋イベントタイムライン方式の演出（踏み込み・被弾・カットイン・画面揺れ）
-- ラウンド区切り・攻撃者表示・シナジー別の光・最終決戦演出（x1は観戦用、目安45秒）
+- ラウンド区切り・攻撃者表示・シナジー別の光・最終決戦演出（x1は観戦用、予算45秒）
 - 効果音21種（うち衝撃WAV12種＋モルモ発話音）、音量・ミュート設定
 - 通常進行と戦闘の独立BGM（編成・昇進・未払い・忠誠・警戒度の演奏レイヤーは共通）
 - 戦果パネル（貢献度の棒グラフ、殊勲/盾役/戦死バッジ、戦闘後の一言）
@@ -71,6 +71,11 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
 
 `emphasis`（0〜3）は「どれくらい重要か」だけを伝え、**尺（何ms見せるか）は描画側が決める**。
 この分担を守っている限り、Canvas版やネイティブ版へ戦闘シーンだけ差し替えられる。
+
+`death.permanent` / `result.reversal` / `synergy.firstDiscovery` も同じ性格の**重要度の印**である。
+描画側の圧縮判定（`BattleScene.isProtected` / `magnitude`）だけが読み、**戦闘計算には一切使わない**。
+`permanent` と `reversal` は勝敗確定後にタイムラインから導出して付け、`firstDiscovery` は
+`Game.recordDiscoveredSynergies()` が登録時に付ける。増やすときも同じ作法（計算に混ぜない）を守ること。
 
 ### 2-2. アニメーションは `transform` と `opacity` だけ
 
@@ -209,6 +214,36 @@ Pagesの反映漏れやキャッシュではなく、BGMのコード側の問題
 ---
 
 ## 4. 直近で完了したこと
+
+### 戦闘の尺は事件の大きさに比例（2026-09-02完了）
+
+`GAME_DESIGN_PRINCIPLES.md` 第3節の契約。仕様は `docs/BATTLE_PACING_SPEC.md`。
+旧実装は「総尺45秒超で全イベントを一律加速」で、契約と向きが逆だった（見せ場ほど速く流れる）。
+
+- core は**印だけ**を足した。`death.permanent`（味方が蘇生せず退場）、`result.reversal`
+  （総HP3割以下から勝った・`Battle.detectReversal()` がタイムラインから導出）、
+  `synergy.firstDiscovery`（そのランで初めて見たシナジー）。計算・乱数・勝敗は不変。
+- UI は `BattleScene.plan(timeline)`（純関数）が保護区間と圧縮対象を分け、
+  予算 `BUDGET_MS` 45秒を超えた分を圧縮対象からだけ削る（下限 `MIN_COMPRESS` 0.45）。
+  保護は `PROTECTED_TYPES`・子を持つ起点・`permanent` な死亡・深度3以上の攻撃。
+  `magnitude()` が深いCHAIN・OVERKILL・初発見・逆転・永久戦死を延長する。
+- 予算は上限ではない。保護区間だけで45秒を超える戦闘は、超えたまま見せる。
+
+測定（`node tools/analysis-duration.js` 200ラン、x1平均・段階1→8）:
+
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 |
+|---|---|---|---|---|---|---|---|---|
+| 実装前 | 13.3s | 15.9s | 25.4s | 26.3s | 33.3s | 37.0s | 39.7s | 44.4s |
+| 実装後 | 13.8s | 16.1s | 25.4s | 27.7s | 34.0s | 38.6s | 40.7s | 45.3s |
+| 保護占有 | 51% | 55% | 46% | 46% | 47% | 49% | 52% | 61% |
+
+序盤の +0.5秒は延長規則によるもので、内訳は OVERKILL +0.37秒・初発見 +0.06秒。
+退屈な区間が伸びたのではなく、序盤にも起きる事件が大きさどおりに見えるようになった。
+終盤の最長が 45秒 → 65秒 に伸びたのは、保護区間だけで予算を超える乱戦を許した結果である。
+
+検証: `node tools/test-battle-pacing.js`（10項目。`isProtected` を常に false にすると
+項目3と6が落ちることを確認済み）、`tools/browser-tests/pacing.js`、全Nodeテスト、
+`node tools/sim.js 50`（クリア率 4〜58%の帯に変化なし。計算経路を触っていないので当然）。
 
 ### 部門・食料・施設由来の事件（P3・完了）
 
@@ -580,8 +615,8 @@ BGMは実装済み（上の「BGM『魔王軍の行進曲』」）。
 
 1. **戦闘の尺は事件の大きさに比例する**（第3節）。通常攻撃と無反応区間を優先して圧縮し、
    CHAIN・OVERKILL・初発見・逆転・永久戦死は圧縮しない。
-   → 現行の `BattleScene` の自動圧縮（総尺45秒超で一律に速度を上げる）は向きが逆。
-   `chainDepth` と余剰ダメージを `emphasis` へ反映し、圧縮対象を通常攻撃に限る改修が必要
+   → **実装済み（2026-09-02、4節「戦闘の尺は事件の大きさに比例」参照）**。
+   一律加速をやめ、`BattleScene.plan()` が保護区間と圧縮対象を分けて計画する
 2. **人材本人の能力・発火条件・効果は公開する**（第7節）。隠すのは組み合わせの結果と壊れ方だけ。
    表示は「トリガー：効果」、詳細数値と例外は詳細表示へ。
    → README「条件はゲーム内に一覧表示していない」と `synergies.js` 冒頭コメントの
@@ -861,7 +896,13 @@ BGMが軍団の状態を正しく演奏へ翻訳しているか検証する場�
 node tools/test-music.js
 ```
 
-### ブラウザ回帰テスト（19本）
+尺が事件の大きさに比例しているか（保護対象・圧縮対象・延長規則）を検証する場合:
+
+```bash
+node tools/test-battle-pacing.js
+```
+
+### ブラウザ回帰テスト（20本）
 
 ```bash
 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright   # 初回のみ
@@ -906,6 +947,7 @@ GAME=$(pwd) CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
 | `tier0` | 決着表示の重なり、解雇ボタンの間隔、ヒント文言 |
 | `scene`/`cutin` | 戦闘演出とシナジーのカットイン |
 | `effects` | ラウンド区切り、攻撃者表示、最終決戦、観戦テンポ |
+| `pacing` | 事件は縮めず通常攻撃だけを圧縮すること、個別倍率でも最後まで再生できること |
 | `sound` | 最初の操作での音声解禁、音量・ミュート保存 |
 | `music` | BGMの演奏開始、編成・場面への追従、未払いの反映、オンオフ保存 |
 | `mormo` | 全画面報告、タイプ表示、発話音、タップ／キー操作、作戦から編成への遷移 |
@@ -921,7 +963,7 @@ GAME=$(pwd) CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
 | `analysis-casualty.js` | 勝利時の戦死数の分布 |
 | `analysis-racecheck.js` | 純粋種族軍 vs 混成軍の勝率を直接比較 |
 | `analysis-loyalty.js` | 未払いの発生率と離脱率 |
-| `analysis-duration.js` | 戦闘演出の実尺（ステージ別） |
+| `analysis-duration.js` | 戦闘演出の実尺と、尺のうち「縮めない事件」が占める割合（ステージ別） |
 | `analysis-events.js` | ハプニング16種の出現と解決の検証 |
 | `test-labor-events.js` | 給与抗議→ストライキ行進の予約・解決・配属変更・旧セーブ移行 |
 | `test-enemy-formations.js` | 敵の代替隊列、戦力帯、事前開示、戻る操作で再抽選されないこと |

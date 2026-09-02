@@ -45,7 +45,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   const timing = await page.evaluate(() => ({
     round: BattleScene.SPECIAL_DURATION.round_start,
     attack: BattleScene.DURATION[1],
-    cap: BattleScene.AUTO_CAP_MS
+    cap: BattleScene.BUDGET_MS
   }));
   if (timing.round < 1000 || timing.attack < 600 || timing.cap < 40000) errors.push('観戦テンポ設定が短すぎる');
 

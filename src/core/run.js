@@ -1199,11 +1199,13 @@ const Game = {
   },
 
   recordDiscoveredSynergies(result) {
-    const found = (result.timeline || []).filter(e => e.type === "synergy" && e.id).map(e => e.id);
-    for (const id of found) {
-      if (SYNERGIES.some(s => s.id === id) && !this.state.discoveredSynergyIds.includes(id)) {
-        this.state.discoveredSynergyIds.push(id);
-      }
+    for (const event of (result.timeline || []).filter(e => e.type === "synergy" && e.id)) {
+      if (!SYNERGIES.some(s => s.id === event.id)) continue;
+      if (this.state.discoveredSynergyIds.includes(event.id)) continue;
+      this.state.discoveredSynergyIds.push(event.id);
+      // 重要度の印。このランで初めて見たシナジーは描画側で尺を縮めない。
+      // 「初めて」はラン内の基準（魔界史全体にすると2代目以降ほぼ祝えなくなる）。
+      event.firstDiscovery = true;
     }
   },
 
