@@ -64,6 +64,39 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     .map(r => r.querySelectorAll('.contrib-badge').length));
   if (perRow.some(n => n > 6)) errors.push('1行のバッジが多すぎる: ' + perRow.join(','));
 
+  // バッジが増えても名前が読めること（守りたい性質は「誰が働いたか分かる」こと）。
+  // 以前はバッジと名前が同じ行を取り合い、働いた者ほど名前が消えていた（幅1pxまで潰れていた）。
+  const nameFit = await page.evaluate(() => {
+    const rows = [
+      { id: 'x0', name: '古参のゴブ太', race: 'ゴブリン', dealt: 120, taken: 20, kills: 3, maxOverkill: 420,
+        survived: true, died: false, resources: { gold: 5, soul: 1 }, traitTriggers: 6, revivesGiven: 1,
+        selfRevives: 0, healed: 0, voice: 'やってやったぜ！' },
+      { id: 'x1', name: 'スライムのぬる子', race: 'スライム', dealt: 8, taken: 90, kills: 0, maxOverkill: 0,
+        survived: false, died: true, resources: { gold: -2 }, traitTriggers: 1, revivesGiven: 0,
+        selfRevives: 1, healed: 4 },
+      { id: 'x2', name: 'ホネオ', race: '骸骨兵', dealt: 0, taken: 0, kills: 0, maxOverkill: 0,
+        survived: true, died: false, resources: {}, traitTriggers: 0, revivesGiven: 0, selfRevives: 0, healed: 0 }
+    ];
+    UI.set(UI.contributionPanel(rows));
+    return Array.from(document.querySelectorAll('.contrib-row')).map(row => {
+      const name = row.querySelector('.contrib-name');
+      const bar = row.querySelector('.contrib-bar');
+      return {
+        text: name.textContent,
+        clipped: name.scrollWidth > name.clientWidth + 1,
+        badges: row.querySelectorAll('.contrib-badge').length,
+        barWidth: Math.round(bar.getBoundingClientRect().width)
+      };
+    });
+  });
+  for (const row of nameFit) {
+    if (row.clipped) errors.push(`バッジ${row.badges}個で名前が省略される: ${row.text}`);
+  }
+  if (nameFit[0].badges < 4) errors.push('バッジが増える行を作れていない: ' + nameFit[0].badges);
+  if (nameFit.some(row => row.barWidth < 200)) {
+    errors.push('貢献バーが細くなっている: ' + nameFit.map(r => r.barWidth).join(','));
+  }
+
   // 敗北画面でも同じ表示契約
   const loseText = await setup(false);
   if (!await page.locator('.breakthrough-panel').count()) errors.push('敗北画面に「今回の壊れ方」パネルが無い');

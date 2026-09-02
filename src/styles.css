@@ -832,12 +832,17 @@ button.wide { width: 100%; }
 /* ── 戦果パネル（貢献度）── */
 .contrib-list { display: flex; flex-direction: column; gap: 6px; }
 .contrib-row {
+  /* 名前と数字を1行目、バッジを2行目、棒を3行目に置く。
+     バッジと名前を同じ行で取り合わせると、働いた者ほど名前が消える
+     （実測で名前の幅が1pxまで潰れていた）。読ませたいのは「誰が」と「棒の長さ」なので、
+     行を分けて両方を必ず読めるようにする。 */
   display: grid;
   grid-template-columns: auto minmax(0,1fr) auto;
   grid-template-areas:
-    "icon name  badges"
-    "bar  bar   num"
-    "voice voice voice";
+    "icon   name   num"
+    "badges badges badges"
+    "bar    bar    bar"
+    "voice  voice  voice";
   align-items: center;
   column-gap: 8px;
   row-gap: 4px;
@@ -856,10 +861,8 @@ button.wide { width: 100%; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.contrib-badges {
-  grid-area: badges; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;
-  max-width: 62%;   /* バッジが増えても名前を潰さない。増えたぶんは折り返す */
-}
+.contrib-badges { grid-area: badges; display: flex; gap: 4px; flex-wrap: wrap; }
+.contrib-badges:empty { display: none; }
 .contrib-badge {
   font-size: 11px;
   border-radius: 5px;
