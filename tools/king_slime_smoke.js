@@ -29,6 +29,8 @@ new Function(source + `
     gold: 10, roster: [makeSlime(1), makeSlime(2), makeSlime(3)], activeUids: [1, 2, 3],
     applicants: [], phase: "formation", uidSeq: 4, selectedMission: null
   });
+  // 合体は魔王の選択になった（自動ではない）。ここは合体経路を見るので明示的に選ぶ
+  if (!Game.setKingSlimeMerge(true)) throw new Error("スライム3体なのに合体を選べない");
   const output = Game.deploy();
   const king = output.result.contribution.find(c => c.tplId === "king_slime");
   if (!king || !king.voice) throw new Error("king slime voice missing");

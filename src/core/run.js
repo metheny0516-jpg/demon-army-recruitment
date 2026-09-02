@@ -62,6 +62,7 @@ const Game = {
       maxArmySize: 0,
       mercenaryOffers: [],
       mercenaries: [],
+      kingSlimeMerge: true,   // 出撃時に合体するか（既定は合体。編成画面で断れる）
       maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
       maxOverkill: 0,     // 同その2。%で持つ
       raceCounts: {},
@@ -169,7 +170,7 @@ const Game = {
     const defaults = {
       demonKingId: "standard",
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0,
-      maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
+      maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
@@ -739,6 +740,39 @@ const Game = {
     return true;
   },
 
+  // 合体の可否と、合体したらどうなるかの見込み。編成画面が判断材料に使う。
+  kingSlimePreview() {
+    const slimes = this.activeRoster().filter(m => m.race === "スライム").slice(0, 3);
+    if (slimes.length < 3) return null;
+    return {
+      members: slimes.map(m => ({ uid: m.uid, name: m.name })),
+      before: {
+        count: slimes.length,
+        hp: slimes.reduce((s, m) => s + m.hp, 0),
+        atk: slimes.reduce((s, m) => s + m.atk, 0),
+        salary: slimes.reduce((s, m) => s + m.salary, 0)
+      },
+      after: {
+        count: 1,
+        hp: Math.round(slimes.reduce((s, m) => s + m.hp, 0) * 1.2),
+        atk: slimes.reduce((s, m) => s + m.atk, 0),
+        def: Math.max(...slimes.map(m => m.def)) + 2,
+        spd: Math.round(slimes.reduce((s, m) => s + m.spd, 0) / 3),
+        salary: Math.max(1, slimes.reduce((s, m) => s + m.salary, 0) - 2)
+      }
+    };
+  },
+
+  setKingSlimeMerge(on) {
+    const st = this.state;
+    if (!st) return false;
+    if (!this.kingSlimePreview()) return false;   // 対象がいなければ設定しない
+    st.kingSlimeMerge = !!on;
+    this.kpi("formationChanged");
+    this.save();
+    return true;
+  },
+
   // 戦闘へ出す形にする。城の補正は自軍と同じく効くが、給与も戦功も持たない。
   preparedMercenaries() {
     const facility = this.facilityInfo();
@@ -873,10 +907,14 @@ const Game = {
     // 支払い後に合体するスライムも含め、画面で提示した給与総額と実額を一致させる。
     if (!openingBattle && !this.preparePayrollForBattle(notes)) return null;
 
-    // キングスライム合体（出撃時・永続）
+    // キングスライム合体（出撃時・永続）。既定では従来どおり合体するが、**断れる**。
+    // 3体が1体になるので、硬く重くなる代わりに頭数で伸びるもの（低賃金大量採用・
+    // 群れの本能・出撃枠の圧）を失う。どちらが得かは編成によるので判断へ返した。
+    // 既定を「合体しない」にして測ったらスライム統一のクリア率が48%→29%へ落ちたので、
+    // 既定は合体のままにしてある（黙って弱くしない）。
     const kingSyn = SYNERGIES.find(s => s.id === "king_slime");
     let kingMerged = false;
-    if (kingSyn && kingSyn.check(this.rosterAsUnits())) {
+    if (kingSyn && st.kingSlimeMerge !== false && kingSyn.check(this.rosterAsUnits())) {
       kingMerged = this.mergeKingSlime(notes);
     }
 

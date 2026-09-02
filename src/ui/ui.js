@@ -371,6 +371,27 @@ const UI = {
     return `<div class="syn-next">▲ ${how} <b>${gain}</b></div>`;
   },
 
+  // 合体は「強くなる代わりに数を失う」取引。自動でやると罠になるので選ばせる。
+  kingSlimePanel() {
+    const preview = Game.kingSlimePreview();
+    if (!preview) return "";
+    const on = Game.state.kingSlimeMerge !== false;
+    return `<div class="panel king-panel ${on ? "on" : ""}">
+      <h3>👑 キングスライム合体 <span class="muted">— スライム3体が1体になる（不可逆）</span></h3>
+      <div class="king-compare">
+        <div><b>${preview.before.count}体のまま</b>
+          <span class="muted">HP計 ${preview.before.hp}・攻計 ${preview.before.atk}・給与 ${preview.before.salary}G</span>
+          <div class="muted">頭数で伸びるもの（低賃金大量採用・群れの本能・出撃枠の圧）を保てる</div></div>
+        <div><b>合体して1体</b>
+          <span class="muted">HP ${preview.after.hp}・攻 ${preview.after.atk}・防 ${preview.after.def}・速 ${preview.after.spd}・給与 ${preview.after.salary}G</span>
+          <div class="muted">硬く重くなるが、頭数は3体ぶん減る</div></div>
+      </div>
+      <button class="small ${on ? "primary" : ""}" data-action="kingmerge" data-on="${on ? "0" : "1"}">
+        ${on ? "✓ 出撃時に合体する（やめる）" : "合体しない（3体のまま戦う）"}</button>
+      <div class="muted">対象：${preview.members.map(m => U.esc(m.name)).join("・")}</div>
+    </div>`;
+  },
+
   // 稼いだ金貨の出口。出撃5枠を壊さず「その戦闘だけの6体目」を買う。
   // 同族を雇えば種族シナジーの頭数も増えるので、硬い者と噛み合う者のどちらを取るかが判断になる。
   mercenaryPanel() {
@@ -666,6 +687,7 @@ const UI = {
         <div class="synergy-hint">最初の味方死亡 → ラウンド終了時に骸骨従者を1体召喚</div></div>` : ""}
       ${this.payrollPanel()}
       ${opening ? "" : this.mercenaryPanel()}
+      ${this.kingSlimePanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
       <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
       <div class="army-section reserve-section"><h3>⚔ 戦闘部門・控え ${reserves.length}</h3>

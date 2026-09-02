@@ -233,6 +233,10 @@ const Battle = {
       });
     }
     for (const s of activeSyn) {
+      // merge型（キングスライム合体）は「合体した戦闘」でだけ run.js がイベントを差し込む。
+      // 条件を満たしているだけで「合体する！」と出すと、合体していないのに宣言することになる
+      // （合体を魔王の選択にした時点でそうなった）。
+      if (s.type === "merge") continue;
       emit("synergy", {
         id: s.id, name: s.name, desc: s.desc, emphasis: 3,
         text: `シナジー発動【${s.name}】 ${s.desc}`, cls: "synergy"
@@ -574,7 +578,8 @@ const Battle = {
       // 旧来のテキストログ（タイムラインから導出）
       log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
       rounds: Math.min(round, this.MAX_ROUNDS),
-      activeSynergies: activeSyn.map(s => s.name),
+      // merge型は「合体した戦闘」でだけ run.js が名前を差し込む（条件を満たしただけでは載せない）
+      activeSynergies: activeSyn.filter(s => s.type !== "merge").map(s => s.name),
       incidents: timeline.filter(e => e.type === "incident").map(e => ({ id: e.id, name: e.name, text: e.text })),
       // 誰がどれだけ働いたか（結果画面のMVP表示用）。新しい状態を戦闘中に
       // 持ち回る必要はなく、既に確定したタイムラインから導出するだけでよい。

@@ -206,6 +206,10 @@ const App = {
         Game.assignDepartment(Number(data.uid), data.department);
         return this.render();
 
+      case "kingmerge":
+        Game.setKingSlimeMerge(data.on === "1");
+        return this.render();
+
       case "hiremerc":
         Game.hireMercenary(Number(data.index));
         return this.render();
