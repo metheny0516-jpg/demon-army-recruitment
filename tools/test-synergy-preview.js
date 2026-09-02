@@ -110,4 +110,21 @@ const snapshot = JSON.stringify(untouched);
 Synergy.traitEffects(untouched);
 assert(JSON.stringify(untouched) === snapshot, '特性の測定も編成を書き換えない');
 
+// ── 8. 採用前に既存軍団との発火経路を読める ──────────────────
+const looter = { uid: 201, name: '盗賊', race: 'ゴブリン', traits: ['pickpocket'], tags: [] };
+const greedyApplicant = { uid: 202, name: '欲張り', race: 'インプ', traits: ['greedy'], tags: [] };
+const greedLinks = Synergy.connections(greedyApplicant, [looter]);
+assert(greedLinks.some(link => link.from === '追い剥ぎ' && link.signal === '金貨獲得' && link.to === '強欲'),
+  '既存の追い剥ぎ → 金貨獲得 → 応募者の強欲を採用前に示す');
+const reverseLinks = Synergy.connections(looter, [greedyApplicant]);
+assert(reverseLinks.some(link => link.from === '追い剥ぎ' && link.signal === '金貨獲得' && link.to === '強欲'),
+  '応募者が起点を作り、既存軍団が反応する逆向きの接続も示す');
+const necro = { uid: 203, name: 'ネクロ', race: '死霊術師', traits: ['necromancy', 'gravekeeper'], tags: ['caster'] };
+const harvester = { uid: 204, name: '骨', race: '骸骨兵', traits: ['soul_harvest'], tags: ['undead'] };
+const deathLinks = Synergy.connections(harvester, [necro]);
+assert(deathLinks.some(link => link.signal === '蘇生' && link.from === '死霊術' && link.to === '魂の徴収'),
+  '死霊術 → 蘇生 → 魂の徴収の異種族接続を示す');
+assert(Synergy.connections({ traits: ['coward'] }, [looter]).length === 0,
+  '直接つながらない能力を無理にシナジー扱いしない');
+
 console.log('シナジー予告テスト完了');

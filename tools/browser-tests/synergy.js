@@ -16,6 +16,28 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     const btn = page.locator('[data-action="hire"]:not([disabled])').first();
     if (await btn.count()) await btn.click();
   }
+
+  // 採用画面で、応募者と現在軍団の能力がどうつながるかを読めること。
+  const recruitText = await page.evaluate(() => {
+    const make = (id, uid, traits) => {
+      const t = MONSTER_TEMPLATES.find(row => row.id === id);
+      return { uid, tplId: id, name: id + uid, race: t.race, job: '', hp: t.base.hp, atk: t.base.atk,
+        def: t.base.def, spd: t.base.spd, salary: t.salary[0], loyalty: 70, merit: 0, rankId: 'soldier',
+        traits, tags: (t.tags || []).slice(), quote: '', unpaid: false, department: 'combat' };
+    };
+    Game.state.roster = [make('goblin', 501, ['pickpocket'])];
+    Game.state.activeUids = [501];
+    Game.state.applicants = [make('imp', 502, ['greedy'])];
+    Game.state.hiresLeft = 1;
+    Game.state.phase = 'recruit';
+    App.render();
+    return document.body.innerText;
+  });
+  if (!recruitText.includes('今の軍団との接続')) errors.push('応募者カードに接続見出しが出ない');
+  if (!/追い剥ぎ.*金貨獲得.*強欲/s.test(recruitText)) {
+    errors.push('採用前に「追い剥ぎ → 金貨獲得 → 強欲」が読めない');
+  }
+
   await enterMissionPhase(page);
   await page.locator('[data-action="missionpick"]').first().click();
 

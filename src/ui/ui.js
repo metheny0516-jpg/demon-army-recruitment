@@ -105,6 +105,14 @@ const UI = {
     }</dl>`;
   },
 
+  applicantConnections(m) {
+    const rows = Synergy.connections(m, Game.state.roster).slice(0, 3);
+    if (!rows.length) return `<div class="applicant-links muted">現在の軍団との直接接続はまだない</div>`;
+    return `<div class="applicant-links"><b>🔗 今の軍団との接続</b>${rows.map(row =>
+      `<div><span>${U.esc(row.from)}</span><i>→ ${U.esc(row.signal)} →</i><span>${U.esc(row.to)}</span>${
+        row.unitName ? `<small>（${U.esc(row.unitName)}）</small>` : ""}</div>`).join("")}</div>`;
+  },
+
   monsterCard(m, opts) {
     opts = opts || {};
     const unpaid = m.unpaid ? `<span class="unpaid">給与未払い</span>` : "";
@@ -141,6 +149,7 @@ const UI = {
       </div>
       ${this.aptitudeHtml(m)}
       <div class="traits">${this.traitHtml(m.traits)}</div>
+      ${opts.resume ? this.applicantConnections(m) : ""}
       ${rank.id === "general" ? `<div class="general-ability">⚔ 将軍の号令：出撃中、味方全員の与ダメージ+15%</div>` : ""}
       ${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}
       ${opts.footer || ""}

@@ -87,6 +87,43 @@ const Synergy = {
     return effects;
   },
 
+  // 採用画面の「この人材を今の軍団へ入れたら何が起きるか」。
+  // links は戦闘計算ではなく公開情報の接続語彙であり、効果量を二重管理しない。
+  // 応募者が作る事件を既存人材が受ける経路と、その逆だけを短く返す。
+  connections(candidate, roster) {
+    const traitsOf = unit => (unit && unit.traits || []).map(id => ({ id, trait: TRAITS[id] }))
+      .filter(entry => entry.trait && entry.trait.links);
+    const candidateTraits = traitsOf(candidate);
+    const armyTraits = (roster || []).flatMap(unit => traitsOf(unit).map(entry => ({ ...entry, unit })));
+    const rows = [];
+    const seen = new Set();
+    const add = (fromName, signal, toName, unitName) => {
+      const key = `${fromName}|${signal}|${toName}|${unitName || ""}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      rows.push({ from: fromName, signal, to: toName, unitName: unitName || null });
+    };
+    for (const source of candidateTraits) {
+      for (const signal of source.trait.links.emits || []) {
+        for (const receiver of armyTraits) {
+          if ((receiver.trait.links.reacts || []).includes(signal)) {
+            add(source.trait.name, signal, receiver.trait.name, receiver.unit.name);
+          }
+        }
+      }
+    }
+    for (const source of armyTraits) {
+      for (const signal of source.trait.links.emits || []) {
+        for (const receiver of candidateTraits) {
+          if ((receiver.trait.links.reacts || []).includes(signal)) {
+            add(source.trait.name, signal, receiver.trait.name, source.unit.name);
+          }
+        }
+      }
+    }
+    return rows;
+  },
+
   // 発動中なら「いまの効き目」と「もう1体増やしたとき／1体入れ替えたときの効き目」、
   // 未発動なら「あと何体で発動するか」を返す。すべて実測。
   // slots は出撃枠（省略時は無制限）。枠が埋まっているなら「増やす」ではなく

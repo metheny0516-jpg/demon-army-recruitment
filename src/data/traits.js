@@ -71,6 +71,7 @@ const TRAITS = {
   pickpocket: {
     name: "追い剥ぎ",
     desc: "自身が敵へ初めてダメージを与えたとき、勝利時に1Gを略奪",
+    links: { emits: ["金貨獲得"] },
     postAttack(ctx) {
       const u = ctx.attacker;
       if (ctx.dmg <= 0 || u.flags.pickpocketUsed) return;
@@ -81,6 +82,7 @@ const TRAITS = {
   greedy: {
     name: "強欲",
     desc: "戦闘中に金貨を得た連鎖で1回、威力70%の追加攻撃",
+    links: { reacts: ["金貨獲得"], emits: ["追加攻撃"] },
     onTriggeredEvents(ctx) {
       const gold = ctx.events.find(e => e.type === "resource_gain" && e.resource === "gold");
       if (!gold) return;
@@ -92,15 +94,18 @@ const TRAITS = {
   },
   big_eater: {
     name: "大食漢",
-    desc: "戦闘糧食を食べられた戦闘では与ダメージ+25%"
+    desc: "戦闘糧食を食べられた戦闘では与ダメージ+25%",
+    links: { reacts: ["食料消費"] }
   },
   demon_cook: {
     name: "魔界料理人",
-    desc: "戦闘糧食1消費につき、最も食欲旺盛な味方の与ダメージ+8%（最大80%）"
+    desc: "戦闘糧食1消費につき、最も食欲旺盛な味方の与ダメージ+8%（最大80%）",
+    links: { reacts: ["食料消費"], emits: ["食事強化"] }
   },
   hunger_demon: {
     name: "飢餓の悪魔",
-    desc: "戦闘糧食で食料が0になった瞬間、全軍与ダメージ×2・被ダメージ+30%"
+    desc: "戦闘糧食で食料が0になった瞬間、全軍与ダメージ×2・被ダメージ+30%",
+    links: { reacts: ["食料0"] }
   },
   tough_skin: {
     name: "硬皮",
@@ -171,6 +176,7 @@ const TRAITS = {
   necromancy: {
     name: "死霊術",
     desc: "ラウンド終了時、死亡した味方1体をHP50%で復活（1戦闘1回。死の軍勢で全快に）",
+    links: { reacts: ["味方死亡"], emits: ["蘇生", "アンデッド化"] },
     onRoundEnd(ctx) {
       const u = ctx.unit;
       if (!u.alive || u.flags.necroUsed) return;
@@ -188,15 +194,18 @@ const TRAITS = {
   },
   gravekeeper: {
     name: "墓守",
-    desc: "味方が初めて死亡するたび魂を1獲得（召喚物を除く）"
+    desc: "味方が初めて死亡するたび魂を1獲得（召喚物を除く）",
+    links: { reacts: ["味方死亡"], emits: ["魂獲得"] }
   },
   soul_harvest: {
     name: "魂の徴収",
-    desc: "味方の蘇生時、魂1を消費して生存中のアンデッド与ダメージ+20%（最大5回）"
+    desc: "味方の蘇生時、魂1を消費して生存中のアンデッド与ダメージ+20%（最大5回）",
+    links: { reacts: ["蘇生", "召喚", "魂獲得"], emits: ["アンデッド強化"] }
   },
   chain_massacre: {
     name: "連鎖虐殺",
-    desc: "100%以上OVERKILLした余剰ダメージの30%を次の敵へ伝播（最大3体）"
+    desc: "100%以上OVERKILLした余剰ダメージの30%を次の敵へ伝播（最大3体）",
+    links: { reacts: ["OVERKILL"], emits: ["伝播攻撃"] }
   },
   mischief: {
     name: "悪戯",

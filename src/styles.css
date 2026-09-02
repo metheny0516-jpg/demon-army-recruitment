@@ -1200,6 +1200,17 @@ button.wide { width: 100%; }
 .syn-reach { margin-top: 10px; }
 .syn-reach h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: normal; }
 
+/* 履歴書で「この人材を入れたら何がつながるか」を、能力名と共通事件の経路で示す */
+.applicant-links {
+  margin: 8px 0; padding: 7px 9px; border-radius: 7px;
+  background: rgba(30, 90, 60, .22); border: 1px solid rgba(100, 190, 135, .35);
+  font-size: 11px;
+}
+.applicant-links > b { display: block; color: #b8ffcf; margin-bottom: 3px; }
+.applicant-links > div { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.applicant-links i { color: #9ef0b8; font-style: normal; }
+.applicant-links small { color: var(--muted); }
+
 /* 魔界史の主要記録。勝敗・到達点の隣に2つだけ並べる */
 .record-highlights { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0 10px; }
 .record-highlights div { display: flex; flex-direction: column; }
