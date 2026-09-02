@@ -377,19 +377,23 @@ const UI = {
     const st = Game.state;
     const hired = st.mercenaries || [];
     const offers = Game.mercenaryOffers();
-    const cost = Game.mercenaryCost();
+    const base = Game.mercenaryBaseCost();
     const full = hired.length >= Game.MERCENARY_COSTS.length;
     const hiredHtml = hired.length
       ? `<div class="merc-hired">雇用中：${hired.map(m =>
           `<span class="merc-chip">${this.icon(m.race)} ${U.esc(m.name)}（${U.esc(m.race)}）${m.hiredFor}G</span>`).join("")}</div>`
       : "";
     const cards = full ? "" : offers.map((m, i) => {
+      const cost = Game.mercenaryCost(i);
+      const kin = Game.mercenaryKinCount(m.race);
       const afford = st.gold >= cost;
       return `<div class="merc-card">
         <div class="merc-name">${this.icon(m.race)} <b>${U.esc(m.name)}</b>
           <span class="muted">${U.esc(m.race)}／${U.esc(m.job)}</span></div>
         <div class="merc-stats">HP ${m.hp}・攻 ${m.atk}・防 ${m.def}・速 ${m.spd}</div>
         <div class="merc-traits">${this.traitHtml(m.traits)}</div>
+        ${cost < base ? `<div class="merc-kin">🤝 顔なじみ価格 ${base}G → <b>${cost}G</b>
+          <span class="muted">（出撃隊に${U.esc(m.race)}が${kin}体）</span></div>` : ""}
         <button class="small primary" data-action="hiremerc" data-index="${i}" ${afford ? "" : "disabled"}>
           ${afford ? `${cost}G で雇う` : `${cost}G 必要（所持 ${st.gold}G）`}</button>
       </div>`;
@@ -397,7 +401,7 @@ const UI = {
     return `<div class="panel merc-panel">
       <h3>🗡 傭兵市場 <span class="muted">— この戦闘だけの助っ人</span></h3>
       <div class="muted">出撃5枠の外から加わる。給与も戦功も持たず、戦闘が終われば去る。
-        ${full ? "これ以上は雇えない。" : `次の1名は ${cost}G。`}</div>
+        ${full ? "これ以上は雇えない。" : `次の1名は ${base}G（出撃隊に同じ種族がいるほど安くなる）。`}</div>
       ${hiredHtml}
       ${cards ? `<div class="merc-list">${cards}</div>` : ""}
     </div>`;

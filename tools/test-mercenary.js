@@ -44,27 +44,60 @@ assert(offers.length === Game.MERCENARY_OFFERS, `出撃前に傭兵候補が${Ga
 assert(offers.every(m => m.mercenary === true), '候補には傭兵の印が付く');
 assert(JSON.stringify(Game.mercenaryOffers()) === JSON.stringify(offers),
   '候補は作戦ごとに固定される（画面を描くたびに引き直さない）');
-assert(Game.mercenaryCost() === Game.MERCENARY_COSTS[0], '1人目の値段は定数どおり');
+assert(Game.mercenaryBaseCost() === Game.MERCENARY_COSTS[0], '1人目の値段は定数どおり');
 
 // ── 2. 雇うと金貨が減り、頭数が増える ─────────────────────
 const goldBefore = st.gold;
 const hiredName = offers[0].name;
+const hiredCost = Game.mercenaryCost(0);
 assert(Game.hireMercenary(0) === true, '金貨を払って傭兵を雇える');
-assert(st.gold === goldBefore - Game.MERCENARY_COSTS[0], '雇用費を所持金から引く');
+assert(st.gold === goldBefore - hiredCost, '雇用費を所持金から引く');
 assert(st.mercenaries.length === 1 && st.mercenaries[0].name === hiredName, '雇った傭兵を保持する');
 assert(Game.mercenaryOffers().length === Game.MERCENARY_OFFERS - 1, '雇った候補は市場から消える');
-assert(Game.mercenaryCost() === Game.MERCENARY_COSTS[1], '2人目は値段が上がる');
+assert(Game.mercenaryBaseCost() === Game.MERCENARY_COSTS[1], '2人目は値段が上がる');
 assert(!st.roster.some(m => m.name === hiredName), '傭兵はロスターに入らない（軍団員ではない）');
 assert(!st.activeUids.includes(st.mercenaries[0].uid), '出撃5枠を消費しない');
 
 Game.hireMercenary(0);
 assert(st.mercenaries.length === 2, '上限まで雇える');
-assert(Game.canHireMercenary(0) === false && Game.mercenaryCost() === Infinity,
+assert(Game.canHireMercenary(0) === false && Game.mercenaryBaseCost() === Infinity,
   '上限を超えては雇えない');
+
+// ── 2b. 顔なじみ価格（同族割引） ────────────────────────
+// 傭兵市場だけだと「誰でも雇えば強くなる」に寄る（実測：稼がないビルドも +17点）。
+// 種族を統一したコミットへ、倍率ではなく「雇いやすさ」で報いる。
+{
+  const kin = ready(80);
+  const uniform = kin.roster[0].race;
+  // 出撃隊を同じ種族で埋める
+  for (const m of kin.roster) m.race = uniform;
+  kin.mercenaryOffers = [
+    { name: '同族の傭兵', race: uniform, job: '傭兵', hp: 20, atk: 8, def: 3, spd: 7,
+      salary: 3, loyalty: 60, traits: [], tags: [], uid: 8001, mercenary: true },
+    { name: '余所者の傭兵', race: '異邦人', job: '傭兵', hp: 20, atk: 8, def: 3, spd: 7,
+      salary: 3, loyalty: 60, traits: [], tags: [], uid: 8002, mercenary: true }
+  ];
+  const kinCount = Game.mercenaryKinCount(uniform);
+  assert(kinCount === Game.activeRoster().length, '出撃隊の同族数を数える');
+  const kinCost = Game.mercenaryCost(0);
+  const strangerCost = Game.mercenaryCost(1);
+  assert(strangerCost === Game.mercenaryBaseCost(), '同族がいない傭兵は定価のまま');
+  assert(kinCost < strangerCost, '同族の傭兵は安く雇える（顔なじみ価格）');
+  const expected = Math.round(Game.mercenaryBaseCost()
+    * (1 - Math.min(Game.MERCENARY_MAX_DISCOUNT, Game.MERCENARY_KIN_DISCOUNT * kinCount)));
+  assert(kinCost === expected, `割引は同族1体につき${Game.MERCENARY_KIN_DISCOUNT * 100}%（上限${Game.MERCENARY_MAX_DISCOUNT * 100}%）`);
+
+  const goldWas = kin.gold;
+  Game.hireMercenary(0);
+  assert(kin.gold === goldWas - kinCost, '割引後の金額だけを支払う');
+  assert(kin.mercenaries[0].hiredFor === kinCost, 'いくらで雇ったかを記録する');
+  // 雇った傭兵は同族数に数えない（雇うほど安くなる連鎖を作らない）
+  assert(Game.mercenaryKinCount(uniform) === kinCount, '雇った傭兵は同族数に数えない');
+}
 
 // ── 3. 金貨が足りなければ雇えない ──────────────────────
 const poor = ready(3);
-assert(Game.mercenaryCost() > poor.gold && Game.canHireMercenary(0) === false,
+assert(Game.mercenaryCost(0) > poor.gold && Game.canHireMercenary(0) === false,
   '所持金が足りなければ雇えない');
 assert(Game.hireMercenary(0) === false && poor.gold === 3, '雇えない操作で所持金が動かない');
 

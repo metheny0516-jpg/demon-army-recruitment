@@ -672,12 +672,34 @@ const Game = {
   // という判断になる（実測：ゴブリン5＋オーガ傭兵61% vs ＋ゴブリン傭兵91%）。
   MERCENARY_COSTS: [10, 20],
   MERCENARY_OFFERS: 2,
+  // 顔なじみ価格。出撃隊に同じ種族がいるほど安く来る（1体につき10%、最大40%引き）。
+  // 傭兵市場だけだと「誰でも雇えば強くなる」に寄り、稼ぐビルドが報われない
+  // （実測：略奪ビルド +20点に対し、稼がないビルドも +17点）。
+  // 種族を統一したコミットに対して「雇いやすさ」で報いる。倍率は増やさない。
+  MERCENARY_KIN_DISCOUNT: 0.1,
+  MERCENARY_MAX_DISCOUNT: 0.4,
 
-  mercenaryCost() {
+  // 出撃隊にいる同じ種族の数（傭兵は数えない＝雇うほど安くなる連鎖は作らない）
+  mercenaryKinCount(race) {
+    return this.activeRoster().filter(m => m.race === race).length;
+  },
+
+  mercenaryBaseCost() {
     const hired = (this.state.mercenaries || []).length;
     return this.MERCENARY_COSTS[hired] !== undefined
       ? this.MERCENARY_COSTS[hired]
       : Infinity;   // 上限に達したら雇えない
+  },
+
+  // index を渡すとその候補の顔なじみ価格。省略時は割引前の値段
+  mercenaryCost(index) {
+    const base = this.mercenaryBaseCost();
+    if (!Number.isFinite(base) || index === undefined) return base;
+    const offer = this.mercenaryOffers()[index];
+    if (!offer) return base;
+    const discount = Math.min(this.MERCENARY_MAX_DISCOUNT,
+      this.MERCENARY_KIN_DISCOUNT * this.mercenaryKinCount(offer.race));
+    return Math.max(1, Math.round(base * (1 - discount)));
   },
 
   // 候補は作戦ごとに固定する。編成をいじるたびに引き直せると、
@@ -701,13 +723,13 @@ const Game = {
     if (!st || !["formation", "preparation"].includes(st.phase)) return false;
     if ((st.mercenaries || []).length >= this.MERCENARY_COSTS.length) return false;
     if (!this.mercenaryOffers()[index]) return false;
-    return st.gold >= this.mercenaryCost();
+    return st.gold >= this.mercenaryCost(index);
   },
 
   hireMercenary(index) {
     if (!this.canHireMercenary(index)) return false;
     const st = this.state;
-    const cost = this.mercenaryCost();
+    const cost = this.mercenaryCost(index);
     const merc = st.mercenaryOffers[index];
     st.gold -= cost;
     st.mercenaries = (st.mercenaries || []).concat([{ ...merc, hiredFor: cost }]);

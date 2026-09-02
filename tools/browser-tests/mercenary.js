@@ -27,9 +27,29 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     errors.push('金貨不足でも雇うボタンが押せてしまう');
   }
 
+  // 顔なじみ価格：出撃隊と同じ種族の傭兵は安く出る
+  const kin = await page.evaluate(() => {
+    Game.state.gold = 60;
+    const race = Game.activeRoster()[0].race;
+    for (const m of Game.state.roster) m.race = race;
+    Game.state.mercenaryOffers = [
+      { name: '同族の傭兵', race, job: '傭兵', hp: 20, atk: 8, def: 3, spd: 7, salary: 3,
+        loyalty: 60, traits: [], tags: [], uid: 8001, mercenary: true },
+      { name: '余所者の傭兵', race: '異邦人', job: '傭兵', hp: 20, atk: 8, def: 3, spd: 7, salary: 3,
+        loyalty: 60, traits: [], tags: [], uid: 8002, mercenary: true }
+    ];
+    App.render();
+    return { kinCost: Game.mercenaryCost(0), strangerCost: Game.mercenaryCost(1),
+      base: Game.mercenaryBaseCost(), text: document.querySelector('.merc-panel').innerText };
+  });
+  if (!(kin.kinCost < kin.strangerCost)) errors.push('同族の傭兵が安くならない');
+  if (kin.strangerCost !== kin.base) errors.push('余所者に割引がかかっている');
+  if (!kin.text.includes('顔なじみ価格')) errors.push('顔なじみ価格の表示が読めない');
+  if (!kin.text.includes(`${kin.kinCost}G で雇う`)) errors.push('割引後の値段でボタンが出ていない');
+
   // 雇うと所持金が減り、雇用中として出る
   const before = await page.evaluate(() => { Game.state.gold = 60; App.render();
-    return { gold: Game.state.gold, cost: Game.mercenaryCost(),
+    return { gold: Game.state.gold, cost: Game.mercenaryCost(0),
       roster: Game.state.roster.length, name: Game.mercenaryOffers()[0].name }; });
   await page.locator('[data-action="hiremerc"]').first().click();
   const after = await page.evaluate(() => ({ gold: Game.state.gold,
