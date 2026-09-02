@@ -208,6 +208,7 @@ const Game = {
       if (!Array.isArray(m.traits)) m.traits = [];
       if (m.tplId === "goblin" && !m.traits.includes("pickpocket")) m.traits.push("pickpocket");
       if (m.tplId === "ogre" && !m.traits.includes("big_eater")) m.traits.push("big_eater");
+      if (m.tplId === "necromancer" && !m.traits.includes("gravekeeper")) m.traits.push("gravekeeper");
       if ((m.job || "").includes("料理人") && !m.traits.includes("demon_cook")) m.traits.push("demon_cook");
     }
     const rosterIds = new Set(st.roster.filter(m => m.department === "combat").map(m => m.uid));

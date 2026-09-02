@@ -92,6 +92,41 @@ const Battle = {
     };
     // 特性から呼ばれるテキスト専用ログ（traits.js の ctx.log がこれ）
     const note = (text, cls) => emit("note", { text, cls: cls || "info", emphasis: cls === "revive" ? 2 : 0 });
+    const soulState = { player: { amount: 0 }, enemy: { amount: 0 } };
+
+    const reactToDeath = (target, deathEvent) => {
+      if (target.flags.soulCounted || target.flags.summoned) return;
+      const allies = target.side === "player" ? playerUnits : enemyUnits;
+      const keeper = allies.find(u => u.alive && u.traits.includes("gravekeeper"));
+      if (!keeper) return;
+      target.flags.soulCounted = true;
+      soulState[target.side].amount += 1;
+      emitCausal("resource_gain", {
+        sourceId: keeper.id, targetId: target.id, resource: "soul", amount: 1, reserved: false, label: "墓守",
+        emphasis: 1, text: `　${keeper.name}の【墓守】 ${target.name}の魂を回収（魂${soulState[target.side].amount}）`, cls: "trait"
+      }, deathEvent);
+    };
+
+    const reactToRevive = (revived, reviveEvent) => {
+      const allies = revived.side === "player" ? playerUnits : enemyUnits;
+      const state = soulState[revived.side];
+      const collector = allies.find(u => u.alive && u.traits.includes("soul_harvest")
+        && (u.flags.soulHarvestStacks || 0) < 5);
+      if (!collector || state.amount <= 0) return;
+      state.amount -= 1;
+      collector.flags.soulHarvestStacks = (collector.flags.soulHarvestStacks || 0) + 1;
+      const undead = allies.filter(u => u.alive && u.tags.includes("undead"));
+      for (const unit of undead) unit.mods.dmgMult *= 1.2;
+      const trigger = emitCausal("trait_trigger", {
+        sourceId: collector.id, traitId: "soul_harvest", name: "魂の徴収",
+        stacks: collector.flags.soulHarvestStacks, affectedIds: undead.map(u => u.id), emphasis: 2,
+        text: `　${collector.name}の【魂の徴収】 アンデッド${undead.length}体を強化（${collector.flags.soulHarvestStacks}/5）`, cls: "trait"
+      }, reviveEvent);
+      emitCausal("resource_consume", {
+        sourceId: collector.id, resource: "soul", amount: 1, remaining: state.amount,
+        emphasis: 1, text: `　魂1を消費（残り${state.amount}）`, cls: "trait"
+      }, trigger);
+    };
 
     const snap = u => ({
       id: u.id, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon, side: u.side,
@@ -193,10 +228,11 @@ const Battle = {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
       }
       if (dead) {
-        emitCausal("death", {
+        const deathEvent = emitCausal("death", {
           unitId: target.id, emphasis: 2,
           text: `　${target.name} は倒れた！`, cls: "death"
         }, damageEvent);
+        reactToDeath(target, deathEvent);
       }
       return { dmg, event: damageEvent };
     };
@@ -326,7 +362,14 @@ const Battle = {
       for (const s of before) {
         if (!s.alive && s.u.alive) {
           const death = [...timeline].reverse().find(e => e.type === "death" && e.unitId === s.u.id);
-          emitCausal("revive", { unitId: s.u.id, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 3 }, death || null);
+          const reviveEvent = emitCausal("revive", {
+            unitId: s.u.id, sourceId: s.u.flags.reviveSourceId || null,
+            traitId: s.u.flags.reviveTraitId || (s.u.flags.selfRevived ? "tenacity" : null),
+            hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 3
+          }, death || null);
+          delete s.u.flags.reviveSourceId;
+          delete s.u.flags.reviveTraitId;
+          reactToRevive(s.u, reviveEvent);
         } else if (s.u.alive && s.u.hp > s.hp) {
           emitCausal("heal", { unitId: s.u.id, amount: s.u.hp - s.hp, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 1 }, null);
         }

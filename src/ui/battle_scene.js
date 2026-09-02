@@ -231,12 +231,17 @@ const BattleScene = {
         break;
       case "resource_gain": {
         const u = this.units[ev.sourceId];
+        const unit = ev.resource === "gold" ? "G" : ev.resource === "soul" ? "魂" : ev.resource;
         if (u) {
           this.clearFocus();
           u.el.classList.add("acting");
-          this.float(u, `+${ev.amount}G`, "heal");
+          this.float(u, `+${ev.amount}${unit}`, "heal");
         }
-        this.showAction(`${ev.label || "略奪"}　+${ev.amount}G`, 650);
+        this.showAction(`${ev.label || "獲得"}　+${ev.amount}${unit}`, 650);
+        break;
+      }
+      case "resource_consume": {
+        if (ev.resource === "soul") this.showAction(`魂を${ev.amount}消費`, 550);
         break;
       }
       case "trait_trigger": {

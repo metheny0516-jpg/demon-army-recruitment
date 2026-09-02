@@ -178,8 +178,19 @@ const TRAITS = {
       dead.alive = true;
       const ratio = u.mods.necroFull ? 1.0 : 0.5;
       dead.hp = Math.max(1, Math.round(dead.maxHp * ratio));
+      if (!dead.tags.includes("undead")) dead.tags.push("undead");
+      dead.flags.reviveSourceId = u.id;
+      dead.flags.reviveTraitId = "necromancy";
       ctx.log(`　${u.name}の【死霊術】 ${dead.name}がアンデッドとして蘇った！`, "revive");
     }
+  },
+  gravekeeper: {
+    name: "墓守",
+    desc: "味方が初めて死亡するたび魂を1獲得（召喚物を除く）"
+  },
+  soul_harvest: {
+    name: "魂の徴収",
+    desc: "味方の蘇生時、魂1を消費して生存中のアンデッド与ダメージ+20%（最大5回）"
   },
   mischief: {
     name: "悪戯",
