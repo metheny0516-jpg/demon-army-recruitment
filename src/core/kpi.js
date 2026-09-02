@@ -6,7 +6,8 @@
 // 読むときは DevTools で `KPI.export()` を叩き、`tools/kpi-report.js` へ渡す。
 //
 // ── 記録する行動 ──────────────────────────────────────
-//   buildAttempts    前戦から人材・特性・施設・狙う資源状態のいずれかが変わった戦闘数
+//   buildAttempts    前戦から人材・特性・施設・傭兵・合体の可否・狙う資源状態の
+//                    いずれかが変わった戦闘数
 //                    （同じ編成の連戦は試行として数えない＝1ランで仮説を何回試せたか）
 //   formationChanges 出撃隊の選抜・並び替え・部門配属を変えた回数
 //   quickRetry       前のランの終了から60秒以内に新しいランを始めたか
@@ -102,10 +103,15 @@ const KPI = {
     }).join(",");
     const departments = (state.roster || [])
       .map(m => `${m.uid}:${m.department || ""}`).sort().join(",");
+    // 金貨で雇った傭兵も「今回の仮説」の一部。誰を雇ったかで編成の狙いが変わる
+    const mercenaries = (state.mercenaries || [])
+      .map(m => `${m.tplId || ""}:${m.race || ""}`).sort().join(",");
     return JSON.stringify({
-      deployed, departments,
+      deployed, departments, mercenaries,
       facility: state.facilityLevel || 0,
       payroll: state.payrollPolicy || "regular",
+      // 合体するか否かも編成の判断（頭数を取るか、1体の硬さを取るか）
+      merge: state.kingSlimeMerge !== false,
       // 狙う資源は作戦で決まる（略奪＝金貨、鎮圧＝忠誠、侵攻＝攻略）
       mission: (stageData && stageData.missionKind) || null
     });

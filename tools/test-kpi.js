@@ -52,6 +52,17 @@ if (moved.length >= 2) {
   st.activeUids = [moved[1], moved[0], ...moved.slice(2)];
   assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '並び順が変われば新しい試行');
 }
+// 金で雇った傭兵と、合体するかどうかも「今回の仮説」に含める
+st.mercenaries = [{ tplId: 'ogre', race: 'オーガ', name: '傭兵A' }];
+assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '雇った傭兵が変われば新しい試行');
+st.mercenaries = [{ tplId: 'goblin', race: 'ゴブリン', name: '傭兵B' }];
+assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '誰を雇ったかの違いも試行として数える');
+assert(KPI.battleStarted(st, { missionKind: 'raid' }) === false, '同じ傭兵のままなら試行に数えない');
+st.mercenaries = [];
+assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '傭兵を雇わない選択も試行');
+st.kingSlimeMerge = false;
+assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '合体するかどうかの判断も試行');
+
 const target = st.roster[0];
 const traitsBefore = target.traits.slice();
 target.traits = [...traitsBefore, 'pickpocket'];

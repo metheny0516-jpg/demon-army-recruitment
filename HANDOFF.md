@@ -510,8 +510,10 @@ OVERKILLは1戦3.88回も起きるが、余剰割合の中央値は18%、100%以
   記録は `buildAttempts` / `formationChanges` / `quickRetry` / `sessionRun` /
   `speedChanges` / `logSkips` / `reportSkips` / `lastScreen`。
 - **ビルド試行の定義**: 出撃隊（uid・順序・tplId・階級・特性）、部門配属、施設Lv、給与方針、
-  作戦種別（＝狙う資源）から指紋を作り、前戦と違えば1回。初戦は必ず1回。
-  指紋は表示にも計算にも使わない。
+  **雇った傭兵（種族）、キングスライム合体の可否**、作戦種別（＝狙う資源）から指紋を作り、
+  前戦と違えば1回。初戦は必ず1回。指紋は表示にも計算にも使わない。
+  **新しい「編成の判断」を足したら、この指紋にも足すこと**（足し忘れると、その判断は
+  仮説試行として数えられず、KPIが実際より少なく出る）。
 - 呼び出し口: `Game.newRun/deploy/endRun` と編成操作3つ（`toggleDeploy` /
   `assignDepartment` / `moveDeployed`）、`BattleScene.cycleSpeed/skip`、
   `MormoScene.advance`（タイプ中のみ）、`App.render`（画面記録）。
