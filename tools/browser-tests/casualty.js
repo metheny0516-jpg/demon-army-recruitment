@@ -20,7 +20,10 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
     Game.state.roster = [
       { uid:901, tplId:'goblin', name:'捨て駒A', race:'ゴブリン', job:'', hp:1, atk:1, def:0, spd:1,
         salary:2, loyalty:70, traits:[], tags:[], quote:'', unpaid:false },
-      { uid:902, tplId:'ogre', name:'生存者', race:'オーガ', job:'', hp:400, atk:60, def:20, spd:9,
+      // 攻撃力を抑えてあるのは意図的。強すぎると味方が敵を1ラウンドで倒しきってしまい、
+      // 敵が一度も行動せず「捨て駒Aが死なない」戦闘になる（実際にフレークとして出た）。
+      // 見たいのは「倒れた者が退場するか」なので、敵が必ず行動する状況を作る。
+      { uid:902, tplId:'ogre', name:'生存者', race:'オーガ', job:'', hp:400, atk:12, def:20, spd:3,
         salary:2, loyalty:70, traits:[], tags:[], quote:'', unpaid:false }
     ];
     Game.state.activeUids = Game.state.roster.map(m => m.uid);

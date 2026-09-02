@@ -1157,6 +1157,22 @@ button.wide { width: 100%; }
 .contrib-badge.soul { background: #14303a; color: #8ed8f0; border: 1px solid #205a6a; }
 .contrib-badge.heal { background: #123a2a; color: #8ef0a8; border: 1px solid #2a7a52; }
 
+/* 編成画面のシナジー予告。効果量と「あと1体で／入れ替えると」を出す */
+.syn.on { border-left: 3px solid var(--gold); }
+.syn-effect { font-size: 12px; margin-top: 2px; }
+.syn-effect b { color: var(--gold); }
+.syn-next {
+  font-size: 12px; margin-top: 3px; color: #9ef0b8;
+  background: rgba(30, 90, 60, .28); border-radius: 6px; padding: 2px 8px; display: inline-block;
+}
+.syn-next b { color: #b8ffcf; }
+.syn-need {
+  font-size: 11px; margin-left: 6px; padding: 1px 6px; border-radius: 8px;
+  background: #2a1a3a; color: #c9a8f0; border: 1px solid #5a3a7a;
+}
+.syn-reach { margin-top: 10px; }
+.syn-reach h4 { margin: 0 0 4px; font-size: 12px; color: var(--muted); font-weight: normal; }
+
 /* 魔界史の主要記録。勝敗・到達点の隣に2つだけ並べる */
 .record-highlights { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0 10px; }
 .record-highlights div { display: flex; flex-direction: column; }

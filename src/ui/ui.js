@@ -348,17 +348,51 @@ const UI = {
     </div>`;
   },
 
+  // 効果量を「+15%刻み」のような説明文だけで済ませると、いま3体で+15%なのか
+  // 5体で+45%なのかが分からず、「脆いから2体を別種族へ」という判断が
+  // 火力を半減させていることに気づけない（実測で混成が純種族より弱かった）。
+  // 効果は Synergy.preview() が実際に適用して測った値を出す。
+  synergyEffect(entry) {
+    const parts = [];
+    if (entry.now.dmgMult > 1) parts.push(`与ダメージ <b>×${entry.now.dmgMult.toFixed(2)}</b>`);
+    if (entry.now.takenMult < 1) parts.push(`被ダメージ <b>×${entry.now.takenMult.toFixed(2)}</b>`);
+    return parts.length ? `${parts.join("・")}（対象 ${entry.now.affected}体）` : "";
+  },
+
+  synergyNext(entry) {
+    if (!entry.next) return "";
+    const gain = entry.next.dmgMult > entry.now.dmgMult
+      ? `与ダメージ ×${entry.next.dmgMult.toFixed(2)}`
+      : `被ダメージ ×${entry.next.takenMult.toFixed(2)}`;
+    const how = entry.swapOutRace
+      ? `${U.esc(entry.swapOutRace)}を${U.esc(entry.nextRace || "同じ種族")}に替えると`
+      : `${U.esc(entry.nextRace || "同じ種族")}をあと1体で`;
+    return `<div class="syn-next">▲ ${how} <b>${gain}</b></div>`;
+  },
+
   synergyPanel(roster) {
-    const act = Synergy.active(roster);
-    const activeIds = new Set(act.map(s => s.id));
-    const inactive = SYNERGIES.filter(s => !activeIds.has(s.id));
+    const entries = Synergy.preview(roster, { slots: Game.MAX_DEPLOY });
+    const act = entries.filter(e => e.active);
     const activeHtml = act.length
-      ? `<div class="syn-list">${act.map(s => `<div class="syn"><b>${U.esc(s.name)}</b>
-          <div class="d">条件：${U.esc(s.condition || "特殊条件")}／${U.esc(s.desc)}</div></div>`).join("")}</div>`
+      ? `<div class="syn-list">${act.map(e => {
+          const effect = this.synergyEffect(e);
+          return `<div class="syn on"><b>${U.esc(e.name)}</b>
+            ${effect ? `<div class="syn-effect">いま：${effect}</div>` : ""}
+            ${this.synergyNext(e)}
+            <div class="d">${U.esc(e.desc)}</div></div>`;
+        }).join("")}</div>`
       : `<div class="muted">現在発動中のシナジーはない。</div>`;
-    const candidates = inactive.map(s => `<div class="syn"><b>${U.esc(s.name)}</b>
-      <div class="d">条件：${U.esc(s.condition || "特殊条件")}／${U.esc(s.desc)}</div></div>`).join("");
+    // 「あと何体で届くか」も実測（手持ちの誰かを増やして条件を満たせるか試す）
+    const reachable = entries.filter(e => !e.active && e.need !== null)
+      .sort((a, b) => a.need - b.need);
+    const far = entries.filter(e => !e.active && e.need === null);
+    const nearHtml = reachable.map(e => `<div class="syn"><b>${U.esc(e.name)}</b>
+      <span class="syn-need">あと${e.need}体</span>
+      <div class="d">条件：${U.esc(e.condition || "特殊条件")}／${U.esc(e.desc)}</div></div>`).join("");
+    const candidates = far.map(e => `<div class="syn"><b>${U.esc(e.name)}</b>
+      <div class="d">条件：${U.esc(e.condition || "特殊条件")}／${U.esc(e.desc)}</div></div>`).join("");
     return `<div class="panel"><h3>発動中のシナジー</h3>${activeHtml}
+      ${nearHtml ? `<div class="syn-reach"><h4>あと少しで届く</h4><div class="syn-list">${nearHtml}</div></div>` : ""}
       <details><summary>組み合わせ候補を見る</summary><div class="syn-list">${candidates}</div></details></div>`;
   },
 
