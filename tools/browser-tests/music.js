@@ -1,10 +1,13 @@
 // BGM（軍団が演奏する行進曲）が実際のプレイで鳴り、場面と編成に追従するか。
 // 曲そのものではなく「軍団の状態が演奏へ届いているか」を見る。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  // モルモ報告は自動で閉じない。覆われた画面を操作できるよう、報告は即送りにする
+  await autoDismissMormo(page);
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
@@ -52,6 +55,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (missionScene !== 'mission') errors.push(`作戦画面の場面名が ${missionScene}`);
 
   // 戦闘に入れば行進が速くなること
+  await enterMissionPhase(page);   // 開幕3日は daily.js の担当。ここは作戦会議から先を見る
   await page.locator('[data-action="missionpick"]').first().click();
   const marchBpm = await page.evaluate(() => Music.desc.bpm);
   await page.click('[data-action="deploy"]');

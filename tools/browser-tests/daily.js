@@ -1,41 +1,34 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { dismissMormo } = require('./helpers.js');
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  const dismissMormo = async () => {
-    if (!await page.locator('#mormo-scene').count()) return;
-    await page.evaluate(() => {
-      if (!MormoScene.active) return;
-      if (MormoScene.typing) MormoScene.completeTyping();
-      MormoScene.advance();
-    });
-  };
   await page.goto('file://' + process.env.GAME + '/index.html');
   await page.click('[data-action="new"]');
-  await dismissMormo();
+  await dismissMormo(page);
   await page.locator('[data-action="hire"]').first().click();
   await page.locator('[data-action="hire"]').first().click();
-  await dismissMormo();
+  await dismissMormo(page);
   if (!await page.getByText('勇者到着まであと2日').count()) throw new Error('1日目の期限表示がない');
   const assignment = await page.evaluate(() => Game.state.roster.map(m => [m.uid, m.department]));
   await page.click('[data-action="endday"]');
-  await dismissMormo();
+  await dismissMormo(page);
   if (!await page.getByText('明日、勇者が到着').count()) throw new Error('2日目の期限表示がない');
   const assignment2 = await page.evaluate(() => Game.state.roster.map(m => [m.uid, m.department]));
   if (JSON.stringify(assignment) !== JSON.stringify(assignment2)) throw new Error('配置が翌日に維持されない');
   await page.click('[data-action="endday"]');
-  await dismissMormo();
+  await dismissMormo(page);
   if (!await page.getByText('本日、勇者襲来').count()) throw new Error('3日目の期限表示がない');
   if (await page.locator('[data-action="endday"]').count()) throw new Error('3日目に防衛戦を飛ばせる');
   await page.evaluate(() => Game.activeRoster().forEach(m => { m.hp = 999; m.atk = 999; m.def = 99; m.spd = 99; }));
   await page.click('[data-action="openingbattle"]');
-  await dismissMormo();
+  await dismissMormo(page);
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
   await page.click('[data-action="afterbattle"]');
-  await dismissMormo();
+  await dismissMormo(page);
   const state = await page.evaluate(() => ({ phase: Game.state.phase, opening: Game.state.openingPrototype, conquest: Game.state.conquest }));
   if (state.phase !== 'result' || state.opening || state.conquest !== 1) throw new Error('防衛戦後に従来結果へ戻らない');
   if (errors.length) throw new Error(errors.join('\n'));

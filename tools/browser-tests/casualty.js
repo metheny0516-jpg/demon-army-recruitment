@@ -1,14 +1,19 @@
 // 戦死したモンスターが本当に軍から去るか、蘇生した者が残るかを検証する
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
 const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m); };
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await b.newPage({ viewport:{width:390,height:844} });
+  // モルモ報告は自動で閉じない。覆われた画面を操作できるよう、報告は即送りにする
+  await autoDismissMormo(page);
   const errs=[]; page.on('pageerror',e=>errs.push(e.message));
   await page.goto('file://' + process.env.GAME + '/index.html');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
+
+  await enterMissionPhase(page);   // 開幕3日を終えてから通常ループの状態を組む
 
   // 前衛が確実に死ぬ状況を作る（脆い前衛＋頑丈な後衛）
   const before = await page.evaluate(() => {

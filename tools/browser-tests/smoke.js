@@ -1,4 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } }); // スマホ縦
@@ -28,6 +29,9 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
       throw new Error('全画面のモルモ画像が表示されていない');
     }
   });
+  // 報告が全画面で出ること自体はここまでで確認した。
+  // この先は下の画面を操作するので、報告は即送りにする（実プレイでは人が送る）
+  await silenceMormoFromNow(page);
   await page.screenshot({ path: process.env.SP + '/shot-recruit.png', fullPage: true });
 
   await step('1人目採用（設立枠が残り再面接）', async () => {
@@ -36,6 +40,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   });
   await step('2人目採用 → 作戦会議 → 編成画面', async () => {
     await page.click('[data-action="hire"]');
+    await enterMissionPhase(page);   // 開幕3日は daily.js の担当。ここは通常ループを通しで見る
     await page.locator('[data-action="missionpick"]').last().click();
     await page.waitForSelector('[data-action="deploy"]');
   });

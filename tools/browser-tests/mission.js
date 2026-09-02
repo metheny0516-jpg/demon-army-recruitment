@@ -1,15 +1,19 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
 const ok = (condition, message) => console.log((condition ? '  ✓ ' : '  ✗ ') + message);
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 900, height: 1000 } });
+  // モルモ報告は自動で閉じない。覆われた画面を操作できるよう、報告は即送りにする
+  await autoDismissMormo(page);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('file://' + process.env.GAME + '/index.html');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
+  await enterMissionPhase(page);   // 開幕3日は daily.js の担当。ここは作戦会議から先を見る
 
   const cards = page.locator('.mission-card');
   ok(await cards.count() === 3, '作戦が3種類提示される');

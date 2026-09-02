@@ -1,13 +1,17 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
 const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m); };
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await b.newPage({ viewport: { width: 390, height: 844 } });
+  // モルモ報告は自動で閉じない。覆われた画面を操作できるよう、報告は即送りにする
+  await autoDismissMormo(page);
   const errs=[]; page.on('pageerror',e=>errs.push(e.message));
   await page.goto('file://' + process.env.GAME + '/index.html');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
+  await enterMissionPhase(page);   // 開幕3日は daily.js の担当。ここは作戦会議から先を見る
   await page.locator('[data-action="missionpick"]').last().click();
 
   // ── 2) 取り返しのつかない操作の誤タップ対策（編成画面）──

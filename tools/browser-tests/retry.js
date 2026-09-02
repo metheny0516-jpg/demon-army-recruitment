@@ -1,8 +1,11 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { autoDismissMormo } = require('./helpers.js');
 const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await b.newPage({ viewport: { width: 390, height: 844 } });
+  // モルモ報告は自動で閉じない。覆われた画面を操作できるよう、報告は即送りにする
+  await autoDismissMormo(page);
   const errs=[]; page.on('pageerror', e=>errs.push(e.message));
   await page.goto('file://' + process.env.GAME + '/index.html');
 
