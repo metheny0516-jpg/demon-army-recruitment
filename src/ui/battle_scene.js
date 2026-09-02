@@ -10,7 +10,8 @@ const BattleScene = {
   DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   SPECIAL_DURATION: {
     battle_start: 500, round_start: 1150, synergy: 1650,
-    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1100, survive: 650, heal: 500, result: 1200
+    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1100, survive: 650,
+    heal: 500, overkill: 950, result: 1200
   },
 
   // 長期戦がだらけないための自動圧縮。シナジー同士が噛み合って乱戦が
@@ -22,7 +23,7 @@ const BattleScene = {
   EFFECT_CLASSES: [
     "fx-goblin_horde", "fx-king_slime", "fx-legion_of_dead", "fx-arcane_circle",
     "fx-cheap_labor", "fx-elite_few", "fx-general_command", "fx-incident",
-    "fx-revive", "fx-guard"
+    "fx-revive", "fx-guard", "fx-overkill"
   ],
 
   speed: 1,
@@ -252,6 +253,19 @@ const BattleScene = {
         this.pulse(ev.traitId);
         break;
       }
+      case "overkill": {
+        const target = this.units[ev.toId];
+        this.clearFocus();
+        if (target) {
+          target.el.classList.add("targeted");
+          this.float(target, `${ev.percent}%`, "damage");
+        }
+        this.showAction(`${ev.rank}　余剰${ev.excess}ダメージ`, 850);
+        this.pulse("overkill");
+        if (ev.percent >= 300) this.shake();
+        if (ev.percent >= 500) this.cutin(ev.rank, `${ev.percent}% OVERKILL`, "overkill");
+        break;
+      }
       case "incident": {
         const culprit = this.units[ev.unitId];
         const target = this.units[ev.targetId];
@@ -342,6 +356,7 @@ const BattleScene = {
     const cls = synergyKinds.includes(kind) ? `fx-${kind}`
       : kind === "revive" ? "fx-revive"
         : kind === "guard" ? "fx-guard"
+          : kind === "overkill" ? "fx-overkill"
           : "fx-incident";
     s.classList.add(cls);
     void s.offsetWidth;

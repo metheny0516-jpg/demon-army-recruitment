@@ -305,7 +305,7 @@ const MONSTER_TEMPLATES = [
     jobs: ["重戦士", "破城槌", "門番", "重量物運搬", "壁（本業）"],
     base: { hp: 45, atk: 14, def: 6, spd: 4 },
     salary: [7, 9], loyalty: [45, 70],
-    fixedTraits: ["brute", "big_eater"], traitPool: ["tough_skin"],
+    fixedTraits: ["brute", "big_eater"], traitPool: ["tough_skin", "chain_massacre"],
     prevJobs: ["城門の門番（30年）", "岩運び（採掘場）", "見世物小屋（脱走）", "橋の下（住居兼職場）",
       "橋の下の住人（家賃滞納なし・そこが家）", "見世物小屋の看板怪物（脱走してそのまま職探し）", "食堂の食べ放題テスター（出禁）", "岩運び（採掘場を素手で崩し独立）"],
     motives: ["メシが多いと聞いた", "門番なら任せろ", "壊す仕事はあるか", "寝床があればいい",

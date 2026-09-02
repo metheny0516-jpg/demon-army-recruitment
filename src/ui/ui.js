@@ -163,6 +163,7 @@ const UI = {
       const fell = c.survived === false;
       if (fell) badges.push(`<span class="contrib-badge dead">💀戦死</span>`);
       else if (c.died) badges.push(`<span class="contrib-badge revived">✨生還</span>`);
+      if (c.maxOverkill > 0) badges.push(`<span class="contrib-badge mvp">💥${c.maxOverkill}%</span>`);
       const ratio = c.dealt / maxDealt;
       return `<div class="contrib-row ${fell ? "died" : ""}">
         <span class="contrib-icon">${this.icon(c.race)}</span>
@@ -227,6 +228,14 @@ const UI = {
       <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
       ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>経理部の圧縮</span></div>` : ""}
       ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>人事部の集客</span></div>` : ""}
+    </div>`;
+  },
+
+  overkillPanel(summary) {
+    if (!summary || summary.count <= 0) return "";
+    return `<div class="panel"><h3>💥 OVERKILL</h3>
+      <div><b>${U.esc(summary.rank || "OVERKILL")}</b>　最大 ${summary.maxPercent}%／余剰 ${summary.maxExcess}ダメージ</div>
+      <div class="muted">発生 ${summary.count}回・総余剰ダメージ ${summary.totalExcess}</div>
     </div>`;
   },
 
@@ -540,6 +549,7 @@ const UI = {
       </div>
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
+      ${this.overkillPanel(b.overkillSummary)}
       ${this.contributionPanel(b.contribution)}
       ${(b.incidents && b.incidents.length) ? `<div class="panel incident-panel"><h3>💥 この戦いの不祥事</h3>
         ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}
@@ -574,6 +584,7 @@ const UI = {
         <div>${U.esc(b.army)} に敗北した</div>
       </div>
       ${this.nearMissPanel(b.nearMiss)}
+      ${this.overkillPanel(b.overkillSummary)}
       ${this.contributionPanel(b.contribution)}
       <div class="panel">
         <h3>まだ終わりではない</h3>
@@ -647,6 +658,7 @@ const UI = {
           record.finalRoster.length ? record.finalRoster.map(m => U.esc(m.name)).join("、") : "誰も残らなかった"}</div>
       </div>
       ${this.nearMissPanel(Game.state.lastBattle && Game.state.lastBattle.nearMiss)}
+      ${this.overkillPanel(Game.state.lastBattle && Game.state.lastBattle.overkillSummary)}
       ${this.contributionPanel(Game.state.lastBattle && Game.state.lastBattle.contribution)}
       <div class="row">
         <button class="primary" data-action="new">第${history.length + 1}代として再挑戦</button>

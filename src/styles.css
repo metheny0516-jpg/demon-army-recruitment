@@ -373,6 +373,7 @@ button.wide { width: 100%; }
 .log .trait { color: var(--purple); }
 .log .synergy { color: #ffd479; font-weight: bold; }
 .log .death { color: var(--red); }
+.log .overkill { color: #ff9b54; font-weight: bold; }
 .log .revive { color: var(--green); }
 .log .result-win { color: var(--green); font-weight: bold; font-size: 15px; }
 .log .result-lose { color: var(--red); font-weight: bold; font-size: 15px; }
@@ -486,6 +487,9 @@ button.wide { width: 100%; }
 }
 .scene.fx-guard .scene-fx {
   background: radial-gradient(circle, rgba(104, 166, 255, .58), rgba(30, 60, 107, .06) 62%, transparent 78%);
+}
+.scene.fx-overkill .scene-fx {
+  background: radial-gradient(circle, rgba(255, 122, 45, .78), rgba(135, 24, 16, .18) 55%, transparent 78%);
 }
 @keyframes scenePulse {
   0%, 100% { opacity: 0; transform: scale(.82); }

@@ -20,6 +20,7 @@
 //   splash       { fromId, toId, dmg, hp, maxHp, dead, label }  火球などの追撃
 //   survive      { unitId, hp, maxHp }              白骨などで致死を耐えた
 //   death        { unitId }
+//   overkill     { fromId,toId,excess,percent,rank }  致死時の余剰ダメージ
 //   revive       { unitId, hp, maxHp }              蘇生（状態差分から自動検出）
 //   heal         { unitId, amount, hp, maxHp }      回復（同上）
 //   note         { }                                特性の発動などテキストのみ
@@ -28,6 +29,14 @@
 // ───────────────────────────────────────────────────────
 const Battle = {
   MAX_ROUNDS: 30,
+
+  overkillRank(percent) {
+    if (percent >= 1000) return { id: "demon_king", name: "魔王級殲滅", emphasis: 3 };
+    if (percent >= 500) return { id: "annihilation", name: "消滅", emphasis: 3 };
+    if (percent >= 300) return { id: "pulverize", name: "粉砕", emphasis: 2 };
+    if (percent >= 100) return { id: "trample", name: "蹂躙", emphasis: 2 };
+    return { id: "overkill", name: "OVERKILL", emphasis: 1 };
+  },
 
   // ロスターのモンスター → 戦闘ユニット
   makeUnit(m, side) {
@@ -193,6 +202,7 @@ const Battle = {
         const tr = TRAITS[tid];
         if (tr && tr.modTaken) dmg = tr.modTaken({ unit: target, attacker, dmg });
       }
+      const hpBefore = target.hp;
       target.hp -= dmg;
 
       let dead = false, survived = false;
@@ -224,6 +234,17 @@ const Battle = {
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
+      let overkillEvent = null;
+      if (dead && dmg > hpBefore) {
+        const excess = dmg - hpBefore;
+        const percent = Math.round(excess / target.maxHp * 100);
+        const rank = Battle.overkillRank(percent);
+        overkillEvent = emitCausal("overkill", {
+          fromId: attacker.id, toId: target.id, excess, percent,
+          rankId: rank.id, rank: rank.name, emphasis: rank.emphasis,
+          text: `　${rank.name}！ 余剰${excess}ダメージ（${percent}% OVERKILL）`, cls: "overkill"
+        }, damageEvent);
+      }
       if (survived) {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
       }
@@ -233,6 +254,22 @@ const Battle = {
           text: `　${target.name} は倒れた！`, cls: "death"
         }, damageEvent);
         reactToDeath(target, deathEvent);
+        const propagationDepth = opts.propagationDepth || 0;
+        if (overkillEvent && overkillEvent.percent >= 100 && propagationDepth < 3
+          && attacker.traits.includes("chain_massacre")) {
+          const opponents = attacker.side === "player" ? enemyUnits : playerUnits;
+          const next = opponents.find(unit => unit.alive);
+          if (next) {
+            const trigger = emitCausal("trait_trigger", {
+              sourceId: attacker.id, traitId: "chain_massacre", name: "連鎖虐殺",
+              propagationDepth: propagationDepth + 1, emphasis: 2,
+              text: `　${attacker.name}の【連鎖虐殺】 余剰ダメージが${next.name}へ伝播！`, cls: "trait"
+            }, overkillEvent);
+            applyDamage(attacker, next, overkillEvent.excess * 0.3, "splash", {
+              label: "連鎖虐殺", parentEvent: trigger, propagationDepth: propagationDepth + 1
+            });
+          }
+        }
       }
       return { dmg, event: damageEvent };
     };
@@ -419,6 +456,7 @@ const Battle = {
       contribution: this.summarizeContribution(timeline, playerUnits),
       nearMiss: this.summarizeNearMiss(timeline),
       chainSummary: this.summarizeChains(timeline),
+      overkillSummary: this.summarizeOverkill(timeline),
       resourceChanges: this.summarizeResourceChanges(timeline)
     };
   },
@@ -450,6 +488,21 @@ const Battle = {
       changes[event.resource] = (changes[event.resource] || 0) + (Number(event.amount) || 0);
     }
     return changes;
+  },
+
+  summarizeOverkill(timeline) {
+    const events = (timeline || []).filter(e => e.type === "overkill");
+    const top = events.reduce((best, event) => !best || event.percent > best.percent ? event : best, null);
+    return {
+      count: events.length,
+      totalExcess: events.reduce((sum, event) => sum + (Number(event.excess) || 0), 0),
+      maxExcess: top ? top.excess : 0,
+      maxPercent: top ? top.percent : 0,
+      rankId: top ? top.rankId : null,
+      rank: top ? top.rank : null,
+      sourceId: top ? top.fromId : null,
+      targetId: top ? top.toId : null
+    };
   },
 
   // 敗北後に「どこまで迫れたか」を見せるための要約。
@@ -494,10 +547,13 @@ const Battle = {
       const dealt = hits.filter(e => e.fromId === u.id).reduce((s, e) => s + e.dmg, 0);
       const taken = hits.filter(e => e.toId === u.id).reduce((s, e) => s + e.dmg, 0);
       const kills = hits.filter(e => e.fromId === u.id && e.dead).length;
+      const overkills = timeline.filter(e => e.type === "overkill" && e.fromId === u.id);
       const died = timeline.some(e => e.type === "death" && e.unitId === u.id);
       return {
         id: u.id, uid: u.uid, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
         unpaid: !!u.unpaid, dealt, taken, kills,
+        overkillCount: overkills.length,
+        maxOverkill: overkills.reduce((max, event) => Math.max(max, event.percent || 0), 0),
         died,                 // 一度でも倒れたか（蘇生した者も true）
         survived: u.alive     // 戦闘終了時に生きていたか。退場判定はこちらを使う
       };

@@ -192,6 +192,10 @@ const TRAITS = {
     name: "魂の徴収",
     desc: "味方の蘇生時、魂1を消費して生存中のアンデッド与ダメージ+20%（最大5回）"
   },
+  chain_massacre: {
+    name: "連鎖虐殺",
+    desc: "100%以上OVERKILLした余剰ダメージの30%を次の敵へ伝播（最大3体）"
+  },
   mischief: {
     name: "悪戯",
     desc: "攻撃した敵の攻撃力を1下げる",
