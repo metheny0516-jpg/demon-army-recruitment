@@ -517,6 +517,7 @@ const BattleScene = {
   // 残りを一気に適用して終わらせる
   skip() {
     this.stop();
+    if (typeof KPI !== "undefined") KPI.logSkipped();
     if (typeof Sound !== "undefined") {
       Sound.stopAll();
       Sound.cue("skip");
@@ -534,6 +535,7 @@ const BattleScene = {
   },
 
   cycleSpeed() {
+    if (typeof KPI !== "undefined") KPI.speedChanged();
     this.speed = this.speed === 1 ? 2 : this.speed === 2 ? 4 : 1;
     this.saveSpeed();
     this.updateSpeedBtn();

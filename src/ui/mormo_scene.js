@@ -97,8 +97,11 @@ const MormoScene = {
 
   advance() {
     if (!this.active) return;
-    if (this.typing) this.reveal();
-    else this.close();
+    if (this.typing) {
+      // 全文が出る前に送った＝報告を読み切らなかった（第14節の「報告スキップ」）
+      if (typeof KPI !== "undefined") KPI.reportSkipped();
+      this.reveal();
+    } else this.close();
   },
 
   close() {

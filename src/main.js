@@ -13,6 +13,7 @@ const App = {
   showTitle() {
     if (typeof MormoScene !== "undefined") MormoScene.close();
     Game.state = null;
+    if (typeof KPI !== "undefined") KPI.screen(null);
     this.music("title");
     UI.title(!!Storage.loadRun(), Storage.loadHistory());
   },
@@ -80,6 +81,7 @@ const App = {
 
   render() {
     const st = Game.state;
+    if (typeof KPI !== "undefined") KPI.screen(st);   // 最後にいた画面と攻略段階（＝止まった場所）
     if (!st) return this.showTitle();
     this.music(this.MUSIC_SCENES[st.phase] || "recruit");
     switch (st.phase) {

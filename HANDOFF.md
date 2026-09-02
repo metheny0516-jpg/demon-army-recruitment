@@ -220,6 +220,37 @@ Pagesの反映漏れやキャッシュではなく、BGMのコード側の問題
 
 ## 4. 直近で完了したこと
 
+### KPI測定契約（2026-09-02完了）
+
+設計憲法 第14節。ロードマップ「仮説試行と『もう1回』を測る」の第1段階。
+**外部送信なし・分析画面なし**で、端末内へ行動だけを残す。
+
+- `src/core/kpi.js`（新規・DOM非依存）。LocalStorageキー `maou_kpi` を1つ追加した。
+  記録は `buildAttempts` / `formationChanges` / `quickRetry` / `sessionRun` /
+  `speedChanges` / `logSkips` / `reportSkips` / `lastScreen`。
+- **ビルド試行の定義**: 出撃隊（uid・順序・tplId・階級・特性）、部門配属、施設Lv、給与方針、
+  作戦種別（＝狙う資源）から指紋を作り、前戦と違えば1回。初戦は必ず1回。
+  指紋は表示にも計算にも使わない。
+- 呼び出し口: `Game.newRun/deploy/endRun` と編成操作3つ（`toggleDeploy` /
+  `assignDepartment` / `moveDeployed`）、`BattleScene.cycleSpeed/skip`、
+  `MormoScene.advance`（タイプ中のみ）、`App.render`（画面記録）。
+  `run.js` からは `Game.kpi(method, ...)` 経由で呼ぶので、**kpi.js を読み込まない既存テストは
+  そのまま動く**（UI側は `typeof KPI !== "undefined"` で守る）。
+- **状態契約**: KPIはラン状態の外に置く。したがって `saveCheckpoint` / `retry` の対象外で、
+  再起しても減らない。魔界史の `maxChain` / `maxOverkill`（巻き戻る）とは逆で、意図的。
+  ラン状態のセーブへKPIを混ぜないことをテストで固定している。
+- 読み方: DevTools で `copy(KPI.export())` → JSONを保存 → `node tools/kpi-report.js kpi.json`。
+  「ビルド試行 ÷ 戦闘数」が高ければ足りないのは種族・役割、低ければ試せる回数・組み替えやすさ。
+- `tools/sim.js` も同じ計測を通り、戦略ごとに「ビルド試行 平均n回/ラン」を出す。
+  現在のAIプレイは 6.8〜14.1回/ラン（戦闘数のほぼ毎回で編成が変わる）。これは基準線であって
+  人間の値ではない。次は実プレイ5〜10ランで人間側の値を取る段階。
+
+検証: `node tools/test-kpi.js`（試行の判定7種、編成変更、テンポ操作、画面記録、再起で減らないこと、
+60秒判定、ラン状態を汚さないこと、壊れた保存データ、件数上限）。
+実際の `deploy()` を1回通して呼び出し経路も固定してあり、`run.js` のフックを外すと落ちる（確認済み）。
+`tools/browser-tests/kpi.js`（新規・クリック非依存）で実機の配線を確認。
+全Nodeテスト29本通過。`node tools/sim.js 50` はクリア率10〜58%で従来の帯のまま。
+
 ### ラン全体の最大CHAIN・最大OVERKILLを魔界史へ（2026-09-02完了）
 
 設計憲法 第11節「主要記録は最大CHAINと最大OVERKILL」の実装。各戦闘の記録は戦果画面で
@@ -690,8 +721,8 @@ BGMは実装済み（上の「BGM『魔王軍の行進曲』」）。
    ラン状態と歴史レコードへ `maxChain / maxOverkill` を保存し、終了画面と魔界史カードへ表示する
 4. **KPI測定契約**（第14節）。リトライ率、セッション内ラン数、途中離脱、速度変更、報告スキップ、
    および「ビルド試行」（前戦から人材・編成・特性・施設・狙う資源状態が変化した戦闘）を数える。
-   → 端末内完結。分析画面は作らず、記録イベントの小さな契約だけ先に設計する。
-   「ビルド試行」は `tools/sim.js` でも数えられるので、1ランの仮説試行回数の指標として先に測れる
+   → **実装済み（2026-09-02、4節「KPI測定契約」参照）**。`src/core/kpi.js` と `maou_kpi`。
+   分析画面は作らず、読むのは `tools/kpi-report.js`。`tools/sim.js` でも同じ計測が出る
 
 CodeX の仕分けで保留になった案（四半期構造、建材廃止、魔王のルール化、勇者の位階、職業訓練、
 廃業届、敵を問いとして設計、離反者が勇者側へ）は採用済みではない。詳細と根拠はレビュー文書を参照。
@@ -829,6 +860,15 @@ READMEと`synergies.js`に残っていた「条件を隠す」旧方針は更新
 ゴブリン統一36%、ゴブリン統一＋求人28%。
 
 ### 高
+
+**次は実プレイ期間（2026-09-02時点のロードマップ）。**
+KPI測定契約まで実装が終わった。順番はオーナー確認済みで、
+①KPIイベント契約（完了）→ **②実機で5〜10ラン遊ぶ → ③仮説試行回数と停止箇所を確認**
+→ ④戦闘・モルモのテンポ調整 → ⑤敵をビルドへの「問い」にする → ⑥施設を大型Joker化
+→ ⑦必要な役割を埋める新種族を1〜2種。
+②③はコードではなく計測なので、実プレイの結果（`node tools/kpi-report.js`）が出るまで
+④以降へ進まない。特に**新種族（⑦）を先に足さない**こと。
+「種族が足りない」のか「既存種族を試せる回数が少ない」のかは、ビルド試行÷戦闘数で切り分ける。
 
 **P3（部門・食料・施設から事件を起こす）の最小実装は完了。**
 拡張コアループの最小実装は完了した。戦闘・建設・生活を別ゲームに分けず、既存の出撃選抜を
@@ -978,7 +1018,13 @@ node tools/test-battle-report.js
 node tools/test-run-records.js
 ```
 
-### ブラウザ回帰テスト（22本）
+KPI測定契約（ビルド試行・リトライ・テンポ・離脱箇所）を検証する場合:
+
+```bash
+node tools/test-kpi.js
+```
+
+### ブラウザ回帰テスト（23本）
 
 ```bash
 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright   # 初回のみ
@@ -1025,6 +1071,7 @@ GAME=$(pwd) CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
 | `effects` | ラウンド区切り、攻撃者表示、最終決戦、観戦テンポ |
 | `report` | 戦果画面の主要記録2つ・代表CHAIN経路・非ダメージバッジ（クリック非依存） |
 | `records` | 終了画面と魔界史カードの最大CHAIN・最大OVERKILL表示（クリック非依存） |
+| `kpi` | 速度変更・スキップ・モルモ早送り・画面記録が端末内へ残ること（クリック非依存） |
 | `pacing` | 事件は縮めず通常攻撃だけを圧縮すること、個別倍率でも最後まで再生できること |
 | `sound` | 最初の操作での音声解禁、音量・ミュート保存 |
 | `music` | BGMの演奏開始、編成・場面への追従、未払いの反映、オンオフ保存 |
@@ -1042,6 +1089,7 @@ GAME=$(pwd) CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
 | `analysis-racecheck.js` | 純粋種族軍 vs 混成軍の勝率を直接比較 |
 | `analysis-loyalty.js` | 未払いの発生率と離脱率 |
 | `analysis-duration.js` | 戦闘演出の実尺と、尺のうち「縮めない事件」が占める割合（ステージ別） |
+| `kpi-report.js` | 実機のKPI（`copy(KPI.export())` で書き出したJSON）を読む。分析画面の代わり |
 | `analysis-events.js` | ハプニング16種の出現と解決の検証 |
 | `test-labor-events.js` | 給与抗議→ストライキ行進の予約・解決・配属変更・旧セーブ移行 |
 | `test-enemy-formations.js` | 敵の代替隊列、戦力帯、事前開示、戻る操作で再抽選されないこと |

@@ -4,7 +4,7 @@
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
 const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
   getItem: k => (k in store ? store[k] : null),
@@ -13,6 +13,7 @@ const ctx = { console, Math, Date, JSON, localStorage: {
 vm.createContext(ctx);
 for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename:f});
 const Game = vm.runInContext('Game', ctx);
+const KPI = vm.runInContext('KPI', ctx);
 const Synergy = vm.runInContext('Synergy', ctx);
 const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
 
@@ -180,4 +181,11 @@ for (const s of strategies) {
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);
+  // 「1ランで仮説を何回試せたか」。同じ編成の連戦は試行に数えない（設計憲法 第14節）
+  const kpiRuns = KPI.load().runs;
+  if (kpiRuns.length) {
+    const mean = key => (kpiRuns.reduce((sum, r) => sum + (r[key] || 0), 0) / kpiRuns.length).toFixed(1);
+    console.log(`  ビルド試行: 平均 ${mean('buildAttempts')}回/ラン（戦闘 ${mean('battles')}回）`);
+  }
+  KPI.reset();
 }

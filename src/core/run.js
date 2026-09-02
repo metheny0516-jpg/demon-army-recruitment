@@ -18,6 +18,12 @@ const Game = {
     return Math.floor(n * d / this.OPENING_DAYS) - Math.floor(n * (d - 1) / this.OPENING_DAYS);
   },
 
+  // KPI（第14節）は「あれば呼ぶ」。kpi.js を読み込まない環境でも進行を壊さない。
+  kpi(method, ...args) {
+    if (typeof KPI === "undefined" || typeof KPI[method] !== "function") return null;
+    return KPI[method](...args);
+  },
+
   newRun(demonKingId) {
     const history = Storage.loadHistory();
     const legacyReturn = this.chooseLegacyReturn(history);
@@ -81,6 +87,7 @@ const Game = {
     this.genApplicants();
     this.saveCheckpoint();
     this.save();
+    this.kpi("runStarted", this.state);
   },
 
   // ── チェックポイントと再起 ──────────────────
@@ -722,6 +729,7 @@ const Game = {
       st.activeUids.push(uid);
     }
     this.save();
+    this.kpi("formationChanged");
     return true;
   },
 
@@ -736,6 +744,7 @@ const Game = {
       st.activeUids = st.activeUids.filter(id => id !== uid);
     }
     this.save();
+    this.kpi("formationChanged");
     return true;
   },
 
@@ -746,6 +755,7 @@ const Game = {
     if (index < 0 || next < 0 || next >= r.length) return;
     [r[index], r[next]] = [r[next], r[index]];
     this.save();
+    this.kpi("formationChanged");
   },
 
   moveUnit(index, dir) {
@@ -782,6 +792,8 @@ const Game = {
     const battleRations = openingBattle ? null : this.prepareBattleRations(notes);
     const playerUnits = this.preparedRoster(battleRations).map(m => Battle.makeUnit(m, "player"));
     const stageData = this.stageData();
+    // ビルド試行の判定は戦闘前に取る（戦死・合体で編成が変わる前の「何を試したか」を見るため）
+    this.kpi("battleStarted", st, stageData);
     const enemyUnits = stageData.units.map(e => Battle.makeUnit(e, "enemy"));
 
     const rationContext = battleRations ? {
@@ -1365,6 +1377,8 @@ const Game = {
     st.record = record;
     Storage.appendHistory(record);
     Storage.clearRun();
+    // KPIはラン状態の外にあるので、再起で巻き戻しても減らない（第14節・意図的）
+    this.kpi("runEnded", st, record);
   },
 
   // ── ハプニング ────────────────────────────
