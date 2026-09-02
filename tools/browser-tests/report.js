@@ -43,9 +43,11 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }, victory);
 
   const winText = await setup(true);
-  if (!await page.locator('.breakthrough-panel').count()) errors.push('勝利画面に「今回の壊れ方」パネルが無い');
+  if (!await page.locator('.breakthrough-panel').count()) errors.push('勝利画面に「今回の大暴れ」パネルが無い');
   if (!winText.includes('最大CHAIN') || !winText.includes('4')) errors.push('最大CHAINが読めない');
   if (!winText.includes('最大OVERKILL') || !winText.includes('180%')) errors.push('最大OVERKILLが読めない');
+  if (!winText.includes('今回の大暴れ')) errors.push('パネル見出しが読めない');
+  if (!winText.includes('いちばん長くつながった連鎖')) errors.push('CHAINと経路の関係を説明する行が無い');
   const steps = await page.locator('.chain-step').allInnerTexts();
   if (steps.join(' → ') !== '攻撃 → 追い剥ぎ +1G → 強欲 → 追加攻撃') {
     errors.push('代表CHAIN経路が読めない: ' + steps.join(' → '));
@@ -99,7 +101,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 
   // 敗北画面でも同じ表示契約
   const loseText = await setup(false);
-  if (!await page.locator('.breakthrough-panel').count()) errors.push('敗北画面に「今回の壊れ方」パネルが無い');
+  if (!await page.locator('.breakthrough-panel').count()) errors.push('敗北画面に「今回の大暴れ」パネルが無い');
   if (!loseText.includes('最大CHAIN')) errors.push('敗北画面で最大CHAINが読めない');
 
   await setup(true);
@@ -112,7 +114,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     UI.result();
     return document.body.innerText;
   });
-  if (!oldText.includes('最大CHAIN')) errors.push('旧データで壊れ方パネルが消えてしまう');
+  if (!oldText.includes('最大CHAIN')) errors.push('旧データで大暴れパネルが消えてしまう');
   if (await page.locator('.chain-step').count()) errors.push('旧データなのに経路が出ている');
 
   await page.screenshot({ path: (process.env.SP || '.') + '/report-panel.png', fullPage: true });

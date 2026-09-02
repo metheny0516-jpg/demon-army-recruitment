@@ -1163,14 +1163,15 @@ button.wide { width: 100%; }
 .record-highlights b { font-size: 18px; color: var(--gold); line-height: 1.2; }
 .record-highlights span { font-size: 11px; color: var(--muted); }
 
-/* 今回の壊れ方。主要記録は2つだけ、下に代表CHAIN経路を一本だけ出す */
+/* 今回の大暴れ。主要記録は2つだけ、下に代表CHAIN経路を一本だけ出す */
 .breakthrough-panel .breakthrough-records {
   display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px;
 }
 .breakthrough-panel .breakthrough-records div { display: flex; flex-direction: column; }
 .breakthrough-panel .breakthrough-records b { font-size: 24px; color: var(--gold); line-height: 1.1; }
 .breakthrough-panel .breakthrough-records span { font-size: 11px; color: var(--muted); }
-.chain-path { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; }
+.chain-caption { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.chain-path { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 4px 0 6px; }
 .chain-step {
   font-size: 12px; padding: 2px 8px; border-radius: 10px;
   background: #1b1526; border: 1px solid #3a2f52;

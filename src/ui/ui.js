@@ -271,11 +271,14 @@ const UI = {
     const maxPercent = (overkill && overkill.maxPercent) || 0;
     if (!maxChain && !maxPercent) return "";
 
+    // 数字だけでは「CHAIN」が何を指すのか伝わらない。経路の上に一行置いて、
+    // 「この芋づるの段数が最大CHAINだ」と読めるようにする（説明画面は作らない）。
     const steps = (chain && chain.deepest && chain.deepest.steps) || [];
     const path = steps.length >= 2
-      ? `<div class="chain-path">${steps.map(step =>
+      ? `<div class="chain-caption">いちばん長くつながった連鎖（${steps.length}段）</div>
+         <div class="chain-path">${steps.map(step =>
           `<span class="chain-step">${U.esc(step.label)}</span>`).join(`<span class="chain-arrow">→</span>`)}</div>`
-      : `<div class="muted">連鎖は起きなかった（単発で終わっている）</div>`;
+      : `<div class="muted">連鎖は起きなかった（ひと突きで終わっている）</div>`;
 
     const details = [];
     if (overkill && overkill.count) details.push(`${U.esc(overkill.rank || "OVERKILL")} ほか ${overkill.count}回・総余剰 ${overkill.totalExcess}`);
@@ -283,7 +286,7 @@ const UI = {
     if (revives) details.push(`蘇生 ${revives}回`);
     if (battle.summonCount) details.push(`召喚 ${battle.summonCount}体`);
 
-    return `<div class="panel breakthrough-panel"><h3>💥 今回の壊れ方</h3>
+    return `<div class="panel breakthrough-panel"><h3>💥 今回の大暴れ</h3>
       <div class="breakthrough-records">
         <div><b>${maxChain}</b><span>最大CHAIN</span></div>
         <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>
