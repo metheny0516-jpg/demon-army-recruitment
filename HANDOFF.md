@@ -124,6 +124,38 @@ formationHint` が加わり、UIは未設定の旧セーブを「基本隊列」
 `dialogue { unitId, name, side, quote }` として戦闘タイムラインへ出る。DOM側へ敵名を直書きせず、
 台詞追加は `src/data/enemies.js` だけで行う。現在は最終戦の勇者アレンに1行だけ設定済み。
 
+### 2-5. 2026-09-02 に増えた契約（データを触る前に読む）
+
+**シナジーの効果量を説明文へ二重に書かない。**
+編成画面の「いま ×1.15／あと1体で ×1.30」は `Synergy.preview()` が
+**使い捨ての写しへ実際に `apply()` して測った値**である。`desc` は文章としてだけ使う。
+したがって `synergies.js` へ新しいシナジーを足すと、**表示は自動で追従する**（追加作業は不要）。
+逆に `desc` に数値を書いても表示はそちらを見ない。`apply()` が本体。
+
+同じく `Synergy.traitEffects()` が特性の `modDealt` を中立な状況
+（敵HP満タン・ラウンド2・乱数0.5）で呼び、編成で決まる倍率だけを拾う。
+**新しい特性も `modDealt` を持つなら自動で編成画面に出る。**
+状況で決まるもの（敵HPを見る、ラウンドを見る、乱数を引く）は自然に外れる。
+
+**merge型シナジーは「実際に合体した戦闘」でだけイベントに載る。**
+`battle.js` は `type === "merge"` を synergy イベントと `activeSynergies` の両方から除外し、
+合体を実行した `run.js` が `addMergeSynergy()` で差し込む。条件を満たしただけで
+「合体する！」と宣言しないための分担。**新しい merge型を足すなら `run.js` 側の合流処理が要る。**
+キングスライム合体は既定で行うが、編成画面で断れる（`st.kingSlimeMerge`、既定 true）。
+
+**傭兵は軍団員ではない。** `flags.mercenary` を持つ戦闘ユニットで、`contribution` の行に
+`mercenary: true` が付く。欠員・戦没者名簿・戦功・昇進・給与・魔界史のいずれにも入らない。
+`st.mercenaries`（雇用中）と `st.mercenaryOffers`（候補）は戦闘後に空へ戻る。
+
+**ラン状態へ増えたフィールド**（`migrateState()` の defaults にも入れてある）:
+`maxChain` / `maxOverkill` / `mercenaryOffers` / `mercenaries` / `kingSlimeMerge`。
+**新しい状態を足したら defaults にも足すこと**（旧セーブが壊れる）。
+
+**新しい「編成の判断」を足したら KPI の指紋にも足す。**
+`KPI.fingerprint()` が「ビルド試行」を数える根拠で、現在は出撃隊・部門配属・施設Lv・給与方針・
+雇った傭兵・合体の可否・作戦種別を見ている。足し忘れると、その判断は試行として数えられず、
+KPIが実際より少なく出る。
+
 ---
 
 ## 3. 落とし穴（私が実際に踏んだもの）
