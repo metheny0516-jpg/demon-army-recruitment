@@ -110,6 +110,15 @@ assert(KPI.current.formationChanges === changesBefore + 2, '出撃隊の入れ�
 Game.assignDepartment(now.roster[0].uid, 'life');
 assert(KPI.current.formationChanges === changesBefore + 3, '部門配属の変更も編成変更として数える');
 
+// 金貨の出口が使われたかも残す
+KPI.mercenaryHired({ race: 'ゴブリン' }, 10, true);
+KPI.mercenaryHired({ race: '異邦人' }, 20, false);
+KPI.mergeRefused();
+assert(KPI.current.mercenariesHired === 2 && KPI.current.mercenaryGold === 30,
+  '雇った傭兵の数と払った金貨を数える');
+assert(KPI.current.kinHires === 1, '同族を雇った回数だけを別に数える（ビルドを濃くした買い物か）');
+assert(KPI.current.mergesRefused === 1, '合体を断った回数を数える（既定を覆す判断）');
+
 KPI.speedChanged();
 KPI.logSkipped();
 KPI.reportSkipped();

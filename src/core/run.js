@@ -736,6 +736,7 @@ const Game = {
     st.mercenaries = (st.mercenaries || []).concat([{ ...merc, hiredFor: cost }]);
     st.mercenaryOffers = st.mercenaryOffers.filter((_, i) => i !== index);
     this.kpi("formationChanged");   // 傭兵も編成の判断
+    this.kpi("mercenaryHired", merc, cost, this.mercenaryKinCount(merc.race) > 0);
     this.save();
     return true;
   },
@@ -767,6 +768,7 @@ const Game = {
     const st = this.state;
     if (!st) return false;
     if (!this.kingSlimePreview()) return false;   // 対象がいなければ設定しない
+    if (st.kingSlimeMerge !== false && on === false) this.kpi("mergeRefused");
     st.kingSlimeMerge = !!on;
     this.kpi("formationChanged");
     this.save();
