@@ -34,6 +34,20 @@ assert(result.chainSummary.maxChain >= 2, 'OVERKILLがCHAIN深度を進める');
 
 const exact = Battle.simulate([make('適量砲', 100, 100, 'player')], [make('標的2', 100, 1, 'enemy')]);
 assert(!exact.timeline.some(e => e.type === 'overkill'), '残HPと同値の致死ダメージはOVERKILLにしない');
+
+// 「やりすぎた撃破」だけに名前を与える。わずかな余剰は日常なのでOVERKILLと呼ばない。
+// （実測で撃破のほぼ全部がOVERKILL判定になり、1戦3.94回＝見せ場が日常になっていた）
+const excessOf = (targetHp, damage) => {
+  const shooter = make('試験砲', 100, damage, 'player');
+  const dummy = make('的', targetHp, 1, 'enemy');
+  return Battle.simulate([shooter], [dummy]).timeline.find(e => e.type === 'overkill') || null;
+};
+assert(Battle.OVERKILL_MIN_PERCENT === 40, 'OVERKILLと呼ぶ下限を1か所の定数で持つ');
+assert(excessOf(100, 130) === null, '余剰30%（下限未満）はOVERKILLと呼ばない');
+const atThreshold = excessOf(100, 140);
+assert(atThreshold && atThreshold.percent === 40, '余剰40%（下限ちょうど）からOVERKILLと呼ぶ');
+assert(atThreshold.rank === 'OVERKILL' && atThreshold.rankId === 'overkill',
+  '下限〜100%未満は基本ランクのまま');
 assert(exact.overkillSummary.count === 0 && exact.overkillSummary.maxPercent === 0, '未発生時は0で安全に集計する');
 
 assert(Battle.overkillRank(100).name === '蹂躙'

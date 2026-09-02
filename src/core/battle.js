@@ -33,6 +33,13 @@
 const Battle = {
   MAX_ROUNDS: 30,
 
+  // 余剰がこの割合（敵の最大HP比）に満たない撃破は OVERKILL と呼ばない。
+  // 実測では撃破のほぼ全部——1戦3.94回——が OVERKILL 判定になっており、
+  // 余剰割合の中央値は18%だった。毎回起きるものは見せ場ではなく日常なので、
+  // 「やりすぎた撃破」だけに名前を与える（40%で1戦0.85回）。
+  // ここは演出の都合ではなくゲーム語彙の線引きなので core 側に置く。
+  OVERKILL_MIN_PERCENT: 40,
+
   overkillRank(percent) {
     if (percent >= 1000) return { id: "demon_king", name: "魔王級殲滅", emphasis: 3 };
     if (percent >= 500) return { id: "annihilation", name: "消滅", emphasis: 3 };
@@ -273,9 +280,11 @@ const Battle = {
         cls: "dmg"
       }, opts.parentEvent || null);
       let overkillEvent = null;
-      if (dead && dmg > hpBefore) {
-        const excess = dmg - hpBefore;
-        const percent = Math.round(excess / target.maxHp * 100);
+      const excessDamage = dead ? Math.max(0, dmg - hpBefore) : 0;
+      const excessPercent = excessDamage > 0 ? Math.round(excessDamage / target.maxHp * 100) : 0;
+      if (excessPercent >= Battle.OVERKILL_MIN_PERCENT) {
+        const excess = excessDamage;
+        const percent = excessPercent;
         const rank = Battle.overkillRank(percent);
         overkillEvent = emitCausal("overkill", {
           fromId: attacker.id, toId: target.id, excess, percent,
