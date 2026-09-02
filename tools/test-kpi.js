@@ -19,7 +19,8 @@ const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
 vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 vm.runInContext('U.chance = () => false; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
-const Game = vm.runInContext('Game', ctx), KPI = vm.runInContext('KPI', ctx);
+const Game = vm.runInContext('Game', ctx), KPI = vm.runInContext('KPI', ctx),
+  Battle = vm.runInContext('Battle', ctx);
 const assert = (condition, message) => { if (!condition) throw new Error(message); console.log(`✓ ${message}`); };
 
 // 時計を手で進められるようにする（60秒判定を実時間で待たないため）
@@ -118,6 +119,57 @@ assert(KPI.current.mercenariesHired === 2 && KPI.current.mercenaryGold === 30,
   '雇った傭兵の数と払った金貨を数える');
 assert(KPI.current.kinHires === 1, '同族を雇った回数だけを別に数える（ビルドを濃くした買い物か）');
 assert(KPI.current.mergesRefused === 1, '合体を断った回数を数える（既定を覆す判断）');
+
+// ── 3b. シナジー観測（異なる条件がどれだけ繋がったか） ─────────
+// 手組みのタイムラインを渡し、「発火したトリガー種類」と
+// 「代表CHAINを構成した異なる能力数」が因果メタデータだけから導出されることを固定する。
+{
+  const timeline = [
+    { eventId: 'e1', type: 'attack', chainId: 'e1', chainDepth: 1 },
+    { eventId: 'e2', type: 'overkill', parentEventId: 'e1', chainId: 'e1', chainDepth: 2, percent: 140, rank: 'OVERKILL' },
+    { eventId: 'e3', type: 'trait_trigger', traitId: 'chain_massacre', name: '連鎖虐殺',
+      parentEventId: 'e2', chainId: 'e1', chainDepth: 3 },
+    { eventId: 'e4', type: 'splash', label: '連鎖虐殺', parentEventId: 'e3', chainId: 'e1', chainDepth: 4 },
+    { eventId: 'e5', type: 'death', parentEventId: 'e4', chainId: 'e1', chainDepth: 5 },
+    { eventId: 'e6', type: 'facility_trigger', facilityId: 'graveyard', name: '墓地',
+      parentEventId: 'e5', chainId: 'e1', chainDepth: 6 },
+    { eventId: 'e7', type: 'summon', parentEventId: 'e6', chainId: 'e1', chainDepth: 7 },
+    // 連鎖に参加していない単発攻撃は「繋がった」とは数えない
+    { eventId: 'e8', type: 'attack' }
+  ];
+  const result = { timeline, chainSummary: Battle.summarizeChains(timeline) };
+  const seen = KPI.battleFinished(result);
+  assert(KPI.current.chainMax === 7, '最大CHAIN（深さ）を記録する');
+  assert(seen.abilities.join('→') === 'OVERKILL→連鎖虐殺→死→墓地→召喚',
+    `代表CHAINを能力の並びとして残す（${seen.abilities.join('→')}）`);
+  assert(KPI.current.chainAbilityMax === 5,
+    '代表CHAINを構成した異なる能力数を数える（特性とその追撃は1つ／起点の通常攻撃は数えない）');
+  const kinds = Object.keys(KPI.current.triggerKinds);
+  assert(kinds.includes('trait:chain_massacre') && kinds.includes('facility:graveyard'),
+    '特性と施設を別の種類として数える');
+  assert(!kinds.includes('event:attack'), '連鎖の起点でない単発攻撃はトリガー種類に数えない');
+  assert(KPI.current.triggerKinds['event:overkill'] === 1, '種類ごとの発火回数を持つ');
+
+  // 同じ能力が何段続いても「1種類」。深さではなく接続の種類数を見るため
+  const flat = [{ eventId: 'f1', type: 'attack', chainId: 'f1', chainDepth: 1 }];
+  for (let i = 2; i <= 9; i++) {
+    flat.push({ eventId: `f${i}`, type: 'trait_trigger', traitId: 'chain_massacre', name: '連鎖虐殺',
+      parentEventId: `f${i - 1}`, chainId: 'f1', chainDepth: i });
+  }
+  const flatSeen = KPI.battleFinished({ timeline: flat, chainSummary: Battle.summarizeChains(flat) });
+  assert(flatSeen.abilities.join('→') === '連鎖虐殺',
+    '同じ能力が続くだけの連鎖は種類として増えない（深さと別物）');
+  assert(KPI.current.chainMax === 9, 'より深い連鎖なら最大CHAINは伸びる');
+  assert(KPI.current.chainAbilityMax === 5, '代表CHAINの記録は「いちばん条件をまたいだ1本」を保つ');
+  assert(KPI.current.chainSample.abilities.length === 5 && KPI.current.chainSample.depth === 7,
+    '代表CHAINの中身と、そのときの深さを残す');
+  assert(KPI.current.triggerKinds['trait:chain_massacre'] === 9,
+    '同じ能力の繰り返しは回数として積む（種類は1つのまま）');
+
+  // 因果メタデータの無い旧データでも落ちない
+  KPI.battleFinished({ timeline: [{ type: 'attack' }], chainSummary: null });
+  assert(KPI.current.chainBattles === 3, '連鎖の無い戦闘も観測回数には数える');
+}
 
 KPI.speedChanged();
 KPI.logSkipped();

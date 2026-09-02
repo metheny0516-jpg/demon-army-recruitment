@@ -959,6 +959,9 @@ const Game = {
     // （やり直した歴史の記録は残さない）ので、ここに別のテレメトリは持たない。
     st.maxChain = Math.max(st.maxChain || 0, (result.chainSummary && result.chainSummary.maxChain) || 0);
     st.maxOverkill = Math.max(st.maxOverkill || 0, (result.overkillSummary && result.overkillSummary.maxPercent) || 0);
+    // 「どの条件がどこへ繋がったか」の観測。KPI側で読むだけで、ラン状態には触らない
+    // （したがって再起で巻き戻しても消えない＝試した事実として残る）。
+    if (typeof KPI !== "undefined") KPI.battleFinished(result);
 
     const goldBefore = st.gold;
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);

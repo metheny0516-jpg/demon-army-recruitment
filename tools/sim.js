@@ -168,6 +168,14 @@ const strategies = [
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
 ];
 const N = Number(process.argv[2] || 400);
+// KPIの書き出し先（任意）: node tools/sim.js 30 --kpi /tmp/kpi.json
+// 実機のプレイではないので数値そのものは参考値だが、KPI→レポートの経路を
+// 人間の試遊を待たずに通せる。試遊で集めた本物の export とは混ぜないこと。
+const kpiOut = (() => {
+  const at = process.argv.indexOf('--kpi');
+  return at >= 0 ? process.argv[at + 1] : null;
+})();
+const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {
   const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0 };
   const res = [];
@@ -182,10 +190,30 @@ for (const s of strategies) {
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);
   // 「1ランで仮説を何回試せたか」。同じ編成の連戦は試行に数えない（設計憲法 第14節）
-  const kpiRuns = KPI.load().runs;
+  const kpiData = KPI.load();
+  const kpiRuns = kpiData.runs;
   if (kpiRuns.length) {
     const mean = key => (kpiRuns.reduce((sum, r) => sum + (r[key] || 0), 0) / kpiRuns.length).toFixed(1);
     console.log(`  ビルド試行: 平均 ${mean('buildAttempts')}回/ラン（戦闘 ${mean('battles')}回）`);
+    // 種族統一ボーナスではなく「異なる条件がどれだけ繋がったか」。
+    // 深さ（最大CHAIN）より、1本の連鎖がまたいだ能力の種類数を見る
+    const kinds = (kpiRuns.reduce((sum, r) => sum + Object.keys(r.triggerKinds || {}).length, 0)
+      / kpiRuns.length).toFixed(1);
+    console.log(`  シナジー接続: トリガー種類 平均 ${kinds}種/ラン　最大CHAIN 平均 ${
+      mean('chainMax')}　代表CHAINの能力数 平均 ${mean('chainAbilityMax')}`);
+    if (kpiOut) {
+      for (const run of kpiRuns) kpiDump.runs.push({ ...run, strategy: s.name });
+      kpiDump.lastScreen = kpiData.lastScreen;
+      kpiDump.lastRunEndedAt = kpiData.lastRunEndedAt;
+      for (const [key, value] of Object.entries(kpiData.totals || {})) {
+        kpiDump.totals[key] = (kpiDump.totals[key] || 0) + value;
+      }
+    }
   }
   KPI.reset();
+}
+
+if (kpiOut) {
+  fs.writeFileSync(kpiOut, JSON.stringify(kpiDump, null, 2));
+  console.log(`\nKPIを書き出した: ${kpiOut}（node tools/kpi-report.js ${kpiOut} で読む）`);
 }

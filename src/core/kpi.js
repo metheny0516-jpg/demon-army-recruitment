@@ -18,6 +18,18 @@
 //   reportSkips      モルモ報告を全文表示前に送った回数
 //   lastScreen       最後にいた画面と攻略段階（＝どこで離脱したか）
 //
+// ── シナジー観測（種族統一ボーナスではなく「異なる条件の接続」を測るため） ──
+//   triggerKinds     ランを通して連鎖に参加した能力の種類（特性・施設・シナジー・事件）
+//                    ＝「何種類の異なるトリガーが実際に発火したか」
+//   chainAbilityMax  代表CHAIN（最深経路）を構成した**異なる能力**の数の最大値
+//                    ＝「1本の連鎖が何種類の条件をまたいだか」。深さより接続の広さを見る
+//   chainMax         ランの最大CHAIN（深さ）。魔界史の maxChain と同じ値だが、
+//                    こちらは再起で巻き戻しても減らない（試した事実として残す）
+//   chainSample      いちばん能力種類の多かった代表CHAINの中身（能力名の並び）
+//
+// これらは戦闘結果のタイムラインから**導出するだけ**で、戦闘計算にも
+// ラン状態にも一切触らない。能力やバランスの変更とは独立して測れる。
+//
 // ── 再起（チェックポイント巻き戻し）との関係 ────────────────────
 // KPIはラン状態の中に持たない。したがって再起で巻き戻しても**減らない**。
 // 魔界史の記録（maxChain / maxOverkill）とは逆の扱いで、これは意図的である。
@@ -83,6 +95,7 @@ const KPI = {
       startedAt: at, endedAt: 0, cleared: false, conquest: 0, battles: 0,
       buildAttempts: 0, formationChanges: 0, speedChanges: 0, logSkips: 0, reportSkips: 0,
       mercenariesHired: 0, mercenaryGold: 0, kinHires: 0, mergesRefused: 0,
+      triggerKinds: {}, chainMax: 0, chainAbilityMax: 0, chainSample: null, chainBattles: 0,
       retriesUsed: 0, sessionRun: this.session.runs, quickRetry: false
     };
     this.update(data => {
@@ -143,6 +156,82 @@ const KPI = {
 
   // 合体を断った回数。既定を断る判断が実際に起きているか
   mergeRefused() { if (this.current) this.current.mergesRefused += 1; },
+
+  // ── シナジー観測 ────────────────────────────
+  // 連鎖イベント1件を「どの能力が発火したか」に畳む。
+  // 表示や集計のためだけの鍵で、戦闘計算には一切使わない。
+  // 因果メタデータの無い旧イベントでも type までは落ちるので、静かに欠測しない。
+  abilityKey(event) {
+    if (!event) return null;
+    if (event.traitId) return { key: `trait:${event.traitId}`, label: event.name || event.traitId };
+    if (event.facilityId) return { key: `facility:${event.facilityId}`, label: event.name || event.facilityId };
+    if (event.type === "synergy") return { key: `synergy:${event.id || event.name}`, label: event.name || "シナジー" };
+    if (event.type === "incident") return { key: `incident:${event.id || event.name}`, label: event.name || "事件" };
+    switch (event.type) {
+      case "overkill": return { key: "event:overkill", label: "OVERKILL" };
+      case "death": return { key: "event:death", label: "死" };
+      case "revive": return { key: "event:revive", label: "蘇生" };
+      case "summon": return { key: "event:summon", label: "召喚" };
+      case "survive": return { key: "event:survive", label: "耐えた" };
+      case "heal": return { key: "event:heal", label: "回復" };
+      // 追撃は「それを起こした能力」の一部。名前があるならその能力名で畳む
+      case "splash": return event.label
+        ? { key: `splash:${event.label}`, label: event.label }
+        : { key: "event:splash", label: "追撃" };
+      case "resource_gain": return { key: "event:resource_gain", label: event.label || "資源獲得" };
+      case "resource_forfeit": return { key: "event:resource_forfeit", label: event.label || "資源没収" };
+      case "resource_consume": return { key: "event:resource_consume", label: "資源消費" };
+      case "attack": return event.parentEventId ? { key: "event:extra_attack", label: "追加攻撃" } : null;
+      default: return event.type ? { key: `event:${event.type}`, label: event.name || event.type } : null;
+    }
+  },
+
+  // 代表CHAIN（最深経路）を構成した「異なる能力」の並び。
+  // 同じ能力が何段続いても1種類として数える。見たいのは深さではなく**接続の種類数**。
+  // 畳む単位は能力名。特性の発火とその追撃のように、内部の型が違っても
+  // プレイヤーから見て同じ能力なら1つと数える（「何種類の条件をまたいだか」を測るため）。
+  // 起点の通常攻撃は能力ではないので並びに入らない（abilityKey が null を返す）。
+  chainAbilities(timeline, deepest) {
+    if (!deepest || !Array.isArray(deepest.steps)) return [];
+    const byId = new Map((timeline || []).filter(e => e.eventId).map(e => [e.eventId, e]));
+    const labels = [], seen = new Set();
+    for (const step of deepest.steps) {
+      const event = byId.get(step.eventId) || step;
+      const ability = this.abilityKey(event);
+      if (!ability || seen.has(ability.label)) continue;
+      seen.add(ability.label);
+      labels.push(ability.label);
+    }
+    return labels;
+  },
+
+  // 戦闘1回ぶんの観測。Battle.simulate() の戻り値をそのまま渡す。
+  // 結果を読むだけで、result も state も書き換えない。
+  battleFinished(result) {
+    if (!this.current || !result) return null;
+    const summary = result.chainSummary || null;
+    const timeline = Array.isArray(result.timeline) ? result.timeline : [];
+    this.current.chainBattles += 1;
+
+    // 発火したトリガーの種類。連鎖に参加した能力だけを数える
+    // （単発の通常攻撃は「何かに繋がった」とは言えないため除く）。
+    for (const event of timeline) {
+      if (!event.chainId || !Number.isFinite(event.chainDepth)) continue;
+      const ability = this.abilityKey(event);
+      if (!ability) continue;
+      this.current.triggerKinds[ability.key] =
+        (this.current.triggerKinds[ability.key] || 0) + 1;
+    }
+
+    const depth = (summary && summary.maxChain) || 0;
+    this.current.chainMax = Math.max(this.current.chainMax, depth);
+    const abilities = this.chainAbilities(timeline, summary && summary.deepest);
+    if (abilities.length > this.current.chainAbilityMax) {
+      this.current.chainAbilityMax = abilities.length;
+      this.current.chainSample = { depth, abilities };
+    }
+    return { depth, abilities };
+  },
 
   speedChanged() {
     if (this.current) this.current.speedChanges += 1;
