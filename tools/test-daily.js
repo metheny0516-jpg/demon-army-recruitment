@@ -1,4 +1,4 @@
-// 冒頭3日の日次決算契約をブラウザなしで検証する。
+// 撤廃した冒頭3日間へ新規・旧セーブのどちらからも入らないことを検証する。
 const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
@@ -22,53 +22,26 @@ const assert = (condition, message) => {
 
 Game.newRun('standard');
 const st = Game.state;
-st.roster = [
-  { uid: 1, tplId: 'goblin', name: '兵士', race: 'ゴブリン', job: '兵士', hp: 20, atk: 4, def: 2, spd: 3,
-    salary: 3, loyalty: 60, traits: [], tags: [], department: 'combat', unpaid: false, unpaidStreak: 0 },
-  { uid: 2, tplId: 'orc', name: '大工', race: 'オーク', job: '建築士', hp: 24, atk: 5, def: 3, spd: 2,
-    salary: 3, loyalty: 60, traits: [], tags: [], department: 'construction', unpaid: false, unpaidStreak: 0 },
-  { uid: 3, tplId: 'kobold', name: '料理人', race: 'コボルト', job: '料理人', hp: 18, atk: 3, def: 1, spd: 5,
-    salary: 3, loyalty: 60, traits: [], tags: [], department: 'life', unpaid: false, unpaidStreak: 0 }
-];
-st.activeUids = [1];
-st.gold = 20; st.food = 3; st.materials = 3;
-Game.beginOpeningPreparation();
-assert(st.phase === 'preparation', '準備日は戦闘せず開始できる');
-const assignments = JSON.stringify(st.roster.map(m => [m.uid, m.department]));
-const before = { gold: st.gold, food: st.food, build: st.buildProgress };
-assert(Game.advanceDay(1), '1日目を本日の業務終了で進められる');
-const once = { gold: st.gold, food: st.food, build: st.buildProgress };
-assert(Game.advanceDay(1) === false, '同じ日の二重決算を拒否する');
-assert(JSON.stringify(once) === JSON.stringify({ gold: st.gold, food: st.food, build: st.buildProgress }),
-  '二重実行拒否時に給与・食料・建設が変化しない');
-assert(st.day === 2 && st.phase === 'preparation', '1日目から2日目へ進む');
-assert(JSON.stringify(st.roster.map(m => [m.uid, m.department])) === assignments, '配置は翌日に維持される');
-assert(Game.advanceDay(2) && st.day === 3, '2日目から3日目へ進む');
-assert(Game.advanceDay(3) === false, '3日目は防衛戦なしで日を終えられない');
-st.openingDefenseWon = true;
-assert(Game.advanceDay(3) && st.openingPrototype === false, '3日目の決算後に従来進行へ戻れる');
-assert(before.gold - st.gold === 7, '3日分の給与合計は旧1ターン分と一致する');
-assert(st.buildProgress === 3, '3日分の建設進行は旧1ターン分と一致する');
-
-const legacy = JSON.parse(JSON.stringify(st));
-delete legacy.day; delete legacy.openingPrototype; delete legacy.dailySettledDay; delete legacy.expeditionUsedToday; delete legacy.openingDefenseWon;
-Game.state = legacy;
-Game.migrateState();
-assert(Game.state.day === 1 && Game.state.openingPrototype === false, 'dayのない既存セーブは従来進行として読める');
-
-Game.newRun('standard');
-const opening = Game.state;
-opening.roster = [{ uid: 1, tplId: 'orc', name: '門番', race: 'オーク', job: '門番', hp: 999, atk: 999, def: 99, spd: 99,
+assert(st.openingPrototype === false && st.phase === 'recruit', '新規ランは3日間を挟まず採用から始まる');
+st.roster = [{ uid: 1, tplId: 'orc', name: '門番', race: 'オーク', job: '門番', hp: 30, atk: 8, def: 4, spd: 3,
   salary: 3, loyalty: 80, traits: [], tags: [], department: 'combat', unpaid: false, unpaidStreak: 0 }];
-opening.activeUids = [1];
-Game.beginOpeningPreparation();
-assert(Game.prepareOpeningBattle('raid'), '準備日は既存の略奪作戦を任意遠征に流用できる');
-opening.phase = 'preparation'; opening.selectedMission = null;
-assert(Game.advanceDay(1) && Game.advanceDay(2), '戦闘なしでも3日目まで到達できる');
-assert(Game.prepareOpeningBattle('raid') === false, '3日目は任意遠征を選べない');
-assert(Game.prepareOpeningBattle('invade'), '3日目は最初の侵攻編成による防衛戦を強制する');
-const defense = Game.deploy();
-assert(defense && defense.result.victory, '防衛戦が既存戦闘エンジンで決着する');
-assert(opening.openingPrototype === false && opening.phase === 'result' && opening.conquest === 1 && opening.turn === 2,
-  '防衛戦後は最初の侵攻を終えた従来進行へ安全に戻る');
-console.log('✓ 日次進行テスト完了');
+st.activeUids = [1];
+Game.finishRecruitment();
+assert(st.phase === 'mission' && st.missionOffers.length === 3,
+  '採用終了後は準備日ではなく通常の作戦会議へ直行する');
+
+const legacyOpening = JSON.parse(JSON.stringify(st));
+legacyOpening.openingPrototype = true;
+legacyOpening.phase = 'preparation';
+legacyOpening.day = 2;
+legacyOpening.expeditionUsedToday = true;
+legacyOpening.openingDefenseWon = false;
+Game.state = legacyOpening;
+Game.migrateState();
+assert(Game.state.openingPrototype === false && Game.state.phase === 'mission',
+  '3日間途中の旧セーブを通常の作戦会議へ移行する');
+assert(Game.state.roster.length === 1 && Game.state.activeUids[0] === 1,
+  '移行時に人材と編成を失わない');
+assert(!Game.state.expeditionUsedToday && !Game.state.openingDefenseWon,
+  '廃止した日程専用フラグを消す');
+console.log('✓ 開幕3日間の撤廃テスト完了');

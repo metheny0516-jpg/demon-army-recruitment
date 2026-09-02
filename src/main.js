@@ -198,6 +198,10 @@ const App = {
         Game.moveDeployed(Number(data.uid), 1);
         return this.render();
 
+      case "front":
+        Game.moveDeployedToFront(Number(data.uid));
+        return this.render();
+
       case "toggledeploy":
         Game.toggleDeploy(Number(data.uid));
         return this.render();

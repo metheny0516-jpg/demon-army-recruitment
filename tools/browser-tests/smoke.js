@@ -51,6 +51,9 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
     await page.locator('[data-action="down"]').first().click();
     const after = await page.locator('.card-name').first().innerText();
     if (before === after) throw new Error('並び替えが効いていない');
+    await page.locator('.department-combat-section .card').nth(1).locator('[data-action="front"]').click();
+    const restored = await page.locator('.card-name').first().innerText();
+    if (restored !== before) throw new Error('最前列へ一発で戻せない');
   });
 
   await step('生活部門へ配属', async () => {

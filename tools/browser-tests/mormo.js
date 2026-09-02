@@ -48,8 +48,8 @@ const { dismissMormo } = require('./helpers.js');
   await page.locator('[data-action="hire"]').first().click();
   // 採用後にも報告が出る。ここは報告そのものではなく「作戦→編成」の遷移を見たいので送る
   while (await dismissMormo(page)) { /* 出ている報告を送り切る */ }
-  // 3日間プロトタイプでは最初の作戦決定が遠征／防衛の選択になる（どちらも formationReport を通る）
-  await page.locator('[data-action="openingbattle"]').first().click();
+  // 開幕3日間は撤廃済み。通常の作戦3択から編成へ進み、同じ formationReport を通る。
+  await page.locator('[data-action="missionpick"]').first().click();
   if (await page.locator('#mormo-scene').count() !== 1) errors.push('作戦決定と編成の間にモルモ報告が出ない');
   if (await page.locator('[data-action="deploy"]').count() !== 1) errors.push('報告の背後に遷移先を準備できていない');
   await page.keyboard.press('Enter');

@@ -34,7 +34,8 @@ const Game = {
       stage: 1,
       turn: 1,
       day: 1,
-      openingPrototype: true,
+      // 3日間の開幕プロトタイプは2026-09-03に撤廃。最初から通常ループへ入る。
+      openingPrototype: false,
       dailySettledDay: 0,
       expeditionUsedToday: false,
       openingDefenseWon: false,
@@ -203,7 +204,20 @@ const Game = {
     }
     st.day = Math.max(1, Number(st.day) || 1);
     st.dailySettledDay = Math.max(0, Number(st.dailySettledDay) || 0);
-    st.openingPrototype = !!st.openingPrototype;
+    // 旧セーブが開幕3日間の途中なら、その日程だけを捨てて通常ループへ合流する。
+    // 人材・資源・配置はそのまま残す。準備画面には選択中の通常作戦が無いため作戦会議へ戻す。
+    const retiredOpening = !!st.openingPrototype;
+    st.openingPrototype = false;
+    if (retiredOpening) {
+      st.dailySettledDay = 0;
+      st.expeditionUsedToday = false;
+      st.openingDefenseWon = false;
+      if (st.phase === "preparation") {
+        st.phase = "mission";
+        st.selectedMission = null;
+        st.missionOffers = [];
+      }
+    }
     st.expeditionUsedToday = !!st.expeditionUsedToday;
     st.openingDefenseWon = !!st.openingDefenseWon;
     if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
@@ -883,6 +897,17 @@ const Game = {
     [r[index], r[next]] = [r[next], r[index]];
     this.save();
     this.kpi("formationChanged");
+  },
+
+  moveDeployedToFront(uid) {
+    const r = this.state.activeUids;
+    const index = r.indexOf(uid);
+    if (index <= 0) return false;
+    r.splice(index, 1);
+    r.unshift(uid);
+    this.save();
+    this.kpi("formationChanged");
+    return true;
   },
 
   moveUnit(index, dir) {

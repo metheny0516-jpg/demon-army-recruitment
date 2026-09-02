@@ -27,6 +27,12 @@ st.maxArmySize = 10;
 
 assert(Game.MAX_ARMY === 20 && Game.MAX_DEPLOY === 5, '軍団20体・出撃5体の上限');
 assert(Game.activeRoster().length === 5, '出撃隊だけを抽出');
+Game.state.activeUids = [1, 2, 3, 4, 5];
+assert(Game.moveDeployedToFront(4) && Game.state.activeUids.join(',') === '4,1,2,3,5',
+  '任意の出撃者を1操作で最前列へ移動');
+assert(Game.moveDeployedToFront(4) === false && Game.state.activeUids.join(',') === '4,1,2,3,5',
+  'すでに最前列なら並びを変えない');
+Game.state.activeUids = [1, 2, 3, 4, 5];
 assert(Game.salaryTotal() === 15, '給与は出撃5体分だけで控えは0G');
 st.gold = 100;
 Game.paySalaries([]);

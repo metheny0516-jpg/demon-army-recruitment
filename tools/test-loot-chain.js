@@ -81,8 +81,9 @@ let goldBefore = Game.state.gold;
 let output = Game.deploy();
 assert(output.result.victory && output.result.resourceChanges.gold === 1, '勝利戦で1Gを予約する');
 assert(Game.state.lastBattle.lootGold === 1, '勝利時に予約金貨を戦果へ確定する');
-assert(Game.state.gold >= goldBefore + output.stageData.reward + 1,
-  '勝利報酬とは別に略奪金を所持金へ加える');
+const paidAfterVictory = (Game.state.lastPayrollReport && Game.state.lastPayrollReport.paid) || 0;
+assert(Game.state.gold === goldBefore + output.stageData.reward + 1 - paidAfterVictory,
+  '通常ループの給与精算後も、勝利報酬とは別に略奪金を所持金へ加える');
 
 Game.newRun();
 Object.assign(Game.state, {

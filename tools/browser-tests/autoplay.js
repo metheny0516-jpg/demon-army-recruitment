@@ -9,6 +9,10 @@ const { autoDismissMormo } = require('./helpers.js');
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
   await page.goto('file://' + process.env.GAME + '/index.html');
+  // file:// の保存領域を使う実Chromeでは別テストや手動プレイの魔界史が見えることがある。
+  // このテストが作った3ランだけを数えるため、開始時に自分の検証領域を空にする。
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
 
   const click = async sel => { await page.locator(sel).first().click(); await page.waitForTimeout(40); };
   let runs = 0;
@@ -56,7 +60,8 @@ const { autoDismissMormo } = require('./helpers.js');
     console.log(`  ✓ ラン${runs} 終了: ${head} / ${cause}`);
     await page.screenshot({ path: process.env.SP + `/shot-gameover.png`, fullPage: true });
     await click('[data-action="history"]');
-    const recs = await page.locator('.history-item').count();
+    // 同じカード部品を使う図鑑・実績を巻き込まないよう、保存済みの魔界史を直接数える。
+    const recs = await page.evaluate(() => Storage.loadHistory().length);
     console.log(`    魔界史に ${recs} 代分の記録`);
     if (recs !== runs) throw new Error(`記録数が合わない: ${recs} != ${runs}`);
     await page.screenshot({ path: process.env.SP + `/shot-history.png`, fullPage: true });

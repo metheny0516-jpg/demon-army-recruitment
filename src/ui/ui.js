@@ -627,6 +627,7 @@ const UI = {
       footer: `<div class="card-actions">
         <div class="row tight">
           <button class="small" data-action="up" data-uid="${m.uid}" ${i === 0 ? "disabled" : ""}>▲ 前へ</button>
+          <button class="small" data-action="front" data-uid="${m.uid}" ${i === 0 ? "disabled" : ""}>⏫ 最前列へ</button>
           <button class="small" data-action="down" data-uid="${m.uid}" ${i === active.length - 1 ? "disabled" : ""}>▼ 後ろへ</button>
           <button class="small" data-action="toggledeploy" data-uid="${m.uid}">控えへ</button>
         </div>
