@@ -11,7 +11,7 @@ const BattleScene = {
   SPECIAL_DURATION: {
     battle_start: 500, round_start: 1150, synergy: 1650, facility_trigger: 1250,
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1100, survive: 650,
-    heal: 500, summon: 1150, overkill: 950, result: 1200
+    heal: 500, summon: 1150, resource_forfeit: 850, overkill: 950, result: 1200
   },
 
   // 長期戦がだらけないための自動圧縮。シナジー同士が噛み合って乱戦が
@@ -259,6 +259,17 @@ const BattleScene = {
           this.float(u, `+${ev.amount}${unit}`, "heal");
         }
         this.showAction(`${ev.label || "獲得"}　+${ev.amount}${unit}`, 650);
+        break;
+      }
+      case "resource_forfeit": {
+        const u = this.units[ev.sourceId];
+        const unit = ev.resource === "gold" ? "G" : ev.resource;
+        if (u) {
+          this.clearFocus();
+          u.el.classList.add("targeted");
+          this.float(u, `-${ev.amount}${unit}`, "damage");
+        }
+        this.showAction(`${ev.label || "予約"}没収　-${ev.amount}${unit}`, 850);
         break;
       }
       case "resource_consume": {

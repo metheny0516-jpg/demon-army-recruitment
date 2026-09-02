@@ -24,6 +24,8 @@
 //   revive       { unitId, hp, maxHp }              蘇生（状態差分から自動検出）
 //   summon       { unit:Snap, sourceUnitId }         戦闘専用ユニットの追加
 //   heal         { unitId, amount, hp, maxHp }      回復（同上）
+//   resource_gain    { sourceId,resource,amount,label }  戦闘後に確定する資源予約
+//   resource_forfeit { sourceId,resource,amount,label }  条件喪失による予約没収
 //   note         { }                                特性の発動などテキストのみ
 //   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
 //   result       { victory }
@@ -155,14 +157,16 @@ const Battle = {
     // シナジー適用（merge型は出撃時に処理済み）
     const activeSyn = Synergy.applyAll(playerUnits);
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
+    const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;
     let ledgerTriggered = false;
     let ledgerBoost = null;
     const gainBattleResource = (unit, resource, value, label, parent) => {
       const resourceName = resource === "gold" ? "G" : resource;
+      const verb = label === "殉職手当" ? "支給予約" : "略奪予約";
       const event = emitCausal("resource_gain", {
         sourceId: unit.id, resource, amount: value, reserved: true, label,
-        emphasis: 1, text: `　${unit.name}の【${label}】 ${value}${resourceName}を略奪予約`, cls: "loot"
+        emphasis: 1, text: `　${unit.name}の【${label}】 ${value}${resourceName}を${verb}`, cls: "loot"
       }, parent);
       if (resource === "gold") {
         const before = reservedGold;
@@ -374,6 +378,12 @@ const Battle = {
       if (applied.deathEvent && goblinRaid && unit.race === "ゴブリン" && target.side === "enemy") {
         triggeredEvents.push(gainBattleResource(unit, "gold", 1, "略奪者の連携", applied.deathEvent));
       }
+      if (applied.deathEvent && martyrAllowance && unit.flags.wasRevived
+        && !unit.flags.martyrAllowanceUsed && target.side === "enemy") {
+        unit.flags.martyrAllowanceUsed = true;
+        unit.flags.martyrGold = 2;
+        triggeredEvents.push(gainBattleResource(unit, "gold", 2, "殉職手当", applied.deathEvent));
+      }
       const post = {
         attacker: unit, target, dmg, enemies, log: note, pick: U.pick,
         dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg,
@@ -407,33 +417,46 @@ const Battle = {
 
     const wiped = us => us.every(u => !u.alive);
     const all = () => [...playerUnits, ...enemyUnits];
-    let round = 0;
+    const tryGraveyardSummon = () => {
+      if (!options.graveyard || !graveyardDeath || graveyardUsed) return null;
+      graveyardUsed = true;
+      const source = graveyardDeath.target;
+      const summoned = Battle.makeUnit({
+        uid: null, tplId: "skeleton", name: `${source.name}の骸骨従者`, race: "骸骨兵",
+        icon: null, job: "墓地の従者",
+        hp: Math.max(1, Math.round(source.maxHp * 0.3)),
+        atk: Math.max(1, Math.round(source.atk * 0.5)), def: 0, spd: 5,
+        salary: 0, loyalty: 100, traits: [], tags: ["undead"]
+      }, "player");
+      summoned.id = `ps${nextSummonId++}`;
+      summoned.flags.summoned = true;
+      playerUnits.push(summoned);
+      const facilityEvent = emitCausal("facility_trigger", {
+        facilityId: "graveyard", name: "墓地", desc: "戦死者を骸骨従者として召喚", emphasis: 2,
+        text: `　施設【墓地】 ${source.name}の遺骸が動き出す！`, cls: "synergy"
+      }, graveyardDeath.deathEvent);
+      const summonEvent = emitCausal("summon", {
+        sourceUnitId: source.id, unit: snap(summoned), emphasis: 3,
+        text: `　${summoned.name}を召喚！`, cls: "revive"
+      }, facilityEvent);
+      reactToUndeadArrival(summoned, summonEvent);
+      return summonEvent;
+    };
 
-    outer:
-    for (round = 1; round <= this.MAX_ROUNDS; round++) {
-      emit("round_start", { round, emphasis: 1, text: `── ラウンド ${round} ──`, cls: "round" });
-
-      const order = all()
-        .filter(u => u.alive)
-        .sort((a, b) => b.spd - a.spd || (U.chance(0.5) ? -1 : 1));
-      for (const unit of order) {
-        if (!unit.alive) continue;
-        const allies = unit.side === "player" ? playerUnits : enemyUnits;
-        const enemies = unit.side === "player" ? enemyUnits : playerUnits;
-        act(unit, allies, enemies, round);
-        if (wiped(playerUnits) || wiped(enemyUnits)) break outer;
-      }
-
-      // ラウンド終了時フック（再生・執念・死霊術）。死亡中ユニットにも回す。
-      // 特性側は ctx.log を呼ぶだけでよく、蘇生・回復は状態差分から自動的に
-      // 構造化イベントへ変換する。新しい特性を足しても描画側の変更は要らない。
+    // 通常ラウンド終了では全特性を処理する。全滅直後は rescueOnWipe を
+    // 明示した特性と墓地だけを一度解決し、敗北判定を先延ばしにしない。
+    const resolveRecoveryHooks = (rescueOnly, rescueSide) => {
+      const candidates = rescueOnly
+        ? (rescueSide === "enemy" ? enemyUnits : playerUnits)
+        : all();
       const before = all().map(u => ({ u, alive: u.alive, hp: u.hp }));
-      for (const unit of all()) {
+      for (const unit of candidates) {
         const allies = unit.side === "player" ? playerUnits : enemyUnits;
         const enemies = unit.side === "player" ? enemyUnits : playerUnits;
         for (const tid of unit.traits) {
           const tr = TRAITS[tid];
-          if (tr && tr.onRoundEnd) tr.onRoundEnd({ unit, allies, enemies, log: note, rng: U.rand });
+          if (!tr || !tr.onRoundEnd || (rescueOnly && !tr.rescueOnWipe)) continue;
+          tr.onRoundEnd({ unit, allies, enemies, log: note, rng: U.rand });
         }
       }
       for (const s of before) {
@@ -444,37 +467,50 @@ const Battle = {
             traitId: s.u.flags.reviveTraitId || (s.u.flags.selfRevived ? "tenacity" : null),
             hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 3
           }, death || null);
+          s.u.flags.wasRevived = true;
           delete s.u.flags.reviveSourceId;
           delete s.u.flags.reviveTraitId;
           reactToUndeadArrival(s.u, reviveEvent);
-        } else if (s.u.alive && s.u.hp > s.hp) {
+        } else if (!rescueOnly && s.u.alive && s.u.hp > s.hp) {
           emitCausal("heal", { unitId: s.u.id, amount: s.u.hp - s.hp, hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 1 }, null);
         }
       }
+      if ((!rescueOnly || rescueSide === "player") && tryGraveyardSummon()) return true;
+      const rescued = rescueSide === "enemy" ? enemyUnits : playerUnits;
+      return !wiped(rescued);
+    };
+    let round = 0;
 
-      if (options.graveyard && graveyardDeath && !graveyardUsed) {
-        graveyardUsed = true;
-        const source = graveyardDeath.target;
-        const summoned = Battle.makeUnit({
-          uid: null, tplId: "skeleton", name: `${source.name}の骸骨従者`, race: "骸骨兵",
-          icon: null, job: "墓地の従者",
-          hp: Math.max(1, Math.round(source.maxHp * 0.3)),
-          atk: Math.max(1, Math.round(source.atk * 0.5)), def: 0, spd: 5,
-          salary: 0, loyalty: 100, traits: [], tags: ["undead"]
-        }, "player");
-        summoned.id = `ps${nextSummonId++}`;
-        summoned.flags.summoned = true;
-        playerUnits.push(summoned);
-        const facilityEvent = emitCausal("facility_trigger", {
-          facilityId: "graveyard", name: "墓地", desc: "戦死者を骸骨従者として召喚", emphasis: 2,
-          text: `　施設【墓地】 ${source.name}の遺骸が動き出す！`, cls: "synergy"
-        }, graveyardDeath.deathEvent);
-        const summonEvent = emitCausal("summon", {
-          sourceUnitId: source.id, unit: snap(summoned), emphasis: 3,
-          text: `　${summoned.name}を召喚！`, cls: "revive"
-        }, facilityEvent);
-        reactToUndeadArrival(summoned, summonEvent);
+    outer:
+    for (round = 1; round <= this.MAX_ROUNDS; round++) {
+      emit("round_start", { round, emphasis: 1, text: `── ラウンド ${round} ──`, cls: "round" });
+
+      const order = all()
+        .filter(u => u.alive)
+        .sort((a, b) => b.spd - a.spd || (U.chance(0.5) ? -1 : 1));
+      let rescuedThisRound = false;
+      for (const unit of order) {
+        if (!unit.alive) continue;
+        const allies = unit.side === "player" ? playerUnits : enemyUnits;
+        const enemies = unit.side === "player" ? enemyUnits : playerUnits;
+        act(unit, allies, enemies, round);
+        if (wiped(enemyUnits)) {
+          if (!resolveRecoveryHooks(true, "enemy")) break outer;
+          rescuedThisRound = true;
+          break;
+        }
+        if (wiped(playerUnits)) {
+          if (!resolveRecoveryHooks(true, "player")) break outer;
+          rescuedThisRound = true;
+          break;
+        }
       }
+      if (rescuedThisRound) continue;
+
+      // ラウンド終了時フック（再生・執念・死霊術）。死亡中ユニットにも回す。
+      // 特性側は ctx.log を呼ぶだけでよく、蘇生・回復は状態差分から自動的に
+      // 構造化イベントへ変換する。新しい特性を足しても描画側の変更は要らない。
+      resolveRecoveryHooks(false, null);
 
       if (round === 1 && feastTrigger) {
         const feastUnit = playerUnits.find(u => u.id === feastTrigger.sourceId && u.alive);
@@ -497,6 +533,15 @@ const Battle = {
       // 30ラウンド経過 → 残HP率で判定
       const ratio = us => us.reduce((s, u) => s + u.hp, 0) / us.reduce((s, u) => s + u.maxHp, 0);
       victory = ratio(playerUnits) >= ratio(enemyUnits);
+    }
+    for (const unit of playerUnits) {
+      if (unit.flags.summoned || !unit.flags.martyrGold || unit.alive) continue;
+      const death = [...timeline].reverse().find(e => e.type === "death" && e.unitId === unit.id);
+      emitCausal("resource_forfeit", {
+        sourceId: unit.id, resource: "gold", amount: unit.flags.martyrGold,
+        reserved: true, label: "殉職手当", emphasis: 2,
+        text: `　${unit.name}の最終戦死により【殉職手当】${unit.flags.martyrGold}Gを没収`, cls: "loot"
+      }, death || null);
     }
     const resultText = wiped(enemyUnits) && victory ? "敵軍を全滅させた！ 魔王軍の勝利！"
       : wiped(playerUnits) ? "魔王軍は全滅した……"
@@ -549,8 +594,9 @@ const Battle = {
   summarizeResourceChanges(timeline) {
     const changes = {};
     for (const event of timeline || []) {
-      if (event.type !== "resource_gain" || !event.resource) continue;
-      changes[event.resource] = (changes[event.resource] || 0) + (Number(event.amount) || 0);
+      if (!event.resource || (event.type !== "resource_gain" && event.type !== "resource_forfeit")) continue;
+      const sign = event.type === "resource_forfeit" ? -1 : 1;
+      changes[event.resource] = (changes[event.resource] || 0) + sign * (Number(event.amount) || 0);
     }
     return changes;
   },

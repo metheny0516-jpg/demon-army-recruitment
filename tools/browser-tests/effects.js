@@ -49,6 +49,17 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }));
   if (timing.round < 1000 || timing.attack < 600 || timing.cap < 40000) errors.push('観戦テンポ設定が短すぎる');
 
+  await page.evaluate(() => BattleScene.render({
+    type: 'resource_forfeit', sourceId: 'p0', resource: 'gold', amount: 2,
+    label: '殉職手当', emphasis: 2, text: '殉職手当2Gを没収', cls: 'loot'
+  }));
+  const forfeitAction = await page.locator('#action-caption').innerText();
+  const forfeitFloat = await page.locator('#pop-p0').innerText();
+  if (!forfeitAction.includes('殉職手当没収') || !forfeitAction.includes('-2G')) {
+    errors.push('殉職手当の没収理由と金額が中央字幕で読めない');
+  }
+  if (!forfeitFloat.includes('-2G')) errors.push('殉職手当の没収額が対象者へ表示されない');
+
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ ラウンド区切り・攻撃表示・最終決戦演出');
   await browser.close();
   process.exit(errors.length ? 1 : 0);

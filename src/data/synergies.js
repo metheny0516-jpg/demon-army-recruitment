@@ -98,5 +98,17 @@ const SYNERGIES = [
         u.mods.takenMult *= 0.6;
       }
     }
+  },
+  {
+    id: "martyr_allowance",
+    name: "殉職手当",
+    condition: "死霊術＋追い剥ぎか強欲",
+    desc: "蘇生者の初撃破で2G予約。戦闘終了時に本人が死亡していれば没収",
+    check(units) {
+      const necromancy = units.some(u => u.traits.includes("necromancy"));
+      const economy = units.some(u => u.traits.includes("pickpocket") || u.traits.includes("greedy"));
+      return necromancy && economy;
+    },
+    apply() { /* 発火は蘇生者の撃破時に battle.js が因果イベントとして処理する */ }
   }
 ];

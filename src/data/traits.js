@@ -143,6 +143,8 @@ const TRAITS = {
   tenacity: {
     name: "執念",
     desc: "死亡後、ラウンド終了時に25%でHP30%で自力復活（1戦闘1回）",
+    // 全滅した瞬間にも、敗北確定前の救済フックとしてだけ実行してよい。
+    rescueOnWipe: true,
     onRoundEnd(ctx) {
       const u = ctx.unit;
       if (!u.alive && !u.flags.selfRevived && ctx.rng() < 0.25) {
