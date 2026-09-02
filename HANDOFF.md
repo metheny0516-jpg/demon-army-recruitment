@@ -77,6 +77,11 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
 `permanent` と `reversal` は勝敗確定後にタイムラインから導出して付け、`firstDiscovery` は
 `Game.recordDiscoveredSynergies()` が登録時に付ける。増やすときも同じ作法（計算に混ぜない）を守ること。
 
+戦果の集計もすべてタイムラインからの導出で完結している。`chainSummary.deepest`（代表CHAIN経路）と
+`contribution` の非ダメージ項目（`traitTriggers` / `resources` / `revivesGiven` / `selfRevives` / `healed`）は
+`sourceId` と `parentEventId` だけを根拠にする。**誰の手柄か言えないものは個人へ帰属させない**
+（施設由来の発火、召喚ユニットの行動）。これらは表示専用で、戦功・昇進・報酬には接続しない。
+
 ### 2-2. アニメーションは `transform` と `opacity` だけ
 
 将来 Capacitor でスマホアプリ化する前提。`left/top/width/height` を毎フレーム変えると
@@ -214,6 +219,36 @@ Pagesの反映漏れやキャッシュではなく、BGMのコード側の問題
 ---
 
 ## 4. 直近で完了したこと
+
+### 戦果画面のCHAINと非ダメージ貢献（2026-09-02完了）
+
+`docs/SYNERGY_VERTICAL_SLICES.md` 実装順7。CHAINは集計していたのに戦果画面から見えず、
+貢献度が与ダメージ中心だったため、略奪・蘇生・能力発火が「無かったこと」になっていた。
+
+- `Battle.deepestChainPath(timeline)`: 最深イベントから `parentEventId` を逆にたどり、
+  **代表経路を一本だけ**返す（分岐した枝は並べない）。1段の文言は `Battle.chainStepLabel()`。
+  同深度なら先に起きた方を選ぶ。親リンクが壊れていても `seen` で止まる。
+  因果メタデータの無い旧データ、単発（深度1）は `null` を返し、表示側は経路を出さない。
+  `chainSummary.deepest = { chainId, depth, steps:[{eventId,type,depth,label}] }`。
+- `Battle.summarizeContribution()` に非ダメージ貢献を追加。すべてタイムラインからの導出:
+  `traitTriggers`（`trait_trigger.sourceId`）、`resources`（`resource_gain` − `resource_forfeit` を
+  資源別に純増減）、`revivesGiven`（`revive.sourceId`）、`selfRevives`（`sourceId` の無い蘇生を
+  `unitId` へ）、`healed`（`heal.unitId`）。施設由来や召喚物は誰の手柄か言えないので付けない。
+- UI: `UI.breakthroughPanel(battle)` を新設し、勝利・敗北・ゲームオーバーの3画面で共通に使う。
+  見出し記録は**最大CHAINと最大OVERKILLの2つだけ**。旧 `overkillPanel` と 💀召喚パネルは廃止し、
+  OVERKILL回数・総余剰・蘇生回数・召喚数は詳細1行へ落とした。
+  個人行のバッジは `UI.contributionExtras()` が組み立て、0のものは出さず最大3つ。
+
+**非ダメージ貢献は表示専用**である。`awardMerit()` は従来どおり `dealt / taken / kills / survived`
+だけを見る。評価軸を増やすと「強い編成」がぼやけるので、恒久報酬へは接続しない。
+魔界史への最大CHAIN・最大OVERKILL保存は次の独立タスク（バックログ「設計憲法への4契約統合」の契約3）。
+
+検証: `node tools/test-battle-report.js`（代表経路が一本であること、旧データで空になること、
+略奪Gの帰属、殉職手当の没収差し引き、死霊術の術者帰属、執念の自己帰属、召喚物を混ぜないこと、
+非ダメージ貢献を足しても戦功が変わらないこと）。`deepestChainPath` を「同じchainIdを全部並べる」
+実装へ壊すと最初のアサーションが落ちることを確認済み。
+`tools/browser-tests/report.js`（新規。主要記録2つ・代表経路・バッジ・OVERKILLパネルの重複が無いこと）。
+全Nodeテスト27本通過。`node tools/sim.js 50` はクリア率2〜46%で従来の帯のまま（計算経路は不変）。
 
 ### 戦闘の尺は事件の大きさに比例（2026-09-02完了）
 
@@ -902,7 +937,13 @@ node tools/test-music.js
 node tools/test-battle-pacing.js
 ```
 
-### ブラウザ回帰テスト（20本）
+代表CHAIN経路と非ダメージ貢献の帰属を検証する場合:
+
+```bash
+node tools/test-battle-report.js
+```
+
+### ブラウザ回帰テスト（21本）
 
 ```bash
 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright   # 初回のみ
@@ -947,6 +988,7 @@ GAME=$(pwd) CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
 | `tier0` | 決着表示の重なり、解雇ボタンの間隔、ヒント文言 |
 | `scene`/`cutin` | 戦闘演出とシナジーのカットイン |
 | `effects` | ラウンド区切り、攻撃者表示、最終決戦、観戦テンポ |
+| `report` | 戦果画面の主要記録2つ・代表CHAIN経路・非ダメージバッジ（クリック非依存） |
 | `pacing` | 事件は縮めず通常攻撃だけを圧縮すること、個別倍率でも最後まで再生できること |
 | `sound` | 最初の操作での音声解禁、音量・ミュート保存 |
 | `music` | BGMの演奏開始、編成・場面への追従、未払いの反映、オンオフ保存 |

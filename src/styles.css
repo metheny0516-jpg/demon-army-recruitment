@@ -852,7 +852,10 @@ button.wide { width: 100%; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.contrib-badges { grid-area: badges; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.contrib-badges {
+  grid-area: badges; display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end;
+  max-width: 62%;   /* バッジが増えても名前を潰さない。増えたぶんは折り返す */
+}
 .contrib-badge {
   font-size: 11px;
   border-radius: 5px;
@@ -1142,6 +1145,24 @@ button.wide { width: 100%; }
 
 /* 倒れたが蘇生で生還した者。戦死とは区別する（蘇生系特性の価値を見せるため） */
 .contrib-badge.revived { background: #123a2a; color: #8ef0a8; border: 1px solid #2a7a52; }
+.contrib-badge.loot { background: #3a2f10; color: var(--gold); border: 1px solid #7a6420; }
+.contrib-badge.trait { background: #2a1a3a; color: #c9a8f0; border: 1px solid #5a3a7a; }
+.contrib-badge.soul { background: #14303a; color: #8ed8f0; border: 1px solid #205a6a; }
+.contrib-badge.heal { background: #123a2a; color: #8ef0a8; border: 1px solid #2a7a52; }
+
+/* 今回の壊れ方。主要記録は2つだけ、下に代表CHAIN経路を一本だけ出す */
+.breakthrough-panel .breakthrough-records {
+  display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.breakthrough-panel .breakthrough-records div { display: flex; flex-direction: column; }
+.breakthrough-panel .breakthrough-records b { font-size: 24px; color: var(--gold); line-height: 1.1; }
+.breakthrough-panel .breakthrough-records span { font-size: 11px; color: var(--muted); }
+.chain-path { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 6px 0; }
+.chain-step {
+  font-size: 12px; padding: 2px 8px; border-radius: 10px;
+  background: #1b1526; border: 1px solid #3a2f52;
+}
+.chain-arrow { font-size: 11px; color: var(--muted); }
 .fallen-panel { border-left: 4px solid #6a2020; }
 
 /* 部門適性チップ。応募者カードでも軍団カードでも同じ見え方にする */

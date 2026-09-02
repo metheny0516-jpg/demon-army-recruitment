@@ -164,6 +164,8 @@ const UI = {
       if (fell) badges.push(`<span class="contrib-badge dead">💀戦死</span>`);
       else if (c.died) badges.push(`<span class="contrib-badge revived">✨生還</span>`);
       if (c.maxOverkill > 0) badges.push(`<span class="contrib-badge mvp">💥${c.maxOverkill}%</span>`);
+      // 火力以外の働き。0のものは出さず、多くても3つまで（読ませたいのは棒の長さと事件）
+      badges.push(...this.contributionExtras(c).slice(0, 3));
       const ratio = c.dealt / maxDealt;
       return `<div class="contrib-row ${fell ? "died" : ""}">
         <span class="contrib-icon">${this.icon(c.race)}</span>
@@ -175,6 +177,21 @@ const UI = {
       </div>`;
     }).join("");
     return `<div class="panel"><h3>戦果</h3><div class="contrib-list">${rows}</div></div>`;
+  },
+
+  // 与ダメージでは見えない働きのバッジ。優先度は「資源 → 蘇生 → 発火 → 魂 → 回復」。
+  contributionExtras(c) {
+    const badges = [];
+    const resources = c.resources || {};
+    const gold = Number(resources.gold) || 0;
+    if (gold) badges.push(`<span class="contrib-badge loot">💰${gold > 0 ? "+" : ""}${gold}G</span>`);
+    const revives = (c.revivesGiven || 0) + (c.selfRevives || 0);
+    if (revives) badges.push(`<span class="contrib-badge revived">✨${revives}蘇生</span>`);
+    if (c.traitTriggers) badges.push(`<span class="contrib-badge trait">⚙${c.traitTriggers}発火</span>`);
+    const soul = Number(resources.soul) || 0;
+    if (soul) badges.push(`<span class="contrib-badge soul">魂${soul > 0 ? "+" : ""}${soul}</span>`);
+    if (c.healed) badges.push(`<span class="contrib-badge heal">💚+${c.healed}</span>`);
+    return badges;
   },
 
   // 「誰をどこへ置くか」を判断するには、置く前に適性が見えていないといけない。
@@ -231,11 +248,36 @@ const UI = {
     </div>`;
   },
 
-  overkillPanel(summary) {
-    if (!summary || summary.count <= 0) return "";
-    return `<div class="panel"><h3>💥 OVERKILL</h3>
-      <div><b>${U.esc(summary.rank || "OVERKILL")}</b>　最大 ${summary.maxPercent}%／余剰 ${summary.maxExcess}ダメージ</div>
-      <div class="muted">発生 ${summary.count}回・総余剰ダメージ ${summary.totalExcess}</div>
+  // 「今回どれだけ壊れたか」を一目で見せるパネル。勝利・敗北・ゲームオーバーで同じものを使う。
+  // 主要記録は**最大CHAINと最大OVERKILLの2つだけ**。召喚・資源・蘇生は横並びに増やさず、
+  // 下の詳細1行か個人貢献のバッジへ回す（記録が増えるほど、どれも読まれなくなる）。
+  breakthroughPanel(battle) {
+    if (!battle) return "";
+    const chain = battle.chainSummary || null;
+    const overkill = battle.overkillSummary || null;
+    const maxChain = (chain && chain.maxChain) || 0;
+    const maxPercent = (overkill && overkill.maxPercent) || 0;
+    if (!maxChain && !maxPercent) return "";
+
+    const steps = (chain && chain.deepest && chain.deepest.steps) || [];
+    const path = steps.length >= 2
+      ? `<div class="chain-path">${steps.map(step =>
+          `<span class="chain-step">${U.esc(step.label)}</span>`).join(`<span class="chain-arrow">→</span>`)}</div>`
+      : `<div class="muted">連鎖は起きなかった（単発で終わっている）</div>`;
+
+    const details = [];
+    if (overkill && overkill.count) details.push(`${U.esc(overkill.rank || "OVERKILL")} ほか ${overkill.count}回・総余剰 ${overkill.totalExcess}`);
+    const revives = (battle.contribution || []).reduce((sum, c) => sum + (c.revivesGiven || 0) + (c.selfRevives || 0), 0);
+    if (revives) details.push(`蘇生 ${revives}回`);
+    if (battle.summonCount) details.push(`召喚 ${battle.summonCount}体`);
+
+    return `<div class="panel breakthrough-panel"><h3>💥 今回の壊れ方</h3>
+      <div class="breakthrough-records">
+        <div><b>${maxChain}</b><span>最大CHAIN</span></div>
+        <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>
+      </div>
+      ${path}
+      ${details.length ? `<div class="muted">${details.join("　/　")}</div>` : ""}
     </div>`;
   },
 
@@ -558,8 +600,7 @@ const UI = {
       </div>
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
-      ${this.overkillPanel(b.overkillSummary)}
-      ${b.summonCount ? `<div class="panel"><h3>💀 召喚</h3><div>骸骨従者 ${b.summonCount}体</div></div>` : ""}
+      ${this.breakthroughPanel(b)}
       ${this.contributionPanel(b.contribution)}
       ${(b.incidents && b.incidents.length) ? `<div class="panel incident-panel"><h3>💥 この戦いの不祥事</h3>
         ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}
@@ -594,7 +635,7 @@ const UI = {
         <div>${U.esc(b.army)} に敗北した</div>
       </div>
       ${this.nearMissPanel(b.nearMiss)}
-      ${this.overkillPanel(b.overkillSummary)}
+      ${this.breakthroughPanel(b)}
       ${this.contributionPanel(b.contribution)}
       <div class="panel">
         <h3>まだ終わりではない</h3>
@@ -668,7 +709,7 @@ const UI = {
           record.finalRoster.length ? record.finalRoster.map(m => U.esc(m.name)).join("、") : "誰も残らなかった"}</div>
       </div>
       ${this.nearMissPanel(Game.state.lastBattle && Game.state.lastBattle.nearMiss)}
-      ${this.overkillPanel(Game.state.lastBattle && Game.state.lastBattle.overkillSummary)}
+      ${this.breakthroughPanel(Game.state.lastBattle)}
       ${this.contributionPanel(Game.state.lastBattle && Game.state.lastBattle.contribution)}
       <div class="row">
         <button class="primary" data-action="new">第${history.length + 1}代として再挑戦</button>

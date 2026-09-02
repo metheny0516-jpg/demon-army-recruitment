@@ -627,8 +627,63 @@ const Battle = {
       maxChain: chains.reduce((max, chain) => Math.max(max, chain.maxDepth), 0),
       chainCount: chains.length,
       eventCount: events.length,
-      chains
+      chains,
+      deepest: this.deepestChainPath(timeline)
     };
+  },
+
+  // 最大CHAINの「代表経路」。最深イベントから parentEventId を逆にたどった**一本だけ**を返す。
+  // 分岐した全イベントは並べない（読む時間が増えるだけで「何から何へ連鎖したか」は伝わらない）。
+  // 因果メタデータの無い旧データでは null を返し、表示側は何も出さない。
+  deepestChainPath(timeline) {
+    const events = (timeline || []).filter(e => Number.isFinite(e.chainDepth));
+    let deepest = null;
+    for (const event of events) {
+      if (!deepest || event.chainDepth > deepest.chainDepth) deepest = event;   // 同深度なら先に起きた方
+    }
+    if (!deepest || deepest.chainDepth < 2) return null;                        // 起点だけなら経路ではない
+
+    const byId = new Map(events.filter(e => e.eventId).map(e => [e.eventId, e]));
+    const sides = new Map();
+    const start = (timeline || []).find(e => e.type === "battle_start");
+    for (const unit of [...((start && start.player) || []), ...((start && start.enemy) || [])]) {
+      sides.set(unit.id, unit.side);
+    }
+
+    const steps = [];
+    const seen = new Set();
+    let current = deepest;
+    while (current && !seen.has(current.eventId)) {   // 親リンクが壊れていても回り続けない
+      seen.add(current.eventId);
+      steps.unshift({
+        eventId: current.eventId || null,
+        type: current.type,
+        depth: current.chainDepth || 1,
+        label: this.chainStepLabel(current, sides)
+      });
+      current = current.parentEventId ? byId.get(current.parentEventId) : null;
+    }
+    return { chainId: deepest.chainId || null, depth: deepest.chainDepth, steps };
+  },
+
+  // 経路の1段を短い日本語にする。表示専用で、集計や計算には使わない。
+  chainStepLabel(event, sides) {
+    const amount = Number(event.amount) || 0;
+    const unit = event.resource === "gold" ? "G" : event.resource === "soul" ? "魂" : (event.resource || "");
+    switch (event.type) {
+      case "attack": return event.parentEventId ? "追加攻撃" : "攻撃";
+      case "splash": return event.label ? `${event.label}の追撃` : "追撃";
+      case "death": return (sides && sides.get(event.unitId)) === "player" ? "戦死" : "撃破";
+      case "overkill": return `${event.rank || "OVERKILL"} ${event.percent}%`;
+      case "revive": return "蘇生";
+      case "summon": return "召喚";
+      case "survive": return "耐えた";
+      case "heal": return `回復+${amount}`;
+      case "resource_gain": return `${event.label || "獲得"} +${amount}${unit}`;
+      case "resource_forfeit": return `${event.label || "没収"} -${amount}${unit}`;
+      case "resource_consume": return `${unit}-${amount}`;
+      default: return event.name || event.label || event.type;
+    }
   },
 
   summarizeResourceChanges(timeline) {
@@ -700,11 +755,27 @@ const Battle = {
       const kills = hits.filter(e => e.fromId === u.id && e.dead).length;
       const overkills = timeline.filter(e => e.type === "overkill" && e.fromId === u.id);
       const died = timeline.some(e => e.type === "death" && e.unitId === u.id);
+      // 火力以外の働き。人物へ確実に帰属できるイベントだけを数え、
+      // 施設・召喚など「誰の手柄か言えないもの」は個人へ付けない。
+      const resources = {};
+      for (const event of timeline) {
+        if (event.sourceId !== u.id || !event.resource) continue;
+        const sign = event.type === "resource_gain" ? 1 : event.type === "resource_forfeit" ? -1 : 0;
+        if (!sign) continue;
+        resources[event.resource] = (resources[event.resource] || 0) + sign * (Number(event.amount) || 0);
+      }
+      const revives = timeline.filter(e => e.type === "revive");
       return {
         id: u.id, uid: u.uid, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
         unpaid: !!u.unpaid, dealt, taken, kills,
         overkillCount: overkills.length,
         maxOverkill: overkills.reduce((max, event) => Math.max(max, event.percent || 0), 0),
+        traitTriggers: timeline.filter(e => e.type === "trait_trigger" && e.sourceId === u.id).length,
+        resources,                                                     // 資源ごとの純増減（獲得−没収）
+        revivesGiven: revives.filter(e => e.sourceId === u.id && e.unitId !== u.id).length,
+        selfRevives: revives.filter(e => e.unitId === u.id && !e.sourceId).length,   // 《執念》など
+        healed: timeline.filter(e => e.type === "heal" && e.unitId === u.id)
+          .reduce((sum, event) => sum + (Number(event.amount) || 0), 0),
         died,                 // 一度でも倒れたか（蘇生した者も true）
         survived: u.alive     // 戦闘終了時に生きていたか。退場判定はこちらを使う
       };
