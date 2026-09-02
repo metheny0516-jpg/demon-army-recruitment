@@ -206,6 +206,10 @@ const App = {
         Game.assignDepartment(Number(data.uid), data.department);
         return this.render();
 
+      case "hiremerc":
+        Game.hireMercenary(Number(data.index));
+        return this.render();
+
       case "payrollpolicy":
         Game.setPayrollPolicy(data.policy);
         return this.render();

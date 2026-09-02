@@ -776,6 +776,7 @@ const Battle = {
       const revives = timeline.filter(e => e.type === "revive");
       return {
         id: u.id, uid: u.uid, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
+        mercenary: !!u.flags.mercenary,   // 金で雇った一時要員。戦功・欠員・戦没者に数えない
         unpaid: !!u.unpaid, dealt, taken, kills,
         overkillCount: overkills.length,
         maxOverkill: overkills.reduce((max, event) => Math.max(max, event.percent || 0), 0),

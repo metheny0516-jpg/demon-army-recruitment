@@ -160,6 +160,7 @@ const UI = {
       if (topTanker && c.id === topTanker.id && (!topDealer || c.id !== topDealer.id)) {
         badges.push(`<span class="contrib-badge tank">🛡盾役</span>`);
       }
+      if (c.mercenary) badges.push(`<span class="contrib-badge merc">🗡傭兵</span>`);
       const fell = c.survived === false;
       if (fell) badges.push(`<span class="contrib-badge dead">💀戦死</span>`);
       else if (c.died) badges.push(`<span class="contrib-badge revived">✨生還</span>`);
@@ -368,6 +369,38 @@ const UI = {
       ? `${U.esc(entry.swapOutRace)}を${U.esc(entry.nextRace || "同じ種族")}に替えると`
       : `${U.esc(entry.nextRace || "同じ種族")}をあと1体で`;
     return `<div class="syn-next">▲ ${how} <b>${gain}</b></div>`;
+  },
+
+  // 稼いだ金貨の出口。出撃5枠を壊さず「その戦闘だけの6体目」を買う。
+  // 同族を雇えば種族シナジーの頭数も増えるので、硬い者と噛み合う者のどちらを取るかが判断になる。
+  mercenaryPanel() {
+    const st = Game.state;
+    const hired = st.mercenaries || [];
+    const offers = Game.mercenaryOffers();
+    const cost = Game.mercenaryCost();
+    const full = hired.length >= Game.MERCENARY_COSTS.length;
+    const hiredHtml = hired.length
+      ? `<div class="merc-hired">雇用中：${hired.map(m =>
+          `<span class="merc-chip">${this.icon(m.race)} ${U.esc(m.name)}（${U.esc(m.race)}）${m.hiredFor}G</span>`).join("")}</div>`
+      : "";
+    const cards = full ? "" : offers.map((m, i) => {
+      const afford = st.gold >= cost;
+      return `<div class="merc-card">
+        <div class="merc-name">${this.icon(m.race)} <b>${U.esc(m.name)}</b>
+          <span class="muted">${U.esc(m.race)}／${U.esc(m.job)}</span></div>
+        <div class="merc-stats">HP ${m.hp}・攻 ${m.atk}・防 ${m.def}・速 ${m.spd}</div>
+        <div class="merc-traits">${this.traitHtml(m.traits)}</div>
+        <button class="small primary" data-action="hiremerc" data-index="${i}" ${afford ? "" : "disabled"}>
+          ${afford ? `${cost}G で雇う` : `${cost}G 必要（所持 ${st.gold}G）`}</button>
+      </div>`;
+    }).join("");
+    return `<div class="panel merc-panel">
+      <h3>🗡 傭兵市場 <span class="muted">— この戦闘だけの助っ人</span></h3>
+      <div class="muted">出撃5枠の外から加わる。給与も戦功も持たず、戦闘が終われば去る。
+        ${full ? "これ以上は雇えない。" : `次の1名は ${cost}G。`}</div>
+      ${hiredHtml}
+      ${cards ? `<div class="merc-list">${cards}</div>` : ""}
+    </div>`;
   },
 
   synergyPanel(roster) {
@@ -606,6 +639,7 @@ const UI = {
       ${!opening && graveyardReady ? `<div class="panel"><b>🪦 墓地</b>
         <div class="synergy-hint">最初の味方死亡 → ラウンド終了時に骸骨従者を1体召喚</div></div>` : ""}
       ${this.payrollPanel()}
+      ${opening ? "" : this.mercenaryPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
       <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
       <div class="army-section reserve-section"><h3>⚔ 戦闘部門・控え ${reserves.length}</h3>

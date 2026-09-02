@@ -1157,6 +1157,21 @@ button.wide { width: 100%; }
 .contrib-badge.soul { background: #14303a; color: #8ed8f0; border: 1px solid #205a6a; }
 .contrib-badge.heal { background: #123a2a; color: #8ef0a8; border: 1px solid #2a7a52; }
 
+/* 傭兵市場。金貨の出口をここに置く */
+.merc-panel { border-color: #8a6a20; }
+.merc-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.merc-card { background: #1b1530; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+.merc-name { font-size: 13px; }
+.merc-name .muted { font-size: 11px; margin-left: 4px; }
+.merc-stats { font-size: 12px; color: var(--dim); margin: 2px 0 4px; }
+.merc-traits { margin-bottom: 6px; }
+.merc-hired { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
+.merc-chip {
+  font-size: 11px; padding: 2px 8px; border-radius: 10px;
+  background: #4a3a12; color: var(--gold); border: 1px solid #8a6a20;
+}
+.contrib-badge.merc { background: #4a3a12; color: var(--gold); border: 1px solid #8a6a20; }
+
 /* 編成画面のシナジー予告。効果量と「あと1体で／入れ替えると」を出す */
 .syn.on { border-left: 3px solid var(--gold); }
 .syn-effect { font-size: 12px; margin-top: 2px; }

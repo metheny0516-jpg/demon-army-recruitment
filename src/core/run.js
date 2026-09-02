@@ -60,6 +60,8 @@ const Game = {
       hiresLeft: demonKing.start.hires,
       maxPower: 0,
       maxArmySize: 0,
+      mercenaryOffers: [],
+      mercenaries: [],
       maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
       maxOverkill: 0,     // 同その2。%で持つ
       raceCounts: {},
@@ -167,7 +169,7 @@ const Game = {
     const defaults = {
       demonKingId: "standard",
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0,
-      maxChain: 0, maxOverkill: 0, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
+      maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
@@ -660,6 +662,73 @@ const Game = {
   FREE_REROLLS: 1,
   REROLL_BASE_COST: 2,
 
+  // ── 傭兵市場 ──────────────────────────────
+  // 稼いだ金貨の出口。中盤で略奪した金が終盤の戦闘に対して何もしないのが、
+  // 略奪ビルドが「中盤は無双、終盤で詰む」原因だった（実測：ゴブリン5体は
+  // 第6戦100%→第7戦8%、そして5体そろえたランのクリア率は12%で最低）。
+  // 出撃5枠は壊さず、金貨で**その戦闘だけの6体目**を買えるようにする
+  // （設計憲法 第3節「6体目以降は高コストな特殊解禁として扱う」）。
+  // 同族を雇えば種族シナジーの頭数も増えるので、「硬い者を雇うか、噛み合う者を雇うか」
+  // という判断になる（実測：ゴブリン5＋オーガ傭兵61% vs ＋ゴブリン傭兵91%）。
+  MERCENARY_COSTS: [10, 20],
+  MERCENARY_OFFERS: 2,
+
+  mercenaryCost() {
+    const hired = (this.state.mercenaries || []).length;
+    return this.MERCENARY_COSTS[hired] !== undefined
+      ? this.MERCENARY_COSTS[hired]
+      : Infinity;   // 上限に達したら雇えない
+  },
+
+  // 候補は作戦ごとに固定する。編成をいじるたびに引き直せると、
+  // 「今いる候補で決める」という判断が消えるため。
+  mercenaryOffers() {
+    const st = this.state;
+    if (!Array.isArray(st.mercenaryOffers)) st.mercenaryOffers = [];
+    if (!st.mercenaryOffers.length && (this.state.mercenaries || []).length < this.MERCENARY_COSTS.length) {
+      st.mercenaryOffers = Array.from({ length: this.MERCENARY_OFFERS }, () => {
+        const merc = this.rollApplicant();
+        merc.mercenary = true;
+        return merc;
+      });
+      this.save();
+    }
+    return st.mercenaryOffers;
+  },
+
+  canHireMercenary(index) {
+    const st = this.state;
+    if (!st || !["formation", "preparation"].includes(st.phase)) return false;
+    if ((st.mercenaries || []).length >= this.MERCENARY_COSTS.length) return false;
+    if (!this.mercenaryOffers()[index]) return false;
+    return st.gold >= this.mercenaryCost();
+  },
+
+  hireMercenary(index) {
+    if (!this.canHireMercenary(index)) return false;
+    const st = this.state;
+    const cost = this.mercenaryCost();
+    const merc = st.mercenaryOffers[index];
+    st.gold -= cost;
+    st.mercenaries = (st.mercenaries || []).concat([{ ...merc, hiredFor: cost }]);
+    st.mercenaryOffers = st.mercenaryOffers.filter((_, i) => i !== index);
+    this.kpi("formationChanged");   // 傭兵も編成の判断
+    this.save();
+    return true;
+  },
+
+  // 戦闘へ出す形にする。城の補正は自軍と同じく効くが、給与も戦功も持たない。
+  preparedMercenaries() {
+    const facility = this.facilityInfo();
+    return (this.state.mercenaries || []).map(m => ({
+      ...m,
+      hp: Math.max(1, Math.round(m.hp * facility.hpMult)),
+      def: Math.max(0, m.def + facility.defBonus),
+      battleDmgMult: 1, battleTakenMult: 1
+    }));
+  },
+
+
   rerollCost() {
     const n = this.state.rerollsThisPhase || 0;
     if (n < this.FREE_REROLLS) return 0;
@@ -791,6 +860,12 @@ const Game = {
 
     const battleRations = openingBattle ? null : this.prepareBattleRations(notes);
     const playerUnits = this.preparedRoster(battleRations).map(m => Battle.makeUnit(m, "player"));
+    // 雇った傭兵は出撃5枠の外から加わる。戦闘が終われば去る（次の戦闘には残らない）
+    for (const merc of this.preparedMercenaries()) {
+      const unit = Battle.makeUnit(merc, "player");
+      unit.flags.mercenary = true;
+      playerUnits.push(unit);
+    }
     const stageData = this.stageData();
     // ビルド試行の判定は戦闘前に取る（戦死・合体で編成が変わる前の「何を試したか」を見るため）
     this.kpi("battleStarted", st, stageData);
@@ -889,6 +964,12 @@ const Game = {
       summonCount: result.summonCount || 0
     };
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
+    // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
+    if ((st.mercenaries || []).length) {
+      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
+    }
+    st.mercenaries = [];
+    st.mercenaryOffers = [];
 
     // 記録の確定とセーブの後始末は必ず最後に行う。先に endRun してから
     // save すると、消したはずのセーブが書き戻ってしまう。
@@ -1305,7 +1386,8 @@ const Game = {
     const st = this.state;
     st.pendingVacancies = 0;
     st.lastFallen = [];
-    const fallen = (contribution || []).filter(c => c.survived === false);
+    // 傭兵は軍団員ではない。倒れても欠員にならず、戦没者名簿にも載らない
+    const fallen = (contribution || []).filter(c => c.survived === false && !c.mercenary);
     if (fallen.length === 0) return;
 
     const uids = new Set(fallen.map(c => c.uid));
