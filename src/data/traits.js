@@ -3,6 +3,7 @@
 //   modDealt(ctx)  与ダメージ倍率を変更 (ctx.mult に乗算し、ctx.notes に発動名を積む)
 //   modTaken(ctx)  被ダメージを変更して返す (ctx.dmg を読み、数値を返す)
 //   postAttack(ctx) 攻撃後の追加効果 (火球・デバフ等)
+//   onTriggeredEvents(ctx) postAttack群が生成したイベントへ反応（資源獲得→追加行動など）
 //   onRoundEnd(ctx) ラウンド終了時 (再生・蘇生等。死亡中も呼ばれるので unit.alive を確認)
 //   onLethal(ctx)  致死ダメージを受けた瞬間。true を返すと HP1 で耐える
 const TRAITS = {
@@ -65,6 +66,28 @@ const TRAITS = {
         ctx.mult *= 1.6;
         ctx.notes.push("血の気");
       }
+    }
+  },
+  pickpocket: {
+    name: "追い剥ぎ",
+    desc: "自身が敵へ初めてダメージを与えたとき、勝利時に1Gを略奪",
+    postAttack(ctx) {
+      const u = ctx.attacker;
+      if (ctx.dmg <= 0 || u.flags.pickpocketUsed) return;
+      u.flags.pickpocketUsed = true;
+      ctx.gainResource("gold", 1, "追い剥ぎ");
+    }
+  },
+  greedy: {
+    name: "強欲",
+    desc: "戦闘中に金貨を得た連鎖で1回、威力70%の追加攻撃",
+    onTriggeredEvents(ctx) {
+      const gold = ctx.events.find(e => e.type === "resource_gain" && e.resource === "gold");
+      if (!gold) return;
+      const used = ctx.attacker.flags.greedyChains || (ctx.attacker.flags.greedyChains = {});
+      if (used[gold.chainId]) return;
+      used[gold.chainId] = true;
+      ctx.extraAction(0.7, gold, "強欲");
     }
   },
   tough_skin: {

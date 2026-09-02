@@ -1,14 +1,14 @@
 // 種族テンプレート。応募者はここから乱数で個体生成される。
 // tier: 出現しやすくなる時期 (1=序盤, 2=中盤, 3=終盤)
 // tags: シナジー判定用 (undead=アンデッド, caster=魔法職)
-// fixedTrait: 必ず持つ特性 / traitPool: 50%で追加される2つ目の特性候補
+// fixedTrait/fixedTraits: 必ず持つ特性 / traitPool: 50%で追加される特性候補
 const MONSTER_TEMPLATES = [
   {
     id: "goblin", race: "ゴブリン", tier: 1, tags: [],
     jobs: ["盗賊", "斥候", "暴れ者", "会計係（どんぶり勘定）", "見張り（居眠り可）"],
     base: { hp: 20, atk: 8, def: 3, spd: 7 },
     salary: [2, 3], loyalty: [55, 80],
-    fixedTrait: "coward", traitPool: ["pack"],
+    fixedTraits: ["coward", "pickpocket"], traitPool: ["pack", "greedy"],
     prevJobs: ["村の物置荒らし（3年）", "街道の追いはぎ（見習い）", "ゴブリン兵（前魔王軍・2ヶ月）", "きのこ採取（無給）",
       "隣村のスパイ（バレて解雇）", "宝箱の番人（居眠りで解雇）", "山賊団の下っ端（分け前が少なくて退団）", "冒険者パーティのモブ（台詞なし）"],
     motives: ["安定した職場を探してます", "前の職場、潰れちゃって……", "福利厚生に惹かれました", "友達に誘われたので",

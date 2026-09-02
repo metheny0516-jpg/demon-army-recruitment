@@ -229,6 +229,24 @@ const BattleScene = {
         this.pulse(ev.id);
         this.cutin(ev.name, ev.desc, ev.id);
         break;
+      case "resource_gain": {
+        const u = this.units[ev.sourceId];
+        if (u) {
+          this.clearFocus();
+          u.el.classList.add("acting");
+          this.float(u, `+${ev.amount}G`, "heal");
+        }
+        this.showAction(`${ev.label || "略奪"}　+${ev.amount}G`, 650);
+        break;
+      }
+      case "trait_trigger": {
+        const u = this.units[ev.sourceId];
+        this.clearFocus();
+        if (u) u.el.classList.add("acting");
+        this.showAction(`【${ev.name}】発動！`, 700);
+        this.pulse(ev.traitId);
+        break;
+      }
       case "incident": {
         const culprit = this.units[ev.unitId];
         const target = this.units[ev.targetId];

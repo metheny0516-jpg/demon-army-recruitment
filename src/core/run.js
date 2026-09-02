@@ -205,6 +205,8 @@ const Game = {
     for (const id of PAYROLL_POLICY_ORDER) st.payrollChoices[id] = Number(st.payrollChoices[id]) || 0;
     for (const m of [...st.roster, ...st.applicants]) {
       if (!DEPARTMENTS[m.department]) m.department = "combat";
+      if (!Array.isArray(m.traits)) m.traits = [];
+      if (m.tplId === "goblin" && !m.traits.includes("pickpocket")) m.traits.push("pickpocket");
     }
     const rosterIds = new Set(st.roster.filter(m => m.department === "combat").map(m => m.uid));
     st.activeUids = st.activeUids.filter((uid, i, ids) => rosterIds.has(uid) && ids.indexOf(uid) === i)
@@ -551,7 +553,7 @@ const Game = {
     // 進行補正：後から来る応募者ほど強い
     const scale = 1 + 0.12 * (level - 1);
     const vary = v => Math.max(1, Math.round(v * scale * (0.85 + U.rand() * 0.3)));
-    const traits = [tpl.fixedTrait];
+    const traits = (tpl.fixedTraits || [tpl.fixedTrait]).filter(Boolean).slice();
     if (tpl.traitPool.length > 0 && U.chance(0.5)) {
       const extra = U.pick(tpl.traitPool);
       if (!traits.includes(extra)) traits.push(extra);
@@ -745,9 +747,11 @@ const Game = {
     st.maxPower = Math.max(st.maxPower, this.armyPower(this.activeRoster()));
 
     const goldBefore = st.gold;
+    const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
     if (result.victory) {
-      st.gold += stageData.reward;
+      st.gold += stageData.reward + lootGold;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
+      if (lootGold > 0) notes.push(`戦闘中の略奪 ${lootGold}G を確定（所持金 ${st.gold}G）`);
       this.processCasualties(result.contribution, notes);
       this.awardMerit(result.contribution, notes);
       this.applyMissionOutcome(stageData, notes);
@@ -794,13 +798,15 @@ const Game = {
       army: stageData.army,
       region: stageData.region,
       reward: result.victory ? stageData.reward : 0,
+      lootGold: result.victory ? lootGold : 0,
       goldBefore,
       synergies: result.activeSynergies,
       incidents: result.incidents || [],
       notes,
       logLength: result.log.length,
       contribution: this.attachVoices(result.contribution, result.victory),
-      nearMiss: result.nearMiss
+      nearMiss: result.nearMiss,
+      chainSummary: result.chainSummary
     };
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
 

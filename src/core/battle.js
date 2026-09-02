@@ -190,10 +190,11 @@ const Battle = {
       return false;
     };
 
-    const act = (unit, allies, enemies, round) => {
+    const act = (unit, allies, enemies, round, actionOpts) => {
+      actionOpts = actionOpts || {};
       const living = enemies.filter(u => u.alive);
       if (living.length === 0) return;
-      if (tryIncident(unit, allies)) return;
+      if (!actionOpts.isExtra && tryIncident(unit, allies)) return;
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = U.chance(0.6) ? living[0] : U.pick(living);
 
@@ -206,22 +207,52 @@ const Battle = {
         if (tr && tr.modDealt) tr.modDealt(ctx);
       }
       const variance = 0.9 + U.rand() * 0.2;
-      const raw = unit.atk * ctx.mult * variance;
+      const raw = unit.atk * ctx.mult * variance * (actionOpts.mult || 1);
       const amount = Math.max(1, Math.round(raw) - Math.floor(target.def / 2));
       if (ctx.notes.length) {
         note(`　${unit.name}の特性（${ctx.notes.join("・")}！）`, "trait");
       }
-      const applied = applyDamage(unit, target, amount, "attack", { traits: ctx.notes });
+      const applied = applyDamage(unit, target, amount, "attack", {
+        traits: ctx.notes,
+        label: actionOpts.label || null,
+        parentEvent: actionOpts.parentEvent || null
+      });
       const dmg = applied.dmg;
 
       // 攻撃後フック（火球・悪戯など）
+      const triggeredEvents = [];
       const post = {
         attacker: unit, target, dmg, enemies, log: note, pick: U.pick,
-        dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg
+        dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg,
+        gainResource: (resource, value, label) => {
+          const resourceName = resource === "gold" ? "G" : resource;
+          const event = emitCausal("resource_gain", {
+            sourceId: unit.id, resource, amount: value, reserved: true, label,
+            emphasis: 1, text: `　${unit.name}の【${label}】 ${value}${resourceName}を略奪予約`, cls: "loot"
+          }, applied.event);
+          triggeredEvents.push(event);
+          return event;
+        }
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
         if (tr && tr.postAttack && target) tr.postAttack(post);
+      }
+      if (triggeredEvents.length) {
+        const reaction = {
+          attacker: unit, events: triggeredEvents,
+          extraAction: (mult, parentEvent, label) => {
+            const trigger = emitCausal("trait_trigger", {
+              sourceId: unit.id, traitId: "greedy", name: label, emphasis: 2,
+              text: `　${unit.name}の【${label}】 金貨に目がくらみ追加行動！`, cls: "trait"
+            }, parentEvent);
+            act(unit, allies, enemies, round, { mult, parentEvent: trigger, label, isExtra: true });
+          }
+        };
+        for (const tid of unit.traits) {
+          const tr = TRAITS[tid];
+          if (tr && tr.onTriggeredEvents) tr.onTriggeredEvents(reaction);
+        }
       }
     };
 
@@ -299,7 +330,8 @@ const Battle = {
       // 持ち回る必要はなく、既に確定したタイムラインから導出するだけでよい。
       contribution: this.summarizeContribution(timeline, playerUnits),
       nearMiss: this.summarizeNearMiss(timeline),
-      chainSummary: this.summarizeChains(timeline)
+      chainSummary: this.summarizeChains(timeline),
+      resourceChanges: this.summarizeResourceChanges(timeline)
     };
   },
 
@@ -321,6 +353,15 @@ const Battle = {
       eventCount: events.length,
       chains
     };
+  },
+
+  summarizeResourceChanges(timeline) {
+    const changes = {};
+    for (const event of timeline || []) {
+      if (event.type !== "resource_gain" || !event.resource) continue;
+      changes[event.resource] = (changes[event.resource] || 0) + (Number(event.amount) || 0);
+    }
+    return changes;
   },
 
   // 敗北後に「どこまで迫れたか」を見せるための要約。

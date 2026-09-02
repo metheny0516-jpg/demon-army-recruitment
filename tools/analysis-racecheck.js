@@ -16,7 +16,7 @@ function mk(tplId, i){
     hp:Math.round(t.base.hp*sc), atk:Math.round(t.base.atk*sc),
     def:t.base.def, spd:t.base.spd,
     salary:Math.round((t.salary[0]+t.salary[1])/2)+1, loyalty:70,
-    traits:[t.fixedTrait], tags:t.tags.slice(), unpaid:false };
+    traits:(t.fixedTraits || [t.fixedTrait]).filter(Boolean), tags:t.tags.slice(), unpaid:false };
 }
 function winRate(roster, stageIdx, n=400){
   let w=0;
