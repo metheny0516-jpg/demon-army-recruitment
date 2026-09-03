@@ -8,6 +8,8 @@
 const BattleScene = {
   EFFECT_DIR: "assets/battle/effects/",
   UNIT_DIR: "assets/battle/units/",
+  VFX_DURATION: { slash: 500, impact: 460, guard: 680, revive: 860, overkill: 860 },
+  missingSprites: new Set(),
   BATTLE_SPRITES: {
     goblin: new Set(["idle", "attack-windup"])
   },
@@ -58,15 +60,28 @@ const BattleScene = {
   portraitHtml(u) {
     const emoji = this.iconOf(u);
     const id = u.tplId;
-    if (this.BATTLE_SPRITES[id] && this.BATTLE_SPRITES[id].has("idle")) {
+    if (!this.missingSprites.has(id) && this.BATTLE_SPRITES[id] && this.BATTLE_SPRITES[id].has("idle")) {
       return `<span class="bu-portrait battle-sprite" data-fallback="${emoji}"><img class="bu-sprite-img"
-        src="${this.UNIT_DIR}${id}/idle.webp" alt="" data-pose="idle"
-        onerror="this.onerror=null; this.src=UI.PORTRAIT_DIR+'${id}.png'; this.parentElement.classList.remove('battle-sprite')"></span>`;
+        src="${this.UNIT_DIR}${id}/idle.webp" alt="" data-pose="idle" data-tpl-id="${U.esc(id)}"
+        onerror="BattleScene.spriteFailed(this)"></span>`;
     }
     if (!UI.hasPortrait(id)) return emoji;
     return `<span class="bu-portrait" data-fallback="${emoji}"><img src="${UI.PORTRAIT_DIR}${id}.png" alt=""
       onerror="UI.portraitFailed('${id}', this)"></span>`;
   },
+
+  spriteFailed(img) {
+    const id = img.dataset.tplId;
+    this.missingSprites.add(id);
+    img.dataset.spriteFailed = "true";
+    img.classList.remove("bu-sprite-img");
+    img.parentElement.classList.remove("battle-sprite");
+    img.onerror = () => UI.portraitFailed(id, img);
+    if (UI.hasPortrait(id)) img.src = UI.PORTRAIT_DIR + id + ".png";
+    else UI.portraitFailed(id, img);
+  },
+
+  visualDuration(ms) { return ms * this.eventScale / this.speed; },
 
   loadSpeed() {
     try { this.speed = Number(localStorage.getItem("maou_speed")) || 1; } catch (e) { this.speed = 1; }
@@ -77,9 +92,15 @@ const BattleScene = {
   stop() {
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
-    document.querySelectorAll(".bu-vfx").forEach(el => el.remove());
+    const scene = document.getElementById("scene");
+    if (scene) {
+      scene.querySelectorAll(".bu-vfx, .fnum").forEach(el => el.remove());
+      scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
+      scene.classList.remove("fx-active", "shake", ...this.EFFECT_CLASSES);
+    }
     for (const u of Object.values(this.units || {})) {
-      if (!u.sprite || !u.tplId) continue;
+      u.el.classList.remove("acting", "targeted", "trouble", "lunge-up", "lunge-down", "hit", "hit-big", "revive-rise", "summon-rise", "pop");
+      if (!u.sprite || !u.tplId || u.sprite.dataset.spriteFailed) continue;
       u.sprite.dataset.pose = "idle";
       u.sprite.src = `${this.UNIT_DIR}${u.tplId}/idle.webp`;
     }
@@ -458,22 +479,23 @@ const BattleScene = {
     img.alt = "";
     img.src = `${this.EFFECT_DIR}${kind}.webp`;
     img.onerror = () => img.remove();
+    const life = this.visualDuration(this.VFX_DURATION[kind] || 560);
+    img.style.animationDuration = `${life}ms`;
     anchor.appendChild(img);
-    const life = kind === "revive" || kind === "overkill" ? 900 : 560;
-    this.timers.push(setTimeout(() => img.remove(), (life * this.eventScale) / this.speed));
+    this.timers.push(setTimeout(() => img.remove(), life));
   },
 
   unitPose(u, pose, duration) {
-    if (!u || !u.sprite || !this.BATTLE_SPRITES[u.tplId] || !this.BATTLE_SPRITES[u.tplId].has(pose)) return;
+    if (!u || !u.sprite || u.sprite.dataset.spriteFailed || !this.BATTLE_SPRITES[u.tplId] || !this.BATTLE_SPRITES[u.tplId].has(pose)) return;
     const marker = `${pose}-${Date.now()}-${Math.random()}`;
     u.sprite.dataset.poseMarker = marker;
     u.sprite.dataset.pose = pose;
     u.sprite.src = `${this.UNIT_DIR}${u.tplId}/${pose}.webp`;
     this.timers.push(setTimeout(() => {
-      if (!u.sprite || u.sprite.dataset.poseMarker !== marker) return;
+      if (!u.sprite || u.sprite.dataset.spriteFailed || u.sprite.dataset.poseMarker !== marker) return;
       u.sprite.dataset.pose = "idle";
       u.sprite.src = `${this.UNIT_DIR}${u.tplId}/idle.webp`;
-    }, (duration || 360) / this.speed));
+    }, this.visualDuration(duration || 360)));
   },
 
   // 座標を測らず、陣営方向だけで戦場全体に攻撃軌道を走らせる。
@@ -559,8 +581,10 @@ const BattleScene = {
     const n = document.createElement("span");
     n.className = "fnum " + (cls || "");
     n.textContent = text;
+    const life = this.visualDuration(900);
+    n.style.animationDuration = `${life}ms`;
     u.pop.appendChild(n);
-    setTimeout(() => n.remove(), 900);
+    this.timers.push(setTimeout(() => n.remove(), life));
   },
 
   shake() {
