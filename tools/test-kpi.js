@@ -96,7 +96,7 @@ KPI.reset();
 Game.newRun();
 {
   const run = Game.state;
-  while (run.applicants.length && run.roster.length < 3 && Game.canHire()) Game.hire(0);
+  while (run.hiresLeft > 0 && run.applicants.length && run.roster.length < 3 && Game.canHire()) Game.hire(0);
   run.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
   KPI.battleStarted(run, { missionKind: 'invade' });
   KPI.battleStarted(run, { missionKind: 'invade' });
@@ -118,6 +118,9 @@ KPI.mergeRefused();
 assert(KPI.current.mercenariesHired === 2 && KPI.current.mercenaryGold === 30,
   '雇った傭兵の数と払った金貨を数える');
 assert(KPI.current.kinHires === 1, '同族を雇った回数だけを別に数える（ビルドを濃くした買い物か）');
+KPI.paidHire(4); KPI.paidHire(8);
+assert(KPI.current.paidHires === 2 && KPI.current.paidHireGold === 12,
+  '有料追加採用の人数と紹介料を記録する');
 assert(KPI.current.mergesRefused === 1, '合体を断った回数を数える（既定を覆す判断）');
 
 // ── 3b. シナジー観測（異なる条件がどれだけ繋がったか） ─────────

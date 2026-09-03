@@ -39,6 +39,7 @@ console.log('■ 金貨の出口（傭兵市場）');
 console.log(`  雇った傭兵: 平均 ${fixed(mean('mercenariesHired'))}人/ラン（うち同族 ${fixed(mean('kinHires'))}人）`);
 console.log(`  傭兵へ払った金貨: 平均 ${fixed(mean('mercenaryGold'))}G/ラン`);
 console.log(`  合体を断った回数: 平均 ${fixed(mean('mergesRefused'))}回/ラン`);
+console.log(`  有料追加採用: 平均 ${fixed(mean('paidHires'))}人/ラン・紹介料 ${fixed(mean('paidHireGold'))}G/ラン`);
 console.log(`  判定: ${mean('mercenariesHired') < 0.5
   ? '傭兵がほぼ使われていない → 見つけられていないか、金が回っていない'
   : mean('kinHires') / Math.max(0.001, mean('mercenariesHired')) >= 0.6

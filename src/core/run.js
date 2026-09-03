@@ -880,6 +880,7 @@ const Game = {
     if (cost > 0) {
       st.gold -= cost;
       st.extraHiresThisPhase += 1;
+      this.kpi("paidHire", cost);
     } else {
       st.hiresLeft -= 1;
     }

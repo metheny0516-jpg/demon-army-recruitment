@@ -43,7 +43,11 @@ function runOnce(strat, stats){
     // 採用フェーズ: 枠がある限り採用する
     while (st.phase === 'recruit' && st.applicants.length) {
       // 基準戦略は従来どおり無料枠だけを使う。追加紹介の戦略は別途比較して足す。
-      if (st.hiresLeft <= 0) { Game.skipHire(); break; }
+      if (st.hiresLeft <= 0) {
+        const target = strat.paidHire && strat.kind === 'race'
+          && st.applicants.some(m => m.race === strat.race);
+        if (!target || st.gold - Game.hireCost() < (strat.keepGold || 0)) { Game.skipHire(); break; }
+      }
       // 種族狙いの戦略は、目当てが居らず金に余裕があれば求人を出し直す
       if (strat.reroll && strat.kind === 'race'
           && !st.applicants.some(m => m.race === strat.race)
@@ -76,7 +80,9 @@ function runOnce(strat, stats){
         if (power(st.applicants[idx]) > power(weakest) * 1.1) Game.fire(weakest.uid);
         else { Game.skipHire(); break; }
       }
+      const hireCost = Game.hireCost();
       Game.hire(chooseIndex(st.applicants, st.roster, strat));
+      if (hireCost > 0) { stats.paidHires++; stats.paidHireGold += hireCost; }
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') {
@@ -163,6 +169,7 @@ const strategies = [
   {name:'最強優先', kind:'greedy'},
   {name:'ゴブリン統一', kind:'race', race:'ゴブリン'},
   {name:'ゴブリン統一+求人', kind:'race', race:'ゴブリン', reroll:true, keepGold:6},
+  {name:'ゴブリン統一+追加採用', kind:'race', race:'ゴブリン', paidHire:true, keepGold:6},
   {name:'スライム統一', kind:'race', race:'スライム'},
   {name:'骸骨寄せ+求人', kind:'race', race:'骸骨兵', reroll:true, keepGold:6},
   {name:'骸骨寄せ', kind:'race', race:'骸骨兵'},
@@ -185,7 +192,7 @@ const kpiOut = (() => {
 })();
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {
-  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0 };
+  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -197,6 +204,7 @@ for (const s of strategies) {
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);
+  if (s.paidHire) console.log(`  追加採用: ${stats.paidHires}人／紹介料 ${stats.paidHireGold}G（${N}ラン合計）`);
   // 「1ランで仮説を何回試せたか」。同じ編成の連戦は試行に数えない（設計憲法 第14節）
   const kpiData = KPI.load();
   const kpiRuns = kpiData.runs;
