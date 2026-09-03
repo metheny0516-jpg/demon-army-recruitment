@@ -414,6 +414,38 @@ const Game = {
     return FACILITIES.find(f => f.id === this.state.activeFacilityId) || null;
   },
 
+  // 施設Jokerが「いまの軍団で発火できるか」。判定は deploy() が Battle に渡す条件
+  // （帳簿＝会計職の出撃者／厨房＝大食漢か料理人の出撃者／墓地＝建設部門の死霊術師）と
+  // 同じ規則を使う。表示・sim・テストがここを通れば、画面の「発火可能」と実際の発火がずれない。
+  // 返り値: { id, ready, count, need, text }。need は不足時にプレイヤーが動かすべき配置。
+  facilityReadiness(id) {
+    const active = this.activeRoster();
+    if (id === "extortion_ledger") {
+      const count = active.filter(m => (m.job || "").includes("会計")).length;
+      return { id, ready: count > 0, count, need: "会計職を出撃隊へ配置",
+        text: count ? `発火可能：会計職の出撃者 ${count}名` : "不足：会計職を出撃隊へ配置" };
+    }
+    if (id === "grand_kitchen") {
+      const eaters = active.filter(m => (m.traits || []).includes("big_eater")).length;
+      const cooks = active.filter(m => (m.traits || []).includes("demon_cook")).length;
+      const count = eaters + cooks;
+      return { id, ready: count > 0, count, need: "大食漢か魔界料理人を出撃隊へ配置",
+        text: count ? `発火可能：大食漢 ${eaters}名／魔界料理人 ${cooks}名（出撃中）`
+          : "不足：大食漢か魔界料理人を出撃隊へ配置" };
+    }
+    if (id === "graveyard") {
+      const count = this.departmentRoster("construction").filter(m => m.tplId === "necromancer").length;
+      return { id, ready: count > 0, count, need: "死霊術師を建設部門へ配置",
+        text: count ? `発火可能：建設部門の死霊術師 ${count}名` : "不足：死霊術師を建設部門へ配置" };
+    }
+    return { id, ready: false, count: 0, need: "", text: "" };
+  },
+
+  // 施設3択を「いま発火できるか」つきで返す。選択画面と sim はこれを読む。
+  facilityChoices() {
+    return FACILITIES.map(f => ({ ...f, readiness: this.facilityReadiness(f.id) }));
+  },
+
   // 拠点接収：建設部門に誰も置かないと施設は「存在しない」ままだった。
   // 勝利した拠点をそのまま接収することで、施工役なしでも1ランに一度だけ最初の施設へ届く。
   // ただし奪った拠点は目立つ（警戒度+3＝以後の敵が約6%強くなる）。

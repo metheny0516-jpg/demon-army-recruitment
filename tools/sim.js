@@ -15,6 +15,7 @@ for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename
 const Game = vm.runInContext('Game', ctx);
 const KPI = vm.runInContext('KPI', ctx);
 const Synergy = vm.runInContext('Synergy', ctx);
+const Storage = vm.runInContext('Storage', ctx);
 const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
 
 function chooseIndex(apps, roster, strat){
@@ -145,9 +146,16 @@ function runOnce(strat, stats){
     if (Game.canSeizeStronghold()) { Game.seizeStronghold(); stats.seizes++; }
     if (st.phase === 'result') Game.afterResult();
     if (st.phase === 'facility') {
-      const id = strat.kind === 'cheap' || strat.kind === 'race' && strat.race === 'ゴブリン'
+      // 選択画面と同じ「いま発火できるか」で選ぶ。発火できる施設があればその中で頭数が多いもの、
+      // どれも発火できなければ戦略の狙いに近い施設を「採用目標」として選ぶ
+      // （HANDOFF 0節の未確認項目2「条件未達の施設を将来の採用目標として選んだか」を数える）。
+      const goal = strat.kind === 'cheap' || strat.kind === 'race' && strat.race === 'ゴブリン'
         ? 'extortion_ledger'
         : strat.kind === 'caster' ? 'grand_kitchen' : 'graveyard';
+      const ready = Game.facilityChoices().filter(f => f.readiness.ready)
+        .sort((a, b) => b.readiness.count - a.readiness.count || (a.id === goal ? -1 : b.id === goal ? 1 : 0));
+      const id = ready.length ? ready[0].id : goal;
+      stats.facilityPick[ready.length ? 'ready' : 'goal']++;
       Game.chooseFacility(id);
     }
     // ハプニングは無作為に選ぶ（人間の判断は再現できないため）
@@ -164,7 +172,15 @@ function runOnce(strat, stats){
       else Game.concede();
     }
   }
-  return st.record || {};
+  // --lesson: 敗北したら前代の記録に最も当てはまる教訓（提示の先頭）を選び、次のランへ持ち越す。
+  // 人間は3つから選ぶが、simでは「記録が指す教訓をそのまま受け取る」を基準にする。
+  if (withLesson && st.phase === 'gameover' && st.record) {
+    const offer = Game.lessonOffers(st.record)[0];
+    if (offer && Game.chooseLesson(offer.id)) stats.lessonChosen[offer.id] = (stats.lessonChosen[offer.id] || 0) + 1;
+  }
+  const record = st.record || {};
+  record.lessonId = st.lessonId || null;
+  return record;
 }
 
 const strategies = [
@@ -188,6 +204,9 @@ const N = Number(process.argv[2] || 400);
 // KPIの書き出し先（任意）: node tools/sim.js 30 --kpi /tmp/kpi.json
 // 実機のプレイではないので数値そのものは参考値だが、KPI→レポートの経路を
 // 人間の試遊を待たずに通せる。試遊で集めた本物の export とは混ぜないこと。
+// --lesson: 敗北→教訓→次代を連結して回す。教訓は応募プールの偏りだけを変えるので
+// クリア率が大きく動くことは想定しておらず、見るのは「教訓ありのランで顔ぶれとビルド名が変わるか」。
+const withLesson = process.argv.includes('--lesson');
 const kpiOut = (() => {
   const at = process.argv.indexOf('--kpi');
   return at >= 0 ? process.argv[at + 1] : null;
@@ -197,7 +216,8 @@ const kpiOut = (() => {
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {
-  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0 };
+  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, facilityPick:{ready:0, goal:0}, lessonChosen:{} };
+  if (withLesson) Storage.clearLesson();   // 前の戦略の教訓を次の戦略へ持ち込まない
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -216,6 +236,18 @@ for (const s of strategies) {
   const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
   for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
   console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}／拠点接収 ${stats.seizes}回`);
+  if (stats.facilityPick.ready + stats.facilityPick.goal) {
+    console.log(`  施設の選び方: 発火可能な施設を選択 ${stats.facilityPick.ready}回／条件未達を採用目標として選択 ${stats.facilityPick.goal}回`);
+  }
+  if (withLesson) {
+    const withL = res.filter(r => r.lessonId), without = res.filter(r => !r.lessonId);
+    const rate = xs => xs.length ? (xs.filter(r => r.cleared).length / xs.length * 100).toFixed(1) + '%' : '—';
+    const names = xs => new Set(xs.map(r => r.buildName).filter(Boolean)).size;
+    const chosen = Object.entries(stats.lessonChosen).sort((a, b) => b[1] - a[1])
+      .map(([id, n]) => `${(Game.lessonById(id) || {}).name || id}:${n}`).join(' ');
+    console.log(`  前代の教訓: 持ち越し ${withL.length}/${N}ラン　クリア率 教訓あり ${rate(withL)}／なし ${rate(without)}　ビルド名 教訓あり ${names(withL)}種／なし ${names(without)}種`);
+    console.log(`  選ばれた教訓: ${chosen || 'なし'}`);
+  }
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);
