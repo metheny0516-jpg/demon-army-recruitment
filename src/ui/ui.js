@@ -45,15 +45,15 @@ const UI = {
 
   init(root) { this.root = root; },
 
-  set(html) {
+  set(html, sceneHint) {
     if (typeof BattleScene !== "undefined") BattleScene.stop();
-    const scene = html.includes("title-screen") ? "title"
+    const scene = sceneHint || (html.includes("title-screen") ? "title"
       : html.includes('id="scene"') ? "battle"
       : html.includes("応募者面接") ? "recruit"
       : html.includes("部門編成") ? "formation"
       : html.includes("作戦会議") ? "mission"
       : html.includes("魔界史") ? "history"
-      : "report";
+      : "report");
     this.root.dataset.scene = scene;
     this.root.innerHTML = `<main class="game-scene game-scene-${scene}">${html}</main>`;
     window.scrollTo(0, 0);
@@ -710,7 +710,8 @@ const UI = {
       const n = builders.filter(m => m.tplId === "necromancer").length;
       return n ? `発火可能：建設部門の死霊術師 ${n}名` : "不足：死霊術師を建設部門へ配置";
     };
-    const cards = FACILITIES.map(f => `<div class="mission-card">
+    const cards = FACILITIES.map((f, i) => `<div class="mission-card facility-blueprint" data-plan="${i + 1}">
+      <div class="blueprint-stamp">設計案 ${i + 1}</div>
       <div class="mission-kind">大型施設 ${current && current.id === f.id ? "・現在稼働中" : ""}</div>
       <h3>${f.icon} ${U.esc(f.name)}</h3>
       <p>${U.esc(f.desc)}</p>
@@ -718,9 +719,11 @@ const UI = {
       <button class="primary wide" data-action="choosefacility" data-id="${U.esc(f.id)}">
         ${current && current.id === f.id ? "この施設を維持する" : current ? "この施設へ建て替える" : "この施設を建てる"}</button>
     </div>`).join("");
-    this.set(`${this.hud()}<div class="panel"><h2>🔨 大型施設の方針決定</h2>
+    this.set(`${this.hud()}<div class="construction-yard"><div class="construction-crane" aria-hidden="true">⚒</div>
+      <div class="panel construction-order"><h2>🔨 大型施設の方針決定</h2>
       <div>施設Lv.${st.pendingFacilityChoiceLevel}が完成した。稼働できる大型施設は1つだけ。現在のビルドをどの方向へ壊すか選べ。</div>
-    </div><div class="mission-grid">${cards}</div>`);
+    </div><div class="construction-label">魔王城増築計画 <small>採用した人材と接続する設計案を選べ</small></div>
+    <div class="mission-grid construction-plans">${cards}</div></div>`, "facility");
   },
 
   formation() {
@@ -907,7 +910,7 @@ const UI = {
     const cp = st.checkpoint;
     const goldNow = cp ? cp.gold : st.gold;
     const goldAfter = Math.floor(goldNow / 2);
-    return this.set(`<div class="banner lose">
+    return this.set(`<div class="defeat-chamber"><div class="banner lose">
         <h2>魔王軍、壊滅</h2>
         <div>${U.esc(b.army)} に敗北した</div>
       </div>
@@ -926,7 +929,7 @@ const UI = {
       <div class="row">
         <button class="primary" data-action="retry">⟲ 再起する（残り ${st.retriesLeft} 回）</button>
         <button class="danger" data-action="concede">ここで終わる（歴史に刻む）</button>
-      </div>`);
+      </div></div>`, "defeat");
   },
 
   // ハプニング画面。選択肢を出し、選んだ後は結果を見せてから採用へ進む。
@@ -937,11 +940,12 @@ const UI = {
     // 選択済み → 結果を見せる
     if (!ev || st.eventOutcome) {
       return this.set(`${this.hud()}
+        <div class="event-desk resolved"><div class="event-seal">処理済</div>
         <div class="panel event-panel">
-          <h2>⚡ その後</h2>
+          <div class="event-kicker">魔王城・案件報告</div><h2>⚡ その後</h2>
           <div class="event-text">${U.esc(st.eventOutcome || "")}</div>
         </div>
-        <button class="primary wide" data-action="eventdone">次の応募者を面接する</button>`);
+        <button class="primary wide" data-action="eventdone">次の応募者を面接する</button></div>`, "event");
     }
 
     const opts = Game.eventOptions().map(({ o, i }) =>
@@ -950,15 +954,18 @@ const UI = {
     ).join("");
 
     this.set(`${this.hud()}
+      <div class="event-desk"><div class="event-seal">至急</div>
       <div class="panel event-panel">
-        <h2>⚡ ${U.esc(ev.title)}</h2>
+        <div class="event-kicker">モルモ提出・緊急案件</div><h2>⚡ ${U.esc(ev.title)}</h2>
         <div class="event-text">${U.esc(st.pendingEvent.text)}</div>
       </div>
-      <div class="event-options">${opts}</div>`);
+      <div class="event-options">${opts}</div></div>`, "event");
   },
 
   gameover(record, history) {
-    this.set(`<div class="banner ${record.cleared ? "win" : "lose"}">
+    this.set(`<div class="closure-file ${record.cleared ? "conquest" : "bankrupt"}">
+      <div class="closure-form-title"><span>魔王軍事業終了届</span><b>第${record.gen}代</b></div>
+      <div class="banner ${record.cleared ? "win" : "lose"}">
         <h2>${record.cleared ? "人間界を制圧した！" : "魔王軍、壊滅"}</h2>
         <div>${U.esc(record.cause)}</div>
       </div>
@@ -1014,7 +1021,7 @@ const UI = {
         <button class="primary" data-action="new">第${history.length + 1}代として再挑戦</button>
         <button data-action="history">魔界史を見る</button>
         <button class="ghost" data-action="title">タイトルへ</button>
-      </div>`);
+      </div></div>`, "gameover");
   },
 
   history(list) {

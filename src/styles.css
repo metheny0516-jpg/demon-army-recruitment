@@ -2006,6 +2006,196 @@ button.primary::first-letter { color: var(--gold); }
   .mission-map-label::before, .mission-map-label::after { display: none; }
   .game-scene-report > .banner { min-height: 130px; }
 }
+
+/* 施設選択は築城現場と設計図。 */
+.construction-yard {
+  position: relative;
+  padding: clamp(14px, 3vw, 30px);
+  border: 1px solid rgba(215,166,82,.42);
+  background:
+    repeating-linear-gradient(135deg, rgba(205,149,61,.08) 0 10px, transparent 10px 22px),
+    linear-gradient(160deg, #1d1717, #0c0a0d 70%);
+  box-shadow: inset 0 0 90px rgba(0,0,0,.58);
+  overflow: hidden;
+}
+.construction-crane {
+  position: absolute;
+  top: -26px;
+  right: 3%;
+  color: rgba(232,189,104,.09);
+  font-size: 180px;
+  line-height: 1;
+  transform: rotate(-12deg);
+  pointer-events: none;
+}
+.construction-order { max-width: 760px; margin: 0 auto 18px; border-left: 6px solid #bd8543; }
+.construction-label {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: var(--gold);
+  font: 800 21px/1.2 "Yu Mincho", serif;
+  letter-spacing: .1em;
+}
+.construction-label small { color: var(--dim); font: 10px/1.3 sans-serif; letter-spacing: 0; }
+.facility-blueprint {
+  color: #241c20;
+  border: 0;
+  border-top: 8px solid #5f4658;
+  background:
+    linear-gradient(rgba(79,52,66,.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,52,66,.08) 1px, transparent 1px),
+    linear-gradient(#d9d0b6, #bfb393);
+  background-size: 18px 18px, 18px 18px, auto;
+  box-shadow: 5px 7px 0 rgba(0,0,0,.32);
+}
+.facility-blueprint::before { content: "築城図面"; color: #735469; }
+.facility-blueprint h3 { color: #281b25; font-family: "Yu Mincho", serif; font-size: 21px; }
+.facility-blueprint p,
+.facility-blueprint .mission-purpose span,
+.facility-blueprint .mission-kind { color: #5c4d55; }
+.facility-blueprint .mission-purpose { background: rgba(74,51,69,.09); border-color: rgba(74,51,69,.28); }
+.facility-blueprint .mission-purpose b { color: #6e385e; }
+.blueprint-stamp {
+  align-self: flex-start;
+  padding: 3px 8px;
+  border: 2px solid rgba(121,51,58,.7);
+  color: #7e333b;
+  font: 800 11px/1.2 sans-serif;
+  transform: rotate(-3deg);
+}
+
+/* ハプニングは通常パネルではなく、モルモが机へ置いた緊急案件。 */
+.event-desk {
+  position: relative;
+  width: min(780px, 100%);
+  margin: 42px auto 0;
+  padding: clamp(18px, 4vw, 42px);
+  color: #291d24;
+  background:
+    linear-gradient(90deg, rgba(88,54,68,.07) 1px, transparent 1px),
+    linear-gradient(#e3d5ba, #cbb995);
+  background-size: 24px 100%, auto;
+  box-shadow: 10px 14px 0 rgba(0,0,0,.34), inset 0 0 35px rgba(86,48,47,.11);
+  transform: rotate(-.22deg);
+}
+.event-desk::before {
+  content: "";
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 120px;
+  height: 28px;
+  transform: translateX(-50%) rotate(1deg);
+  background: rgba(213,190,137,.78);
+  box-shadow: 0 2px 5px rgba(0,0,0,.22);
+}
+.event-desk .event-panel {
+  color: #291d24;
+  border: 0;
+  border-bottom: 2px solid rgba(100,55,67,.34);
+  background: transparent;
+  box-shadow: none;
+}
+.event-desk .event-panel::after { display: none; }
+.event-desk .event-panel h2 { color: #3a2332; font-size: clamp(25px, 5vw, 42px); }
+.event-kicker { color: #7d5164; font-size: 10px; font-weight: 800; letter-spacing: .28em; }
+.event-desk .event-text { font-family: "Yu Mincho", serif; font-size: 17px; line-height: 1.9; }
+.event-seal {
+  position: absolute;
+  z-index: 2;
+  top: 18px;
+  right: 22px;
+  width: 72px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border: 5px double #a13d48;
+  border-radius: 50%;
+  color: #a13d48;
+  font: 900 17px/1 "Yu Mincho", serif;
+  transform: rotate(9deg);
+  opacity: .78;
+}
+.event-desk.resolved .event-seal { color: #416a52; border-color: #416a52; transform: rotate(-8deg); }
+.event-desk .event-options { display: grid; gap: 9px; }
+.event-desk .event-choice {
+  color: #f8efdb;
+  border-color: #5c4054;
+  background: linear-gradient(90deg, #3f283d, #281d2d);
+}
+
+/* ラン終了は統計画面ではなく、判を押して閉じる一代分の廃業届。 */
+.closure-file {
+  position: relative;
+  width: min(940px, 100%);
+  margin: 0 auto;
+  padding: clamp(12px, 3vw, 30px);
+  border: 1px solid rgba(124,91,111,.5);
+  color: #281d23;
+  background:
+    linear-gradient(rgba(98,63,73,.06) 1px, transparent 1px),
+    linear-gradient(#dfd2b8, #c4b18f);
+  background-size: 100% 28px, auto;
+  box-shadow: 11px 14px 0 rgba(0,0,0,.38), inset 0 0 48px rgba(82,46,44,.12);
+}
+.closure-form-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 4px 13px;
+  border-bottom: 4px double #4f3545;
+  font: 900 clamp(22px, 5vw, 38px)/1.2 "Yu Mincho", serif;
+  letter-spacing: .1em;
+}
+.closure-form-title b { font-size: 14px; color: #74586a; }
+.closure-file > .banner { margin-top: 15px; border-radius: 1px; }
+.closure-file > .banner { color: #fff5df; }
+.closure-file > .banner h2 { color: #fff5df; }
+.closure-file > .panel {
+  color: #2c2026;
+  border-color: rgba(74,48,61,.3);
+  border-radius: 0;
+  background: rgba(255,250,230,.34);
+  box-shadow: none;
+}
+.closure-file > .panel::after { border-color: rgba(74,48,61,.08); }
+.closure-file .muted { color: #695763; }
+.closure-file .history-item { color: #30232a; }
+.closure-file .history-item dt { color: #74586a; }
+.closure-file .history-item dd { color: #2b2026; }
+.closure-file .lesson-panel { border: 2px solid #725268; }
+.closure-file .lesson-panel .mission-card { color: var(--text); }
+.closure-file > .row { justify-content: center; margin-top: 20px; }
+.closure-file.bankrupt::after,
+.closure-file.conquest::after {
+  content: "廃業";
+  position: absolute;
+  right: max(3vw, 20px);
+  margin-top: -110px;
+  padding: 13px 9px;
+  border: 6px double #9f3943;
+  color: #9f3943;
+  font: 900 25px/1 "Yu Mincho", serif;
+  transform: rotate(-12deg);
+  opacity: .76;
+}
+.closure-file.conquest::after { content: "制圧"; color: #376b4b; border-color: #376b4b; }
+
+.defeat-chamber { width: min(900px, 100%); margin: 0 auto; }
+.game-scene-defeat { min-height: 100vh; padding-top: 5vh; }
+.game-scene-defeat .banner { border-radius: 2px; min-height: 150px; display: grid; place-content: center; }
+.game-scene-defeat .banner h2 { font: 900 clamp(32px, 7vw, 58px)/1.2 "Yu Mincho", serif; letter-spacing: .13em; }
+.game-scene-defeat .defeat-chamber > .row { justify-content: center; margin-top: 18px; }
+
+@media (max-width: 700px) {
+  .construction-label { flex-direction: column; gap: 4px; }
+  .event-desk { margin-top: 25px; padding: 24px 12px 16px; transform: none; }
+  .event-seal { width: 55px; top: 10px; right: 10px; font-size: 13px; }
+  .closure-file { padding: 10px 8px 18px; }
+  .closure-form-title { align-items: flex-end; }
+}
 .mission-card::before {
   content: "作戦令";
   align-self: flex-end;
