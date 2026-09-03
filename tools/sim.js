@@ -192,13 +192,9 @@ const kpiOut = (() => {
   const at = process.argv.indexOf('--kpi');
   return at >= 0 ? process.argv[at + 1] : null;
 })();
-// --no-facility-bonus: 施設のhpMult/defBonusを無効化してsimを回す（比較用）
-const noFacilityBonus = process.argv.includes('--no-facility-bonus');
-if (noFacilityBonus) {
-  const FACILITY_LEVELS = vm.runInContext('FACILITY_LEVELS', ctx);
-  for (const lv of FACILITY_LEVELS) { lv.hpMult = 1; lv.defBonus = 0; }
-  console.log('（施設の共通HP・防御補正なし）');
-}
+// 旧仕様（施設Lv.＝全員のHP・防御補正）は2026-09-03に撤去した。
+// 比較フラグは run.js が hpMult を読まなくなり復元できないため削除した。
+// 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {
   const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0 };

@@ -31,19 +31,23 @@ const DEPARTMENTS = {
 const DEPARTMENT_ORDER = ["combat", "construction", "life"];
 
 // buildThreshold は累計建材投入数。施設効果は保存中の個体値を変えず、出撃時だけ加える。
+// レベルは「全員の数値」ではなく「大型Jokerが1戦闘に働ける回数」を表す。
+// 設計憲法 第9節：恒久成長を攻撃力+1%のような数値上昇にしない。増やすのは
+// 選択肢・組み合わせ・発見であって、伸びるのは軍団の平均値ではなく壊れ方の濃さである。
+// hpMult / defBonus は 2026-09-03 に撤去した（旧セーブ互換のため 1 / 0 として残す）。
 const FACILITY_LEVELS = [
-  { level: 0, name: "空き部屋", buildThreshold: 0, hpMult: 1, defBonus: 0 },
-  { level: 1, name: "仮設兵舎", buildThreshold: 3, hpMult: 1.05, defBonus: 0 },
-  { level: 2, name: "整備工房", buildThreshold: 7, hpMult: 1.08, defBonus: 1 },
-  { level: 3, name: "魔王城作業区", buildThreshold: 12, hpMult: 1.12, defBonus: 2 }
+  { level: 0, name: "空き部屋", buildThreshold: 0, works: 0, hpMult: 1, defBonus: 0 },
+  { level: 1, name: "仮設兵舎", buildThreshold: 3, works: 1, hpMult: 1, defBonus: 0 },
+  { level: 2, name: "整備工房", buildThreshold: 7, works: 2, hpMult: 1, defBonus: 0 },
+  { level: 3, name: "魔王城作業区", buildThreshold: 12, works: 3, hpMult: 1, defBonus: 0 }
 ];
 
 const FACILITIES = [
-  { id: "extortion_ledger", icon: "📒", name: "恐喝帳簿", desc: "会計職を出撃させ、予約金貨3Gで次の味方攻撃+40%",
+  { id: "extortion_ledger", icon: "📒", name: "恐喝帳簿", desc: "会計職を出撃させ、予約金貨3Gごとに次の味方攻撃+40%（Lv.の回数だけ発火）",
     links: { reacts: ["金貨獲得"], emits: ["攻撃強化"] } },
-  { id: "grand_kitchen", icon: "🍖", name: "巨大厨房", desc: "戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍化",
+  { id: "grand_kitchen", icon: "🍖", name: "巨大厨房", desc: "戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を(Lv.+1)倍化",
     links: { reacts: ["食料消費"], emits: ["食事強化"] } },
-  { id: "graveyard", icon: "🪦", name: "墓地", desc: "建設部門の死霊術師が、最初の戦死者を骸骨従者として召喚",
+  { id: "graveyard", icon: "🪦", name: "墓地", desc: "建設部門の死霊術師が、戦死者を骸骨従者として召喚（Lv.の体数まで）",
     links: { reacts: ["味方死亡"], emits: ["召喚"] } }
 ];
 

@@ -74,10 +74,20 @@ const kitchenRations = Game.battleRationQuote();
 assert(kitchenRations.kitchen && kitchenRations.need === Game.foodNeedFor(Game.activeRoster()) + 1,
   '巨大厨房は戦闘糧食を追加で1消費する');
 assert(Game.preparedRoster(kitchenRations)[0].battleDmgMult === 1.5,
-  '巨大厨房は大食漢の食事強化を2倍にする');
+  '巨大厨房Lv.1は大食漢の食事強化を2倍にする');
+st.facilityLevel = 3;
+assert(Game.preparedRoster(kitchenRations)[0].battleDmgMult === 2,
+  '巨大厨房Lv.3は食事強化を4倍にする（Lv.＝Jokerが働く回数）');
+st.facilityLevel = 1;
 
+// 施設Lv.の一律HP・防御補正は2026-09-03に撤去した（設計憲法 第9節）。
+// 伸びるのは軍団の平均値ではなく、稼働中Jokerが働く回数である。
 const prepared = Game.preparedRoster()[0];
-assert(prepared.hp === 21 && prepared.def === 2, '仮設兵舎のHP+5%を出撃時だけ適用');
+assert(prepared.hp === 20 && prepared.def === 2, '施設Lv.は出撃隊の素の値を変えない');
+assert(Game.facilityWorks() === 1, '施設Lv.1では大型施設が1回働く');
+st.facilityLevel = 3;
+assert(Game.facilityWorks() === 3, '施設Lv.3では大型施設が3回働く');
+st.facilityLevel = 1;
 assert(st.roster[0].hp === 20, '施設効果で保存中の個体値を汚さない');
 
 Game.assignDepartment(1, 'life');

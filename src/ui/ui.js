@@ -251,7 +251,7 @@ const UI = {
       <div><b>⚔ ${combat}</b><span>戦闘所属</span></div>
       <div><b>🔨 ${builders}</b><span>建設所属</span></div>
       <div><b>🍲 ${life}</b><span>生活所属</span></div>
-      <div><b>${U.esc(facility.name)}</b><span>HP+${Math.round((facility.hpMult - 1) * 100)}% / 防御+${facility.defBonus}</span></div>
+      <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
       <div class="${balance < 0 ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `不足 ${-balance}！` : `余剰 ${balance}`}</span></div>
       <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
       ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>経理部の圧縮</span></div>` : ""}
@@ -316,7 +316,7 @@ const UI = {
     const chains = battle.deathChains || [];
     const lines = [];
     if (facility && facility.level >= 1) {
-      lines.push(`🏗 施設Lv.${facility.level}（${U.esc(facility.name)}）：出撃隊 HP+${Math.round((facility.hpMult - 1) * 100)}%・防御+${facility.defBonus}`);
+      lines.push(`🏗 施設Lv.${facility.level}（${U.esc(facility.name)}）：大型施設が1戦闘に ${facility.works || 1} 回まで働く`);
     }
     const fired = new Map((summary.facilities || []).map(f => [f.facilityId, f]));
     const describe = f => {

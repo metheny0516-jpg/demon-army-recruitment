@@ -27,7 +27,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
         ] }
       },
       overkillSummary: { count: 2, totalExcess: 40, maxExcess: 30, maxPercent: 180, rank: '蹂躙' },
-      facility: { level: 3, name: '魔王城作業区', hpMult: 1.12, defBonus: 2, activeId: 'graveyard', activeName: '墓地' },
+      facility: { level: 3, name: '魔王城作業区', works: 3, activeId: 'graveyard', activeName: '墓地' },
       facilitySummary: { rescuedFromWipe: true, facilities: [
         { facilityId: 'graveyard', name: '墓地', count: 1, summons: 1, amount: 0, rescued: true }
       ] },
@@ -62,7 +62,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }
   // 2倍速で見えなかった「誰が戻したか」が、戦果で一目で読めること
   if (!await page.locator('.facility-panel').count()) errors.push('勝利画面に「施設と死者の働き」パネルが無い');
-  for (const want of ['施設Lv.3', 'HP+12%', '防御+2', '墓地', '骸骨従者1体', '全滅回避']) {
+  for (const want of ['施設Lv.3', '3 回まで働く', '墓地', '骸骨従者1体', '全滅回避']) {
     if (!winText.includes(want)) errors.push('施設の働きが読めない: ' + want);
   }
   const deathSteps = await page.locator('.facility-panel .death-chain .chain-step').allInnerTexts();

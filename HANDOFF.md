@@ -1642,7 +1642,6 @@ P3（部門・食料・施設由来の事件）は完了。
 
 ```bash
 node tools/sim.js 50
-node tools/sim.js 200 --no-facility-bonus   # 施設Lvの共通HP・防御補正を0にした比較（Joker単体の価値を測る）
 ```
 
 各戦略の行の直後に「施設到達: Lv1以上 xx%（Lv3 yy%）／選択 …」が出る。到達率が0の戦略で

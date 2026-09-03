@@ -112,14 +112,16 @@ const Battle = {
     // 特性から呼ばれるテキスト専用ログ（traits.js の ctx.log がこれ）
     const note = (text, cls) => emit("note", { text, cls: cls || "info", emphasis: cls === "revive" ? 2 : 0 });
     const soulState = { player: { amount: 0 }, enemy: { amount: 0 } };
-    let graveyardDeath = null;
-    let graveyardUsed = false;
+    // 施設Lv.＝Jokerが働ける回数。0/未指定なら従来どおり1回だけ働く。
+    const facilityWorks = Math.max(1, Number(options.facilityWorks) || 1);
+    const graveyardQueue = [];
+    let graveyardUsed = 0;
     let nextSummonId = 1;
 
     const reactToDeath = (target, deathEvent) => {
       if (target.flags.summoned) return;
-      if (options.graveyard && target.side === "player" && !graveyardDeath) {
-        graveyardDeath = { target, deathEvent };
+      if (options.graveyard && target.side === "player" && graveyardQueue.length < facilityWorks) {
+        graveyardQueue.push({ target, deathEvent });
       }
       if (target.flags.soulCounted) return;
       const allies = target.side === "player" ? playerUnits : enemyUnits;
@@ -166,7 +168,7 @@ const Battle = {
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;
-    let ledgerTriggered = false;
+    let ledgerFires = 0;
     let ledgerBoost = null;
     const gainBattleResource = (unit, resource, value, label, parent) => {
       const resourceName = resource === "gold" ? "G" : resource;
@@ -178,12 +180,14 @@ const Battle = {
       if (resource === "gold") {
         const before = reservedGold;
         reservedGold += value;
-        if (options.extortionLedger && !ledgerTriggered && before < 3 && reservedGold >= 3) {
-          ledgerTriggered = true;
+        const nextLedgerMark = (ledgerFires + 1) * 3;
+        if (options.extortionLedger && ledgerFires < facilityWorks
+          && before < nextLedgerMark && reservedGold >= nextLedgerMark) {
+          ledgerFires += 1;
           ledgerBoost = emitCausal("facility_trigger", {
             facilityId: "extortion_ledger", name: "恐喝帳簿", desc: "次の味方攻撃+40%",
             amount: reservedGold, emphasis: 2,
-            text: `　施設【恐喝帳簿】 予約金貨${reservedGold}G到達、次の味方攻撃+40%`, cls: "synergy"
+            text: `　施設【恐喝帳簿】 予約金貨${reservedGold}G到達（${ledgerFires}回目）、次の味方攻撃+40%`, cls: "synergy"
           }, event);
         }
       }
@@ -435,9 +439,11 @@ const Battle = {
     const wiped = us => us.every(u => !u.alive);
     const all = () => [...playerUnits, ...enemyUnits];
     const tryGraveyardSummon = () => {
-      if (!options.graveyard || !graveyardDeath || graveyardUsed) return null;
-      graveyardUsed = true;
-      const source = graveyardDeath.target;
+      if (!options.graveyard || graveyardUsed >= facilityWorks) return null;
+      const pending = graveyardQueue[graveyardUsed];
+      if (!pending) return null;
+      graveyardUsed += 1;
+      const source = pending.target;
       const summoned = Battle.makeUnit({
         uid: null, tplId: "skeleton", name: `${source.name}の骸骨従者`, race: "骸骨兵",
         icon: null, job: "墓地の従者",
@@ -451,7 +457,7 @@ const Battle = {
       const facilityEvent = emitCausal("facility_trigger", {
         facilityId: "graveyard", name: "墓地", desc: "戦死者を骸骨従者として召喚", emphasis: 2,
         text: `　施設【墓地】 ${source.name}の遺骸が動き出す！`, cls: "synergy"
-      }, graveyardDeath.deathEvent);
+      }, pending.deathEvent);
       const summonEvent = emitCausal("summon", {
         sourceUnitId: source.id, unit: snap(summoned), emphasis: 3,
         text: `　${summoned.name}を召喚！`, cls: "revive"

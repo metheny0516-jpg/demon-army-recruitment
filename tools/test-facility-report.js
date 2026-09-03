@@ -38,6 +38,20 @@ assert(facility.facilities.length === 1 && facility.facilities[0].facilityId ===
   '施設要約は facility_trigger を施設ごとにまとめる');
 assert(facility.facilities[0].summons === 1 && facility.facilities[0].rescued && facility.rescuedFromWipe,
   '味方全員が倒れた後の墓地召喚を「全滅回避」として残す');
+// 施設Lv.＝Jokerが1戦闘に働ける回数（2026-09-03、共通HP・防御補正の撤去と引き換え）
+{
+  const fodder = () => [player(11, '一番手', [], 10, 1, 12), player(12, '二番手', [], 10, 1, 11),
+    player(13, '三番手', [], 10, 1, 10)];
+  const executioner = () => [enemy('処刑人', 999, 30, 1)];
+  const works1 = Battle.simulate(fodder(), executioner(), { graveyard: true, facilityWorks: 1 });
+  const works3 = Battle.simulate(fodder(), executioner(), { graveyard: true, facilityWorks: 3 });
+  const summonsOf = r => (r.facilitySummary.facilities[0] || { summons: 0 }).summons;
+  assert(summonsOf(works1) === 1, '墓地Lv.1は戦死者を1体だけ起こす');
+  assert(summonsOf(works3) > summonsOf(works1),
+    '墓地Lv.3は同じ戦闘でより多くの戦死者を起こす（Lv.＝働く回数）');
+  assert(summonsOf(works3) <= 3, '墓地はLv.の回数を超えて働かない');
+}
+
 let chains = result.deathChains;
 assert(chains.length === 1 && chains[0].name === '最後の戦没者'
   && chains[0].steps.join(' → ') === '戦死 → 骸骨従者を召喚' && chains[0].permanentDeath,
@@ -95,8 +109,8 @@ Object.assign(Game.state, {
 const meritBefore = Game.state.roster[0].merit;
 const out = Game.deploy();
 const b = Game.state.lastBattle;
-assert(out.result.victory && b.facility && b.facility.level === 2 && b.facility.hpMult === 1.08 && b.facility.defBonus === 1,
-  '戦果に施設Lvの共通補正を残す');
+assert(out.result.victory && b.facility && b.facility.level === 2 && b.facility.works === 2,
+  '戦果に施設Lvと、Jokerが働ける回数を残す');
 assert(b.facility.activeId === 'graveyard' && b.facility.activeName === '墓地',
   '戦果に稼働中の大型施設を残す');
 assert(b.facilitySummary && b.facilitySummary.facilities.length === 0 && Array.isArray(b.deathChains),

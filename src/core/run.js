@@ -398,6 +398,14 @@ const Game = {
     return FACILITY_LEVELS[U.clamp(Number(wanted) || 0, 0, FACILITY_LEVELS.length - 1)];
   },
 
+  // 施設Lv.は大型Jokerが1戦闘に働ける回数として効く。稼働施設が無ければ0。
+  facilityWorks() {
+    const st = this.state;
+    if (!st.activeFacilityId) return 0;
+    const info = this.facilityInfo();
+    return Math.max(0, Number(info.works) || 0);
+  },
+
   activeFacility() {
     return FACILITIES.find(f => f.id === this.state.activeFacilityId) || null;
   },
@@ -460,24 +468,21 @@ const Game = {
   },
 
   preparedRoster(rations) {
-    const facility = this.facilityInfo();
     const active = this.activeRoster();
     const cook = active.find(m => (m.traits || []).includes("demon_cook"));
     const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
     const foodTarget = active.slice().sort((a, b) => Aptitude.of(b).appetite - Aptitude.of(a).appetite)[0];
-    const kitchenMult = rations && rations.kitchen ? 2 : 1;
+    // 巨大厨房は Lv.+1 倍。Lv.1で従来どおりの2倍、Lv.3で4倍まで濃くなる。
+    const kitchenMult = rations && rations.kitchen ? 1 + this.facilityWorks() : 1;
     const foodBoost = cook && rations ? Math.min(0.8, rations.consumed * 0.08 * kitchenMult) : 0;
     return active.map(m => {
       let dmgMult = 1, takenMult = 1;
       if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= 1 + 0.25 * kitchenMult;
       if (foodTarget && m.uid === foodTarget.uid) dmgMult *= 1 + foodBoost;
       if (rations && rations.emptied && hungering) { dmgMult *= 2; takenMult *= 1.3; }
-      return {
-        ...m,
-        hp: Math.max(1, Math.round(m.hp * facility.hpMult)),
-        def: Math.max(0, m.def + facility.defBonus),
-        battleDmgMult: dmgMult, battleTakenMult: takenMult
-      };
+      // 施設の一律HP・防御補正は撤去した（設計憲法 第9節）。施設Lv.は
+      // 大型Jokerが働ける回数（facilityWorks）としてのみ効く。
+      return { ...m, battleDmgMult: dmgMult, battleTakenMult: takenMult };
     });
   },
 
@@ -870,14 +875,11 @@ const Game = {
     return true;
   },
 
-  // 戦闘へ出す形にする。城の補正は自軍と同じく効くが、給与も戦功も持たない。
+  // 戦闘へ出す形にする。給与も戦功も持たない。
+  // 施設の一律補正は撤去したので、自軍と同じく素の値で出る。
   preparedMercenaries() {
-    const facility = this.facilityInfo();
     return (this.state.mercenaries || []).map(m => ({
-      ...m,
-      hp: Math.max(1, Math.round(m.hp * facility.hpMult)),
-      def: Math.max(0, m.def + facility.defBonus),
-      battleDmgMult: 1, battleTakenMult: 1
+      ...m, battleDmgMult: 1, battleTakenMult: 1
     }));
   },
 
@@ -1071,7 +1073,8 @@ const Game = {
       && this.activeRoster().some(m => (m.job || "").includes("会計"));
     const graveyard = st.activeFacilityId === "graveyard"
       && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
-    const result = Battle.simulate(playerUnits, enemyUnits, { rations: rationContext, extortionLedger, graveyard });
+    const result = Battle.simulate(playerUnits, enemyUnits,
+      { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks() });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);
@@ -1159,7 +1162,8 @@ const Game = {
         const info = this.facilityInfo();
         const active = this.activeFacility();
         return {
-          level: st.facilityLevel || 0, name: info.name, hpMult: info.hpMult, defBonus: info.defBonus,
+          level: st.facilityLevel || 0, name: info.name, works: this.facilityWorks(),
+          hpMult: info.hpMult, defBonus: info.defBonus,
           activeId: active ? active.id : null, activeName: active ? active.name : null
         };
       })(),
@@ -1291,7 +1295,7 @@ const Game = {
       + `（施工能力 ${buildCapacity}・備蓄 ${st.materials}）`);
     if (st.facilityLevel > beforeLevel) {
       const facility = this.facilityInfo();
-      notes.push(`施設完成【${facility.name}】出撃隊 HP+${Math.round((facility.hpMult - 1) * 100)}%・防御+${facility.defBonus}`);
+      notes.push(`施設完成【${facility.name}】稼働中の大型施設が1戦闘に ${facility.works} 回まで働く`);
     }
   },
 
