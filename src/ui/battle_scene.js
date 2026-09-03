@@ -75,7 +75,9 @@ const BattleScene = {
     if (typeof Music !== "undefined") Music.update(Game.state, { scene: this.isFinalBattle ? "final" : "battle" });
     const sceneClass = this.isFinalBattle ? "scene final-battle" : "scene";
     return `
-      <div class="hud">
+      <div class="battle-stage-layout">
+      <section class="battle-stage-main">
+      <div class="hud battle-hud">
         <span>第 <b>${Game.state.generation}</b> 代魔王軍</span>
         <span>第 <b>${stageData.stage}</b> 作戦</span>
         <span class="muted">${U.esc(stageData.region)}</span>
@@ -106,7 +108,12 @@ const BattleScene = {
         <button class="small" data-action="skiplog">▶▶ 最後まで飛ばす</button>
         <button class="primary" data-action="afterbattle" id="next-btn" style="display:none">結果を見る</button>
       </div>
-      <div class="log" id="log"></div>`;
+      </section>
+      <aside class="battle-chronicle">
+        <div class="battle-chronicle-title"><span>戦況記録</span><small>重要な出来事は戦場内でも表示される</small></div>
+        <div class="log" id="log"></div>
+      </aside>
+      </div>`;
   },
 
   unitHtml(u) {
