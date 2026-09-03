@@ -274,6 +274,30 @@ for (const s of strategies) {
       / kpiRuns.length).toFixed(1);
     console.log(`  シナジー接続: トリガー種類 平均 ${kinds}種/ラン　最大CHAIN 平均 ${
       mean('chainMax')}　代表CHAINの能力数 平均 ${mean('chainAbilityMax')}`);
+    // 発火能力の内訳。stats.syn は「編成で成立した数」、こちらは「実際に連鎖へ参加した数」。
+    // 2つがズレていたら、成立しているのに何にも繋がっていないということ。
+    const fired = new Map();
+    const byCat = new Map();
+    for (const run of kpiRuns) {
+      for (const [key, n] of Object.entries(run.triggerKinds || {})) {
+        fired.set(key, (fired.get(key) || 0) + n);
+        const cat = key.split(':')[0];
+        byCat.set(cat, (byCat.get(cat) || 0) + n);
+      }
+    }
+    const catLine = [...byCat.entries()].sort((a,b)=>b[1]-a[1])
+      .map(([k,v]) => `${k}:${v}`).join(' ');
+    const topFired = [...fired.entries()].sort((a,b)=>b[1]-a[1]).slice(0, 8)
+      .map(([k,v]) => `${k}:${v}`).join(' ');
+    console.log(`  発火の分類: ${catLine || 'なし'}`);
+    console.log(`  発火の内訳: ${topFired || 'なし'}`);
+    // シナジーだけを「成立（編成で条件を満たした）」と「発火（連鎖に参加した）」で並べる。
+    // 成立>>発火 なら、そのシナジーは繋がる先を持っていない。
+    const synFired = new Map();
+    for (const [key, n] of fired) if (key.startsWith('synergy:')) synFired.set(key.slice(8), n);
+    const synLine = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1])
+      .map(([name, active]) => `${name} 成立${active}/発火${synFired.get(name) || 0}`).join('　');
+    console.log(`  シナジー成立→発火: ${synLine || 'なし'}`);
     if (kpiOut) {
       for (const run of kpiRuns) kpiDump.runs.push({ ...run, strategy: s.name });
       kpiDump.lastScreen = kpiData.lastScreen;
