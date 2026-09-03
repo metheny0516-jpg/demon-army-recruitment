@@ -1374,7 +1374,7 @@ button.primary::first-letter { color: var(--gold); }
   border-top: 9px solid #3d263f;
   border-radius: 1px;
   background:
-    linear-gradient(90deg, rgba(77,45,62,.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(77,45,62,.035) 1px, transparent 1px),
     linear-gradient(#efe2c8, #d7c3a3);
   background-size: 22px 100%, auto;
   box-shadow: 4px 7px 0 rgba(0,0,0,.28), inset 0 0 28px rgba(84,45,42,.12);
@@ -1395,7 +1395,35 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-recruit .applicant-links i { color: #276345; }
 .game-scene-recruit .meta .loyal { color: #315d85; }
 .game-scene-recruit .meta .salary { color: #8a5915; }
-.game-scene-recruit .department-tag { border-color: rgba(55,36,49,.28); }
+.game-scene-recruit .rank-badge {
+  color: #3f293d;
+  border-color: rgba(63,41,61,.5);
+  background: rgba(255,250,232,.48);
+  font-weight: 700;
+}
+.game-scene-recruit .rank-squad_leader { color: #2f552d; border-color: #58724e; background: rgba(103,137,83,.12); }
+.game-scene-recruit .rank-demon_lord { color: #5d2c70; border-color: #724487; background: rgba(122,72,142,.12); }
+.game-scene-recruit .rank-general { color: #70430b; border-color: #9a681b; background: rgba(190,137,36,.14); }
+.game-scene-recruit .merit { color: #6d561d; font-weight: 700; }
+.game-scene-recruit .department-tag {
+  border-color: currentColor;
+  background: rgba(255,250,232,.42);
+  font-weight: 700;
+}
+.game-scene-recruit .department-combat { color: #873d32; }
+.game-scene-recruit .department-construction { color: #765016; }
+.game-scene-recruit .department-life { color: #28603b; }
+.game-scene-recruit .aptitudes .apt {
+  background: rgba(255,250,232,.5);
+  font-weight: 700;
+}
+.game-scene-recruit .aptitudes .apt-food { color: #28603b; border-color: #4d815c; }
+.game-scene-recruit .aptitudes .apt-material { color: #6c4915; border-color: #8b672d; }
+.game-scene-recruit .aptitudes .apt-wage { color: #6d561d; border-color: #92782f; }
+.game-scene-recruit .aptitudes .apt-recruit { color: #31577a; border-color: #55789a; }
+.game-scene-recruit .aptitudes .apt-appetite { color: #853f3f; border-color: #a46161; }
+.game-scene-recruit .aptitudes .apt-appetite.none { color: #514858; border-color: #756a7a; }
+.game-scene-recruit .aptitudes .apt-note { color: #5f5360; }
 .game-scene-recruit .quote { border-top-color: rgba(55,36,49,.25); }
 .game-scene-recruit .avatar.photo { border: 4px solid #f5ecd8; outline: 1px solid #66525e; box-shadow: 2px 3px 5px rgba(0,0,0,.32); }
 
