@@ -636,10 +636,28 @@ const UI = {
   facility() {
     const st = Game.state;
     const current = Game.activeFacility();
+    const active = Game.activeRoster();
+    const builders = Game.departmentRoster("construction");
+    const statusOf = f => {
+      if (f.id === "extortion_ledger") {
+        const n = active.filter(m => (m.job || "").includes("会計")).length;
+        return n ? `発火可能：会計職の出撃者 ${n}名` : "不足：会計職を出撃隊へ配置";
+      }
+      if (f.id === "grand_kitchen") {
+        const eaters = active.filter(m => (m.traits || []).includes("big_eater")).length;
+        const cooks = active.filter(m => (m.traits || []).includes("demon_cook")).length;
+        return eaters || cooks
+          ? `発火可能：大食漢 ${eaters}名／魔界料理人 ${cooks}名（出撃中）`
+          : "不足：大食漢か魔界料理人を出撃隊へ配置";
+      }
+      const n = builders.filter(m => m.tplId === "necromancer").length;
+      return n ? `発火可能：建設部門の死霊術師 ${n}名` : "不足：死霊術師を建設部門へ配置";
+    };
     const cards = FACILITIES.map(f => `<div class="mission-card">
       <div class="mission-kind">大型施設 ${current && current.id === f.id ? "・現在稼働中" : ""}</div>
       <h3>${f.icon} ${U.esc(f.name)}</h3>
       <p>${U.esc(f.desc)}</p>
+      <div class="mission-purpose"><b>現在の接続</b><br><span>${U.esc(statusOf(f))}</span></div>
       <button class="primary wide" data-action="choosefacility" data-id="${U.esc(f.id)}">
         ${current && current.id === f.id ? "この施設を維持する" : "この施設へ建て替える"}</button>
     </div>`).join("");
