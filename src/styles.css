@@ -1234,6 +1234,244 @@ button.wide { width: 100%; }
 .applicant-links i { color: #9ef0b8; font-style: normal; }
 .applicant-links small { color: var(--muted); }
 
+/* ── 2026-09 UI再設計・第一段階 ─────────────────────────
+   ブラウザのカード一覧ではなく「魔王城の執務卓」を共通舞台にする。
+   DOM契約は変えず、今後8〜10体を収容できる横幅と場面クラスだけ先に用意する。 */
+:root {
+  --bg: #09070d;
+  --bg2: #17111e;
+  --panel: #211a27;
+  --panel2: #2b2033;
+  --line: #66506f;
+  --text: #f2eadb;
+  --dim: #bcaec2;
+  --gold: #e8bd68;
+  --purple: #bc78d7;
+  --ink: #1d1520;
+}
+
+html {
+  background: #07050a;
+}
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 50% -18%, rgba(129, 66, 139, .32), transparent 44%),
+    linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.014) 1px, transparent 1px),
+    #09070d;
+  background-size: auto, 5px 5px, 5px 5px, auto;
+}
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  width: min(11vw, 150px);
+  opacity: .72;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.8), transparent),
+    repeating-linear-gradient(90deg, #120d17 0 22px, #1b1321 23px 25px, #0b080e 26px 29px);
+  border-right: 1px solid rgba(232,189,104,.18);
+}
+body::before { left: 0; }
+body::after { right: 0; transform: scaleX(-1); }
+
+#app {
+  width: min(1180px, calc(100% - 24px));
+  max-width: none;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 18px clamp(10px, 2vw, 28px) 34px;
+}
+.game-scene { position: relative; animation: sceneEnter .24s ease-out both; }
+.game-scene::before {
+  content: "";
+  display: block;
+  height: 8px;
+  margin: 0 34px 14px;
+  background: linear-gradient(90deg, transparent, rgba(232,189,104,.72), transparent);
+  clip-path: polygon(0 45%, 42% 45%, 44% 0, 56% 0, 58% 45%, 100% 45%, 100% 55%, 58% 55%, 56% 100%, 44% 100%, 42% 55%, 0 55%);
+  opacity: .72;
+}
+@keyframes sceneEnter { from { opacity: 0; transform: translateY(6px); } }
+
+/* 石板、羊皮紙、封蝋を役割で使い分け、すべてを同じ紫カードにしない。 */
+.panel,
+.department-section,
+.reserve-section {
+  position: relative;
+  border: 1px solid rgba(155,125,160,.52);
+  border-radius: 3px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.035), transparent 35%),
+    linear-gradient(160deg, rgba(38,29,45,.98), rgba(20,15,25,.98));
+  box-shadow: 0 10px 26px rgba(0,0,0,.24), inset 0 0 0 2px rgba(0,0,0,.2);
+}
+.panel::after,
+.department-section::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px solid rgba(232,189,104,.06);
+  pointer-events: none;
+}
+.panel h2,
+.panel h3,
+.army-section > h3 {
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", serif;
+  letter-spacing: .06em;
+}
+
+button {
+  border-radius: 2px;
+  border-color: rgba(165,133,172,.65);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.07), transparent 46%),
+    #2b2033;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.25), 0 3px 0 #0b080e;
+  letter-spacing: .02em;
+}
+button.primary {
+  color: #fff4d2;
+  border-color: #d7aa54;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.13), transparent 42%),
+    linear-gradient(135deg, #70318e, #431d58);
+  box-shadow: inset 0 0 0 1px rgba(255,226,153,.12), 0 3px 0 #170a1d;
+}
+button.primary::first-letter { color: var(--gold); }
+
+/* HUDはWebのステータスバーではなく、魔王の作戦卓に並ぶ資源札。 */
+.hud {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  justify-content: center;
+  gap: 0;
+  padding: 6px 9px;
+  border: 1px solid rgba(232,189,104,.48);
+  border-radius: 2px;
+  background: rgba(13,9,16,.94);
+  box-shadow: 0 8px 22px rgba(0,0,0,.46), inset 0 -2px rgba(118,69,128,.2);
+  backdrop-filter: blur(8px);
+}
+.hud > span {
+  padding: 3px 10px;
+  border-right: 1px solid rgba(232,189,104,.16);
+  white-space: nowrap;
+}
+.hud > span:last-child { border-right: 0; }
+.hud b { font-family: Georgia, "Yu Mincho", serif; color: #fff7df; }
+
+/* 履歴書は暗いアプリカードではなく、魔界役所から届いた書類。 */
+.game-scene-recruit .card {
+  color: #2a1c24;
+  border: 0;
+  border-top: 9px solid #3d263f;
+  border-radius: 1px;
+  background:
+    linear-gradient(90deg, rgba(77,45,62,.08) 1px, transparent 1px),
+    linear-gradient(#efe2c8, #d7c3a3);
+  background-size: 22px 100%, auto;
+  box-shadow: 4px 7px 0 rgba(0,0,0,.28), inset 0 0 28px rgba(84,45,42,.12);
+}
+.game-scene-recruit .card:nth-child(even) { transform: rotate(.18deg); }
+.game-scene-recruit .card-name { color: #25151f; font-family: "Yu Mincho", serif; font-size: 18px; }
+.game-scene-recruit .card-job,
+.game-scene-recruit .muted,
+.game-scene-recruit .quote { color: #695567; }
+.game-scene-recruit .stat { color: #241a22; background: rgba(72,48,70,.10); border: 1px solid rgba(72,48,70,.15); }
+.game-scene-recruit .stat .k { color: #725e70; }
+.game-scene-recruit .trait { color: #312139; background: rgba(91,50,112,.11); border-left-color: #793d8e; }
+.game-scene-recruit .trait b { color: #662a7d; }
+.game-scene-recruit .resume { color: #30212a; background: rgba(255,250,232,.46); border-left-color: #7e3e66; }
+.game-scene-recruit .resume dt { color: #775f6d; }
+.game-scene-recruit .applicant-links { color: #244737; background: rgba(40,91,64,.08); border-color: rgba(40,91,64,.35); }
+.game-scene-recruit .applicant-links > b,
+.game-scene-recruit .applicant-links i { color: #276345; }
+.game-scene-recruit .meta .loyal { color: #315d85; }
+.game-scene-recruit .meta .salary { color: #8a5915; }
+.game-scene-recruit .department-tag { border-color: rgba(55,36,49,.28); }
+.game-scene-recruit .quote { border-top-color: rgba(55,36,49,.25); }
+.game-scene-recruit .avatar.photo { border: 4px solid #f5ecd8; outline: 1px solid #66525e; box-shadow: 2px 3px 5px rgba(0,0,0,.32); }
+
+/* 編成札は石板。将来の8〜10体表示では横密度を上げられる。 */
+.game-scene-formation .cards { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
+.game-scene-formation .card {
+  border-radius: 2px;
+  border-color: rgba(119,91,128,.7);
+  background:
+    linear-gradient(145deg, rgba(73,53,82,.82), rgba(25,18,31,.96));
+  box-shadow: 0 6px 18px rgba(0,0,0,.3), inset 0 0 0 2px rgba(0,0,0,.18);
+}
+.game-scene-formation .card-head { border-bottom: 1px solid rgba(232,189,104,.15); padding-bottom: 7px; }
+.game-scene-formation .pos-badge { color: var(--gold); border-radius: 1px; border-color: rgba(232,189,104,.3); }
+
+.mission-card {
+  border-radius: 2px;
+  border-top-width: 7px;
+  background:
+    linear-gradient(150deg, rgba(50,37,57,.98), rgba(18,13,23,.98));
+  box-shadow: 0 8px 22px rgba(0,0,0,.3), inset 0 0 0 2px rgba(0,0,0,.18);
+}
+.mission-card::before {
+  content: "作戦令";
+  align-self: flex-end;
+  margin-top: -5px;
+  color: rgba(232,189,104,.55);
+  font: 700 10px/1 "Yu Mincho", serif;
+  letter-spacing: .25em;
+}
+
+/* タイトルはメニュー画面ではなく魔王軍の紋章と開庁宣言。 */
+.game-scene-title::before { display: none; }
+.title-screen {
+  min-height: calc(100vh - 70px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 34px 10px 54px;
+}
+.title-crest {
+  width: 108px;
+  aspect-ratio: 1;
+  margin: 0 auto 12px;
+  display: grid;
+  place-items: center;
+  color: #241421;
+  font: 900 48px/1 "Yu Mincho", serif;
+  background: radial-gradient(circle at 40% 35%, #ffe08a, #b36b28 68%, #562736);
+  border: 4px double #f0cf83;
+  clip-path: polygon(50% 0, 88% 14%, 100% 52%, 76% 88%, 50% 100%, 24% 88%, 0 52%, 12% 14%);
+  filter: drop-shadow(0 13px 18px rgba(0,0,0,.55));
+}
+.title-kicker { color: #a990a9; font-size: 10px; letter-spacing: .34em; }
+.title-screen h1 {
+  margin-top: 3px;
+  font-family: "Yu Mincho", "Hiragino Mincho ProN", serif;
+  font-size: clamp(38px, 7vw, 70px);
+  letter-spacing: .12em;
+  text-shadow: 0 5px 0 #261128, 0 12px 28px #000;
+}
+.title-copy { color: #d9cbd8; margin: 0; font-family: "Yu Mincho", serif; letter-spacing: .08em; }
+.title-menu { max-width: 520px; }
+.title-menu button { min-height: 56px; font-family: "Yu Mincho", serif; }
+.title-menu button small { opacity: .75; }
+
+@media (max-width: 700px) {
+  body::before, body::after { display: none; }
+  #app { width: 100%; padding: 8px 8px 24px; }
+  .game-scene::before { margin-bottom: 8px; }
+  .hud { position: relative; justify-content: flex-start; }
+  .hud > span { flex: 1 1 auto; padding: 2px 7px; }
+  .game-scene-recruit .card:nth-child(even) { transform: none; }
+  .title-crest { width: 84px; }
+}
+
 /* 魔界史の主要記録。勝敗・到達点の隣に2つだけ並べる */
 .record-highlights { display: flex; gap: 16px; flex-wrap: wrap; margin: 6px 0 10px; }
 .record-highlights div { display: flex; flex-direction: column; }

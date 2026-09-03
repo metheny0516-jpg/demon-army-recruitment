@@ -47,7 +47,15 @@ const UI = {
 
   set(html) {
     if (typeof BattleScene !== "undefined") BattleScene.stop();
-    this.root.innerHTML = html;
+    const scene = html.includes("title-screen") ? "title"
+      : html.includes('id="scene"') ? "battle"
+      : html.includes("応募者面接") ? "recruit"
+      : html.includes("部門編成") ? "formation"
+      : html.includes("作戦会議") ? "mission"
+      : html.includes("魔界史") ? "history"
+      : "report";
+    this.root.dataset.scene = scene;
+    this.root.innerHTML = `<main class="game-scene game-scene-${scene}">${html}</main>`;
     window.scrollTo(0, 0);
   },
 
@@ -547,8 +555,10 @@ const UI = {
       data-action="new" data-king="${U.esc(k.id)}">${k.icon} ${U.esc(k.name)}で新規ゲーム
       <small>${U.esc(k.desc)}</small></button>`).join("");
     this.set(`<div class="title-screen">
+      <div class="title-crest" aria-hidden="true"><span>魔</span></div>
+      <div class="title-kicker">DEMON KINGDOM PERSONNEL OFFICE</div>
       <h1>魔王ワーク</h1>
-      <p class="muted">採用して、配属して、働かせろ。<br>戦場も魔王城も、人材配置がすべてだ。</p>
+      <p class="title-copy">採用して、配属して、働かせろ。<br>戦場も魔王城も、人材配置がすべてだ。</p>
       <div class="title-menu">
         <div class="muted">第${history.length + 1}代魔王を選ぶ</div>
         ${kingChoices}
