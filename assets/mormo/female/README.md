@@ -1,6 +1,8 @@
-# 女の子版モルモ（生成候補）
+# 女の子版モルモ（制作原画）
 
 `welcome.png`、`report.png`、`worried.png`、`panic.png`、`angry.png`、`joy.png` は、
-女の子版モルモの表情差分候補です。正式採用前のため、現行の `assets/mormo/*.webp` からは参照しません。
+正式採用した女の子版モルモの制作原画です。
 
-採用時は背景透過と画面内サイズを揃えて WebP 化し、性別選択の読み込み契約とテストを追加します。
+ゲームは透過・512×512へ整えた `assets/mormo/*.webp` を参照します。
+再生成は `python -X utf8 scripts/prepare_mormo_female.py` を使用します。
+旧男の子版は `assets/mormo/male/` に保存しています。
