@@ -90,11 +90,14 @@ const Synergy = {
   // 採用画面の「この人材を今の軍団へ入れたら何が起きるか」。
   // links は戦闘計算ではなく公開情報の接続語彙であり、効果量を二重管理しない。
   // 応募者が作る事件を既存人材が受ける経路と、その逆だけを短く返す。
-  connections(candidate, roster) {
+  connections(candidate, roster, facilities) {
     const traitsOf = unit => (unit && unit.traits || []).map(id => ({ id, trait: TRAITS[id] }))
       .filter(entry => entry.trait && entry.trait.links);
     const candidateTraits = traitsOf(candidate);
     const armyTraits = (roster || []).flatMap(unit => traitsOf(unit).map(entry => ({ ...entry, unit })));
+    for (const facility of facilities || []) {
+      if (facility && facility.links) armyTraits.push({ id: facility.id, trait: facility, unit: { name: facility.name } });
+    }
     const rows = [];
     const seen = new Set();
     const add = (fromName, signal, toName, unitName) => {

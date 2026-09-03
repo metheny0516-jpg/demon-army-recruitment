@@ -39,9 +39,12 @@ const FACILITY_LEVELS = [
 ];
 
 const FACILITIES = [
-  { id: "extortion_ledger", icon: "📒", name: "恐喝帳簿", desc: "会計職を出撃させ、予約金貨3Gで次の味方攻撃+40%" },
-  { id: "grand_kitchen", icon: "🍖", name: "巨大厨房", desc: "戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍化" },
-  { id: "graveyard", icon: "🪦", name: "墓地", desc: "建設部門の死霊術師が、最初の戦死者を骸骨従者として召喚" }
+  { id: "extortion_ledger", icon: "📒", name: "恐喝帳簿", desc: "会計職を出撃させ、予約金貨3Gで次の味方攻撃+40%",
+    links: { reacts: ["金貨獲得"], emits: ["攻撃強化"] } },
+  { id: "grand_kitchen", icon: "🍖", name: "巨大厨房", desc: "戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍化",
+    links: { reacts: ["食料消費"], emits: ["食事強化"] } },
+  { id: "graveyard", icon: "🪦", name: "墓地", desc: "建設部門の死霊術師が、最初の戦死者を骸骨従者として召喚",
+    links: { reacts: ["味方死亡"], emits: ["召喚"] } }
 ];
 
 const DEPARTMENT_RULES = {

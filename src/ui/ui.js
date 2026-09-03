@@ -106,7 +106,8 @@ const UI = {
   },
 
   applicantConnections(m) {
-    const rows = Synergy.connections(m, Game.state.roster).slice(0, 3);
+    const facility = Game.activeFacility();
+    const rows = Synergy.connections(m, Game.state.roster, facility ? [facility] : []).slice(0, 3);
     if (!rows.length) return `<div class="applicant-links muted">現在の軍団との直接接続はまだない</div>`;
     return `<div class="applicant-links"><b>🔗 今の軍団との接続</b>${rows.map(row =>
       `<div><span>${U.esc(row.from)}</span><i>→ ${U.esc(row.signal)} →</i><span>${U.esc(row.to)}</span>${

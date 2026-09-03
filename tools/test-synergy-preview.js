@@ -126,5 +126,9 @@ assert(deathLinks.some(link => link.signal === '蘇生' && link.from === '死霊
   '死霊術 → 蘇生 → 魂の徴収の異種族接続を示す');
 assert(Synergy.connections({ traits: ['coward'] }, [looter]).length === 0,
   '直接つながらない能力を無理にシナジー扱いしない');
+const ledger = { id: 'extortion_ledger', name: '恐喝帳簿', links: { reacts: ['金貨獲得'], emits: ['攻撃強化'] } };
+const facilityLinks = Synergy.connections(looter, [], [ledger]);
+assert(facilityLinks.some(link => link.from === '追い剥ぎ' && link.signal === '金貨獲得' && link.to === '恐喝帳簿'),
+  '稼働施設を軍団側の要素として履歴書の接続へ含める');
 
 console.log('シナジー予告テスト完了');
