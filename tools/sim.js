@@ -34,6 +34,23 @@ function chooseIndex(apps, roster, strat){
   return apps.reduce((b,m,i)=> power(m) > power(apps[b]) ? i : b, 0);
 }
 
+// 部門配属の方針。undefined は全員戦闘（施設は建たない）。
+//   balanced = 弱い順に生活1・建設1   build = 生活1・建設2（施工能力を厚くする）
+function assignDepartments(strat){
+  const st = Game.state;
+  const mode = strat.departments;
+  if (!mode || st.roster.length < 3) return;
+  for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
+  const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
+  Game.assignDepartment(support[0].uid, 'life');
+  Game.assignDepartment(support[1].uid, 'construction');
+  // 建設を厚くするのは軍団に余裕があるときだけ。3体しか居ない状態で2人目を建設へ回すと
+  // 戦闘部門が空になり、出撃できずランが進まない（実際にそれで平均勝利0.00になった）。
+  if (mode === 'build' && st.roster.length >= 5 && support[2]) {
+    Game.assignDepartment(support[2].uid, 'construction');
+  }
+}
+
 function runOnce(strat, stats){
   Game.newRun();
   const st = Game.state;
@@ -86,12 +103,7 @@ function runOnce(strat, stats){
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') {
-      if (strat.departments === 'balanced' && st.roster.length >= 3) {
-        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
-        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
-        Game.assignDepartment(support[0].uid, 'life');
-        Game.assignDepartment(support[1].uid, 'construction');
-      }
+      assignDepartments(strat);
       const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);
       st.activeUids = best.map(m => m.uid);
@@ -100,9 +112,16 @@ function runOnce(strat, stats){
       else Game.prepareOpeningBattle('invade');
     }
     if (st.phase === 'mission') {
+      // 作戦方針。既定（未指定）は侵攻一択で、これが「侵攻速攻」と同じ動きになる。
+      // raid=略奪中心 / build=建材重視（鎮圧を厚く） / careful=資金と忠誠を見て寄り道
       let kind = 'invade';
       const salary = Game.salaryTotal();
       if (strat.mission === 'raid' && (st.missionCounts.raid || 0) < 4) kind = 'raid';
+      if (strat.mission === 'build') {
+        // 建材は鎮圧+2・侵攻+1・略奪0。建設で施設を伸ばすには鎮圧へ寄る必要がある。
+        if ((st.missionCounts.suppress || 0) < 4) kind = 'suppress';
+        else if (st.gold < salary + 5 && (st.missionCounts.raid || 0) < 2) kind = 'raid';
+      }
       if (strat.mission === 'careful') {
         const lowLoyalty = st.roster.some(m => m.loyalty < 45);
         if (lowLoyalty && (st.missionCounts.suppress || 0) < 2) kind = 'suppress';
@@ -112,12 +131,7 @@ function runOnce(strat, stats){
       Game.selectMission(index >= 0 ? index : 2);
     }
     if (st.phase === 'formation') {
-      if (strat.departments === 'balanced' && st.roster.length >= 3) {
-        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
-        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
-        Game.assignDepartment(support[0].uid, 'life');
-        Game.assignDepartment(support[1].uid, 'construction');
-      }
+      assignDepartments(strat);
       const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);                // 強い5体を選び、HP高い順に前へ
       st.activeUids = best.map(m => m.uid);
@@ -141,14 +155,24 @@ function runOnce(strat, stats){
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
     }
-    // 拠点接収：施設ゼロのまま条件を満たしたら必ず使う（入口が到達率をどれだけ動かすかを測る）
-    if (Game.canSeizeStronghold()) { Game.seizeStronghold(); stats.seizes++; }
+    // 拠点接収。既定は「条件を満たせば必ず使う」だが、これは方針のひとつでしかない。
+    // seize:'never' は接収せず建設だけで施設を目指す（または施設を使わない）方針。
+    if (strat.seize !== 'never' && Game.canSeizeStronghold()) {
+      Game.seizeStronghold(); stats.seizes++;
+    }
+    if (Game.canSeizeStronghold()) stats.seizeDeclined++;   // 出たのに使わなかった回数
     if (st.phase === 'result') Game.afterResult();
     if (st.phase === 'facility') {
-      const id = strat.kind === 'cheap' || strat.kind === 'race' && strat.race === 'ゴブリン'
+      // 施設方針。既定 'auto' は採用戦略から推測する従来どおりの固定で、
+      // これは「戦略ごとに施設が決め打ち」という前提そのもの。明示idで切り離せる。
+      // 'none' は施設を使わない方針。建設に人を置かず接収もしなければ、本来ここへ来ない。
+      // 来てしまったら方針が漏れているので数えて可視化する（黙って選ばない）。
+      const auto = strat.kind === 'cheap' || strat.kind === 'race' && strat.race === 'ゴブリン'
         ? 'extortion_ledger'
         : strat.kind === 'caster' ? 'grand_kitchen' : 'graveyard';
-      Game.chooseFacility(id);
+      const want = strat.facility || 'auto';
+      if (want === 'none') stats.facilityLeaked++;
+      Game.chooseFacility(want === 'auto' || want === 'none' ? auto : want);
     }
     // ハプニングは無作為に選ぶ（人間の判断は再現できないため）
     if (st.phase === 'event') {
@@ -183,6 +207,24 @@ const strategies = [
   {name:'慎重経営', kind:'greedy', mission:'careful'},
   {name:'三部門均衡', kind:'greedy', mission:'careful', departments:'balanced'},
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
+
+  // ── プレイ方針の比較（2026-09-03追加） ────────────────────────
+  // 上の15戦略は「誰を採るか」を変えている。こちらは採用を最強優先で固定し、
+  // 「どう進めるか」だけを動かして、作戦・部門・施設の効きを切り分ける。
+  // 名前は 方針: で始める（出力を目で分けるため）。
+  {name:'方針: 侵攻速攻', kind:'greedy', mission:'invade', seize:'never'},
+  {name:'方針: 侵攻速攻+接収', kind:'greedy', mission:'invade', seize:'always'},
+  {name:'方針: 略奪中心', kind:'greedy', mission:'raid', seize:'never'},
+  {name:'方針: 略奪中心+接収', kind:'greedy', mission:'raid', seize:'always'},
+  {name:'方針: 建設重視', kind:'greedy', mission:'build', departments:'build', seize:'never'},
+  {name:'方針: 建設重視+接収', kind:'greedy', mission:'build', departments:'build', seize:'always'},
+  {name:'方針: 施設を使わない', kind:'greedy', mission:'invade', seize:'never', facility:'none'},
+
+  // 施設3択そのものの比較。建設重視で必ず到達させ、選ぶ施設だけを変える。
+  // 「戦略ごとに施設が決め打ち」という前提を外すとどれが効くのかを見る。
+  {name:'施設: 墓地', kind:'greedy', mission:'build', departments:'build', facility:'graveyard'},
+  {name:'施設: 恐喝帳簿', kind:'greedy', mission:'build', departments:'build', facility:'extortion_ledger'},
+  {name:'施設: 巨大厨房', kind:'greedy', mission:'build', departments:'build', facility:'grand_kitchen'},
 ];
 const N = Number(process.argv[2] || 400);
 // KPIの書き出し先（任意）: node tools/sim.js 30 --kpi /tmp/kpi.json
@@ -197,7 +239,7 @@ const kpiOut = (() => {
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {
-  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0 };
+  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, seizeDeclined:0, facilityLeaked:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
