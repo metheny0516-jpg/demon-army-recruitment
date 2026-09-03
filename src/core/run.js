@@ -1104,7 +1104,19 @@ const Game = {
       nearMiss: result.nearMiss,
       chainSummary: result.chainSummary,
       overkillSummary: result.overkillSummary,
-      summonCount: result.summonCount || 0
+      summonCount: result.summonCount || 0,
+      // 施設は「誰の手柄か」を個人へ付けない代わりに、戦果へ短い要約として残す。
+      // 共通補正（Lv）と稼働施設（Joker）を分けて書き、どちらを体感したか読めるようにする。
+      facility: (() => {
+        const info = this.facilityInfo();
+        const active = this.activeFacility();
+        return {
+          level: st.facilityLevel || 0, name: info.name, hpMult: info.hpMult, defBonus: info.defBonus,
+          activeId: active ? active.id : null, activeName: active ? active.name : null
+        };
+      })(),
+      facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
+      deathChains: result.deathChains || []
     };
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
     // 傭兵は契約終了。次の戦闘は新しい候補から選び直す

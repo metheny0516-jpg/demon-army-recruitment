@@ -592,6 +592,8 @@ const Battle = {
       chainSummary: this.summarizeChains(timeline),
       overkillSummary: this.summarizeOverkill(timeline),
       summonCount: timeline.filter(e => e.type === "summon").length,
+      facilitySummary: this.summarizeFacility(timeline),
+      deathChains: this.summarizeDeathChains(timeline),
       resourceChanges: this.summarizeResourceChanges(timeline)
     };
   },
@@ -727,6 +729,64 @@ const Battle = {
       sourceId: top ? top.fromId : null,
       targetId: top ? top.toId : null
     };
+  },
+
+  // 施設が今回の戦闘で何をしたか。facility_trigger と、その子の summon だけから導出する。
+  // 「全滅回避」は、召喚の時点で開始時の味方が全員倒れていたかをタイムライン再生で判定する。
+  // 戦闘中に別の状態を持ち回らず、戦功・昇進・報酬には一切接続しない（表示専用）。
+  summarizeFacility(timeline) {
+    const events = timeline || [];
+    const start = events.find(e => e.type === "battle_start");
+    const alive = new Map(((start && start.player) || []).map(u => [u.id, true]));
+    const byId = new Map(events.filter(e => e.eventId).map(e => [e.eventId, e]));
+    const facilities = new Map();
+    let rescuedFromWipe = false;
+    for (const event of events) {
+      if (event.type === "death" && alive.has(event.unitId)) alive.set(event.unitId, false);
+      else if (event.type === "revive" && alive.has(event.unitId)) alive.set(event.unitId, true);
+      if (event.type === "facility_trigger") {
+        const current = facilities.get(event.facilityId)
+          || { facilityId: event.facilityId, name: event.name, count: 0, summons: 0, amount: 0, rescued: false };
+        current.count += 1;
+        current.amount = Math.max(current.amount, Number(event.amount) || 0);
+        facilities.set(event.facilityId, current);
+      } else if (event.type === "summon") {
+        const parent = event.parentEventId ? byId.get(event.parentEventId) : null;
+        const current = parent && parent.type === "facility_trigger" ? facilities.get(parent.facilityId) : null;
+        if (!current) continue;
+        current.summons += 1;
+        if (alive.size && [...alive.values()].every(a => !a)) {
+          current.rescued = true;
+          rescuedFromWipe = true;
+        }
+      }
+    }
+    return { facilities: [...facilities.values()], rescuedFromWipe };
+  },
+
+  // 死者ごとの短い連鎖。「同じゾンビが二度立ち上がった」ように見える戦闘で、
+  // 耐えたのか・死んだのか・誰が戻したのか・全快だったのか・別個体の召喚だったのかを分ける。
+  // 味方（開始スナップショットに居る者）だけを対象にし、召喚物は起点にしない。
+  summarizeDeathChains(timeline) {
+    const events = timeline || [];
+    const start = events.find(e => e.type === "battle_start");
+    const units = new Map(((start && start.player) || []).map(u =>
+      [u.id, { unitId: u.id, name: u.name, steps: [], deaths: 0, permanentDeath: false }]));
+    for (const event of events) {
+      const unit = units.get(event.type === "summon" ? event.sourceUnitId : event.unitId);
+      if (!unit) continue;
+      if (event.type === "survive") unit.steps.push("致死を耐えた");
+      else if (event.type === "death") { unit.steps.push("戦死"); unit.deaths += 1; unit.permanentDeath = true; }
+      else if (event.type === "revive") {
+        unit.permanentDeath = false;
+        const by = event.traitId === "necromancy" ? "死霊術で蘇生"
+          : event.traitId === "tenacity" ? "執念で復活" : "蘇生";
+        const full = Number.isFinite(event.hp) && Number.isFinite(event.maxHp) && event.hp >= event.maxHp;
+        unit.steps.push(full ? `${by}（全快）` : by);
+      } else if (event.type === "summon") unit.steps.push("骸骨従者を召喚");
+    }
+    return [...units.values()].filter(u => u.steps.length)
+      .map(u => ({ unitId: u.unitId, name: u.name, steps: u.steps, deaths: u.deaths, permanentDeath: u.permanentDeath }));
   },
 
   // 敗北後に「どこまで迫れたか」を見せるための要約。

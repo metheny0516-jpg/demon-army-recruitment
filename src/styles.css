@@ -1240,6 +1240,10 @@ button.wide { width: 100%; }
   background: #1b1526; border: 1px solid #3a2f52;
 }
 .chain-arrow { font-size: 11px; color: var(--muted); }
+.facility-panel .notes { margin: 4px 0 0; }
+.facility-panel .death-chain { margin-top: 4px; }
+.facility-panel .death-chain b { font-size: 12px; }
+.facility-panel .chain-step.permanent { color: var(--red); }
 .fallen-panel { border-left: 4px solid #6a2020; }
 
 /* 部門適性チップ。応募者カードでも軍団カードでも同じ見え方にする */

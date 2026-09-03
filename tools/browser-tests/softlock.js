@@ -11,9 +11,11 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   await page.click('[data-action="new"]');
   console.log('▼ 新規開始直後（部隊0体）で面接を打ち切ろうとする');
   const skipDisabled = await page.locator('[data-action="skip"][disabled]').count();
-  const formDisabled = await page.locator('[data-action="toformation"][disabled]').count();
-  ok(skipDisabled===1, '「誰も採用しない」が無効化されている');
-  ok(formDisabled===1, '「部隊編成へ進む」が無効化されている');
+  // 「作戦会議へ進む」ボタンは面接終了へ統合された（1ba62ac）。守りたい性質は
+  // 「空部隊のまま採用画面を抜ける押せるボタンが無い」ことなので、ボタン名ではなくそれを測る
+  const formEnabled = await page.locator('[data-action="toformation"]:not([disabled])').count();
+  ok(skipDisabled===1, '「面接を終了」が無効化されている');
+  ok(formEnabled===0, '空部隊で作戦会議へ進める有効ボタンが無い');
 
   console.log('▼ 万一 空部隊で編成画面に入っても脱出できるか');
   await page.evaluate(() => { Game.skipHire(); App.render(); });

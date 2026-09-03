@@ -307,6 +307,40 @@ const UI = {
     </div>`;
   },
 
+  // 施設と死者の働き。2倍速やスキップで見えなかった「誰が戻したか」を戦果で読めるようにする。
+  // 集計は Battle.summarizeFacility / summarizeDeathChains（タイムライン導出）を表示するだけ。
+  facilityPanel(battle) {
+    if (!battle) return "";
+    const facility = battle.facility || null;
+    const summary = battle.facilitySummary || { facilities: [] };
+    const chains = battle.deathChains || [];
+    const lines = [];
+    if (facility && facility.level >= 1) {
+      lines.push(`🏗 施設Lv.${facility.level}（${U.esc(facility.name)}）：出撃隊 HP+${Math.round((facility.hpMult - 1) * 100)}%・防御+${facility.defBonus}`);
+    }
+    const fired = new Map((summary.facilities || []).map(f => [f.facilityId, f]));
+    const describe = f => {
+      if (f.facilityId === "graveyard") return `骸骨従者${f.summons || 0}体を召喚${f.rescued ? "（全滅回避）" : ""}`;
+      if (f.facilityId === "extortion_ledger") return `予約金貨${f.amount}G到達 → 次の味方攻撃+40%`;
+      if (f.facilityId === "grand_kitchen") return "食事強化を2倍化（糧食+1）";
+      return `${f.count}回発火`;
+    };
+    for (const f of fired.values()) lines.push(`🔥 ${U.esc(f.name)}：${U.esc(describe(f))}`);
+    if (facility && facility.activeId && !fired.has(facility.activeId)) {
+      lines.push(`💤 ${U.esc(facility.activeName)}：今回は発火しなかった`);
+    }
+    if (!lines.length && !chains.length) return "";
+    const chainRows = chains.map(c => `<div class="death-chain"><b>${U.esc(c.name)}</b>
+      <div class="chain-path">${c.steps.map(step => `<span class="chain-step">${U.esc(step)}</span>`)
+        .join(`<span class="chain-arrow">→</span>`)}${
+        c.permanentDeath ? `<span class="chain-arrow">→</span><span class="chain-step permanent">永久戦死</span>` : ""}</div>
+    </div>`).join("");
+    return `<div class="panel facility-panel"><h3>🪦 施設と死者の働き</h3>
+      ${lines.length ? `<ul class="notes">${lines.map(l => `<li>${l}</li>`).join("")}</ul>` : ""}
+      ${chains.length ? `<div class="chain-caption">死者の連鎖（誰が倒れ、誰が戻したか）</div>${chainRows}` : ""}
+    </div>`;
+  },
+
   payrollPanel() {
     const st = Game.state;
     const selected = Game.payrollPolicy();
@@ -801,6 +835,7 @@ const UI = {
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
       ${this.breakthroughPanel(b)}
+      ${this.facilityPanel(b)}
       ${this.contributionPanel(b.contribution)}
       ${(b.incidents && b.incidents.length) ? `<div class="panel incident-panel"><h3>💥 この戦いの不祥事</h3>
         ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}
@@ -836,6 +871,7 @@ const UI = {
       </div>
       ${this.nearMissPanel(b.nearMiss)}
       ${this.breakthroughPanel(b)}
+      ${this.facilityPanel(b)}
       ${this.contributionPanel(b.contribution)}
       <div class="panel">
         <h3>まだ終わりではない</h3>

@@ -27,6 +27,14 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
         ] }
       },
       overkillSummary: { count: 2, totalExcess: 40, maxExcess: 30, maxPercent: 180, rank: '蹂躙' },
+      facility: { level: 3, name: '魔王城作業区', hpMult: 1.12, defBonus: 2, activeId: 'graveyard', activeName: '墓地' },
+      facilitySummary: { rescuedFromWipe: true, facilities: [
+        { facilityId: 'graveyard', name: '墓地', count: 1, summons: 1, amount: 0, rescued: true }
+      ] },
+      deathChains: [
+        { unitId: 'p1', name: '死霊術師', deaths: 1, permanentDeath: false,
+          steps: ['致死を耐えた', '戦死', '死霊術で蘇生（全快）', '骸骨従者を召喚'] }
+      ],
       contribution: [
         { id: 'p0', uid: roster[0] && roster[0].uid, name: '追い剥ぎゴブ', race: 'ゴブリン', dealt: 30, taken: 5,
           kills: 2, maxOverkill: 180, survived: true, died: false,
@@ -48,9 +56,18 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!winText.includes('最大OVERKILL') || !winText.includes('180%')) errors.push('最大OVERKILLが読めない');
   if (!winText.includes('今回の大暴れ')) errors.push('パネル見出しが読めない');
   if (!winText.includes('いちばん長くつながった連鎖')) errors.push('CHAINと経路の関係を説明する行が無い');
-  const steps = await page.locator('.chain-step').allInnerTexts();
+  const steps = await page.locator(".breakthrough-panel .chain-step").allInnerTexts();
   if (steps.join(' → ') !== '攻撃 → 追い剥ぎ +1G → 強欲 → 追加攻撃') {
     errors.push('代表CHAIN経路が読めない: ' + steps.join(' → '));
+  }
+  // 2倍速で見えなかった「誰が戻したか」が、戦果で一目で読めること
+  if (!await page.locator('.facility-panel').count()) errors.push('勝利画面に「施設と死者の働き」パネルが無い');
+  for (const want of ['施設Lv.3', 'HP+12%', '防御+2', '墓地', '骸骨従者1体', '全滅回避']) {
+    if (!winText.includes(want)) errors.push('施設の働きが読めない: ' + want);
+  }
+  const deathSteps = await page.locator('.facility-panel .death-chain .chain-step').allInnerTexts();
+  if (deathSteps.join(' → ') !== '致死を耐えた → 戦死 → 死霊術で蘇生（全快） → 骸骨従者を召喚') {
+    errors.push('死者の連鎖が読めない: ' + deathSteps.join(' → '));
   }
   const headings = await page.locator('.panel h3').allInnerTexts();
   if (headings.filter(h => h.includes('OVERKILL')).length !== 0) errors.push('OVERKILLパネルが重複して残っている');
@@ -103,6 +120,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   const loseText = await setup(false);
   if (!await page.locator('.breakthrough-panel').count()) errors.push('敗北画面に「今回の大暴れ」パネルが無い');
   if (!loseText.includes('最大CHAIN')) errors.push('敗北画面で最大CHAINが読めない');
+  if (!await page.locator('.facility-panel').count()) errors.push('敗北画面に「施設と死者の働き」パネルが無い');
 
   await setup(true);
   await page.screenshot({ path: (process.env.SP || '.') + '/report-chain.png', fullPage: true });
@@ -111,11 +129,13 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   const oldText = await page.evaluate(() => {
     const b = Game.state.lastBattle;
     b.chainSummary = { maxChain: 1, chainCount: 1, eventCount: 1, chains: [] };
+    delete b.facility; delete b.facilitySummary; delete b.deathChains;
     UI.result();
     return document.body.innerText;
   });
   if (!oldText.includes('最大CHAIN')) errors.push('旧データで大暴れパネルが消えてしまう');
-  if (await page.locator('.chain-step').count()) errors.push('旧データなのに経路が出ている');
+  if (await page.locator(".breakthrough-panel .chain-step").count()) errors.push("旧データなのに経路が出ている");
+  if (await page.locator('.facility-panel').count()) errors.push('施設要約の無い旧データなのに施設パネルが出ている');
 
   await page.screenshot({ path: (process.env.SP || '.') + '/report-panel.png', fullPage: true });
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 主要記録2つ・代表CHAIN経路・非ダメージバッジ');
