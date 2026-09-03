@@ -67,6 +67,17 @@ UI全面改修の主要画面は一巡した。次は実機で文字密度とス
 引き継いで読みにくいことを確認した。`game-scene-recruit` 内だけ濃いインク色・薄い色面・太字へ
 上書きし、紙の縦罫線も不透明度を下げた。暗背景側の共通色と他画面の表示契約は変更していない。
 
+### 画像VFX＋戦闘立ち画パイロット（2026-09-03・CodeX）
+
+戦闘ルールとタイムライン契約は変えず、対象カードへ一時画像を重ねる `.bu-vfx-anchor` を追加した。
+`slash`、`impact`、`guard`、`revive`、`overkill` の透過WebPを生成・圧縮し、攻撃・耐え・蘇生・
+OVERKILLへ接続済み。画像読込失敗時は既存CSS演出だけが残り、スキップ時は残ったVFXを除去する。
+
+戦闘専用立ち画はゴブリンだけをパイロット実装した。待機は
+`assets/battle/units/goblin/idle.webp`、攻撃時は `attack-windup.webp` へ短時間切り替わる。
+履歴書写真 `assets/monsters/goblin.png` は変更していない。他種族へ展開するときは一括生成せず、
+同一性・透過・96px表示を1種ずつ確認して `BattleScene.BATTLE_SPRITES` へ登録する。
+
 ### この区切りまでに完了・push済み
 
 | コミット | 内容 |

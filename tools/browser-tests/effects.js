@@ -42,6 +42,39 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   const action = await page.locator('#action-caption').innerText();
   if (!action.includes('古参のゴブ太') || !action.includes('勇者アレン')) errors.push('攻撃者と対象が読めない');
 
+  // 画像VFXはタイムライン契約を変えず、対象カード上へ一時的に重なる。
+  await page.evaluate(() => {
+    BattleScene.stop();
+    BattleScene.render({
+      type: 'attack', fromId: 'p0', toId: 'e0', dmg: 8, hp: 34, maxHp: 50, emphasis: 2
+    });
+  });
+  await page.waitForTimeout(80);
+  const vfx = await page.locator('#bu-e0 .bu-vfx').evaluateAll(images => images.map(image => ({
+    kind: image.className,
+    loaded: image.complete && image.naturalWidth > 0
+  })));
+  if (process.env.SP) await page.screenshot({ path: process.env.SP + '/scene-image-vfx.png' });
+  if (!vfx.some(item => item.kind.includes('vfx-slash') && item.loaded)) errors.push('斬撃画像VFXが対象へ表示されない');
+  if (!vfx.some(item => item.kind.includes('vfx-impact') && item.loaded)) errors.push('命中画像VFXが対象へ表示されない');
+  const pose = await page.locator('#bu-p0 .bu-sprite-img').evaluate(image => ({
+    pose: image.dataset.pose,
+    loaded: image.complete && image.naturalWidth > 0
+  }));
+  if (pose.pose !== 'attack-windup' || !pose.loaded) errors.push('ゴブリンの攻撃キーポーズへ切り替わらない');
+
+  await page.evaluate(() => {
+    BattleScene.render({ type: 'survive', unitId: 'p0', hp: 1, maxHp: 30, emphasis: 2 });
+    BattleScene.render({ type: 'revive', unitId: 'p0', hp: 10, maxHp: 30, emphasis: 2 });
+    BattleScene.render({ type: 'overkill', toId: 'e0', percent: 180, excess: 40, rank: '蹂躙', emphasis: 2 });
+  });
+  await page.waitForTimeout(80);
+  for (const kind of ['guard', 'revive', 'overkill']) {
+    const loaded = await page.locator(`.bu-vfx.vfx-${kind}`).evaluateAll(images =>
+      images.some(image => image.complete && image.naturalWidth > 0));
+    if (!loaded) errors.push(`${kind}画像VFXが表示されない`);
+  }
+
   const timing = await page.evaluate(() => ({
     round: BattleScene.SPECIAL_DURATION.round_start,
     attack: BattleScene.DURATION[1],
@@ -60,7 +93,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }
   if (!forfeitFloat.includes('-2G')) errors.push('殉職手当の没収額が対象者へ表示されない');
 
-  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ ラウンド区切り・攻撃表示・最終決戦演出');
+  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ ラウンド区切り・攻撃表示・画像VFX・最終決戦演出');
   await browser.close();
   process.exit(errors.length ? 1 : 0);
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

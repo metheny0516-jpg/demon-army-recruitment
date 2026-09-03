@@ -6,6 +6,11 @@
 //
 // アニメーションは transform と opacity のみを使う（レイアウトを走らせない＝スマホで滑らか）。
 const BattleScene = {
+  EFFECT_DIR: "assets/battle/effects/",
+  UNIT_DIR: "assets/battle/units/",
+  BATTLE_SPRITES: {
+    goblin: new Set(["idle", "attack-windup"])
+  },
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
   DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
@@ -53,6 +58,11 @@ const BattleScene = {
   portraitHtml(u) {
     const emoji = this.iconOf(u);
     const id = u.tplId;
+    if (this.BATTLE_SPRITES[id] && this.BATTLE_SPRITES[id].has("idle")) {
+      return `<span class="bu-portrait battle-sprite" data-fallback="${emoji}"><img class="bu-sprite-img"
+        src="${this.UNIT_DIR}${id}/idle.webp" alt="" data-pose="idle"
+        onerror="this.onerror=null; this.src=UI.PORTRAIT_DIR+'${id}.png'; this.parentElement.classList.remove('battle-sprite')"></span>`;
+    }
     if (!UI.hasPortrait(id)) return emoji;
     return `<span class="bu-portrait" data-fallback="${emoji}"><img src="${UI.PORTRAIT_DIR}${id}.png" alt=""
       onerror="UI.portraitFailed('${id}', this)"></span>`;
@@ -67,6 +77,12 @@ const BattleScene = {
   stop() {
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
+    document.querySelectorAll(".bu-vfx").forEach(el => el.remove());
+    for (const u of Object.values(this.units || {})) {
+      if (!u.sprite || !u.tplId) continue;
+      u.sprite.dataset.pose = "idle";
+      u.sprite.src = `${this.UNIT_DIR}${u.tplId}/idle.webp`;
+    }
   },
 
   // 骨組みのHTML。ui.js から差し込む。
@@ -120,6 +136,7 @@ const BattleScene = {
 
   unitHtml(u) {
     return `<div class="bu" id="bu-${u.id}">
+      <div class="bu-vfx-anchor" aria-hidden="true"></div>
       <div class="bu-flash"></div>
       <div class="bu-icon">${this.portraitHtml(u)}</div>
       <div class="bu-name">${U.esc(u.name)}</div>
@@ -134,7 +151,9 @@ const BattleScene = {
       fill: document.getElementById("hp-" + u.id),
       pop: document.getElementById("pop-" + u.id),
       side: u.side,
-      name: u.name
+      name: u.name,
+      tplId: u.tplId,
+      sprite: document.querySelector(`#bu-${u.id} .bu-sprite-img`)
     };
     this.setHp(this.units[u.id], u.hp, u.maxHp);
   },
@@ -258,12 +277,15 @@ const BattleScene = {
         const from = this.units[ev.fromId], to = this.units[ev.toId];
         this.focusAttack(from, to, ev);
         if (from && ev.type === "attack") {
+          this.unitPose(from, "attack-windup", 360);
           from.el.classList.remove("lunge-up", "lunge-down");
           void from.el.offsetWidth; // アニメーション再生のためのリセット
           from.el.classList.add(from.side === "player" ? "lunge-up" : "lunge-down");
         }
         this.attackStreak(from && from.side, ev.type === "splash", ev.emphasis || 0);
         if (to) {
+          this.unitVfx(to, "slash", from && from.side === "enemy" ? "reverse" : "", ev.emphasis);
+          this.unitVfx(to, "impact", "", ev.emphasis);
           this.hit(to, ev.dmg, ev.emphasis, ev.label);
           this.setHp(to, ev.hp, ev.maxHp);
         }
@@ -287,6 +309,7 @@ const BattleScene = {
           u.el.classList.add("revive-rise");
           this.setHp(u, ev.hp, ev.maxHp);
           this.float(u, "復活！", "heal");
+          this.unitVfx(u, "revive", "", 2);
           this.pulse("revive");
         }
         break;
@@ -314,6 +337,7 @@ const BattleScene = {
         if (u) {
           this.setHp(u, ev.hp, ev.maxHp);
           this.float(u, "耐えた！", "guard");
+          this.unitVfx(u, "guard", "", 2);
           this.pulse("guard");
         }
         break;
@@ -366,6 +390,7 @@ const BattleScene = {
         if (target) {
           target.el.classList.add("targeted");
           this.float(target, `${ev.percent}%`, "damage");
+          this.unitVfx(target, "overkill", "", ev.emphasis || 2);
         }
         this.showAction(`${ev.rank}　余剰${ev.excess}ダメージ`, 1100);
         this.pulse("overkill");
@@ -421,6 +446,34 @@ const BattleScene = {
     if (!from || !to) return;
     const action = ev.type === "splash" ? (ev.label || "追撃") : "攻撃";
     this.showAction(`${from.name}の${action}　→　${to.name}`);
+  },
+
+  // 生成画像は戦闘ルールを知らない表示素材。読込失敗時は既存CSS演出だけが残る。
+  unitVfx(u, kind, variant, emphasis) {
+    if (!u || !u.el) return;
+    const anchor = u.el.querySelector(".bu-vfx-anchor");
+    if (!anchor) return;
+    const img = document.createElement("img");
+    img.className = `bu-vfx vfx-${kind}${variant ? ` ${variant}` : ""}${emphasis >= 2 ? " heavy" : ""}`;
+    img.alt = "";
+    img.src = `${this.EFFECT_DIR}${kind}.webp`;
+    img.onerror = () => img.remove();
+    anchor.appendChild(img);
+    const life = kind === "revive" || kind === "overkill" ? 900 : 560;
+    this.timers.push(setTimeout(() => img.remove(), (life * this.eventScale) / this.speed));
+  },
+
+  unitPose(u, pose, duration) {
+    if (!u || !u.sprite || !this.BATTLE_SPRITES[u.tplId] || !this.BATTLE_SPRITES[u.tplId].has(pose)) return;
+    const marker = `${pose}-${Date.now()}-${Math.random()}`;
+    u.sprite.dataset.poseMarker = marker;
+    u.sprite.dataset.pose = pose;
+    u.sprite.src = `${this.UNIT_DIR}${u.tplId}/${pose}.webp`;
+    this.timers.push(setTimeout(() => {
+      if (!u.sprite || u.sprite.dataset.poseMarker !== marker) return;
+      u.sprite.dataset.pose = "idle";
+      u.sprite.src = `${this.UNIT_DIR}${u.tplId}/idle.webp`;
+    }, (duration || 360) / this.speed));
   },
 
   // 座標を測らず、陣営方向だけで戦場全体に攻撃軌道を走らせる。
