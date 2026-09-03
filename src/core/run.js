@@ -28,6 +28,9 @@ const Game = {
   newRun(demonKingId) {
     const history = Storage.loadHistory();
     const legacyReturn = this.chooseLegacyReturn(history);
+    // 教訓は前代の敗北画面で選ばれている。読んだら消す（1ランに1つだけ効く）
+    const lessonId = Storage.loadLesson();
+    Storage.clearLesson();
     const demonKing = DEMON_KINGS.find(k => k.id === demonKingId) || DEMON_KINGS[0];
     this.state = {
       demonKingId: demonKing.id,
@@ -84,6 +87,7 @@ const Game = {
       laborDispute: null,
       legacyReturn,
       legacyOffered: false,
+      lessonId: this.lessonById(lessonId) ? lessonId : null,
       pendingVacancies: 0,
       fallenTotal: 0,
       fallenRoll: [],
@@ -193,7 +197,7 @@ const Game = {
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
-      legacyReturn: null, legacyOffered: false
+      legacyReturn: null, legacyOffered: false, lessonId: null
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
@@ -628,11 +632,74 @@ const Game = {
     this.prepareMissions(true);
   },
 
+  // ── 前代の教訓（ロードマップ⑦：失敗を方向転換の材料に） ─────────
+  // 敗北がただの損失で終わっていた。魔界史に名前は残るが、次のランは毎回まっさらで、
+  // 「負けたから次はこうする」がゲームの側に一切繋がっていなかった。
+  //
+  // 効果は意図的に「攻撃力+1%」型にしない（設計憲法 第9節）。教訓が変えるのは強さではなく
+  // **応募プールの偏り＝次に引ける手札**である。何を学んだことにするかはプレイヤーが選ぶ。
+  // それが「方向転換の材料」であって、押しつけの補正はただのバフになる。
+  LESSONS: [
+    { id: "mason", name: "石工の記憶", icon: "🧱",
+      when: "城をひとつも建てられずに滅びた",
+      effect: "建設に向く者が応募に来やすくなる",
+      test: r => (r.facilityLevel || 0) === 0,
+      favor: ["orc", "ogre"] },
+    { id: "mourning", name: "弔いの記憶", icon: "🕯",
+      when: "あまりに多くの戦死者を出した",
+      effect: "死を扱う者が応募に来やすくなる",
+      test: r => (r.fallenTotal || 0) >= 5,
+      favor: ["necromancer", "skeleton", "zombie"] },
+    { id: "unpaid", name: "未払いの記憶", icon: "💸",
+      when: "給与と不祥事で軍が荒れた",
+      effect: "未払いでこそ荒ぶる者が応募に来やすくなる",
+      test: r => ((r.payrollChoices || {}).withhold || 0) >= 3 || (r.battleIncidentTotal || 0) >= 10,
+      favor: ["orc", "goblin"] },
+    { id: "rations", name: "兵糧の記憶", icon: "🍖",
+      when: "食料が尽きたまま最期を迎えた",
+      effect: "食を支える者が応募に来やすくなる",
+      test: r => ((r.finalResources || {}).food || 0) === 0,
+      favor: ["kobold", "slime"] },
+    { id: "arcane", name: "未完の記憶", icon: "🔮",
+      when: "連鎖がほとんど起きなかった",
+      effect: "術を扱う者が応募に来やすくなる",
+      test: r => (r.maxChain || 0) <= 2,
+      favor: ["mage", "imp", "necromancer"] },
+    { id: "rout", name: "敗走の記憶", icon: "🏳",
+      when: "何も試せないまま早々に敗走した",
+      effect: "毎回の面接に応募者がもう1名増える",
+      test: r => (r.battlesWon || 0) <= 3,
+      favor: [], extraApplicant: true }
+  ],
+
+  lessonById(id) { return this.LESSONS.find(l => l.id === id) || null; },
+
+  // 前代の記録に当てはまる教訓を先に、足りなければ残りで埋めて必ず3つ返す。
+  // 「当てはまったものだけ」にすると、綺麗に負けたランで選択肢が消えてしまう。
+  lessonOffers(record) {
+    const r = record || {};
+    const matched = this.LESSONS.filter(l => { try { return l.test(r); } catch (e) { return false; } });
+    const rest = this.LESSONS.filter(l => !matched.includes(l));
+    return matched.concat(rest).slice(0, 3);
+  },
+
+  // 敗北確定画面で選ぶ。次に newRun したときに一度だけ効く。
+  chooseLesson(id) {
+    if (!this.lessonById(id)) return false;
+    Storage.saveLesson(id);
+    if (this.state) this.state.chosenLessonId = id;
+    return true;
+  },
+
+  activeLesson() { return this.state ? this.lessonById(this.state.lessonId) : null; },
+
   // ── 応募者生成 ────────────────────────────
   // 応募者は基本3名。非戦闘部門に人事適性を持つ者が居ると、その人数だけ増える（上限6名）。
   // 「人事担当（死者）を生活部門に置いたら応募が増えた」という発見を作るための接続。
   applicantCount() {
-    return U.clamp(3 + this.departmentOutput().recruit, 3, 6);
+    const lesson = this.activeLesson();
+    const bonus = lesson && lesson.extraApplicant ? 1 : 0;
+    return U.clamp(3 + this.departmentOutput().recruit + bonus, 3, 7);
   },
 
   genApplicants() {
@@ -690,10 +757,14 @@ const Game = {
     const st = this.state;
     const level = this.campaignLevel();
     // 作戦と征服が進むほど高ティアが出やすい
+    // 教訓は出現率を3倍に寄せるだけ。確定ではないので「来なかった」も起こる。
+    const favored = new Set((this.activeLesson() || {}).favor || []);
     const weights = MONSTER_TEMPLATES.map(t => {
-      if (t.tier === 1) return level <= 3 ? 6 : 2;
-      if (t.tier === 2) return level <= 2 ? 2 : 5;
-      return level <= 2 ? 0.5 : (level <= 4 ? 2 : 5);
+      let w;
+      if (t.tier === 1) w = level <= 3 ? 6 : 2;
+      else if (t.tier === 2) w = level <= 2 ? 2 : 5;
+      else w = level <= 2 ? 0.5 : (level <= 4 ? 2 : 5);
+      return favored.has(t.id) ? w * 3 : w;
     });
     const total = weights.reduce((a, b) => a + b, 0);
     let r = U.rand() * total;

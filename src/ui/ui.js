@@ -594,6 +594,10 @@ const UI = {
           : st.hiresLeft > 1 ? `先の戦いで欠員が出た。${st.hiresLeft}名まで補充できる。`
           : st.hiresLeft === 0 ? `無料採用枠は終了。${Game.additionalHireCost()}Gで追加紹介を受けるか、面接を終了できる。`
           : "3名が魔王軍への入隊を希望している。採用できるのは1名だけだ。"}</div>
+        ${(() => {
+          const l = Game.activeLesson();
+          return l ? `<div class="lesson-note">${l.icon} 前代の教訓【${U.esc(l.name)}】${U.esc(l.effect)}</div>` : "";
+        })()}
       </div>
       <div class="cards">${cards}</div>
       <div class="spacer"></div>
@@ -937,6 +941,22 @@ const UI = {
         <div class="muted">この軍団は、魔界史にこう記された</div>
         <h2 class="build-name">「${U.esc(record.buildName)}」</h2>
       </div>` : ""}
+      ${!record.cleared ? (() => {
+        const chosen = Game.state && Game.state.chosenLessonId;
+        const offers = Game.lessonOffers(record);
+        return `<div class="panel lesson-panel">
+          <h3>🕮 この敗北から、何を学んだことにするか</h3>
+          <div class="muted">選んだ教訓は<b>次代の魔王軍にだけ</b>引き継がれる。
+            軍が強くなるわけではない。<b>面接に来る顔ぶれが変わる</b>。</div>
+          <div class="mission-grid">${offers.map(l => `<div class="mission-card ${chosen === l.id ? "chosen" : ""}">
+            <div class="mission-kind">${l.icon} 教訓</div>
+            <h3>${U.esc(l.name)}</h3>
+            <p>${U.esc(l.when)}</p>
+            <div class="mission-purpose"><b>次代への影響</b><br><span>${U.esc(l.effect)}</span></div>
+            <button class="primary wide" data-action="chooselesson" data-id="${U.esc(l.id)}"
+              ${chosen === l.id ? "disabled" : ""}>${chosen === l.id ? "これを胸に刻んだ" : "これを胸に刻む"}</button>
+          </div>`).join("")}</div>
+        </div>`; })() : ""}
       <div class="panel">
         <h3>第${record.gen}代魔王軍の記録</h3>
         ${this.recordHighlights(record)}

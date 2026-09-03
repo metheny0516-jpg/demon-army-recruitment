@@ -2,6 +2,9 @@
 const Storage = {
   SAVE_KEY: "maou_save",
   HISTORY_KEY: "maou_history",
+  // 前代の敗北から次代へ持ち越す「教訓」。ラン状態の外にあるので、
+  // ランを閉じても残り、次の newRun が一度だけ読んで消す。
+  LESSON_KEY: "maou_lesson",
 
   saveRun(state) {
     try { localStorage.setItem(this.SAVE_KEY, JSON.stringify(state)); } catch (e) { /* 容量超過等は無視 */ }
@@ -14,6 +17,16 @@ const Storage = {
   },
   clearRun() {
     try { localStorage.removeItem(this.SAVE_KEY); } catch (e) {}
+  },
+
+  saveLesson(id) {
+    try { localStorage.setItem(this.LESSON_KEY, String(id)); } catch (e) {}
+  },
+  loadLesson() {
+    try { return localStorage.getItem(this.LESSON_KEY); } catch (e) { return null; }
+  },
+  clearLesson() {
+    try { localStorage.removeItem(this.LESSON_KEY); } catch (e) {}
   },
 
   loadHistory() {

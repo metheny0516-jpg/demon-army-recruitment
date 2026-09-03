@@ -419,6 +419,11 @@ button.wide { width: 100%; }
 .seize-panel { border: 1px solid var(--gold); box-shadow: 0 0 0 2px rgba(0,0,0,.25) inset; }
 .seize-panel h3 { color: var(--gold); }
 .build-name-panel { text-align: center; }
+/* 敗北からの方向転換。負けた直後にいちばん読ませたいので、他の集計より前に置いている */
+.lesson-panel { border: 1px solid var(--gold); }
+.lesson-panel h3 { color: var(--gold); }
+.mission-card.chosen { border-color: var(--gold); opacity: .85; }
+.lesson-note { margin-top: 6px; color: var(--gold); font-size: 13px; }
 .build-name-panel .build-name { font-size: 20px; margin: 6px 0 0; line-height: 1.4; }
 .history-item.cleared { border-left-color: var(--green); }
 .history-item dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; }

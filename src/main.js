@@ -162,6 +162,11 @@ const App = {
         return this.report("joy", "拠点、接収完了デス！\n建設担当がいなくても城は建ちます。ただし王国には見つかりましタ……",
           { kicker: "拠点接収", title: "宰相モルモ・接収報告" });
 
+      case "chooselesson":
+        if (!Game.chooseLesson(data.id)) return;
+        this.render();
+        return;
+
       case "choosefacility":
         Game.chooseFacility(data.id);
         this.render();
