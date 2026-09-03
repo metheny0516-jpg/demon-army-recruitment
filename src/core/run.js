@@ -1622,6 +1622,76 @@ const Game = {
     }
   },
 
+  // ── ビルド名 ───────────────────────────────
+  // 魔界史に残るのが「第N代・M戦で敗北・施設Lv.2」という台帳の数字だけでは、
+  // 負けたランが記録として何も語らない。設計憲法 第7節（敗北を笑える／人に話したくなる
+  // ものにする）と第11節（歴史を残す）より、ランを一言で言い表す名前を自動生成する。
+  //
+  // 材料はすべて record の中にある（KPIには依存しない。simでもテストでも同じ名前が出る）。
+  // 新しい数値もコンテンツも増やさず、既にある観測の接続数だけを増やす（第4節）。
+  //
+  // 名前 = 〈修飾〉＋〈中核〉＋〈体裁〉
+  // 修飾は「そのランで実際に起きた、いちばん珍しいこと」を1つだけ採る。
+  // 2つ並べると「墓地を三度も回した屍を積み上げた死の軍勢」のように読めなくなるため、
+  // 口に出して言える長さを優先する（人に話したくなるのが目的なので）。
+
+  // 上にあるものほど「そのランを言い表している」と判断する。
+  BUILD_TRAITS: [
+    { id: "facility_max", test: r => r.facilityLevel >= 3 && r.activeFacilityId,
+      phrase: r => ({
+        graveyard: "墓地を三度も回した",
+        extortion_ledger: "帳簿を三度めくった",
+        grand_kitchen: "厨房を焚き続けた"
+      }[r.activeFacilityId] || "城を建てきった") },
+    { id: "overkill", test: r => (r.maxOverkill || 0) >= 200, phrase: () => "過剰殺戮の" },
+    { id: "chain", test: r => (r.maxChain || 0) >= 6,
+      phrase: r => `${r.maxChain}連鎖を通した` },
+    { id: "no_death", test: r => (r.fallenTotal || 0) === 0 && (r.battlesWon || 0) >= 5,
+      phrase: () => "誰ひとり死なせなかった" },
+    { id: "many_death", test: r => (r.fallenTotal || 0) >= 10, phrase: () => "屍を積み上げた" },
+    { id: "withhold", test: r => (r.payrollChoices || {}).withhold >= 5,
+      phrase: () => "給料を払わなかった" },
+    { id: "advance", test: r => (r.payrollChoices || {}).advance >= 5,
+      phrase: () => "厚遇されすぎた" },
+    { id: "raid", test: r => (r.missionCounts || {}).raid >= 5, phrase: () => "略奪しかしなかった" },
+    { id: "suppress", test: r => (r.missionCounts || {}).suppress >= 4,
+      phrase: () => "身内ばかり殴っていた" },
+    { id: "wanted", test: r => (r.alert || 0) >= 12, phrase: () => "指名手配された" },
+    { id: "incidents", test: r => (r.battleIncidentTotal || 0) >= 20, phrase: () => "不祥事まみれの" },
+    { id: "generals", test: r => (r.generalsMade || []).length >= 2, phrase: () => "将軍が二人いた" },
+    { id: "tiny", test: r => (r.maxArmySize || 0) > 0 && r.maxArmySize <= 4,
+      phrase: r => `たった${r.maxArmySize}体の` },
+    { id: "huge", test: r => (r.maxArmySize || 0) >= 15, phrase: () => "大所帯の" },
+    // ここから下は「ほぼ全ランで起きる普通の行動」。修飾は珍しさを表すためにあるので、
+    // 他に何も言うことがないランだけがこの名前を名乗る。
+    // 50ラン計測で上位に置いたところ、名前の半分以上がこの2つに occupied された。
+    { id: "retry", test: r => (r.retriesUsed || 0) >= 1, phrase: () => "一度死に損なった" },
+    { id: "seized", test: r => !!r.seizeUsed, phrase: () => "拠点を接収した" }
+  ],
+
+  // 中核は、発見したシナジーがあればそれを名乗る。無ければ主力種族。
+  BUILD_CORES: [
+    ["legion_of_dead", "死の軍勢"], ["king_slime", "キングスライム"],
+    ["arcane_circle", "魔法結社"], ["goblin_horde", "ゴブリン軍団"],
+    ["elite_few", "精鋭"], ["cheap_labor", "安月給"],
+    ["martyr_allowance", "殉職手当"], ["general_command", "将軍の号令"]
+  ],
+
+  buildName(record) {
+    const r = record || {};
+    const traits = this.BUILD_TRAITS.filter(t => { try { return t.test(r); } catch (e) { return false; } });
+    const prefix = traits.length ? traits[0].phrase(r) : "";
+    const found = new Set(r.discoveredSynergyIds || []);
+    const coreEntry = this.BUILD_CORES.find(([id]) => found.has(id));
+    const core = coreEntry ? coreEntry[1] : `${r.mainRace || "寄せ集め"}`;
+    // 中核がシナジー名なら体裁を足さない（「死の軍勢軍団」にしないため）
+    const size = r.maxArmySize || 0;
+    const suffix = coreEntry ? "" : size >= 12 ? "の大軍団" : (size >= 1 && size <= 4) ? "の一党" : "軍団";
+    // 何も起きなかったランは、そう名乗らせる（第12節・くすっと笑える）
+    if (!prefix) return `特筆すべきことのない${core}${suffix}`;
+    return `${prefix}${core}${suffix}`;
+  },
+
   // ── ラン終了と魔界史 ──────────────────────
   endRun(cleared) {
     const st = this.state;
@@ -1663,8 +1733,11 @@ const Game = {
       discoveredSynergyIds: (st.discoveredSynergyIds || []).slice(),
       hallOfFame: this.hallOfFameMember(),
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
+      seizeUsed: !!st.seizeUsed,
       date: new Date().toISOString().slice(0, 10)
     };
+    // 名前は record が出揃ってから付ける（材料は record の中だけ）
+    record.buildName = this.buildName(record);
     st.record = record;
     Storage.appendHistory(record);
     Storage.clearRun();

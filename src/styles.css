@@ -411,6 +411,11 @@ button.wide { width: 100%; }
   font-size: 13px;
 }
 .history-item .gen { font-weight: bold; font-size: 15px; color: var(--gold); }
+/* ビルド名。魔界史でいちばん最初に目に入るのは数字ではなく「何をした軍団か」であってほしい */
+.build-name { color: var(--gold); font-weight: bold; letter-spacing: .02em; }
+.history-item .build-name { font-size: 14px; margin: 2px 0 4px; opacity: .95; }
+.build-name-panel { text-align: center; }
+.build-name-panel .build-name { font-size: 20px; margin: 6px 0 0; line-height: 1.4; }
 .history-item.cleared { border-left-color: var(--green); }
 .history-item dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 6px 0 0; }
 .history-item dt { color: var(--dim); }

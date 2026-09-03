@@ -208,6 +208,11 @@ for (const s of strategies) {
   console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  平均施設Lv ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
   const lv1Rate = (res.filter(r=>(r.facilityLevel||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.facilityLevel||0) >= 3).length/N*100).toFixed(1);
+  const nameCount = new Map();
+  for (const r of res) if (r.buildName) nameCount.set(r.buildName, (nameCount.get(r.buildName) || 0) + 1);
+  const topNames = [...nameCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+    .map(([n, c]) => `${n}:${c}`).join(' / ');
+  console.log(`  ビルド名: ${nameCount.size}種/${N}ラン　多い順 ${topNames || 'なし'}`);
   const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
   for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
   console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}／拠点接収 ${stats.seizes}回`);

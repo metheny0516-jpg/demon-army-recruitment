@@ -930,6 +930,10 @@ const UI = {
         <h2>${record.cleared ? "人間界を制圧した！" : "魔王軍、壊滅"}</h2>
         <div>${U.esc(record.cause)}</div>
       </div>
+      ${record.buildName ? `<div class="panel build-name-panel">
+        <div class="muted">この軍団は、魔界史にこう記された</div>
+        <h2 class="build-name">「${U.esc(record.buildName)}」</h2>
+      </div>` : ""}
       <div class="panel">
         <h3>第${record.gen}代魔王軍の記録</h3>
         ${this.recordHighlights(record)}
@@ -995,6 +999,7 @@ const UI = {
     const items = list.slice().reverse().map(r => `
       <div class="history-item ${r.cleared ? "cleared" : ""}">
         <div class="gen">第${r.gen}代魔王軍 ${r.cleared ? "👑 人間界制圧" : ""}</div>
+        ${r.buildName ? `<div class="build-name">「${U.esc(r.buildName)}」</div>` : ""}
         ${this.recordHighlights(r)}
         <dl>
           <dt>在位</dt><dd>${r.reignYears}年</dd>
