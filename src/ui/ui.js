@@ -648,7 +648,8 @@ const UI = {
         : m.missionKind === "suppress"
           ? `生存者の忠誠 +${m.loyaltyDelta}`
           : "王国攻略は進まない";
-      return `<div class="mission-card mission-${U.esc(m.missionKind)}">
+      return `<div class="mission-card mission-${U.esc(m.missionKind)}" data-route="${i + 1}">
+        <div class="mission-route-number"><span>進軍路</span><b>${i + 1}</b></div>
         <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : "🏰"}
           危険度 ${U.esc(m.difficulty)}</div>
         <h3>${U.esc(m.missionTitle)}</h3>
@@ -673,15 +674,20 @@ const UI = {
       </div>`;
     }).join("");
     this.set(`${this.hud()}
-      <div class="panel">
+      <div class="mission-warroom">
+      <header class="mission-warroom-head">
+      <div class="panel mission-briefing">
         <h2>🗺 作戦会議</h2>
         <div class="muted">略奪と鎮圧は軍団を整える寄り道、王国侵攻は最終決戦を近づける。
           建設担当がいれば、どの作戦でも勝利後に備蓄建材を施設へ投入する。</div>
       </div>
-      <div class="panel"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
-      <div class="mission-grid">${cards}</div>
+      <div class="panel mission-assets"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
+      </header>
+      <div class="mission-map-label"><span>王国周辺作戦図</span><small>三本の進軍路から、次の一手を選ぶ</small></div>
+      <div class="mission-grid mission-routes">${cards}</div>
       <div class="spacer"></div>
-      <button class="wide ghost" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`);
+      <button class="wide ghost mission-return" data-action="backrecruit">← 面接・軍団確認へ戻る</button>
+      </div>`);
   },
 
   facility() {
