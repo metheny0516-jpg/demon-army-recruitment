@@ -786,7 +786,9 @@ const UI = {
          <button class="primary wide" data-action="endday" data-day="${st.day}">本日の業務を終了</button>`
       : `<button class="primary wide" data-action="openingbattle" data-kind="invade" ${empty ? "disabled" : ""}>⚔ 防衛戦を開始する</button>`;
     this.set(`${this.hud()}
-      <div class="panel">
+      <div class="formation-layout">
+      <aside class="formation-briefing">
+      <div class="panel formation-heading">
         <h2>${opening ? `📅 ${st.day}日目：${deadline}` : "🏢 部門編成"} <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || (opening ? "準備日" : "作戦未選択"))}</span></h2>
         <div class="muted">${opening ? "配置と給与方針は翌日も維持される。変えたい所だけ直し、業務終了で日次決算を行う。" : "戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。"}</div>
         ${this.departmentSummary()}
@@ -808,6 +810,9 @@ const UI = {
       ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
+      </aside>
+      <section class="formation-board" aria-label="魔王軍の配置盤">
+      <div class="formation-board-title"><span>魔王軍配置盤</span><small>札を動かし、今日の働き場所を決める</small></div>
       <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
       <div class="army-section reserve-section"><h3>⚔ 戦闘部門・控え ${reserves.length}</h3>
         <div class="cards">${reserveCards || `<div class="muted">戦闘部門の控えはいない</div>`}</div></div>
@@ -817,13 +822,17 @@ const UI = {
       <div class="army-section department-section department-life-section"><h3>🍲 食料・生活部門 ${lifeWorkers.length}</h3>
         <div class="muted department-help">勝利後、食料適性のぶんだけ調達する。食う量は種族ごとに違い、アンデッドは何も食べない。足りれば軍団全員の忠誠も少し上がる。</div>
         <div class="cards">${lifeCards || `<div class="department-empty">現在は自炊。食料が尽きれば全員の忠誠が下がる。</div>`}</div></div>
-      <div class="spacer"></div>
+      </section>
+      <aside class="formation-intel">
+      <div class="formation-intel-title"><span>参謀卓</span><small>発火予測・敵情</small></div>
       ${this.synergyPanel(active)}
       ${this.enemyPreview()}
+      <div class="formation-orders">
       ${opening ? "" : `<button class="wide ghost" data-action="backmission">← 作戦会議へ戻る</button>`}
       <div class="spacer"></div>
       ${preparation ? openingActions : `<button class="primary wide" data-action="deploy" ${empty || (!opening && !payrollQuote.affordable) ? "disabled" : ""}>${opening ? (st.day === Game.OPENING_DAYS ? "防衛戦へ出撃する" : "遠征へ出撃する") : `${U.esc(payroll.name)}で出撃する`}</button>`}
-      ${st.roster.length === 0 ? `<div class="spacer"></div><button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}`);
+      ${st.roster.length === 0 ? `<div class="spacer"></div><button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}
+      </div></aside></div>`);
   },
 
   battle(result, stageData) {

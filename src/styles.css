@@ -1411,6 +1411,145 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-formation .card-head { border-bottom: 1px solid rgba(232,189,104,.15); padding-bottom: 7px; }
 .game-scene-formation .pos-badge { color: var(--gold); border-radius: 1px; border-color: rgba(232,189,104,.3); }
 
+/* 編成は縦長フォームではなく三面の作戦卓。中央だけが人材札の盤面になる。 */
+.formation-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, .82fr) minmax(430px, 1.65fr) minmax(270px, .9fr);
+  align-items: start;
+  gap: 14px;
+}
+.formation-briefing,
+.formation-board,
+.formation-intel { min-width: 0; }
+.formation-briefing,
+.formation-intel {
+  position: sticky;
+  top: 72px;
+  max-height: calc(100vh - 86px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #76537c transparent;
+  padding-right: 2px;
+}
+.formation-board {
+  position: relative;
+  padding: 12px;
+  border: 1px solid rgba(232,189,104,.32);
+  background:
+    radial-gradient(circle at 50% 0, rgba(119,67,126,.18), transparent 38%),
+    linear-gradient(90deg, rgba(255,255,255,.012) 1px, transparent 1px),
+    linear-gradient(rgba(255,255,255,.012) 1px, transparent 1px),
+    rgba(8,6,11,.72);
+  background-size: auto, 22px 22px, 22px 22px, auto;
+  box-shadow: inset 0 0 55px rgba(0,0,0,.55), 0 14px 35px rgba(0,0,0,.32);
+}
+.formation-board::before,
+.formation-board::after {
+  content: "";
+  position: absolute;
+  width: 42px;
+  height: 42px;
+  pointer-events: none;
+}
+.formation-board::before {
+  inset: 6px auto auto 6px;
+  border-top: 2px solid var(--gold);
+  border-left: 2px solid var(--gold);
+}
+.formation-board::after {
+  inset: auto 6px 6px auto;
+  border-right: 2px solid var(--gold);
+  border-bottom: 2px solid var(--gold);
+}
+.formation-board-title,
+.formation-intel-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 4px 10px;
+  color: var(--gold);
+  font: 700 17px/1.3 "Yu Mincho", serif;
+  letter-spacing: .1em;
+}
+.formation-board-title small,
+.formation-intel-title small {
+  color: var(--dim);
+  font: 10px/1.3 sans-serif;
+  letter-spacing: .04em;
+}
+.formation-intel-title {
+  padding: 9px 10px;
+  margin: 0 0 10px;
+  border-block: 1px solid rgba(232,189,104,.28);
+  background: rgba(232,189,104,.045);
+}
+.formation-layout .army-section { margin-top: 10px; }
+.formation-layout .department-section,
+.formation-layout .reserve-section { padding: 10px; }
+.formation-layout .department-section > h3,
+.formation-layout .reserve-section > h3 {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.formation-layout .formation-board .cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.formation-layout .formation-board .card { padding: 9px; gap: 6px; }
+.formation-layout .formation-board .avatar { width: 36px; height: 36px; flex-basis: 36px; }
+.formation-layout .formation-board .card-name { font-size: 14px; }
+.formation-layout .formation-board .stats { gap: 2px; }
+.formation-layout .formation-board .stat .v { font-size: 13px; }
+.formation-layout .formation-board .trait { padding: 3px 6px; font-size: 11px; }
+.formation-layout .formation-board .card-actions button { flex: 1 1 auto; padding-inline: 6px; }
+.formation-orders {
+  position: sticky;
+  bottom: 0;
+  padding: 10px 0 3px;
+  background: linear-gradient(transparent, #09070d 20%);
+}
+.formation-orders .primary {
+  min-height: 58px;
+  font-family: "Yu Mincho", serif;
+  font-size: 16px;
+  letter-spacing: .08em;
+}
+.formation-briefing .panel,
+.formation-intel .panel { margin-bottom: 9px; }
+.formation-briefing .department-overview { grid-template-columns: 1fr; }
+.formation-briefing .payroll-options { grid-template-columns: 1fr; }
+.formation-briefing .payroll-option { min-height: 0; }
+.formation-briefing .mercenary-grid { grid-template-columns: 1fr; }
+
+@media (max-width: 1040px) {
+  .formation-layout { grid-template-columns: minmax(240px, .8fr) minmax(440px, 1.5fr); }
+  .formation-intel {
+    position: static;
+    grid-column: 1 / -1;
+    max-height: none;
+    overflow: visible;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .formation-intel-title,
+  .formation-orders { grid-column: 1 / -1; }
+}
+
+@media (max-width: 760px) {
+  .formation-layout { display: flex; flex-direction: column; }
+  .formation-briefing,
+  .formation-intel { position: static; width: 100%; max-height: none; overflow: visible; }
+  .formation-board { width: 100%; padding: 9px; }
+  .formation-intel { display: block; }
+  .formation-layout .formation-board .cards { grid-template-columns: 1fr; }
+  .formation-briefing .department-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
 .mission-card {
   border-radius: 2px;
   border-top-width: 7px;
