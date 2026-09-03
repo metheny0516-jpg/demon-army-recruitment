@@ -155,6 +155,13 @@ const App = {
         Game.finishRecruitment();
         return this.render();
 
+      case "seize":
+        if (!Game.seizeStronghold()) return;
+        Game.afterResult();
+        this.render();
+        return this.report("joy", "拠点、接収完了デス！\n建設担当がいなくても城は建ちます。ただし王国には見つかりましタ……",
+          { kicker: "拠点接収", title: "宰相モルモ・接収報告" });
+
       case "choosefacility":
         Game.chooseFacility(data.id);
         this.render();

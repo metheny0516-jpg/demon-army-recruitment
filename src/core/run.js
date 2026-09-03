@@ -53,6 +53,7 @@ const Game = {
       facilityLevel: 0,
       activeFacilityId: null,
       pendingFacilityChoiceLevel: null,
+      seizeUsed: false,
       lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
@@ -187,7 +188,8 @@ const Game = {
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
-      buildProgress: 0, facilityLevel: 0, activeFacilityId: null, pendingFacilityChoiceLevel: null, lastDepartmentReport: null,
+      buildProgress: 0, facilityLevel: 0, activeFacilityId: null, pendingFacilityChoiceLevel: null,
+      seizeUsed: false, lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
@@ -398,6 +400,52 @@ const Game = {
 
   activeFacility() {
     return FACILITIES.find(f => f.id === this.state.activeFacilityId) || null;
+  },
+
+  // 拠点接収：建設部門に誰も置かないと施設は「存在しない」ままだった。
+  // 勝利した拠点をそのまま接収することで、施工役なしでも1ランに一度だけ最初の施設へ届く。
+  // ただし奪った拠点は目立つ（警戒度+3＝以後の敵が約6%強くなる）。
+  // Lv.2以降は従来どおり建設部門の仕事であり、この入口は「最初のJokerを試す」ためだけにある。
+  SEIZE_ALERT_COST: 1,
+
+  seizeQuote() {
+    const st = this.state;
+    const target = FACILITY_LEVELS[1];
+    const need = Math.max(0, target.buildThreshold - (st.buildProgress || 0));
+    return {
+      need,
+      have: st.materials || 0,
+      alertCost: this.SEIZE_ALERT_COST,
+      affordable: (st.materials || 0) >= need
+    };
+  },
+
+  // 表示・sim・実プレイで同じ条件を使う。結果画面でのみ、施設ゼロのときだけ提示する。
+  canSeizeStronghold() {
+    const st = this.state;
+    if (!st || st.phase !== "result") return false;
+    if (st.seizeUsed) return false;
+    if ((st.facilityLevel || 0) >= 1 || st.pendingFacilityChoiceLevel) return false;
+    if (!st.lastBattle || !st.lastBattle.victory) return false;
+    return this.seizeQuote().affordable;
+  },
+
+  seizeStronghold() {
+    if (!this.canSeizeStronghold()) return false;
+    const st = this.state;
+    const quote = this.seizeQuote();
+    st.materials -= quote.need;
+    st.buildProgress += quote.need;
+    st.facilityLevel = 1;
+    st.pendingFacilityChoiceLevel = 1;
+    st.seizeUsed = true;
+    st.alert = Math.max(0, st.alert + this.SEIZE_ALERT_COST);
+    if (st.lastBattle && Array.isArray(st.lastBattle.notes)) {
+      st.lastBattle.notes.push(`拠点接収：建材 ${quote.need} を投じて敵拠点を接収した`
+        + `（施設Lv.1／王国警戒度+${this.SEIZE_ALERT_COST} 現在 ${st.alert}）`);
+    }
+    this.save();
+    return true;
   },
 
   chooseFacility(id) {

@@ -141,6 +141,8 @@ function runOnce(strat, stats){
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
     }
+    // 拠点接収：施設ゼロのまま条件を満たしたら必ず使う（入口が到達率をどれだけ動かすかを測る）
+    if (Game.canSeizeStronghold()) { Game.seizeStronghold(); stats.seizes++; }
     if (st.phase === 'result') Game.afterResult();
     if (st.phase === 'facility') {
       const id = strat.kind === 'cheap' || strat.kind === 'race' && strat.race === 'ゴブリン'
@@ -199,7 +201,7 @@ if (noFacilityBonus) {
 }
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {
-  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0 };
+  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -212,7 +214,7 @@ for (const s of strategies) {
   const lv3Rate = (res.filter(r=>(r.facilityLevel||0) >= 3).length/N*100).toFixed(1);
   const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
   for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
-  console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}`);
+  console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}／拠点接収 ${stats.seizes}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);

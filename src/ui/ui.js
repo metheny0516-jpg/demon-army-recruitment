@@ -854,6 +854,16 @@ const UI = {
         <h3>現在の軍団</h3>
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
       </div>
+      ${Game.canSeizeStronghold() ? (() => {
+        const q = Game.seizeQuote();
+        return `<div class="panel seize-panel">
+        <h3>🏴 この拠点を接収するか</h3>
+        <div class="muted">建設担当がいなくても、勝ち取った拠点をそのまま城へ組み込める。
+          <b>このランで1度きり</b>だ。<br>
+          代償：建材 <b>${q.need}</b>（備蓄 ${q.have}）を消費し、王国警戒度 <b>+${q.alertCost}</b>。
+          奪った拠点は目立つ。以後の敵は少し強くなる。</div>
+        <button class="primary wide" data-action="seize">🏴 接収して大型施設を選ぶ</button>
+      </div>`; })() : ""}
       <button class="primary wide" data-action="afterresult">次へ</button>`);
     if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
   },
