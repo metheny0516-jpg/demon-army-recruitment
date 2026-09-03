@@ -84,6 +84,8 @@ const BattleScene = {
       </div>
       <div class="${sceneClass}" id="scene">
         <div class="scene-fx" id="scene-fx"></div>
+        <div class="battle-streak" id="battle-streak"><i></i><i></i><i></i></div>
+        <div class="chain-flare" id="chain-flare"><b></b><span>CHAIN</span></div>
         <div class="scene-band" id="band-enemy"></div>
         <div class="scene-mid">
           <span class="scene-army">${U.esc(stageData.army)}</span>
@@ -231,6 +233,7 @@ const BattleScene = {
   // 1イベントを描画し、次までの尺(ms)を返す
   render(ev) {
     if (ev.text) this.appendLog(ev.text, ev.cls);
+    this.chainFlare(ev);
     if (typeof Sound !== "undefined") {
       const from = this.units[ev.fromId];
       Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from && from.side });
@@ -259,6 +262,7 @@ const BattleScene = {
           void from.el.offsetWidth; // アニメーション再生のためのリセット
           from.el.classList.add(from.side === "player" ? "lunge-up" : "lunge-down");
         }
+        this.attackStreak(from && from.side, ev.type === "splash", ev.emphasis || 0);
         if (to) {
           this.hit(to, ev.dmg, ev.emphasis, ev.label);
           this.setHp(to, ev.hp, ev.maxHp);
@@ -278,9 +282,9 @@ const BattleScene = {
         const u = this.units[ev.unitId];
         if (u) {
           u.el.classList.remove("dead");
-          u.el.classList.remove("pop");
+          u.el.classList.remove("pop", "revive-rise");
           void u.el.offsetWidth;
-          u.el.classList.add("pop");
+          u.el.classList.add("revive-rise");
           this.setHp(u, ev.hp, ev.maxHp);
           this.float(u, "復活！", "heal");
           this.pulse("revive");
@@ -294,7 +298,7 @@ const BattleScene = {
           band.insertAdjacentHTML("beforeend", this.unitHtml(data));
           this.registerUnit(data);
           const summoned = this.units[data.id];
-          summoned.el.classList.add("pop");
+          summoned.el.classList.add("summon-rise");
           this.float(summoned, "召喚！", "heal");
           this.pulse("revive");
         }
@@ -417,6 +421,29 @@ const BattleScene = {
     if (!from || !to) return;
     const action = ev.type === "splash" ? (ev.label || "追撃") : "攻撃";
     this.showAction(`${from.name}の${action}　→　${to.name}`);
+  },
+
+  // 座標を測らず、陣営方向だけで戦場全体に攻撃軌道を走らせる。
+  // 個々の命中先は従来どおり acting / targeted が示す。
+  attackStreak(side, splash, emphasis) {
+    const streak = document.getElementById("battle-streak");
+    if (!streak) return;
+    streak.className = `battle-streak ${side === "player" ? "to-enemy" : "to-player"}${splash ? " splash" : ""}${emphasis >= 2 ? " heavy" : ""}`;
+    void streak.offsetWidth;
+    streak.classList.add("show");
+    this.timers.push(setTimeout(() => streak.classList.remove("show"), (520 * this.eventScale) / this.speed));
+  },
+
+  chainFlare(ev) {
+    const depth = ev && ev.chainDepth || 0;
+    const flare = document.getElementById("chain-flare");
+    if (!flare || depth < 2) return;
+    flare.querySelector("b").textContent = depth;
+    flare.classList.remove("show", "deep");
+    if (depth >= 4) flare.classList.add("deep");
+    void flare.offsetWidth;
+    flare.classList.add("show");
+    this.timers.push(setTimeout(() => flare.classList.remove("show"), (850 * this.eventScale) / this.speed));
   },
 
   showAction(text, duration) {

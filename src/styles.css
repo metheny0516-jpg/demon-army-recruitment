@@ -1598,6 +1598,70 @@ button.primary::first-letter { color: var(--gold); }
   font: 700 10px/1 "Yu Mincho", serif;
   letter-spacing: .3em;
 }
+.battle-streak {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 50%;
+  width: min(68%, 620px);
+  height: 110px;
+  opacity: 0;
+  transform: translate(-50%, -50%) rotate(-18deg) scaleX(.15);
+  transform-origin: center;
+  pointer-events: none;
+}
+.battle-streak i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 4px;
+  border-radius: 50%;
+  background: linear-gradient(90deg, transparent, #fff8d0 28% 72%, transparent);
+  box-shadow: 0 0 12px #f0c46a, 0 0 26px rgba(224,90,90,.72);
+}
+.battle-streak i:nth-child(1) { top: 28px; }
+.battle-streak i:nth-child(2) { top: 52px; transform: translateX(7%) scaleX(.86); }
+.battle-streak i:nth-child(3) { top: 75px; transform: translateX(-4%) scaleX(.72); }
+.battle-streak.to-player { transform: translate(-50%, -50%) rotate(18deg) scaleX(.15); }
+.battle-streak.splash { height: 150px; }
+.battle-streak.splash i { height: 3px; }
+.battle-streak.heavy i { height: 7px; box-shadow: 0 0 16px #fff2a9, 0 0 38px #e05245; }
+@keyframes streakToEnemy {
+  0% { opacity: 0; transform: translate(-50%, 38%) rotate(-18deg) scaleX(.15); }
+  28% { opacity: 1; transform: translate(-50%, -45%) rotate(-18deg) scaleX(1); }
+  100% { opacity: 0; transform: translate(-50%, -105%) rotate(-18deg) scaleX(1.08); }
+}
+@keyframes streakToPlayer {
+  0% { opacity: 0; transform: translate(-50%, -138%) rotate(18deg) scaleX(.15); }
+  28% { opacity: 1; transform: translate(-50%, -55%) rotate(18deg) scaleX(1); }
+  100% { opacity: 0; transform: translate(-50%, 12%) rotate(18deg) scaleX(1.08); }
+}
+.battle-streak.to-enemy.show { animation: streakToEnemy .5s ease-out; }
+.battle-streak.to-player.show { animation: streakToPlayer .5s ease-out; }
+
+.chain-flare {
+  position: absolute;
+  z-index: 6;
+  top: 50%;
+  right: 4%;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  color: #ffe09a;
+  opacity: 0;
+  transform: translateY(-50%) translateX(25px) scale(.82);
+  pointer-events: none;
+  text-shadow: 0 3px 8px #000, 0 0 20px rgba(232,189,104,.62);
+}
+.chain-flare b { font: 900 clamp(36px, 6vw, 72px)/1 Georgia, serif; }
+.chain-flare span { font: 800 12px/1 sans-serif; letter-spacing: .2em; }
+.chain-flare.deep { color: #ff9a5e; text-shadow: 0 3px 8px #000, 0 0 28px rgba(255,81,55,.8); }
+@keyframes chainFlare {
+  0% { opacity: 0; transform: translateY(-50%) translateX(28px) scale(.72); }
+  22%, 72% { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
+  100% { opacity: 0; transform: translateY(-58%) translateX(-8px) scale(1.08); }
+}
+.chain-flare.show { animation: chainFlare .82s ease-out; }
 .game-scene-battle .scene-band {
   width: 100%;
   min-height: 150px;
@@ -1679,6 +1743,26 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-battle .bu-hp { height: 7px; border: 1px solid rgba(255,255,255,.08); border-radius: 1px; }
 .game-scene-battle .bu.acting { border-color: #f2ca72; box-shadow: 0 0 25px rgba(232,189,104,.42); }
 .game-scene-battle .bu.targeted { border-color: #f06b61; box-shadow: 0 0 22px rgba(224,90,90,.35); }
+.game-scene-battle .bu.revive-rise::after,
+.game-scene-battle .bu.summon-rise::after {
+  border-color: #80efb0;
+  box-shadow: 0 0 24px #52d78a, inset 0 0 18px rgba(82,215,138,.35);
+}
+@keyframes reviveRise {
+  0% { opacity: .15; transform: translateY(24px) scale(.72) rotate(-5deg); }
+  52% { opacity: 1; transform: translateY(-8px) scale(1.12) rotate(2deg); }
+  100% { opacity: 1; transform: translateY(0) scale(1) rotate(0); }
+}
+@keyframes summonRise {
+  0% { opacity: 0; transform: translateY(48px) scale(.45); }
+  45% { opacity: 1; transform: translateY(-12px) scale(1.14); }
+  72% { opacity: 1; transform: translateY(4px) scale(.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.game-scene-battle .bu.revive-rise { animation: reviveRise .7s cubic-bezier(.2,.8,.2,1); }
+.game-scene-battle .bu.summon-rise { animation: summonRise .82s cubic-bezier(.12,.8,.18,1); }
+.game-scene-battle .bu.revive-rise::after,
+.game-scene-battle .bu.summon-rise::after { animation: actingFocus .72s ease-out; }
 .game-scene-battle .action-caption {
   width: min(88%, 560px);
   padding: 10px 18px;
