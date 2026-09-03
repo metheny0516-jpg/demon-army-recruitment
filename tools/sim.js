@@ -190,6 +190,13 @@ const kpiOut = (() => {
   const at = process.argv.indexOf('--kpi');
   return at >= 0 ? process.argv[at + 1] : null;
 })();
+// --no-facility-bonus: 施設のhpMult/defBonusを無効化してsimを回す（比較用）
+const noFacilityBonus = process.argv.includes('--no-facility-bonus');
+if (noFacilityBonus) {
+  const FACILITY_LEVELS = vm.runInContext('FACILITY_LEVELS', ctx);
+  for (const lv of FACILITY_LEVELS) { lv.hpMult = 1; lv.defBonus = 0; }
+  console.log('（施設の共通HP・防御補正なし）');
+}
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {
   const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0 };
@@ -201,6 +208,11 @@ for (const s of strategies) {
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
   console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  平均施設Lv ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
+  const lv1Rate = (res.filter(r=>(r.facilityLevel||0) >= 1).length/N*100).toFixed(1);
+  const lv3Rate = (res.filter(r=>(r.facilityLevel||0) >= 3).length/N*100).toFixed(1);
+  const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
+  for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
+  console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);
