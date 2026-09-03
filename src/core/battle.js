@@ -165,18 +165,29 @@ const Battle = {
 
     // シナジー適用（merge型は出撃時に処理済み）
     const activeSyn = Synergy.applyAll(playerUnits);
-    const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
-    const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
+    // シナジー由来の発火へ「誰の手柄か」を付ける。
+    // 因果の親（撃破→略奪、戦死→蘇生）は本当の原因のままにしておき、
+    // 帰属だけを足す。これが無いと、シナジーが起こした金貨も蘇生も
+    // 汎用の resource_gain / revive として数えられ、KPI上そのシナジーは
+    // 「一度も発火していない」ように見える（2026-09-03に全8種で発火0と出た原因）。
+    const synergyById = new Map(activeSyn.map(s => [s.id, s]));
+    const bySynergy = (id, data) => {
+      const s = synergyById.get(id);
+      if (s) { data.synergyId = s.id; data.synergyName = s.name; }
+      return data;
+    };
+    const goblinRaid = synergyById.has("goblin_horde");
+    const martyrAllowance = synergyById.has("martyr_allowance");
     let reservedGold = 0;
     let ledgerFires = 0;
     let ledgerBoost = null;
-    const gainBattleResource = (unit, resource, value, label, parent) => {
+    const gainBattleResource = (unit, resource, value, label, parent, synergyId) => {
       const resourceName = resource === "gold" ? "G" : resource;
       const verb = label === "殉職手当" ? "支給予約" : "略奪予約";
-      const event = emitCausal("resource_gain", {
+      const event = emitCausal("resource_gain", bySynergy(synergyId, {
         sourceId: unit.id, resource, amount: value, reserved: true, label,
         emphasis: 1, text: `　${unit.name}の【${label}】 ${value}${resourceName}を${verb}`, cls: "loot"
-      }, parent);
+      }), parent);
       if (resource === "gold") {
         const before = reservedGold;
         reservedGold += value;
@@ -284,13 +295,13 @@ const Battle = {
       else if (opts.traits && opts.traits.length) emphasis = 1;
 
       const label = opts.label ? `【${opts.label}】` : "";
-      const damageEvent = emitCausal(kind, {
+      const damageEvent = emitCausal(kind, bySynergy(opts.synergyId || null, {
         fromId: attacker.id, toId: target.id, dmg,
         hp: target.hp, maxHp: target.maxHp, dead,
         traits: opts.traits || [], label: opts.label || null, emphasis,
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
-      }, opts.parentEvent || null);
+      }), opts.parentEvent || null);
       let overkillEvent = null;
       const excessDamage = dead ? Math.max(0, dmg - hpBefore) : 0;
       const excessPercent = excessDamage > 0 ? Math.round(excessDamage / target.maxHp * 100) : 0;
@@ -397,17 +408,21 @@ const Battle = {
       // 攻撃後フック（火球・悪戯など）
       const triggeredEvents = [];
       if (applied.deathEvent && goblinRaid && unit.race === "ゴブリン" && target.side === "enemy") {
-        triggeredEvents.push(gainBattleResource(unit, "gold", 1, "略奪者の連携", applied.deathEvent));
+        triggeredEvents.push(gainBattleResource(unit, "gold", 1, "略奪者の連携", applied.deathEvent, "goblin_horde"));
       }
       if (applied.deathEvent && martyrAllowance && unit.flags.wasRevived
         && !unit.flags.martyrAllowanceUsed && target.side === "enemy") {
         unit.flags.martyrAllowanceUsed = true;
         unit.flags.martyrGold = 2;
-        triggeredEvents.push(gainBattleResource(unit, "gold", 2, "殉職手当", applied.deathEvent));
+        triggeredEvents.push(gainBattleResource(unit, "gold", 2, "殉職手当", applied.deathEvent, "martyr_allowance"));
       }
       const post = {
         attacker: unit, target, dmg, enemies, log: note, pick: U.pick,
-        dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg,
+        dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", {
+          label, parentEvent: applied.event,
+          // 火球が全体化しているのは《魔法結社》の働き。単体の火球は火球のまま。
+          synergyId: a.mods.fireballAll && label === "火球" ? "arcane_circle" : null
+        }).dmg,
         gainResource: (resource, value, label) => {
           const event = gainBattleResource(unit, resource, value, label, applied.event);
           triggeredEvents.push(event);
@@ -485,11 +500,14 @@ const Battle = {
       for (const s of before) {
         if (!s.alive && s.u.alive) {
           const death = [...timeline].reverse().find(e => e.type === "death" && e.unitId === s.u.id);
-          const reviveEvent = emitCausal("revive", {
+          // 全快で戻ったのは《死の軍勢》の働き。半分で戻ったなら死霊術単体の手柄。
+          const reviver = playerUnits.find(u => u.id === s.u.flags.reviveSourceId);
+          const fullByLegion = reviver && reviver.mods.necroFull && s.u.hp >= s.u.maxHp;
+          const reviveEvent = emitCausal("revive", bySynergy(fullByLegion ? "legion_of_dead" : null, {
             unitId: s.u.id, sourceId: s.u.flags.reviveSourceId || null,
             traitId: s.u.flags.reviveTraitId || (s.u.flags.selfRevived ? "tenacity" : null),
             hp: s.u.hp, maxHp: s.u.maxHp, emphasis: 3
-          }, death || null);
+          }), death || null);
           s.u.flags.wasRevived = true;
           delete s.u.flags.reviveSourceId;
           delete s.u.flags.reviveTraitId;

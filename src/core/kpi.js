@@ -171,6 +171,11 @@ const KPI = {
   // 因果メタデータの無い旧イベントでも type までは落ちるので、静かに欠測しない。
   abilityKey(event) {
     if (!event) return null;
+    // シナジー由来と分かっている発火は、汎用イベントではなくシナジーの手柄として数える。
+    // 付いていないと、シナジーが起こした金貨も蘇生も resource_gain / revive に埋もれ、
+    // そのシナジーは「一度も発火していない」ように見える。
+    if (event.synergyId) return { key: `synergy:${event.synergyName || event.synergyId}`,
+      label: event.synergyName || event.synergyId };
     if (event.traitId) return { key: `trait:${event.traitId}`, label: event.name || event.traitId };
     if (event.facilityId) return { key: `facility:${event.facilityId}`, label: event.name || event.facilityId };
     if (event.type === "synergy") return { key: `synergy:${event.id || event.name}`, label: event.name || "シナジー" };

@@ -297,6 +297,8 @@ for (const s of strategies) {
     for (const [key, n] of fired) if (key.startsWith('synergy:')) synFired.set(key.slice(8), n);
     const synLine = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1])
       .map(([name, active]) => `${name} 成立${active}/発火${synFired.get(name) || 0}`).join('　');
+    // 成立は「その編成で条件を満たした戦闘数」、発火は「連鎖へ参加したイベント総数」。
+    // 分母が違うので発火>成立は正常（1戦で何度も発火する）。見たいのは発火0かどうか。
     console.log(`  シナジー成立→発火: ${synLine || 'なし'}`);
     if (kpiOut) {
       for (const run of kpiRuns) kpiDump.runs.push({ ...run, strategy: s.name });
