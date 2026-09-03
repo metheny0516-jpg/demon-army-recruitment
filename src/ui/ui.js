@@ -625,7 +625,9 @@ const UI = {
       const buildText = !nextFacility
         ? "施設は最大レベル"
         : construction <= 0
-          ? `施工役なし（${m.materialReward || 0}建材は備蓄）`
+          ? (!st.seizeUsed && st.facilityLevel === 0
+              ? `施工役なし。建材${Math.max(0, 3 - (st.buildProgress || 0))}で勝利後に拠点接収できる（備蓄${st.materials || 0}）`
+              : `施工役なし（${m.materialReward || 0}建材は備蓄）`)
           : `勝利後 最大${buildEstimate}投入／次施設まで${buildRemaining}`;
       const consequence = m.missionKind === "invade"
         ? `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`
@@ -694,7 +696,7 @@ const UI = {
       <p>${U.esc(f.desc)}</p>
       <div class="mission-purpose"><b>現在の接続</b><br><span>${U.esc(statusOf(f))}</span></div>
       <button class="primary wide" data-action="choosefacility" data-id="${U.esc(f.id)}">
-        ${current && current.id === f.id ? "この施設を維持する" : "この施設へ建て替える"}</button>
+        ${current && current.id === f.id ? "この施設を維持する" : current ? "この施設へ建て替える" : "この施設を建てる"}</button>
     </div>`).join("");
     this.set(`${this.hud()}<div class="panel"><h2>🔨 大型施設の方針決定</h2>
       <div>施設Lv.${st.pendingFacilityChoiceLevel}が完成した。稼働できる大型施設は1つだけ。現在のビルドをどの方向へ壊すか選べ。</div>
@@ -827,6 +829,17 @@ const UI = {
         <div>${U.esc(b.army)} を撃退した</div>
         <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
       </div>
+      ${Game.canSeizeStronghold() ? (() => {
+        const q = Game.seizeQuote();
+        return `<div class="panel seize-panel">
+        <h3>🏴 この拠点を接収するか</h3>
+        <div class="muted">建設担当がいなくても、勝ち取った拠点をそのまま城へ組み込める。
+          <b>このランで1度きり</b>だ。<br>
+          代償：建材 <b>${q.need}</b>（備蓄 ${q.have}）を消費し、王国警戒度 <b>+${q.alertCost}</b>。
+          奪った拠点は目立つ。以後の敵は少し強くなる。</div>
+        <button class="primary wide" data-action="seize">🏴 接収して大型施設を選ぶ</button>
+      </div>`; })() : ""}
+
       <div class="panel payroll-result">
         <h3>${payrollPolicy.icon} 給与報告：${U.esc(payrollPolicy.name)}</h3>
         <div>支払額 <b>${payrollReport.paid || 0}G</b>／通常額 ${payrollReport.base || 0}G</div>
@@ -854,16 +867,6 @@ const UI = {
         <h3>現在の軍団</h3>
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
       </div>
-      ${Game.canSeizeStronghold() ? (() => {
-        const q = Game.seizeQuote();
-        return `<div class="panel seize-panel">
-        <h3>🏴 この拠点を接収するか</h3>
-        <div class="muted">建設担当がいなくても、勝ち取った拠点をそのまま城へ組み込める。
-          <b>このランで1度きり</b>だ。<br>
-          代償：建材 <b>${q.need}</b>（備蓄 ${q.have}）を消費し、王国警戒度 <b>+${q.alertCost}</b>。
-          奪った拠点は目立つ。以後の敵は少し強くなる。</div>
-        <button class="primary wide" data-action="seize">🏴 接収して大型施設を選ぶ</button>
-      </div>`; })() : ""}
       <button class="primary wide" data-action="afterresult">次へ</button>`);
     if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
   },

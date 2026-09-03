@@ -414,6 +414,10 @@ button.wide { width: 100%; }
 /* ビルド名。魔界史でいちばん最初に目に入るのは数字ではなく「何をした軍団か」であってほしい */
 .build-name { color: var(--gold); font-weight: bold; letter-spacing: .02em; }
 .history-item .build-name { font-size: 14px; margin: 2px 0 4px; opacity: .95; }
+/* 拠点接収は1ランに1度きりの分岐なので、勝利バナー直下で目立たせる。
+   結果画面の最下部に置いていたときは実プレイで一度も使われなかった（2画面ぶん下にあった）。 */
+.seize-panel { border: 1px solid var(--gold); box-shadow: 0 0 0 2px rgba(0,0,0,.25) inset; }
+.seize-panel h3 { color: var(--gold); }
 .build-name-panel { text-align: center; }
 .build-name-panel .build-name { font-size: 20px; margin: 6px 0 0; line-height: 1.4; }
 .history-item.cleared { border-left-color: var(--green); }
