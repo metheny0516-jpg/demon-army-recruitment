@@ -10,6 +10,7 @@ const { dismissMormo } = require('./helpers.js');
   await dismissMormo(page);
   await page.locator('[data-action="hire"]').first().click();
   await page.locator('[data-action="hire"]').first().click();
+  await page.locator('[data-action="skip"]').click();
   await dismissMormo(page);
   const state = await page.evaluate(() => ({ phase: Game.state.phase, opening: Game.state.openingPrototype }));
   if (state.opening || state.phase !== 'mission') throw new Error('採用後に通常の作戦会議へ直行しない');

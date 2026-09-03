@@ -1,0 +1,28 @@
+const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { autoDismissMormo } = require('./helpers.js');
+(async () => {
+  const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await autoDismissMormo(page);
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.click('[data-action="new"]');
+  await page.evaluate(() => { Game.state.gold = 30; App.render(); });
+  await page.locator('[data-action="hire"]:not([disabled])').first().click();
+  await page.locator('[data-action="hire"]:not([disabled])').first().click();
+  if (await page.evaluate(() => Game.state.phase) !== 'recruit') throw new Error('無料枠終了で面接が自動終了した');
+  const first = await page.locator('[data-action="hire"]').first().innerText();
+  if (!first.includes('紹介料 4G') || !first.includes('給与')) throw new Error('紹介料と給与を区別していない');
+  await page.locator('[data-action="hire"]:not([disabled])').first().click();
+  const second = await page.locator('[data-action="hire"]').first().innerText();
+  if (!second.includes('紹介料 8G')) throw new Error('追加紹介料が倍増しない');
+  await page.reload();
+  await page.locator('[data-action="continue"]').click();
+  if (!await page.locator('[data-action="skip"]').count()) throw new Error('再開後に面接終了操作がない');
+  await page.locator('[data-action="skip"]').click();
+  if (await page.evaluate(() => Game.state.phase) !== 'mission') throw new Error('明示終了で作戦会議へ進まない');
+  if (errors.length) throw new Error(errors.join('\n'));
+  console.log('✓ 面接継続・追加紹介4G→8G・保存復帰・明示終了');
+  await browser.close();
+})().catch(e => { console.error('✗', e.message); process.exit(1); });

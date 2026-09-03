@@ -44,7 +44,10 @@ Game.newRun();
   const st = Game.state;
   let guard = 0, battles = 0, expectedChain = 0, expectedOverkill = 0;
   while (battles < 3 && guard++ < 60 && !['gameover', 'clear'].includes(st.phase)) {
-    if (st.phase === 'recruit') { if (st.applicants.length && Game.canHire()) Game.hire(0); else Game.skipHire(); }
+    if (st.phase === 'recruit') {
+      if (st.hiresLeft > 0 && st.applicants.length && Game.canHireApplicant(0)) Game.hire(0);
+      else Game.skipHire();
+    }
     if (st.phase === 'preparation') {
       st.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
       if (st.day < Game.OPENING_DAYS) Game.advanceDay(st.day); else Game.prepareOpeningBattle('invade');

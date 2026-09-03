@@ -151,13 +151,7 @@ const App = {
         return this.render();
 
       case "toformation":
-        if (Game.beginOpeningPreparation()) {
-          this.render();
-          return this.report("report", "魔王様、勇者到着まであと2日デス。\n配置と給与方針はそのまま翌日へ持ち越せます。今日は仕込みに徹するか、辺境へ遠征するかお選びください。",
-            { kicker: "1日目・準備日", title: "宰相モルモ・期限報告" });
-        }
-        Game.state.applicants = [];
-        Game.prepareMissions(true);
+        Game.finishRecruitment();
         return this.render();
 
       case "endday": {

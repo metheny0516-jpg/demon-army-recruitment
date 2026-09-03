@@ -42,6 +42,8 @@ function runOnce(strat, stats){
     stats.maxArmy = Math.max(stats.maxArmy, st.roster.length);
     // 採用フェーズ: 枠がある限り採用する
     while (st.phase === 'recruit' && st.applicants.length) {
+      // 基準戦略は従来どおり無料枠だけを使う。追加紹介の戦略は別途比較して足す。
+      if (st.hiresLeft <= 0) { Game.skipHire(); break; }
       // 種族狙いの戦略は、目当てが居らず金に余裕があれば求人を出し直す
       if (strat.reroll && strat.kind === 'race'
           && !st.applicants.some(m => m.race === strat.race)

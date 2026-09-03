@@ -148,8 +148,13 @@ formationHint` が加わり、UIは未設定の旧セーブを「基本隊列」
 `st.mercenaries`（雇用中）と `st.mercenaryOffers`（候補）は戦闘後に空へ戻る。
 
 **ラン状態へ増えたフィールド**（`migrateState()` の defaults にも入れてある）:
-`maxChain` / `maxOverkill` / `mercenaryOffers` / `mercenaries` / `kingSlimeMerge`。
+`maxChain` / `maxOverkill` / `mercenaryOffers` / `mercenaries` / `kingSlimeMerge` /
+`extraHiresThisPhase`。
 **新しい状態を足したら defaults にも足すこと**（旧セーブが壊れる）。
+
+**無料採用枠が0になっても `hire()` は面接を自動終了しない。** 以後は紹介料4Gから倍増し、
+`extraHiresThisPhase` が料金段階を持つ。終了は `skipHire()` の明示操作だけ。戦後の
+`nextRecruit()` で無料枠と追加料金段階をリセットする。simの基準戦略は従来比較を守るため無料枠だけ使う。
 
 **新しい「編成の判断」を足したら KPI の指紋にも足す。**
 `KPI.fingerprint()` が「ビルド試行」を数える根拠で、現在は出撃隊・部門配属・施設Lv・給与方針・
@@ -251,6 +256,12 @@ Pagesの反映漏れやキャッシュではなく、BGMのコード側の問題
 ---
 
 ## 4. 直近で完了したこと
+
+### 面接の自動終了を廃止し、追加紹介を選択化（2026-09-03完了）
+
+無料採用枠を使い切った瞬間に作戦会議へ送る挙動を廃止。次の応募者群を見たまま、紹介料
+4G→8G→16Gで追加採用するか、明示的に面接を終了するか選べる。希望給与は戦後の維持費、紹介料は
+即時費用としてボタン上で分けて表示する。人事適性の割引は同時導入せず、候補人数増加だけを維持。
 
 ### 3作戦の目的と施設施工見込を明示（2026-09-03完了）
 

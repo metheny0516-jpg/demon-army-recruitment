@@ -9,6 +9,7 @@ const Game = {
   MAX_CONQUEST: ENEMY_STAGES.length,
   MAX_ARMY: 20,
   MAX_DEPLOY: 5,
+  EXTRA_HIRE_BASE_COST: 4,
   OPENING_DAYS: 3,
 
   // 旧1ターン分を3日へ整数のまま配る。1,1,1 のような少量も3日合計で元量に戻る。
@@ -59,6 +60,7 @@ const Game = {
       applicants: [],
       phase: "recruit",
       hiresLeft: demonKing.start.hires,
+      extraHiresThisPhase: 0,
       maxPower: 0,
       maxArmySize: 0,
       mercenaryOffers: [],
@@ -170,7 +172,7 @@ const Game = {
     }
     const defaults = {
       demonKingId: "standard",
-      roster: [], activeUids: [], applicants: [], hiresLeft: 1, maxPower: 0, maxArmySize: 0,
+      roster: [], activeUids: [], applicants: [], hiresLeft: 1, extraHiresThisPhase: 0, maxPower: 0, maxArmySize: 0,
       maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
@@ -196,6 +198,8 @@ const Game = {
     if (!Array.isArray(st.activeUids)) st.activeUids = st.roster.slice(0, this.MAX_DEPLOY).map(m => m.uid);
     if (!Array.isArray(st.applicants)) st.applicants = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
+    st.hiresLeft = Math.max(0, Number(st.hiresLeft) || 0);
+    st.extraHiresThisPhase = Math.max(0, Number(st.extraHiresThisPhase) || 0);
     if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
     if (!Array.isArray(st.recruitedTplIds)) st.recruitedTplIds = [];
     if (!Array.isArray(st.discoveredSynergyIds)) st.discoveredSynergyIds = [];
@@ -827,23 +831,42 @@ const Game = {
   // ── 採用・解雇・編成 ──────────────────────
   canHire() { return this.state.roster.length < this.MAX_ARMY; },
 
+  additionalHireCost() {
+    return this.EXTRA_HIRE_BASE_COST * Math.pow(2, this.state.extraHiresThisPhase || 0);
+  },
+
+  hireCost() {
+    return this.state.hiresLeft > 0 ? 0 : this.additionalHireCost();
+  },
+
+  canHireApplicant(index) {
+    const st = this.state;
+    return st.phase === "recruit" && !!st.applicants[index]
+      && this.canHire() && st.gold >= this.hireCost();
+  },
+
   hire(index) {
     const st = this.state;
-    if (!this.canHire()) return false;
+    if (!this.canHireApplicant(index)) return false;
     const m = st.applicants[index];
-    if (!m) return false;
+    const cost = this.hireCost();
+    if (cost > 0) {
+      st.gold -= cost;
+      st.extraHiresThisPhase += 1;
+    } else {
+      st.hiresLeft -= 1;
+    }
     st.roster.push(m);
     st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
     if (st.activeUids.length < this.MAX_DEPLOY) st.activeUids.push(m.uid);
     st.raceCounts[m.race] = (st.raceCounts[m.race] || 0) + 1;
     if (m.tplId && !st.recruitedTplIds.includes(m.tplId)) st.recruitedTplIds.push(m.tplId);
-    st.hiresLeft = (st.hiresLeft || 1) - 1;
-    // 設立期など採用枠が残っていれば、続けて次の応募者を面接する
-    if (st.hiresLeft > 0 && this.canHire()) {
+    // 採用後も面接は閉じない。次の候補を見て、追加紹介料を払うか自分で終了する。
+    if (this.canHire()) {
       st.rerollsThisPhase = 0;   // 新しい面接なので広告費もリセット
       this.genApplicants();
     } else {
-      this.finishRecruitment();
+      st.applicants = [];
     }
     this.save();
     return true;
@@ -1650,6 +1673,7 @@ const Game = {
     st.phase = "recruit";
     // 欠員が出た分だけ追加で採用できる（欠員募集）
     st.hiresLeft = 1 + (st.pendingVacancies || 0);
+    st.extraHiresThisPhase = 0;
     st.pendingVacancies = 0;
     st.rerollsThisPhase = 0;
     st.pendingEvent = null;

@@ -51,6 +51,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
 
   // 場面が進むと曲も進むこと（2人目の採用で作戦会議へ移る）
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
+  await page.locator('[data-action="skip"]').click();
   const missionScene = await page.evaluate(() => Music.desc.scene);
   if (missionScene !== 'mission') errors.push(`作戦画面の場面名が ${missionScene}`);
 

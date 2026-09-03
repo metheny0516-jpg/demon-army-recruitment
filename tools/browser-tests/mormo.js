@@ -46,6 +46,7 @@ const { dismissMormo } = require('./helpers.js');
 
   await page.locator('[data-action="hire"]').first().click();
   await page.locator('[data-action="hire"]').first().click();
+  await page.locator('[data-action="skip"]').click();
   // 採用後にも報告が出る。ここは報告そのものではなく「作戦→編成」の遷移を見たいので送る
   while (await dismissMormo(page)) { /* 出ている報告を送り切る */ }
   // 開幕3日間は撤廃済み。通常の作戦3択から編成へ進み、同じ formationReport を通る。

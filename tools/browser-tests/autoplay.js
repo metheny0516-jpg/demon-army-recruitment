@@ -30,6 +30,8 @@ const { autoDismissMormo } = require('./helpers.js');
       // gameover(敗北確定 or 全クリア)画面だけを終端とみなす。result()の1戦ごとの勝利画面はスルーする。
       if (await page.locator('.banner').count()
           && !(await page.locator('[data-action="nextrecruit"], [data-action="afterresult"]').count())) break;
+      if (await page.locator('[data-action="skip"]').count()
+          && await page.evaluate(() => Game.state.hiresLeft <= 0)) { await click('[data-action="skip"]'); continue; }
       if (await page.locator('[data-action="hire"]:not([disabled])').count()) { await click('[data-action="hire"]:not([disabled])'); continue; }
       // 満員なら1体解雇して入れ替える（プレイヤーと同じ操作）
       if (await page.locator('[data-action="hire"][disabled]').count() && await page.locator('[data-action="fire"]').count()) {

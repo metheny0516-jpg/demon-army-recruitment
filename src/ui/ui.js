@@ -530,8 +530,14 @@ const UI = {
     const full = !Game.canHire();
     const cards = st.applicants.map((m, i) => this.monsterCard(m, {
       resume: true,
-      footer: `<button class="primary wide" data-action="hire" data-index="${i}" ${full ? "disabled" : ""}>
-        ${full ? "軍団が満員（誰かを解雇せよ）" : `採用する（給与 ${m.salary}G）`}</button>`
+      footer: (() => {
+        const cost = Game.hireCost();
+        const allowed = Game.canHireApplicant(i);
+        const label = full ? "軍団が満員（誰かを解雇せよ）"
+          : cost > 0 ? `追加採用（紹介料 ${cost}G・給与 ${m.salary}G）`
+          : `無料枠で採用（給与 ${m.salary}G）`;
+        return `<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`;
+      })()
     })).join("");
     // 満員でも応募者を逃さず入れ替えられるよう、この画面から解雇できるようにする
     const rosterPanel = st.roster.length ? `<div class="panel">
@@ -551,7 +557,7 @@ const UI = {
         <div class="muted">${
           st.turn === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
           : st.hiresLeft > 1 ? `先の戦いで欠員が出た。${st.hiresLeft}名まで補充できる。`
-          : st.hiresLeft === 0 ? "今回の採用は終了。軍団を確認したら作戦会議へ戻れ。"
+          : st.hiresLeft === 0 ? `無料採用枠は終了。${Game.additionalHireCost()}Gで追加紹介を受けるか、面接を終了できる。`
           : "3名が魔王軍への入隊を希望している。採用できるのは1名だけだ。"}</div>
       </div>
       <div class="cards">${cards}</div>
@@ -559,8 +565,7 @@ const UI = {
       <div class="row">
         <button data-action="reroll" ${Game.canReroll() ? "" : "disabled"}>
           📢 求人を出し直す（広告費 ${Game.rerollCost()}G）</button>
-        <button data-action="skip" ${st.roster.length === 0 ? "disabled" : ""}>誰も採用しない（面接を打ち切る）</button>
-        <button data-action="toformation" ${st.roster.length === 0 ? "disabled" : ""}>作戦会議へ進む</button>
+        <button data-action="skip" ${st.roster.length === 0 ? "disabled" : ""}>面接を終了して作戦会議へ</button>
         ${st.roster.length === 0 ? `<span class="muted">部隊が空では出撃できない。まず1体は採用せよ。</span>` : ""}
       </div>
       <div class="spacer"></div>
