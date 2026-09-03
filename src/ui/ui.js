@@ -573,17 +573,31 @@ const UI = {
     const st = Game.state;
     const offers = st.missionOffers.length ? st.missionOffers : Game.prepareMissions(true);
     const salary = Game.salaryTotal();
+    const construction = Game.departmentOutput().material;
+    const nextFacility = FACILITY_LEVELS[st.facilityLevel + 1];
     const cards = offers.map((m, i) => {
       const net = m.reward - salary;
+      const availableMaterials = (st.materials || 0) + (m.materialReward || 0);
+      const buildEstimate = nextFacility ? Math.min(availableMaterials, construction) : 0;
+      const buildRemaining = nextFacility
+        ? Math.max(0, nextFacility.buildThreshold - st.buildProgress)
+        : 0;
+      const buildText = !nextFacility
+        ? "施設は最大レベル"
+        : construction <= 0
+          ? `施工役なし（${m.materialReward || 0}建材は備蓄）`
+          : `勝利後 最大${buildEstimate}投入／次施設まで${buildRemaining}`;
       const consequence = m.missionKind === "invade"
-        ? `王国攻略 +${m.conquestDelta}`
+        ? `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`
         : m.missionKind === "suppress"
           ? `生存者の忠誠 +${m.loyaltyDelta}`
-          : "軍資金を優先";
+          : "王国攻略は進まない";
       return `<div class="mission-card mission-${U.esc(m.missionKind)}">
         <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : "🏰"}
           危険度 ${U.esc(m.difficulty)}</div>
         <h3>${U.esc(m.missionTitle)}</h3>
+        <div class="mission-purpose"><b>${U.esc(m.strategyLabel || "作戦")}</b><br>
+          <span>${U.esc(m.strategyHint || "")}</span></div>
         <div class="mission-army">${U.esc(m.army)} <span class="muted">— ${U.esc(m.region)}</span></div>
         <div class="mission-formation"><b>敵編成：${U.esc(m.formationName || "基本隊列")}</b><br>
           <span class="muted">${U.esc(m.formationHint || "敵情を確認して出撃隊を選べ。")}</span></div>
@@ -592,6 +606,7 @@ const UI = {
           <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
           <dt>食料</dt><dd class="food">+${m.foodReward || 0}</dd>
           <dt>建材</dt><dd class="materials">+${m.materialReward || 0}</dd>
+          <dt>施設施工見込</dt><dd>${U.esc(buildText)}</dd>
           <dt>給与・手当</dt><dd>${salary}G</dd>
           <dt>差引見込</dt><dd class="${net >= 0 ? "positive" : "negative"}">${net >= 0 ? "+" : ""}${net}G</dd>
           <dt>作戦結果</dt><dd>${U.esc(consequence)}</dd>
@@ -604,7 +619,8 @@ const UI = {
     this.set(`${this.hud()}
       <div class="panel">
         <h2>🗺 作戦会議</h2>
-        <div class="muted">次に何をするか選べ。寄り道すれば軍を養えるが、警戒度が上がるほど以後の敵も強くなる。</div>
+        <div class="muted">略奪と鎮圧は軍団を整える寄り道、王国侵攻は最終決戦を近づける。
+          建設担当がいれば、どの作戦でも勝利後に備蓄建材を施設へ投入する。</div>
       </div>
       <div class="panel"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
       <div class="mission-grid">${cards}</div>

@@ -5,6 +5,8 @@ const MISSION_TYPES = [
     id: "raid",
     icon: "🔥",
     title: "辺境を略奪する",
+    strategyLabel: "資金・食料を補給",
+    strategyHint: "王国攻略を進めず、給与と兵糧を蓄える寄り道。警戒度は大きく上がる。",
     descriptions: [
       "守りの薄い辺境から軍資金を奪う。儲かるが、王国には派手に気づかれる。",
       "商隊と村の金庫を狙う。正義とは、勝った側の帳簿に書かれる言葉だ。",
@@ -28,6 +30,8 @@ const MISSION_TYPES = [
     id: "suppress",
     icon: "⚖",
     title: "魔界の反乱を鎮圧する",
+    strategyLabel: "忠誠回復・建材確保",
+    strategyHint: "反乱軍の砦を接収して建材を得る。施工は建設担当が勝利後に行う。",
     descriptions: [
       "魔界内部の揉め事を武力で解決する。収入は少ないが、軍の結束は戻る。",
       "反乱軍から統治能力を疑われている。話し合いの予定はない。",
@@ -52,6 +56,8 @@ const MISSION_TYPES = [
     id: "invade",
     icon: "🏰",
     title: "王国へ進軍する",
+    strategyLabel: "決戦へ進む",
+    strategyHint: "王国攻略が1進む。寄り道せず最終決戦へ近づく。",
     descriptions: [
       "王国の重要拠点を正面から攻略する。勝てば王都への道が一歩開く。"
     ],

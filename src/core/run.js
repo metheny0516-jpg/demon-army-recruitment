@@ -475,6 +475,8 @@ const Game = {
       stage: st.turn,
       missionKind: type.id,
       missionTitle: type.title,
+      strategyLabel: type.strategyLabel,
+      strategyHint: type.strategyHint,
       description: U.pick(type.descriptions),
       difficulty: type.difficulty,
       army: isInvade ? base.army : type.armies[variant],

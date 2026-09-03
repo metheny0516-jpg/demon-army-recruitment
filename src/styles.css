@@ -1124,6 +1124,15 @@ button.wide { width: 100%; }
 .mission-card.mission-suppress { border-top-color: #5d8f70; }
 .mission-card.mission-invade { border-top-color: var(--gold); }
 .mission-kind { color: var(--dim); font-size: 12px; font-weight: bold; }
+.mission-purpose {
+  padding: 9px 10px;
+  border: 1px solid rgba(214, 177, 92, .35);
+  border-radius: 7px;
+  background: rgba(214, 177, 92, .08);
+  line-height: 1.45;
+}
+.mission-purpose b { color: var(--gold); }
+.mission-purpose span { color: var(--dim); font-size: 12px; }
 .mission-army { font-weight: bold; }
 .mission-economy {
   display: grid;
