@@ -38,6 +38,12 @@ const FACILITY_LEVELS = [
   { level: 3, name: "魔王城作業区", buildThreshold: 12, hpMult: 1.12, defBonus: 2 }
 ];
 
+const FACILITIES = [
+  { id: "extortion_ledger", icon: "📒", name: "恐喝帳簿", desc: "会計職を出撃させ、予約金貨3Gで次の味方攻撃+40%" },
+  { id: "grand_kitchen", icon: "🍖", name: "巨大厨房", desc: "戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍化" },
+  { id: "graveyard", icon: "🪦", name: "墓地", desc: "建設部門の死霊術師が、最初の戦死者を骸骨従者として召喚" }
+];
+
 const DEPARTMENT_RULES = {
   startingFood: 3,
   foodPerRoster: 3,

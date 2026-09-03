@@ -95,6 +95,8 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
   // 勝利していれば数戦回してセーブ復元も見る
   if (won) {
     for (let i = 0; i < 3; i++) {
+      if (await page.locator('[data-action="afterresult"]').count()) await page.click('[data-action="afterresult"]');
+      if (await page.locator('[data-action="choosefacility"]').count()) await page.locator('[data-action="choosefacility"]').first().click();
       if (await page.locator('[data-action="nextrecruit"]').count()) {
         await page.click('[data-action="nextrecruit"]');
         if (await page.locator('[data-action="hire"]').count()) await page.locator('[data-action="hire"]').first().click();

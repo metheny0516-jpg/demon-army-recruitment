@@ -23,7 +23,7 @@ const App = {
   MUSIC_SCENES: {
     recruit: "recruit", event: "recruit",
     mission: "mission", formation: "mission", preparation: "mission",
-    result: "mission", defeat: "defeat",
+    result: "mission", facility: "mission", defeat: "defeat",
     gameover: "defeat", clear: "victory"
   },
 
@@ -90,6 +90,7 @@ const App = {
       case "formation": return UI.formation();
       case "preparation": return UI.formation();
       case "result": return UI.result();
+      case "facility": return UI.facility();
       case "event": return UI.event();
       case "defeat": return UI.defeat();
       case "gameover":
@@ -153,6 +154,12 @@ const App = {
       case "toformation":
         Game.finishRecruitment();
         return this.render();
+
+      case "choosefacility":
+        Game.chooseFacility(data.id);
+        this.render();
+        return this.report("joy", `大型施設「${Game.activeFacility().name}」を稼働します！ この軍団の壊れ方を決める設備デス！`,
+          { kicker: "施設方針決定", title: "宰相モルモ・竣工報告" });
 
       case "endday": {
         const report = Game.advanceDay(Number(data.day));

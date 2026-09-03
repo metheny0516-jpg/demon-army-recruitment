@@ -61,6 +61,20 @@ assert(st.food === 2, '調達した食料3から非出撃者ぶん1を引いて2
 assert(st.roster.every(m => m.loyalty === 61), '食事が足りると軍団全員の忠誠+1');
 assert(st.facilityLevel === 1 && st.buildProgress === 5 && st.materials === 0,
   'オーク1名の施工能力3が建材を投入して仮設兵舎を完成');
+assert(st.pendingFacilityChoiceLevel === 1 && st.activeFacilityId === null,
+  '施設段階の完成時に大型施設の選択待ちになる');
+st.phase = 'result';
+assert(Game.afterResult() === 'facility' && st.phase === 'facility', '戦果確認後に大型施設3択へ進む');
+assert(Game.chooseFacility('grand_kitchen') && st.activeFacilityId === 'grand_kitchen',
+  '巨大厨房を選び、稼働施設を1つに固定する');
+st.roster[0].traits = ['big_eater'];
+st.activeUids = [st.roster[0].uid];
+st.food = 10;
+const kitchenRations = Game.battleRationQuote();
+assert(kitchenRations.kitchen && kitchenRations.need === Game.foodNeedFor(Game.activeRoster()) + 1,
+  '巨大厨房は戦闘糧食を追加で1消費する');
+assert(Game.preparedRoster(kitchenRations)[0].battleDmgMult === 1.5,
+  '巨大厨房は大食漢の食事強化を2倍にする');
 
 const prepared = Game.preparedRoster()[0];
 assert(prepared.hp === 21 && prepared.def === 2, '仮設兵舎のHP+5%を出撃時だけ適用');

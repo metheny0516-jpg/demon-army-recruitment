@@ -124,7 +124,7 @@ const KPI = {
       .map(m => `${m.tplId || ""}:${m.race || ""}`).sort().join(",");
     return JSON.stringify({
       deployed, departments, mercenaries,
-      facility: state.facilityLevel || 0,
+      facility: `${state.facilityLevel || 0}:${state.activeFacilityId || "none"}`,
       payroll: state.payrollPolicy || "regular",
       // 合体するか否かも編成の判断（頭数を取るか、1体の硬さを取るか）
       merge: state.kingSlimeMerge !== false,

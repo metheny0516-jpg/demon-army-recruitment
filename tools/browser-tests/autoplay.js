@@ -27,6 +27,7 @@ const { autoDismissMormo } = require('./helpers.js');
       if (await page.locator('[data-action="eventdone"]').count()) { await click('[data-action="eventdone"]'); continue; }
       // 戦闘結果の「次へ」
       if (await page.locator('[data-action="afterresult"]').count()) { await click('[data-action="afterresult"]'); continue; }
+      if (await page.locator('[data-action="choosefacility"]').count()) { await click('[data-action="choosefacility"]'); continue; }
       // gameover(敗北確定 or 全クリア)画面だけを終端とみなす。result()の1戦ごとの勝利画面はスルーする。
       if (await page.locator('.banner').count()
           && !(await page.locator('[data-action="nextrecruit"], [data-action="afterresult"]').count())) break;

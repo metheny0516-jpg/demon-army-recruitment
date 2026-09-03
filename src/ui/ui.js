@@ -76,7 +76,7 @@ const UI = {
       <span class="gold">所持金 <b>${st.gold}G</b></span>
       <span class="food">食料 <b>${st.food}</b></span>
       <span class="materials">建材 <b>${st.materials}</b></span>
-      <span>施設 <b>Lv.${st.facilityLevel}</b></span>
+      <span>施設 <b>Lv.${st.facilityLevel}${Game.activeFacility() ? ` ${U.esc(Game.activeFacility().name)}` : ""}</b></span>
       <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
       <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
       <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
@@ -633,6 +633,21 @@ const UI = {
       <button class="wide ghost" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`);
   },
 
+  facility() {
+    const st = Game.state;
+    const current = Game.activeFacility();
+    const cards = FACILITIES.map(f => `<div class="mission-card">
+      <div class="mission-kind">大型施設 ${current && current.id === f.id ? "・現在稼働中" : ""}</div>
+      <h3>${f.icon} ${U.esc(f.name)}</h3>
+      <p>${U.esc(f.desc)}</p>
+      <button class="primary wide" data-action="choosefacility" data-id="${U.esc(f.id)}">
+        ${current && current.id === f.id ? "この施設を維持する" : "この施設へ建て替える"}</button>
+    </div>`).join("");
+    this.set(`${this.hud()}<div class="panel"><h2>🔨 大型施設の方針決定</h2>
+      <div>施設Lv.${st.pendingFacilityChoiceLevel}が完成した。稼働できる大型施設は1つだけ。現在のビルドをどの方向へ壊すか選べ。</div>
+    </div><div class="mission-grid">${cards}</div>`);
+  },
+
   formation() {
     const st = Game.state;
     const opening = st.openingPrototype;
@@ -691,8 +706,9 @@ const UI = {
       active.some(m => (m.traits || []).includes("necromancy")) ? "死亡者1名を蘇生" : "",
       active.some(m => (m.traits || []).includes("soul_harvest")) ? "蘇生→魂消費→アンデッド強化" : ""
     ].filter(Boolean);
-    const ledgerReady = st.facilityLevel >= 1 && active.some(m => (m.job || "").includes("会計"));
-    const graveyardReady = st.facilityLevel >= 1 && builders.some(m => m.tplId === "necromancer");
+    const ledgerReady = st.activeFacilityId === "extortion_ledger" && active.some(m => (m.job || "").includes("会計"));
+    const graveyardReady = st.activeFacilityId === "graveyard" && builders.some(m => m.tplId === "necromancer");
+    const kitchenReady = st.activeFacilityId === "grand_kitchen";
     const deadline = st.day === 1 ? "勇者到着まであと2日"
       : st.day === 2 ? "明日、勇者が到着" : "本日、勇者襲来";
     const openingActions = st.day < Game.OPENING_DAYS
@@ -716,6 +732,9 @@ const UI = {
         <div class="synergy-hint">予約金貨3G到達 → 次の味方攻撃+40%</div></div>` : ""}
       ${!opening && graveyardReady ? `<div class="panel"><b>🪦 墓地</b>
         <div class="synergy-hint">最初の味方死亡 → ラウンド終了時に骸骨従者を1体召喚</div></div>` : ""}
+      ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房</b>
+        <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍にする。</span>
+      </div>` : ""}
       ${this.payrollPanel()}
       ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}

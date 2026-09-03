@@ -202,6 +202,10 @@ const Battle = {
         emphasis: rations.emptied ? 2 : 1,
         text: `戦闘糧食 ${rations.consumed}/${rations.need} を消費`, cls: "food"
       }, null);
+      if (rations.kitchen && rations.consumed > 0) {
+        emitCausal("facility_trigger", { facilityId: "grand_kitchen", name: "巨大厨房", emphasis: 2,
+          text: "　施設【巨大厨房】 食事強化を2倍にする！", cls: "synergy" }, rationEvent);
+      }
       const byUid = uid => playerUnits.find(u => u.uid === uid);
       for (const uid of rations.bigEaterUids || []) {
         const u = byUid(uid);

@@ -149,7 +149,7 @@ formationHint` が加わり、UIは未設定の旧セーブを「基本隊列」
 
 **ラン状態へ増えたフィールド**（`migrateState()` の defaults にも入れてある）:
 `maxChain` / `maxOverkill` / `mercenaryOffers` / `mercenaries` / `kingSlimeMerge` /
-`extraHiresThisPhase`。
+`extraHiresThisPhase` / `activeFacilityId` / `pendingFacilityChoiceLevel`。
 **新しい状態を足したら defaults にも足すこと**（旧セーブが壊れる）。
 
 **無料採用枠が0になっても `hire()` は面接を自動終了しない。** 以後は紹介料4Gから倍増し、
@@ -256,6 +256,15 @@ Pagesの反映漏れやキャッシュではなく、BGMのコード側の問題
 ---
 
 ## 4. 直近で完了したこと
+
+### 施設を選択式の大型Jokerへ移行（2026-09-03完了）
+
+`facilityLevel/buildProgress` は施工規模・実績・魔界史との互換のため残し、同時に1つだけ稼働する
+`activeFacilityId` を分離した。Lv.1/2/3到達ごとに恐喝帳簿・巨大厨房・墓地から維持または建て替えを
+選ぶ。恐喝帳簿は会計職＋予約金貨3G、墓地は建設部門の死霊術師＋戦死、巨大厨房は戦闘糧食を
+追加1消費して大食漢・魔界料理人の食事強化を2倍化する。KPI指紋にも施設IDを追加済み。
+旧セーブは既存Lvを維持し、次の戦果確認後に施設選択へ入る。一律HP/防御補正は比較のため当面維持し、
+選択制の価値を試遊してから撤去判断する。
 
 ### 面接の自動終了を廃止し、追加紹介を選択化（2026-09-03完了）
 

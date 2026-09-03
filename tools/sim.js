@@ -136,6 +136,12 @@ function runOnce(strat, stats){
       stats.battles++;
     }
     if (st.phase === 'result') Game.afterResult();
+    if (st.phase === 'facility') {
+      const id = strat.kind === 'cheap' || strat.kind === 'race' && strat.race === 'ゴブリン'
+        ? 'extortion_ledger'
+        : strat.kind === 'caster' ? 'grand_kitchen' : 'graveyard';
+      Game.chooseFacility(id);
+    }
     // ハプニングは無作為に選ぶ（人間の判断は再現できないため）
     if (st.phase === 'event') {
       if (st.pendingEvent) {

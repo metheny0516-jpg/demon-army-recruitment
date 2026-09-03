@@ -51,6 +51,8 @@ const Game = {
       materials: demonKing.start.materials,
       buildProgress: 0,
       facilityLevel: 0,
+      activeFacilityId: null,
+      pendingFacilityChoiceLevel: null,
       lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
@@ -185,7 +187,7 @@ const Game = {
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
-      buildProgress: 0, facilityLevel: 0, lastDepartmentReport: null,
+      buildProgress: 0, facilityLevel: 0, activeFacilityId: null, pendingFacilityChoiceLevel: null, lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
@@ -198,6 +200,13 @@ const Game = {
     if (!Array.isArray(st.activeUids)) st.activeUids = st.roster.slice(0, this.MAX_DEPLOY).map(m => m.uid);
     if (!Array.isArray(st.applicants)) st.applicants = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
+    if (!FACILITIES.some(f => f.id === st.activeFacilityId)) st.activeFacilityId = null;
+    if (st.pendingFacilityChoiceLevel !== null) {
+      st.pendingFacilityChoiceLevel = U.clamp(Number(st.pendingFacilityChoiceLevel) || 0, 1, FACILITY_LEVELS.length - 1);
+    }
+    if (!st.activeFacilityId && !st.pendingFacilityChoiceLevel && Number(st.facilityLevel) >= 1) {
+      st.pendingFacilityChoiceLevel = U.clamp(Number(st.facilityLevel), 1, FACILITY_LEVELS.length - 1);
+    }
     st.hiresLeft = Math.max(0, Number(st.hiresLeft) || 0);
     st.extraHiresThisPhase = Math.max(0, Number(st.extraHiresThisPhase) || 0);
     if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
@@ -337,14 +346,16 @@ const Game = {
 
   battleRationQuote() {
     const foodBefore = Math.max(0, this.state.food || 0);
-    const totalNeed = this.foodNeed();
-    const need = this.foodNeedFor(this.activeRoster());
+    const kitchen = this.state.activeFacilityId === "grand_kitchen";
+    const totalNeed = this.foodNeed() + (kitchen ? 1 : 0);
+    const need = this.foodNeedFor(this.activeRoster()) + (kitchen ? 1 : 0);
     const consumed = Math.min(foodBefore, need);
     return {
       need, totalNeed, remainingNeed: Math.max(0, totalNeed - need),
       consumed, shortage: Math.max(0, need - consumed), foodBefore,
       foodAfter: foodBefore - consumed,
-      emptied: foodBefore > 0 && foodBefore - consumed === 0
+      emptied: foodBefore > 0 && foodBefore - consumed === 0,
+      kitchen
     };
   },
 
@@ -385,16 +396,32 @@ const Game = {
     return FACILITY_LEVELS[U.clamp(Number(wanted) || 0, 0, FACILITY_LEVELS.length - 1)];
   },
 
+  activeFacility() {
+    return FACILITIES.find(f => f.id === this.state.activeFacilityId) || null;
+  },
+
+  chooseFacility(id) {
+    const st = this.state;
+    if (st.phase !== "facility" || !st.pendingFacilityChoiceLevel) return false;
+    if (!FACILITIES.some(f => f.id === id)) return false;
+    st.activeFacilityId = id;
+    st.pendingFacilityChoiceLevel = null;
+    if (this.maybeEvent()) return true;
+    this.nextRecruit();
+    return true;
+  },
+
   preparedRoster(rations) {
     const facility = this.facilityInfo();
     const active = this.activeRoster();
     const cook = active.find(m => (m.traits || []).includes("demon_cook"));
     const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
     const foodTarget = active.slice().sort((a, b) => Aptitude.of(b).appetite - Aptitude.of(a).appetite)[0];
-    const foodBoost = cook && rations ? Math.min(0.8, rations.consumed * 0.08) : 0;
+    const kitchenMult = rations && rations.kitchen ? 2 : 1;
+    const foodBoost = cook && rations ? Math.min(0.8, rations.consumed * 0.08 * kitchenMult) : 0;
     return active.map(m => {
       let dmgMult = 1, takenMult = 1;
-      if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= 1.25;
+      if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= 1 + 0.25 * kitchenMult;
       if (foodTarget && m.uid === foodTarget.uid) dmgMult *= 1 + foodBoost;
       if (rations && rations.emptied && hungering) { dmgMult *= 2; takenMult *= 1.3; }
       return {
@@ -991,9 +1018,9 @@ const Game = {
       feastUid: battleRations.consumed >= 4
         ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null
     } : null;
-    const extortionLedger = st.facilityLevel >= 1
+    const extortionLedger = st.activeFacilityId === "extortion_ledger"
       && this.activeRoster().some(m => (m.job || "").includes("会計"));
-    const graveyard = st.facilityLevel >= 1
+    const graveyard = st.activeFacilityId === "graveyard"
       && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
     const result = Battle.simulate(playerUnits, enemyUnits, { rations: rationContext, extortionLedger, graveyard });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
@@ -1169,6 +1196,7 @@ const Game = {
       && st.buildProgress >= FACILITY_LEVELS[st.facilityLevel + 1].buildThreshold) {
       st.facilityLevel += 1;
     }
+    if (st.facilityLevel > beforeLevel) st.pendingFacilityChoiceLevel = st.facilityLevel;
 
     st.lastDepartmentReport = {
       foodReward,
@@ -1559,6 +1587,7 @@ const Game = {
       generalsMade: (st.generalsMade || []).map(g => ({ name: g.name, race: g.race })),
       battleIncidentTotal: st.battleIncidentTotal || 0,
       facilityLevel: st.facilityLevel || 0,
+      activeFacilityId: st.activeFacilityId || null,
       finalResources: { food: st.food || 0, materials: st.materials || 0 },
       departmentCounts: Object.fromEntries(DEPARTMENT_ORDER.map(id => [id, this.departmentRoster(id).length])),
       finalRoster: st.roster.map(m => ({
@@ -1662,6 +1691,11 @@ const Game = {
       st.selectedMission = null;
       this.save();
       return "preparation";
+    }
+    if (st.pendingFacilityChoiceLevel) {
+      st.phase = "facility";
+      this.save();
+      return "facility";
     }
     if (this.maybeEvent()) return "event";
     this.nextRecruit();

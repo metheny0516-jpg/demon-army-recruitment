@@ -553,7 +553,8 @@ const EVENTS = [
       return { actor: U.pick(builders.filter(m => Aptitude.of(m).material === best)).uid };
     },
     text(st, c) {
-      const facility = FACILITY_LEVELS[st.facilityLevel] || FACILITY_LEVELS[0];
+      const facility = FACILITIES.find(f => f.id === st.activeFacilityId)
+        || FACILITY_LEVELS[st.facilityLevel] || FACILITY_LEVELS[0];
       return `新施設「${facility.name}」が完成した。${c.actor.name}が泥だらけで表彰を待っている。\n`
         + `一方、モルモは完成報告書の功績欄に、すでに魔王様の名前を書いてしまった。`;
     },
