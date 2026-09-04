@@ -2412,3 +2412,11 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-recruit .hire-food { color: #28603b; border-color: #4d815c; background: rgba(77,129,92,.12); }
 .game-scene-recruit .hire-food.warn { color: #853f3f; border-color: #a46161; background: rgba(164,97,97,.12); }
 .department-overview .warn b { color: #ff9a9a; }
+
+/* 宴：余剰食料の使い道。備蓄が積み上がるだけの資源だと判断が生まれない。 */
+.feast-panel .feast-ready {
+  font-size: 12px; color: #f2dc9a;
+  padding: 5px 8px; border-radius: 3px;
+  border: 1px solid rgba(240, 210, 120, .45); background: rgba(240, 210, 120, .08);
+}
+.feast-panel h3 .muted { font-size: 12px; font-weight: normal; }

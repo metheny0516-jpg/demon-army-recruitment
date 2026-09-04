@@ -197,7 +197,8 @@ const Game = {
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
-      legacyReturn: null, legacyOffered: false, lessonId: null
+      legacyReturn: null, legacyOffered: false, lessonId: null,
+      feastPending: null
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
@@ -386,6 +387,69 @@ const Game = {
     };
   },
 
+  // 備蓄には上限がある。上限が無いと余剰はただ積み上がり、
+  // 「保険」として無限に強くなるので、食料を使う判断が永久に生まれない。
+  // 上限は軍団の消費に比例するので、大軍団が一方的に損をすることはない。
+  foodCapacity() {
+    return Math.max(8, this.foodNeed() * 4);
+  },
+
+  // 腐敗は罰ではなく合図。「そろそろ宴だ」と気づかせるためにログへ出す。
+  spoilFood(notes) {
+    const cap = this.foodCapacity();
+    const over = Math.max(0, (this.state.food || 0) - cap);
+    if (over > 0) {
+      this.state.food = cap;
+      if (notes) notes.push(`備蓄庫の上限 ${cap} を超えた食料 ${over} が傷んだ。腐らせる前に宴を開くべきだった`);
+    }
+    return over;
+  },
+
+  // 宴：余った食料の使い道。余剰は今まで死に資源で、黒字にする理由がなかった。
+  // 効くのは「食う者」だけなので、アンデッド軍団では宴そのものが成立しない。
+  // 大食漢は食う量が倍になる代わりに効果も倍。負債だったオーガが資産に変わる。
+  feastQuote() {
+    const st = this.state;
+    const active = this.activeRoster();
+    const eaters = st.roster.filter(m => Aptitude.of(m).appetite > 0);
+    const activeEaters = active.filter(m => Aptitude.of(m).appetite > 0);
+    const bigEaters = active.filter(m => (m.traits || []).includes("big_eater")).length;
+    const cook = active.some(m => (m.traits || []).includes("demon_cook"));
+    const base = Math.max(1, this.foodNeed());
+    // 大食漢がいれば倍食う。料理人がいれば同じ量で足りる。
+    let cost = base * (bigEaters > 0 ? 2 : 1);
+    if (cook) cost = Math.max(1, Math.ceil(cost / 2));
+    const stock = Math.max(0, st.food || 0);
+    const dmgBonus = bigEaters > 0 ? .30 : .15;
+    const loyaltyGain = bigEaters > 0 ? 10 : 6;
+    return {
+      cost, stock, dmgBonus, loyaltyGain,
+      bigEaters, cook,
+      eaters: eaters.length,
+      activeEaters: activeEaters.length,
+      held: !!st.feastPending,
+      // 宴は「余剰の使い道」であって、備蓄を削る博打にはしない。
+      // 宴のあとに2戦ぶんの糧食が残らないなら開けない。連打しても飢えないようにする。
+      affordable: stock >= cost + base * 2,
+      possible: eaters.length > 0
+    };
+  },
+
+  holdFeast() {
+    const st = this.state;
+    const q = this.feastQuote();
+    if (st.feastPending || !q.possible || !q.affordable) return null;
+    st.food = Math.max(0, st.food - q.cost);
+    let fed = 0;
+    for (const m of st.roster) {
+      if (Aptitude.of(m).appetite === 0) continue;
+      m.loyalty = U.clamp(m.loyalty + q.loyaltyGain, 0, 100);
+      fed++;
+    }
+    st.feastPending = { dmgBonus: q.dmgBonus, cost: q.cost, fed, bigEaters: q.bigEaters };
+    return st.feastPending;
+  },
+
   prepareBattleRations(notes) {
     const quote = this.battleRationQuote();
     this.state.food = quote.foodAfter;
@@ -494,6 +558,7 @@ const Game = {
 
   preparedRoster(rations) {
     const active = this.activeRoster();
+    const feast = this.state.feastPending;
     const cook = active.find(m => (m.traits || []).includes("demon_cook"));
     const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
     const foodTarget = active.slice().sort((a, b) => Aptitude.of(b).appetite - Aptitude.of(a).appetite)[0];
@@ -505,6 +570,8 @@ const Game = {
       if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= 1 + 0.25 * kitchenMult;
       if (foodTarget && m.uid === foodTarget.uid) dmgMult *= 1 + foodBoost;
       if (rations && rations.emptied && hungering) { dmgMult *= 2; takenMult *= 1.3; }
+      // 宴を食えた者だけが強くなる。食事不要の軍団に宴の効果はない。
+      if (feast && Aptitude.of(m).appetite > 0) dmgMult *= 1 + feast.dmgBonus;
       // 施設の一律HP・防御補正は撤去した（設計憲法 第9節）。施設Lv.は
       // 大型Jokerが働ける回数（facilityWorks）としてのみ効く。
       return { ...m, battleDmgMult: dmgMult, battleTakenMult: takenMult };
@@ -1141,7 +1208,12 @@ const Game = {
     }
 
     const battleRations = openingBattle ? null : this.prepareBattleRations(notes);
+    const feastUsed = st.feastPending;
     const playerUnits = this.preparedRoster(battleRations).map(m => Battle.makeUnit(m, "player"));
+    if (feastUsed) {
+      notes.push(`宴の余韻：${feastUsed.fed}名が満腹のまま戦場へ出た（与ダメージ+${Math.round(feastUsed.dmgBonus * 100)}%）`);
+      st.feastPending = null;
+    }
     // 雇った傭兵は出撃5枠の外から加わる。戦闘が終われば去る（次の戦闘には残らない）
     for (const merc of this.preparedMercenaries()) {
       const unit = Battle.makeUnit(merc, "player");
@@ -1355,11 +1427,13 @@ const Game = {
     }
     if (st.facilityLevel > beforeLevel) st.pendingFacilityChoiceLevel = st.facilityLevel;
 
+    const spoiled = this.spoilFood(notes);
     st.lastDepartmentReport = {
       foodReward,
       foodProduced,
       foodConsumed,
       foodShortage,
+      foodSpoiled: spoiled,
       loyaltyDelta,
       materialReward,
       materialUsed,
@@ -1373,7 +1447,7 @@ const Game = {
       lifeWorkers: lifeWorkers.length
     };
 
-    notes.push(`生活部門：食料 +${foodReward + foodProduced} / 消費 ${foodConsumed}（備蓄 ${st.food}）`);
+    notes.push(`生活部門：食料 +${foodReward + foodProduced} / 消費 ${foodConsumed}（備蓄 ${st.food}／上限 ${this.foodCapacity()}）`);
     if (output.wage > 0) notes.push(`経理部の働きで給与総額を ${output.wage}% 圧縮した`);
     if (foodShortage > 0) {
       notes.push(`食料不足 ${foodShortage}！ 軍団全員の忠誠${loyaltyDelta}`);

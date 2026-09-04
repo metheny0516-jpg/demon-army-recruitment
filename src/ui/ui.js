@@ -262,7 +262,7 @@ const UI = {
       <div><b>🔨 ${builders}</b><span>建設所属</span></div>
       <div><b>🍲 ${life}</b><span>生活所属</span></div>
       <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
-      <div class="${balance < 0 ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `不足 ${-balance}！` : `余剰 ${balance}`}</span></div>
+      <div class="${balance < 0 ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `不足 ${-balance}！` : `余剰 ${balance}`}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）</span></div>
       <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
       ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>経理部の圧縮</span></div>` : ""}
       ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>人事部の集客</span></div>` : ""}
@@ -349,6 +349,32 @@ const UI = {
     return `<div class="panel facility-panel"><h3>🪦 施設と死者の働き</h3>
       ${lines.length ? `<ul class="notes">${lines.map(l => `<li>${l}</li>`).join("")}</ul>` : ""}
       ${chains.length ? `<div class="chain-caption">死者の連鎖（誰が倒れ、誰が戻したか）</div>${chainRows}` : ""}
+    </div>`;
+  },
+
+  // 余った食料の使い道。備蓄が積み上がるだけの資源だったので、判断に変える。
+  feastPanel() {
+    const q = Game.feastQuote();
+    if (!q.possible) {
+      return `<div class="panel feast-panel"><h3>🍗 宴</h3>
+        <div class="muted">この軍団は誰も食事を必要としない。宴は開けない。</div></div>`;
+    }
+    const links = [
+      q.bigEaters > 0 ? `大食漢${q.bigEaters}体：食う量2倍・効果2倍` : "",
+      q.cook ? "魔界料理人：必要な食料が半分" : ""
+    ].filter(Boolean);
+    const body = q.held
+      ? `<div class="feast-ready">宴は済んだ。${U.esc(String(Game.state.feastPending.fed))}名が満腹で出撃する（食う者の与ダメージ+${Math.round(Game.state.feastPending.dmgBonus * 100)}%）</div>`
+      : `<button class="wide" data-action="feast" ${q.affordable ? "" : "disabled"}>
+           🍗 宴を開く（食料 ${q.cost} 消費）
+         </button>
+         <div class="muted">${q.affordable
+            ? `食う者${q.eaters}名の忠誠+${q.loyaltyGain}、出撃した食う者の与ダメージ+${Math.round(q.dmgBonus * 100)}%（次の戦闘のみ）。`
+            : `備蓄 ${q.stock}。宴には ${q.cost} と、2戦ぶんの糧食を残す余裕が要る。`}</div>`;
+    return `<div class="panel feast-panel">
+      <h3>🍗 宴 <span class="muted">備蓄 ${q.stock} / 上限 ${Game.foodCapacity()}</span></h3>
+      ${body}
+      ${links.length ? `<div class="synergy-hint">${links.map(U.esc).join(" / ")}</div>` : ""}
     </div>`;
   },
 
@@ -828,6 +854,7 @@ const UI = {
       ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房</b>
         <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍にする。</span>
       </div>` : ""}
+      ${opening ? "" : this.feastPanel()}
       ${this.payrollPanel()}
       ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
