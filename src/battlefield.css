@@ -1,4 +1,12 @@
 /* Stage actors, not portrait cards. Names/HP stay planted while bodies move. */
+.battle-projectile { position: absolute; z-index: 5; top: 0; left: 0; width: 0; height: 0; pointer-events: none; opacity: 0; }
+.battle-projectile::before, .battle-projectile::after { content: ""; position: absolute; }
+.projectile-arrow::before { width: 35px; height: 3px; top: -1px; left: -35px; background: #e7c98a; box-shadow: 0 1px 2px #000; }
+.projectile-arrow::after { top: -5px; left: -5px; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 9px solid #f5edcf; }
+.projectile-stone::before { width: 12px; height: 10px; left: -6px; top: -5px; background: #b8a891; border: 2px solid #514436; border-radius: 40%; box-shadow: -9px 0 6px #cab18b60; }
+.projectile-magic::before { width: 20px; height: 20px; left: -10px; top: -10px; border-radius: 50%; background: radial-gradient(circle, #fff 0 12%, #edd4ff 22%, #b57cff 48%, #6630b100 72%); box-shadow: 0 0 15px #bc81ff, -14px 0 15px #9d5ce888; }
+.projectile-magic::after { width: 42px; height: 8px; top: -4px; left: -45px; border-radius: 50%; background: linear-gradient(90deg, transparent, #bf86ffa0); }
+.battlefield .bu-vfx.impact-magic { filter: hue-rotate(225deg); }
 .game-scene-battle .scene.battlefield {
   display: block;
   min-height: 560px;
@@ -65,5 +73,6 @@
   .battlefield .scene-band:not(:has(.bu:nth-child(3))) .bu-actor { height: 133px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .battle-projectile { display: none; }
   .battlefield .battle-sprite { animation: none !important; }
 }

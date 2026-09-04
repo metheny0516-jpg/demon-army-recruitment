@@ -64,6 +64,15 @@ const BattleScene = {
     return u.tplId || (u.side === "enemy" && ["🗡", "🗡️", "⚔️"].includes(u.icon) ? "swordsman" : undefined);
   },
 
+  // 表示上の分類だけ。射程・ダメージ種別・命中率などの戦闘ルールではない。
+  attackKind(u) {
+    if (!u) return "melee";
+    if (u.icon === "🏹") return "arrow";
+    if (u.icon === "🪨") return "stone";
+    if (["mage", "necromancer", "imp"].includes(u.tplId) || ["✨", "📖"].includes(u.icon)) return "magic";
+    return "melee";
+  },
+
   // 戦闘絵→履歴書→絵文字。剣士の敵だけ共通の戦闘絵を使用する。
   portraitHtml(u) {
     const emoji = this.iconOf(u);
@@ -106,7 +115,7 @@ const BattleScene = {
     this.timers = [];
     const scene = document.getElementById("scene");
     if (scene) {
-      scene.querySelectorAll(".bu-vfx, .fnum").forEach(el => el.remove());
+      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
       scene.classList.remove("fx-active", "shake", ...this.EFFECT_CLASSES);
     }
@@ -198,6 +207,7 @@ const BattleScene = {
       fill: document.getElementById("hp-" + u.id),
       pop: document.getElementById("pop-" + u.id),
       side: u.side,
+      icon: u.icon,
       name: u.name,
       tplId: artId,
       sprite: document.getElementById("bu-" + u.id).querySelector(".bu-sprite-img"),
@@ -483,7 +493,8 @@ const BattleScene = {
     if (from) from.el.closest(".scene-band").style.zIndex = "3";
     if (to) to.el.classList.add("targeted");
     if (!from || !to) return;
-    const action = ev.type === "splash" ? (ev.label || "追撃") : "攻撃";
+    const action = ev.type === "splash" ? (ev.label || "追撃")
+      : ({ arrow: "射撃", stone: "投石", magic: "魔法攻撃" }[this.attackKind(from)] || "攻撃");
     this.showAction(`${from.name}の${action}　→　${to.name}`);
   },
 
@@ -516,16 +527,53 @@ const BattleScene = {
     motion.onfinish = () => { this.motions.delete(motion); motion.cancel(); };
   },
 
+  projectileMotion(from, to, kind, contact) {
+    const scene = document.getElementById("scene");
+    if (!scene || !from?.actor || !to?.actor) return () => {};
+    const stage = scene.getBoundingClientRect();
+    const a = from.actor.getBoundingClientRect(), b = to.actor.getBoundingClientRect();
+    const start = { x: a.x + a.width / 2 - stage.x - scene.clientLeft, y: a.y + a.height * .6 - stage.y - scene.clientTop };
+    const end = { x: b.x + b.width / 2 - stage.x - scene.clientLeft, y: b.y + b.height * .6 - stage.y - scene.clientTop };
+    const angle = Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
+    const el = document.createElement("span");
+    el.className = `battle-projectile projectile-${kind}`;
+    el.setAttribute("aria-hidden", "true");
+    const pose = p => `translate(${p.x}px, ${p.y}px) rotate(${angle}deg)`;
+    scene.appendChild(el);
+    const motion = el.animate([
+      { transform: pose(start), opacity: 0, offset: 0 },
+      { transform: pose(start), opacity: 0, offset: .34 },
+      { transform: pose(start), opacity: 1, offset: .35 },
+      { transform: pose({ x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 - (kind === "stone" ? 28 : 0) }), opacity: 1, offset: .675 },
+      { transform: pose(end), opacity: 1, offset: 1 }
+    ], { duration: contact, fill: "both", easing: "linear" });
+    this.motions.add(motion);
+    return () => { motion.cancel(); this.motions.delete(motion); el.remove(); };
+  },
+
   // ルールは即時計算済み。表示だけを「溜め→接触→戻り」へ分ける。
   // 中断時は pendingHits でHPだけ確定し、次イベントやスキップと食い違わせない。
   attackMotion(from, to, ev) {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const total = this.visualDuration(this.durationOf(ev) * .88);
-    const contact = reduced ? 0 : total * .38;
+    const kind = ev.type === "splash" ? "melee" : this.attackKind(from);
+    const ranged = kind !== "melee";
+    const contact = reduced ? 0 : total * (ranged ? .62 : .38);
     const settle = () => { if (to) this.setHp(to, ev.hp, ev.maxHp); };
     this.pendingHits.add(settle);
     const later = (fn, ms) => this.timers.push(setTimeout(fn, ms));
-    if (from && to && ev.type === "attack" && !reduced) {
+    let removeProjectile = () => {};
+    if (from && to && ranged && !reduced) {
+      removeProjectile = this.projectileMotion(from, to, kind, contact);
+      const direction = from.side === "player" ? 1 : -1;
+      this.animateActor(from, [
+        { transform: "translateX(0)" },
+        { transform: `translateX(${-direction * 6}px) rotate(${-direction * 3}deg)`, offset: .22 },
+        { transform: "translateX(0)", offset: .45 },
+        { transform: "translateX(0)" }
+      ], total);
+    }
+    if (from && to && ev.type === "attack" && !ranged && !reduced) {
       const a = from.actor.getBoundingClientRect(), b = to.actor.getBoundingClientRect();
       const direction = from.side === "player" ? 1 : -1;
       const dx = b.x + b.width / 2 - a.x - a.width / 2 - direction * b.width * .75;
@@ -543,12 +591,13 @@ const BattleScene = {
       later(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : "idle"), total);
     }
     const impact = () => {
+      removeProjectile();
       settle();
       this.pendingHits.delete(settle);
       if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side });
       if (!to) return;
-      this.unitVfx(to, ev.type === "splash" ? "impact" : "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
-      if (ev.type !== "splash") this.unitVfx(to, "impact", "", ev.emphasis);
+      if (ev.type !== "splash" && !ranged) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
+      this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
       this.hit(to, ev.dmg, ev.emphasis, ev.label);
       this.setPose(to, "hurt");
       const recoil = to.side === "player" ? -1 : 1;
@@ -556,11 +605,11 @@ const BattleScene = {
         { transform: "translateX(0)" },
         { transform: `translateX(${recoil * 13}px) rotate(${recoil * 8}deg)`, offset: .22 },
         { transform: "translateX(0)" }
-      ], total * .48);
+      ], Math.min(total * .48, total - contact));
       later(() => {
         this.setPose(to, to.el.classList.contains("dead") ? "fallen" : "idle");
         to.el.classList.remove("hit", "hit-big");
-      }, total * .5);
+      }, Math.min(total * .5, total - contact));
       if (ev.emphasis >= 3 && !reduced) this.shake();
     };
     if (reduced) impact(); else later(impact, contact);
