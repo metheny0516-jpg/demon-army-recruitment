@@ -355,9 +355,15 @@ const UI = {
   // 余った食料の使い道。備蓄が積み上がるだけの資源だったので、判断に変える。
   feastPanel() {
     const q = Game.feastQuote();
+    const streak = Game.state.hungerStreak || 0;
+    // 飢餓は損失で終わらない。出口が見えていないと、また「不足＝詰み」に戻る。
+    const hunger = streak > 0
+      ? `<div class="hunger-streak">🥀 飢餓 ${streak}戦目 —
+          あと${Game.HUNGER_ADAPT_TURNS - streak}戦を生き延びた者は<b>飢餓適応</b>（食料を消費しない／最大HP-15%）</div>`
+      : "";
     if (!q.possible) {
       return `<div class="panel feast-panel"><h3>🍗 宴</h3>
-        <div class="muted">この軍団は誰も食事を必要としない。宴は開けない。</div></div>`;
+        <div class="muted">この軍団は誰も食事を必要としない。宴は開けない。</div>${hunger}</div>`;
     }
     const links = [
       q.bigEaters > 0 ? `大食漢${q.bigEaters}体：食う量2倍・効果2倍` : "",
@@ -375,6 +381,7 @@ const UI = {
       <h3>🍗 宴 <span class="muted">備蓄 ${q.stock} / 上限 ${Game.foodCapacity()}</span></h3>
       ${body}
       ${links.length ? `<div class="synergy-hint">${links.map(U.esc).join(" / ")}</div>` : ""}
+      ${hunger}
     </div>`;
   },
 

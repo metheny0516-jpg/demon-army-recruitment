@@ -198,7 +198,7 @@ const Game = {
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
       legacyReturn: null, legacyOffered: false, lessonId: null,
-      feastPending: null
+      feastPending: null, hungerStreak: 0
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
@@ -385,6 +385,37 @@ const Game = {
       emptied: foodBefore > 0 && foodBefore - consumed === 0,
       kitchen
     };
+  },
+
+  // 飢餓の連鎖を、単調な忠誠低下から「飢餓適応」への到達点に変える。
+  // 3戦を耐えた者はもう食わない。生活部門を捨てる逆方向のビルドが、ここで初めて成立する。
+  HUNGER_ADAPT_TURNS: 3,
+
+  advanceHunger(shortage, notes) {
+    const st = this.state;
+    if (!shortage) { st.hungerStreak = 0; return []; }
+    st.hungerStreak = (st.hungerStreak || 0) + 1;
+    if (st.hungerStreak < this.HUNGER_ADAPT_TURNS) {
+      const left = this.HUNGER_ADAPT_TURNS - st.hungerStreak;
+      if (notes) notes.push(`飢餓${st.hungerStreak}戦目。あと${left}戦を生き延びた者は、食わない体になる`);
+      return [];
+    }
+    const adapted = [];
+    for (const m of st.roster) {
+      if (Aptitude.of(m).appetite === 0) continue;
+      if (!Array.isArray(m.traits)) m.traits = [];
+      m.traits.push("starved");
+      // ただで手に入る出口にはしない。飢えた体は痩せる。
+      // 食料問題は消えるが軍団は脆くなり、戦死と墓地の側へ寄っていく。
+      m.hp = Math.max(1, Math.round(m.hp * 0.85));
+      adapted.push(m.name);
+    }
+    st.hungerStreak = 0;
+    if (adapted.length && notes) {
+      notes.push(`飢餓適応：${adapted.join("・")}は、もう食料を必要としない体になった（最大HP-15%）。`
+        + `軍団は飢えを克服したのではなく、飢えの側へ寄っていった`);
+    }
+    return adapted;
   },
 
   // 備蓄には上限がある。上限が無いと余剰はただ積み上がり、
@@ -1399,13 +1430,19 @@ const Game = {
     st.food = Math.max(0, st.food - foodConsumed);
     let loyaltyDelta = 0;
     if (foodShortage > 0) {
-      loyaltyDelta = -Math.min(24, foodShortage * DEPARTMENT_RULES.foodShortageLoyaltyPenalty);
+      loyaltyDelta = -Math.min(18, foodShortage * DEPARTMENT_RULES.foodShortageLoyaltyPenalty);
     } else if (lifeWorkers.length > 0) {
       loyaltyDelta = normalized ? this.dailyShare(1, dailyDay) : 1;
     }
     if (loyaltyDelta) {
-      for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + loyaltyDelta, 0, 100);
+      // 食わない者は食事に不満を持たない。アンデッドと飢餓適応者は飢えても揺れない。
+      for (const m of st.roster) {
+        if (loyaltyDelta < 0 && Aptitude.of(m).appetite === 0) continue;
+        m.loyalty = U.clamp(m.loyalty + loyaltyDelta, 0, 100);
+      }
     }
+    // 飢餓は損失で終わらせない。飢え続けた軍団は、食わない体になって出口へ抜ける。
+    const adapted = this.advanceHunger(foodShortage > 0, notes);
 
     st.materials += materialReward;
     const beforeLevel = st.facilityLevel;
@@ -1434,6 +1471,8 @@ const Game = {
       foodConsumed,
       foodShortage,
       foodSpoiled: spoiled,
+      hungerStreak: st.hungerStreak || 0,
+      adapted,
       loyaltyDelta,
       materialReward,
       materialUsed,

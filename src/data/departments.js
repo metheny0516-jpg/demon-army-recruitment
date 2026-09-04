@@ -54,7 +54,7 @@ const FACILITIES = [
 const DEPARTMENT_RULES = {
   startingFood: 3,
   foodPerRoster: 3,
-  foodShortageLoyaltyPenalty: 8
+  foodShortageLoyaltyPenalty: 6
 };
 
 // 給与を固定の後処理ではなく、出撃前の戦術にする。
@@ -167,6 +167,11 @@ const Aptitude = {
     if ((monster && monster.traits || []).includes("big_eater")) {
       out.appetite += 3;
       out.labels.push("大食漢");
+    }
+    // 飢えを生き延びた体は、もう食わない。飢餓が能力に変わる唯一の出口。
+    if ((monster && monster.traits || []).includes("starved")) {
+      out.appetite = 0;
+      out.labels.push("飢餓適応");
     }
     return out;
   },

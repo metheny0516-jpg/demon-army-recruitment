@@ -83,7 +83,38 @@ const { autoDismissMormo } = require('./helpers.js');
     assert.equal(spoil.food, spoil.cap, '備蓄は上限で止まる');
     assert.ok(spoil.note.includes('宴'), '腐敗ログが宴へ誘導する');
 
-    console.log('✓ 宴：成立条件・大食漢と料理人の倍率・アンデッド不成立・備蓄上限の腐敗');
+    // 6) 飢餓は3戦で「飢餓適応」へ抜ける。損失で終わらせない出口。
+    const hunger = await page.evaluate(() => {
+      Game.state.roster = [mk('goblin', 4), mk('skeleton', 5)];
+      Game.state.activeUids = [4];
+      Game.state.hungerStreak = 0;
+      const steps = [];
+      for (let i = 0; i < 3; i++) {
+        const notes = [];
+        const adapted = Game.advanceHunger(true, notes);
+        steps.push({ streak: Game.state.hungerStreak, adapted, note: notes[0] || '' });
+      }
+      const gob = Game.state.roster.find(m => m.uid === 4);
+      const skel = Game.state.roster.find(m => m.uid === 5);
+      const before = MONSTER_TEMPLATES.find(t => t.id === 'goblin').base.hp;
+      // 不足が途切れれば連鎖はリセットされる
+      Game.state.hungerStreak = 2;
+      Game.advanceHunger(false, []);
+      return { steps, gobTraits: gob.traits, gobHp: gob.hp, baseHp: before,
+        gobAppetite: Aptitude.of(gob).appetite,
+        skelTraits: skel.traits, reset: Game.state.hungerStreak };
+    });
+    assert.deepEqual(hunger.steps.map(s => s.streak), [1, 2, 0], '3戦目で適応し、連鎖はリセットされる');
+    assert.equal(hunger.steps[0].adapted.length, 0, '1戦目ではまだ適応しない');
+    assert.ok(hunger.steps[0].note.includes('あと2戦'), '残り戦数が読める');
+    assert.ok(hunger.steps[2].adapted.length > 0, '3戦目で飢餓適応が起きる');
+    assert.ok(hunger.gobTraits.includes('starved'), '食う者が飢餓適応する');
+    assert.equal(hunger.gobAppetite, 0, '飢餓適応すると食料を消費しない');
+    assert.ok(hunger.gobHp < hunger.baseHp, '飢餓適応の代償で最大HPが減る');
+    assert.ok(!hunger.skelTraits.includes('starved'), '元から食わない者は適応しない');
+    assert.equal(hunger.reset, 0, '不足が途切れれば連鎖はリセットされる');
+
+    console.log('✓ 宴：成立条件・大食漢と料理人の倍率・アンデッド不成立・備蓄上限の腐敗／飢餓3戦→飢餓適応');
   } finally {
     await browser.close();
   }
