@@ -348,3 +348,47 @@ const SPECIAL_MONSTER_VOICES = {
     lose: ["まとまりすぎた……", "つぎは……もっと、うまく……", "みっつで、ひとつは、むずかしい……"],
   }
 };
+
+// ── 指名求人の募集要項 ──────────────────────────────
+// 「こういう奴を寄越せ」と条件を指定して出す有料の求人。
+// 条件はシナジーの発火条件と同じ語彙にしてある。狙って揃えられなければ、
+// 組み合わせの発見は運任せのままで、爆発が自分の手柄にならない。
+//
+// match(t) は MONSTER_TEMPLATES の1件を受け、条件に合うなら真を返す。
+// 合った候補の出現重みを weight 倍に寄せるだけで、確定ではない
+// （「出せば必ず来る」にすると採用が作業になる）。
+const RECRUIT_BRIEFS = [
+  {
+    id: "caster", icon: "🔮", name: "魔導の心得ある者",
+    note: "魔法職。魔法結社の頭数になる",
+    match(t) { return (t.tags || []).includes("caster"); }
+  },
+  {
+    id: "undead", icon: "💀", name: "死んでも働ける者",
+    note: "アンデッド。死の軍勢の頭数になり、食事も要らない",
+    match(t) { return (t.tags || []).includes("undead"); }
+  },
+  {
+    id: "brute", icon: "🗡", name: "腕に覚えのある者",
+    note: "前に出て殴れる種族。魔導士は含まない",
+    match(t) { return t.base && t.base.atk >= 9 && !(t.tags || []).includes("caster"); }
+  },
+  {
+    id: "tough", icon: "🛡", name: "打たれ強い者",
+    note: "HPか防御が厚い種族。最前列を任せられる",
+    match(t) { return t.base && (t.base.hp >= 30 || t.base.def >= 5); }
+  },
+  {
+    id: "worker", icon: "🔨", name: "現場で使える者",
+    note: "調達か施工の適性が高い種族。戦わせなくても働く",
+    match(t) {
+      const apt = (typeof RACE_APTITUDES !== "undefined" && RACE_APTITUDES[t.id]) || null;
+      return !!apt && ((apt.food || 0) >= 3 || (apt.material || 0) >= 3);
+    }
+  },
+  {
+    id: "cheap", icon: "🪙", name: "安く働く者",
+    note: "希望給与が低い種族。低賃金大量採用の材料",
+    match(t) { return Array.isArray(t.salary) && t.salary[0] <= 2; }
+  }
+];

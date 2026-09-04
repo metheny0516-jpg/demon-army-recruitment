@@ -82,6 +82,8 @@ const Game = {
       retriesLeft: this.RETRIES_PER_RUN,
       retriesUsed: 0,
       rerollsThisPhase: 0,
+      briefId: null,
+      briefsThisPhase: 0,
       pendingEvent: null,
       eventOutcome: null,
       laborDispute: null,
@@ -182,7 +184,7 @@ const Game = {
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, extraHiresThisPhase: 0, maxPower: 0, maxArmySize: 0,
       maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
-      rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
+      rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
       generalsMade: [],
@@ -891,12 +893,23 @@ const Game = {
     // 作戦と征服が進むほど高ティアが出やすい
     // 教訓は出現率を3倍に寄せるだけ。確定ではないので「来なかった」も起こる。
     const favored = new Set((this.activeLesson() || {}).favor || []);
+    // 指名求人：条件に合う者へ重みを寄せる。確定ではないので「出したのに来ない」も起きる。
+    const brief = this.activeBrief();
     const weights = MONSTER_TEMPLATES.map(t => {
       let w;
       if (t.tier === 1) w = level <= 3 ? 6 : 2;
       else if (t.tier === 2) w = level <= 2 ? 2 : 5;
       else w = level <= 2 ? 0.5 : (level <= 4 ? 2 : 5);
-      return favored.has(t.id) ? w * 3 : w;
+      if (favored.has(t.id)) w *= 3;
+      if (brief) {
+        // 金を払って条件を出した以上は寄る。ただし外れも残す。
+        let hit = false;
+        try { hit = !!brief.match(t); } catch (e) { hit = false; }
+        w = hit ? w * this.BRIEF_WEIGHT : w * 0.35;
+        // 指名求人は「強い奴を寄越せ」でもある。高ティアの目をさらに上げる。
+        if (hit && t.tier >= 2) w *= 1.5;
+      }
+      return w;
     });
     const total = weights.reduce((a, b) => a + b, 0);
     let r = U.rand() * total;
@@ -1087,6 +1100,48 @@ const Game = {
   },
 
 
+  // ── 指名求人 ────────────────────────────
+  // 「こういう奴を寄越せ」と条件を指定して出す有料の求人。
+  // 中盤から解禁するのは、序盤に狙い撃ちできると「まず何が出るか見る」段階が消えるため。
+  // 条件はシナジーの発火条件と同じ語彙なので、これが爆発を自分で狙う手段になる。
+  BRIEF_UNLOCK_LEVEL: 3,
+  BRIEF_BASE_COST: 6,
+  BRIEF_WEIGHT: 6,
+
+  briefUnlocked() {
+    return this.campaignLevel() >= this.BRIEF_UNLOCK_LEVEL;
+  },
+
+  activeBrief() {
+    const id = this.state && this.state.briefId;
+    if (!id) return null;
+    return RECRUIT_BRIEFS.find(b => b.id === id) || null;
+  },
+
+  // 指名は面接ごとに倍々。連打で理想の軍団を組み上げるのは経営judgementを消す。
+  briefCost() {
+    return this.BRIEF_BASE_COST * Math.pow(2, this.state.briefsThisPhase || 0);
+  },
+
+  canPostBrief(briefId) {
+    const st = this.state;
+    if (!st || st.phase !== "recruit" || !this.briefUnlocked()) return false;
+    if (!RECRUIT_BRIEFS.some(b => b.id === briefId)) return false;
+    return st.gold >= this.briefCost();
+  },
+
+  postBrief(briefId) {
+    if (!this.canPostBrief(briefId)) return false;
+    const st = this.state;
+    st.gold -= this.briefCost();
+    st.briefsThisPhase = (st.briefsThisPhase || 0) + 1;
+    st.briefId = briefId;
+    this.genApplicants();
+    // 指名で入れ替えた応募者は、そのまま無料枠で採れる（求人費とは別の話にしない）
+    this.save();
+    return true;
+  },
+
   rerollCost() {
     const n = this.state.rerollsThisPhase || 0;
     if (n < this.FREE_REROLLS) return 0;
@@ -1145,6 +1200,8 @@ const Game = {
     // 採用後も面接は閉じない。次の候補を見て、追加紹介料を払うか自分で終了する。
     if (this.canHire()) {
       st.rerollsThisPhase = 0;   // 新しい面接なので広告費もリセット
+      st.briefsThisPhase = 0;
+      st.briefId = null;
       this.genApplicants();
     } else {
       st.applicants = [];
@@ -2067,6 +2124,9 @@ const Game = {
     st.extraHiresThisPhase = 0;
     st.pendingVacancies = 0;
     st.rerollsThisPhase = 0;
+    // 指名は面接1回ぶん。次の面接へは持ち越さない（払い続けないと狙い撃ちできない）
+    st.briefsThisPhase = 0;
+    st.briefId = null;
     st.pendingEvent = null;
     st.eventOutcome = null;
     st.selectedMission = null;

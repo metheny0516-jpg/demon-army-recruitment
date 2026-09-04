@@ -646,6 +646,26 @@ const UI = {
           <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
         </span>`).join("")}</div>
     </div>` : "";
+    // 指名求人：金を払って「こういう奴を寄越せ」と条件を出す。中盤から解禁。
+    // 条件をシナジーの発火条件と同じ語彙にしてあるので、狙って揃える手段になる。
+    const briefPanel = (() => {
+      if (!Game.briefUnlocked()) return "";
+      const cost = Game.briefCost();
+      const active = Game.activeBrief();
+      const buttons = RECRUIT_BRIEFS.map(b => `
+        <button class="brief-option ${active && active.id === b.id ? "selected" : ""}"
+          data-action="brief" data-brief="${b.id}" ${Game.canPostBrief(b.id) ? "" : "disabled"}>
+          <span class="brief-title">${b.icon} ${U.esc(b.name)}</span>
+          <span class="brief-note">${U.esc(b.note)}</span>
+        </button>`).join("");
+      return `<div class="panel brief-panel">
+        <h3>📣 指名求人 <span class="muted">— 求人費 ${cost}G（出すたび倍）</span></h3>
+        <div class="muted">条件を指定して求人を出し直す。合う者が来やすくなり、格上も出やすくなる。
+          ${active ? `いまの指名：<b>${active.icon} ${U.esc(active.name)}</b>` : "確実ではない。来ないこともある。"}</div>
+        <div class="brief-options">${buttons}</div>
+        ${st.gold < cost ? `<div class="payroll-warning">指名には ${cost}G 必要（現在 ${st.gold}G）</div>` : ""}
+      </div>`;
+    })();
     this.set(`${this.hud()}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
@@ -661,6 +681,7 @@ const UI = {
         })()}
       </div>
       <div class="cards">${cards}</div>
+      ${briefPanel}
       <div class="spacer"></div>
       <div class="row">
         <button data-action="reroll" ${Game.canReroll() ? "" : "disabled"}>
