@@ -587,6 +587,19 @@ const Game = {
     return true;
   },
 
+  // シナジーの発火条件を数える母集団。出撃隊ではなく軍団全体を渡す。
+  // 部門へ回した者も条件に参加できるので、「戦力か経営か」の二択が
+  // 「どちらでも同じ札が効く」に変わり、同時発動が起きる。
+  synergyPool() {
+    return this.state.roster.map(m => ({
+      ...m,
+      alive: true,
+      traits: (m.traits || []).slice(),
+      tags: (m.tags || []).slice(),
+      mods: { dmgMult: 1, takenMult: 1 }
+    }));
+  },
+
   preparedRoster(rations) {
     const active = this.activeRoster();
     const feast = this.state.feastPending;
@@ -1269,7 +1282,8 @@ const Game = {
     const graveyard = st.activeFacilityId === "graveyard"
       && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
     const result = Battle.simulate(playerUnits, enemyUnits,
-      { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks() });
+      { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks(),
+        synergyPool: this.synergyPool() });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);

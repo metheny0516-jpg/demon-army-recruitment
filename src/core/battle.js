@@ -164,7 +164,9 @@ const Battle = {
     });
 
     // シナジー適用（merge型は出撃時に処理済み）
-    const activeSyn = Synergy.applyAll(playerUnits);
+    // 発火条件は出撃5枠の外まで数える（options.synergyPool＝軍団全体）。
+    // 効果は出撃したユニットにしか乗らないので、控えが戦うわけではない。
+    const activeSyn = Synergy.applyAll(playerUnits, { pool: options.synergyPool || playerUnits });
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;

@@ -18,12 +18,14 @@ const SYNERGIES = [
     // （弱い個体で枠を埋めること）に見合う爆発力を持たせる。
     id: "goblin_horde",
     name: "ゴブリン軍団",
-    condition: "ゴブリンが3体以上",
-    desc: "ゴブリンの与ダメージ+15%刻み。敵撃破時、さらに1Gを略奪予約",
-    count(units) { return units.filter(u => u.race === "ゴブリン").length; },
-    check(units) { return this.count(units) >= 3; },
-    apply(units) {
-      const mult = 1 + 0.15 * (this.count(units) - 2);
+    condition: "軍団にゴブリンが4体以上",
+    desc: "出撃したゴブリンの与ダメージ+12%刻み。敵撃破時、さらに1Gを略奪予約",
+    // 数えるのは軍団全体（pool）、強くなるのは出撃した者だけ。
+    // 出撃5枠で3体そろえる必要が無くなり、他のシナジーと枠を奪い合わなくなる。
+    count(units, ctx) { return Synergy.pool(units, ctx).filter(u => u.race === "ゴブリン").length; },
+    check(units, ctx) { return this.count(units, ctx) >= 4; },
+    apply(units, ctx) {
+      const mult = 1 + 0.12 * (this.count(units, ctx) - 3);
       for (const u of units) if (u.race === "ゴブリン") u.mods.dmgMult *= mult;
     }
   },
@@ -39,15 +41,16 @@ const SYNERGIES = [
   {
     id: "legion_of_dead",
     name: "死の軍勢",
-    condition: "死霊術師＋アンデッド2体以上",
-    desc: "アンデッドの与ダメージ+30%（2体目以降、1体増えるごとにさらに+30%）、死霊術の復活が全快に",
-    count(units) { return units.filter(u => u.tags.includes("undead")).length; },
-    check(units) {
-      const necro = units.some(u => u.traits.includes("necromancy"));
-      return necro && this.count(units) >= 2;
+    condition: "軍団に死霊術師＋アンデッド3体以上",
+    desc: "出撃したアンデッドの与ダメージ+22%（3体目以降、1体増えるごとにさらに+22%）、死霊術の復活が全快に",
+    // 死霊術師は供養代行で建設部門に置かれることが多い。枠で数えると死の軍勢が永久に立たない。
+    count(units, ctx) { return Synergy.pool(units, ctx).filter(u => u.tags.includes("undead")).length; },
+    check(units, ctx) {
+      const necro = Synergy.pool(units, ctx).some(u => u.traits.includes("necromancy"));
+      return necro && this.count(units, ctx) >= 3;
     },
-    apply(units) {
-      const mult = 1 + 0.3 * (this.count(units) - 1);
+    apply(units, ctx) {
+      const mult = 1 + 0.22 * (this.count(units, ctx) - 2);
       for (const u of units) {
         if (u.tags.includes("undead")) u.mods.dmgMult *= mult;
         if (u.traits.includes("necromancy")) u.mods.necroFull = true;
@@ -57,12 +60,12 @@ const SYNERGIES = [
   {
     id: "arcane_circle",
     name: "魔法結社",
-    condition: "魔法職が3体以上",
-    desc: "魔法職の与ダメージ+35%（3体目以降、1体増えるごとにさらに+35%）、火球が敵全体に広がる",
-    count(units) { return units.filter(u => u.tags.includes("caster")).length; },
-    check(units) { return this.count(units) >= 3; },
-    apply(units) {
-      const mult = 1 + 0.35 * (this.count(units) - 2);
+    condition: "軍団に魔法職が4体以上",
+    desc: "出撃した魔法職の与ダメージ+18%（4体目以降、1体増えるごとにさらに+18%）、火球が敵全体に広がる",
+    count(units, ctx) { return Synergy.pool(units, ctx).filter(u => u.tags.includes("caster")).length; },
+    check(units, ctx) { return this.count(units, ctx) >= 4; },
+    apply(units, ctx) {
+      const mult = 1 + 0.18 * (this.count(units, ctx) - 3);
       for (const u of units) {
         if (u.tags.includes("caster")) {
           u.mods.dmgMult *= mult;
@@ -97,6 +100,24 @@ const SYNERGIES = [
         u.mods.dmgMult *= 1.8;
         u.mods.takenMult *= 0.6;
       }
+    }
+  },
+  {
+    // 重ねがけの2段目。個々のシナジーは足し算で終わるので、
+    // 「いくつ同時に立てたか」自体を発火条件にして掛け算の段を作る。
+    // 狙うのは強さではなく「揃った瞬間の快感」なので、条件は数だけにして
+    // どの組み合わせで到達したかは問わない（毎ラン違う形で壊れる）。
+    id: "overload",
+    name: "魔王軍完成",
+    condition: "シナジーが2つ以上同時発動",
+    desc: "同時発動数-1につき、出撃隊全員の与ダメージ+20%",
+    meta: true,
+    check(units, ctx) { return ((ctx && ctx.activeCount) || 0) >= 2; },
+    apply(units, ctx) {
+      const stacks = ((ctx && ctx.activeCount) || 0) - 1;
+      if (stacks <= 0) return;
+      const mult = 1 + 0.2 * stacks;
+      for (const u of units) u.mods.dmgMult *= mult;
     }
   },
   {

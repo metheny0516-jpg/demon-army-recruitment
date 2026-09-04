@@ -453,7 +453,11 @@ const UI = {
     const gain = entry.next.dmgMult > entry.now.dmgMult
       ? `与ダメージ ×${entry.next.dmgMult.toFixed(2)}`
       : `被ダメージ ×${entry.next.takenMult.toFixed(2)}`;
-    const how = entry.swapOutRace
+    // 発火条件を軍団全体で数えるシナジーは、出撃枠を入れ替えても総数が動かない。
+    // その場合は「枠を空けずに軍団へ1体足せ」と案内するのが正しい。
+    const how = entry.viaRecruit
+      ? `軍団に${U.esc(entry.nextRace || "同じ種族")}をあと1体（出撃枠はそのままで）`
+      : entry.swapOutRace
       ? `${U.esc(entry.swapOutRace)}を${U.esc(entry.nextRace || "同じ種族")}に替えると`
       : `${U.esc(entry.nextRace || "同じ種族")}をあと1体で`;
     return `<div class="syn-next">▲ ${how} <b>${gain}</b></div>`;
@@ -538,7 +542,8 @@ const UI = {
   },
 
   synergyPanel(roster) {
-    const entries = Synergy.preview(roster, { slots: Game.MAX_DEPLOY });
+    // 予告は本番と同じ母集団（軍団全体）で測る。ここがズレると編成画面だけ嘘をつく。
+    const entries = Synergy.preview(roster, { slots: Game.MAX_DEPLOY, pool: Game.synergyPool() });
     const act = entries.filter(e => e.active);
     const activeHtml = act.length
       ? `<div class="syn-list">${act.map(e => {

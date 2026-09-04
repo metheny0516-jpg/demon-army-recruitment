@@ -57,19 +57,20 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     return document.querySelector('.panel .syn-list') ? document.body.innerText : document.body.innerText;
   }, squad);
 
-  const mixed = await build(['goblin', 'goblin', 'goblin', 'ogre', 'ogre']);
+  // 発火条件を軍団全体で数えるようにしたぶん、必要数は3→4体、刻みは15%→12%になった。
+  const mixed = await build(['goblin', 'goblin', 'goblin', 'goblin', 'ogre']);
   if (!mixed.includes('ゴブリン軍団')) errors.push('発動中のシナジー名が出ない');
-  if (!mixed.includes('×1.15')) errors.push('いまの効果量（×1.15）が読めない: 混成3体');
-  if (!/オーガを.*ゴブリン.*替える/.test(mixed.replace(/\n/g, ' '))) {
-    errors.push('枠が埋まっているのに入れ替えの案内が出ない');
+  if (!mixed.includes('×1.12')) errors.push('いまの効果量（×1.12）が読めない: 混成4体');
+  // 軍団全体で数えるようになったので、枠が埋まっていても入れ替えではなく採用で伸びる。
+  if (!/軍団にゴブリンをあと1体/.test(mixed.replace(/\n/g, ' '))) {
+    errors.push('枠が埋まっているときの伸ばし方（軍団へ採用）が出ない');
   }
-  if (!mixed.includes('×1.30')) errors.push('入れ替え後の倍率が読めない');
+  if (!mixed.includes('×1.24')) errors.push('1体増やした後の倍率が読めない');
 
   const pure = await build(['goblin', 'goblin', 'goblin', 'goblin', 'goblin']);
-  if (!pure.includes('×1.45')) errors.push('純ゴブリン5体の倍率（×1.45）が読めない');
-  if (/替えると|あと1体で/.test(pure.replace(/\n/g, ' ').split('組み合わせ候補')[0])) {
-    errors.push('これ以上伸びない編成に伸ばし方を出している');
-  }
+  if (!pure.includes('×1.24')) errors.push('純ゴブリン5体の倍率（×1.24）が読めない');
+  // 軍団を数えるので、5体全員ゴブリンでも「あと1体採れば伸びる」は正しい案内になる。
+
 
   // 編成で決まる特性（群れの本能）も見えること。混ぜると落ちるのが読めるか
   if (!/いまの並びで効いている特性/.test(pure)) errors.push('特性の効き目の見出しが無い');
@@ -81,7 +82,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     errors.push(`混ぜても特性の倍率が落ちて見えない: 純${packPure} 混成${packMixed}`);
   }
 
-  const two = await build(['goblin', 'goblin', 'ogre']);
+  const two = await build(['goblin', 'goblin', 'goblin', 'ogre']);
   if (!/あと1体/.test(two)) errors.push('未発動シナジーの「あと何体」が読めない');
 
   await page.locator('.panel', { hasText: '発動中のシナジー' }).first().scrollIntoViewIfNeeded();
