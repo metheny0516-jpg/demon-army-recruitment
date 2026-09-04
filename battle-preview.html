@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>戦闘モーション試写室</title>
+<link rel="stylesheet" href="src/styles.css"><link rel="stylesheet" href="src/battlefield.css">
+</head>
+<body>
+<header style="max-width:1128px;margin:20px auto;padding:0 12px">
+  <h1 style="font-size:20px">戦闘モーション試写室</h1>
+  <p>演出確認用の固定シナリオです。本編のセーブ・戦績は変更しません。</p>
+  <button id="replay">▶ 1対1を再生</button>
+  <button id="crowd">5対5を確認</button>
+</header>
+<div id="app"></div>
+<script src="src/data/portraits.js"></script>
+<script src="src/core/util.js"></script>
+<script src="src/ui/ui.js"></script>
+<script>const Game = { state: { generation: 1 }, MAX_CONQUEST: 8 };</script>
+<script src="src/ui/battle_scene.js"></script>
+<script>
+UI.init(document.getElementById('app'));
+BattleScene.loadSpeed = () => {};
+BattleScene.saveSpeed = () => {};
+function replay(count = 1) {
+  const player = Array.from({ length: count }, (_, i) => ({ id: 'p' + i, tplId: 'goblin', side: 'player', name: 'ゴブ太' + (i || ''), icon: '👺', hp: 30, maxHp: 30 }));
+  const enemy = Array.from({ length: count }, (_, i) => ({ id: 'e' + i, side: 'enemy', name: '剣士見習い' + (i || ''), icon: '🗡', hp: 24, maxHp: 24 }));
+  UI.set(BattleScene.shell({ stage: 1, army: '見習い冒険者', region: '演出試写' }));
+  const events = [{ type: 'battle_start', player, enemy }, { type: 'round_start', round: 1 }];
+  for (let i = 0; i < count; i++) {
+    events.push({ type: 'attack', fromId: 'p' + i, toId: 'e' + i, dmg: 8, hp: 16, maxHp: 24, emphasis: 1 });
+    events.push({ type: 'attack', fromId: 'e' + i, toId: 'p' + i, dmg: 9, hp: 21, maxHp: 30, emphasis: 1 });
+  }
+  events.push({ type: 'trait_trigger', sourceId: 'p0', name: '群れの本能', traitId: 'goblin_horde', text: '試写用：能力発火から追撃へ' },
+    { type: 'attack', fromId: 'p0', toId: 'e0', dmg: 12, hp: 4, maxHp: 24, emphasis: 2, chainDepth: 2 },
+    { type: 'splash', fromId: 'p0', toId: 'e0', dmg: 10, hp: 0, maxHp: 24, emphasis: 3, chainDepth: 3, label: '追撃' },
+    { type: 'death', unitId: 'e0' },
+    { type: 'overkill', toId: 'e0', percent: 150, excess: 6, rank: '蹂躙', emphasis: 2, chainDepth: 4 },
+    { type: 'result', victory: true });
+  BattleScene.play(events, () => { document.getElementById('next-btn').textContent = 'もう一度見る'; });
+}
+document.getElementById('replay').onclick = () => replay();
+document.getElementById('crowd').onclick = () => replay(5);
+UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replay(); });
+replay();
+</script>
+</body>
+</html>

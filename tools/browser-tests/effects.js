@@ -50,18 +50,21 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     });
   });
   await page.waitForTimeout(80);
+  const windup = await page.locator('#bu-p0 .bu-sprite-img').getAttribute('data-pose');
+  if (windup !== 'attack-windup') errors.push('命中前の溜めがない');
+  await page.waitForTimeout(230);
   const vfx = await page.locator('#bu-e0 .bu-vfx').evaluateAll(images => images.map(image => ({
     kind: image.className,
     loaded: image.complete && image.naturalWidth > 0
   })));
-  if (process.env.SP) await page.screenshot({ path: process.env.SP + '/scene-image-vfx.png' });
   if (!vfx.some(item => item.kind.includes('vfx-slash') && item.loaded)) errors.push('斬撃画像VFXが対象へ表示されない');
   if (!vfx.some(item => item.kind.includes('vfx-impact') && item.loaded)) errors.push('命中画像VFXが対象へ表示されない');
   const pose = await page.locator('#bu-p0 .bu-sprite-img').evaluate(image => ({
     pose: image.dataset.pose,
     loaded: image.complete && image.naturalWidth > 0
   }));
-  if (pose.pose !== 'attack-windup' || !pose.loaded) errors.push('ゴブリンの攻撃キーポーズへ切り替わらない');
+  if (pose.pose !== 'strike' || !pose.loaded) errors.push('ゴブリンの振り抜きへ切り替わらない');
+  if (process.env.SP) await page.screenshot({ path: process.env.SP + '/scene-image-vfx.png' });
 
   await page.evaluate(() => {
     BattleScene.render({ type: 'survive', unitId: 'p0', hp: 1, maxHp: 30, emphasis: 2 });

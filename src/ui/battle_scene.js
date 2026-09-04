@@ -10,9 +10,14 @@ const BattleScene = {
   UNIT_DIR: "assets/battle/units/",
   VFX_DURATION: { slash: 500, impact: 460, guard: 680, revive: 860, overkill: 860 },
   missingSprites: new Set(),
+  preloadedSprites: new Set(),
+  vfxPreloaded: false,
   BATTLE_SPRITES: {
-    goblin: new Set(["idle", "attack-windup"])
+    goblin: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    swordsman: new Set(["idle"])
   },
+  motions: new Set(),
+  pendingHits: new Set(),
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
   DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
@@ -55,11 +60,14 @@ const BattleScene = {
 
   // 敵はデータのアイコン、味方は種族アイコン
   iconOf(u) { return u.icon || (u.side === "enemy" ? "🗡" : UI.icon(u.race)); },
+  artId(u) {
+    return u.tplId || (u.side === "enemy" && ["🗡", "🗡️", "⚔️"].includes(u.icon) ? "swordsman" : undefined);
+  },
 
-  // 立ち絵があればそれを使い、無ければ絵文字に落ちる（敵は今のところ絵文字のみ）
+  // 戦闘絵→履歴書→絵文字。剣士の敵だけ共通の戦闘絵を使用する。
   portraitHtml(u) {
     const emoji = this.iconOf(u);
-    const id = u.tplId;
+    const id = this.artId(u);
     if (!this.missingSprites.has(id) && this.BATTLE_SPRITES[id] && this.BATTLE_SPRITES[id].has("idle")) {
       return `<span class="bu-portrait battle-sprite" data-fallback="${emoji}"><img class="bu-sprite-img"
         src="${this.UNIT_DIR}${id}/idle.webp" alt="" data-pose="idle" data-tpl-id="${U.esc(id)}"
@@ -90,6 +98,10 @@ const BattleScene = {
   saveSpeed() { try { localStorage.setItem("maou_speed", String(this.speed)); } catch (e) {} },
 
   stop() {
+    for (const settle of this.pendingHits) settle();
+    this.pendingHits.clear();
+    for (const motion of this.motions) motion.cancel();
+    this.motions.clear();
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
     const scene = document.getElementById("scene");
@@ -101,8 +113,7 @@ const BattleScene = {
     for (const u of Object.values(this.units || {})) {
       u.el.classList.remove("acting", "targeted", "trouble", "lunge-up", "lunge-down", "hit", "hit-big", "revive-rise", "summon-rise", "pop");
       if (!u.sprite || !u.tplId || u.sprite.dataset.spriteFailed) continue;
-      u.sprite.dataset.pose = "idle";
-      u.sprite.src = `${this.UNIT_DIR}${u.tplId}/idle.webp`;
+      this.setPose(u, u.el.classList.contains("dead") ? "fallen" : "idle");
     }
   },
 
@@ -110,7 +121,7 @@ const BattleScene = {
   shell(stageData) {
     this.isFinalBattle = stageData.missionKind === "invade" && stageData.baseStage === Game.MAX_CONQUEST;
     if (typeof Music !== "undefined") Music.update(Game.state, { scene: this.isFinalBattle ? "final" : "battle" });
-    const sceneClass = this.isFinalBattle ? "scene final-battle" : "scene";
+    const sceneClass = this.isFinalBattle ? "scene battlefield final-battle" : "scene battlefield";
     return `
       <div class="battle-stage-layout">
       <section class="battle-stage-main">
@@ -125,9 +136,9 @@ const BattleScene = {
         <div class="chain-flare" id="chain-flare"><b></b><span>CHAIN</span></div>
         <div class="scene-band" id="band-enemy"></div>
         <div class="scene-mid">
-          <span class="scene-army">${U.esc(stageData.army)}</span>
-          <span class="scene-vs">VS</span>
           <span class="scene-army">魔王軍</span>
+          <span class="scene-vs">VS</span>
+          <span class="scene-army">${U.esc(stageData.army)}</span>
         </div>
         <div class="scene-band" id="band-player"></div>
         <div class="action-caption" id="action-caption"></div>
@@ -156,10 +167,10 @@ const BattleScene = {
   },
 
   unitHtml(u) {
-    return `<div class="bu" id="bu-${u.id}">
+    return `<div class="bu" id="bu-${u.id}" data-side="${u.side}">
       <div class="bu-vfx-anchor" aria-hidden="true"></div>
       <div class="bu-flash"></div>
-      <div class="bu-icon">${this.portraitHtml(u)}</div>
+      <div class="bu-actor"><div class="bu-icon">${this.portraitHtml(u)}</div></div>
       <div class="bu-name">${U.esc(u.name)}</div>
       <div class="bu-hp"><div class="bu-hpfill" id="hp-${u.id}"></div></div>
       <div class="bu-pop" id="pop-${u.id}"></div>
@@ -167,14 +178,30 @@ const BattleScene = {
   },
 
   registerUnit(u) {
+    if (!this.vfxPreloaded) {
+      this.vfxPreloaded = true;
+      for (const kind of Object.keys(this.VFX_DURATION)) {
+        const image = new Image();
+        image.src = `${this.EFFECT_DIR}${kind}.webp`;
+      }
+    }
+    const artId = this.artId(u);
+    if (this.BATTLE_SPRITES[artId] && !this.preloadedSprites.has(artId)) {
+      this.preloadedSprites.add(artId);
+      for (const pose of this.BATTLE_SPRITES[artId]) {
+        const image = new Image();
+        image.src = `${this.UNIT_DIR}${artId}/${pose}.webp`;
+      }
+    }
     this.units[u.id] = {
       el: document.getElementById("bu-" + u.id),
       fill: document.getElementById("hp-" + u.id),
       pop: document.getElementById("pop-" + u.id),
       side: u.side,
       name: u.name,
-      tplId: u.tplId,
-      sprite: document.querySelector(`#bu-${u.id} .bu-sprite-img`)
+      tplId: artId,
+      sprite: document.getElementById("bu-" + u.id).querySelector(".bu-sprite-img"),
+      actor: document.getElementById("bu-" + u.id).querySelector(".bu-actor")
     };
     this.setHp(this.units[u.id], u.hp, u.maxHp);
   },
@@ -274,7 +301,7 @@ const BattleScene = {
   render(ev) {
     if (ev.text) this.appendLog(ev.text, ev.cls);
     this.chainFlare(ev);
-    if (typeof Sound !== "undefined") {
+    if (typeof Sound !== "undefined" && ev.type !== "attack" && ev.type !== "splash") {
       const from = this.units[ev.fromId];
       Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from && from.side });
     }
@@ -297,26 +324,14 @@ const BattleScene = {
       case "splash": {
         const from = this.units[ev.fromId], to = this.units[ev.toId];
         this.focusAttack(from, to, ev);
-        if (from && ev.type === "attack") {
-          this.unitPose(from, "attack-windup", 360);
-          from.el.classList.remove("lunge-up", "lunge-down");
-          void from.el.offsetWidth; // アニメーション再生のためのリセット
-          from.el.classList.add(from.side === "player" ? "lunge-up" : "lunge-down");
-        }
-        this.attackStreak(from && from.side, ev.type === "splash", ev.emphasis || 0);
-        if (to) {
-          this.unitVfx(to, "slash", from && from.side === "enemy" ? "reverse" : "", ev.emphasis);
-          this.unitVfx(to, "impact", "", ev.emphasis);
-          this.hit(to, ev.dmg, ev.emphasis, ev.label);
-          this.setHp(to, ev.hp, ev.maxHp);
-        }
-        if (ev.emphasis >= 3) this.shake();
+        this.attackMotion(from, to, ev);
         break;
       }
       case "death": {
         const u = this.units[ev.unitId];
         if (u) {
           u.el.classList.add("dead");
+          this.setPose(u, "fallen");
           this.float(u, "倒れた！", "fallen");
         }
         break;
@@ -325,6 +340,7 @@ const BattleScene = {
         const u = this.units[ev.unitId];
         if (u) {
           u.el.classList.remove("dead");
+          this.setPose(u, "idle");
           u.el.classList.remove("pop", "revive-rise");
           void u.el.offsetWidth;
           u.el.classList.add("revive-rise");
@@ -455,6 +471,7 @@ const BattleScene = {
   },
 
   clearFocus() {
+    document.querySelectorAll("#scene .scene-band").forEach(b => b.style.zIndex = "1");
     for (const u of Object.values(this.units)) {
       u.el.classList.remove("acting", "targeted", "trouble");
     }
@@ -463,6 +480,7 @@ const BattleScene = {
   focusAttack(from, to, ev) {
     this.clearFocus();
     if (from) from.el.classList.add("acting");
+    if (from) from.el.closest(".scene-band").style.zIndex = "3";
     if (to) to.el.classList.add("targeted");
     if (!from || !to) return;
     const action = ev.type === "splash" ? (ev.label || "追撃") : "攻撃";
@@ -483,6 +501,69 @@ const BattleScene = {
     img.style.animationDuration = `${life}ms`;
     anchor.appendChild(img);
     this.timers.push(setTimeout(() => img.remove(), life));
+  },
+
+  setPose(u, pose) {
+    if (!u || !u.sprite || u.sprite.dataset.spriteFailed || !this.BATTLE_SPRITES[u.tplId]?.has(pose)) return;
+    u.sprite.dataset.pose = pose;
+    u.sprite.src = `${this.UNIT_DIR}${u.tplId}/${pose}.webp`;
+  },
+
+  animateActor(u, frames, duration) {
+    if (!u?.actor || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const motion = u.actor.animate(frames, { duration, easing: "linear" });
+    this.motions.add(motion);
+    motion.onfinish = () => { this.motions.delete(motion); motion.cancel(); };
+  },
+
+  // ルールは即時計算済み。表示だけを「溜め→接触→戻り」へ分ける。
+  // 中断時は pendingHits でHPだけ確定し、次イベントやスキップと食い違わせない。
+  attackMotion(from, to, ev) {
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const total = this.visualDuration(this.durationOf(ev) * .88);
+    const contact = reduced ? 0 : total * .38;
+    const settle = () => { if (to) this.setHp(to, ev.hp, ev.maxHp); };
+    this.pendingHits.add(settle);
+    const later = (fn, ms) => this.timers.push(setTimeout(fn, ms));
+    if (from && to && ev.type === "attack" && !reduced) {
+      const a = from.actor.getBoundingClientRect(), b = to.actor.getBoundingClientRect();
+      const direction = from.side === "player" ? 1 : -1;
+      const dx = b.x + b.width / 2 - a.x - a.width / 2 - direction * b.width * .75;
+      const dy = b.y - a.y;
+      this.setPose(from, "attack-windup");
+      this.animateActor(from, [
+        { transform: "translate(0,0) scale(1)", offset: 0 },
+        { transform: `translate(${-direction * 10}px,4px) scale(.94,1.04)`, offset: .2 },
+        { transform: `translate(${dx}px,${dy}px) scale(1.05,.97)`, offset: .38 },
+        { transform: `translate(${dx}px,${dy}px) scale(1.05,.97)`, offset: .48 },
+        { transform: "translate(0,0) scale(1)", offset: 1 }
+      ], total);
+      later(() => this.setPose(from, "strike"), contact * .85);
+      later(() => this.setPose(from, "recover"), total * .6);
+      later(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : "idle"), total);
+    }
+    const impact = () => {
+      settle();
+      this.pendingHits.delete(settle);
+      if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side });
+      if (!to) return;
+      this.unitVfx(to, ev.type === "splash" ? "impact" : "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
+      if (ev.type !== "splash") this.unitVfx(to, "impact", "", ev.emphasis);
+      this.hit(to, ev.dmg, ev.emphasis, ev.label);
+      this.setPose(to, "hurt");
+      const recoil = to.side === "player" ? -1 : 1;
+      this.animateActor(to, [
+        { transform: "translateX(0)" },
+        { transform: `translateX(${recoil * 13}px) rotate(${recoil * 8}deg)`, offset: .22 },
+        { transform: "translateX(0)" }
+      ], total * .48);
+      later(() => {
+        this.setPose(to, to.el.classList.contains("dead") ? "fallen" : "idle");
+        to.el.classList.remove("hit", "hit-big");
+      }, total * .5);
+      if (ev.emphasis >= 3 && !reduced) this.shake();
+    };
+    if (reduced) impact(); else later(impact, contact);
   },
 
   unitPose(u, pose, duration) {
@@ -506,6 +587,7 @@ const BattleScene = {
     streak.className = `battle-streak ${side === "player" ? "to-enemy" : "to-player"}${splash ? " splash" : ""}${emphasis >= 2 ? " heavy" : ""}`;
     void streak.offsetWidth;
     streak.classList.add("show");
+    streak.style.animationDuration = `${this.visualDuration(520)}ms`;
     this.timers.push(setTimeout(() => streak.classList.remove("show"), (520 * this.eventScale) / this.speed));
   },
 
@@ -518,6 +600,7 @@ const BattleScene = {
     if (depth >= 4) flare.classList.add("deep");
     void flare.offsetWidth;
     flare.classList.add("show");
+    flare.style.animationDuration = `${this.visualDuration(850)}ms`;
     this.timers.push(setTimeout(() => flare.classList.remove("show"), (850 * this.eventScale) / this.speed));
   },
 
@@ -525,6 +608,7 @@ const BattleScene = {
     const c = document.getElementById("action-caption");
     if (!c) return;
     c.textContent = text;
+    c.style.animationDuration = `${this.visualDuration(duration || 600)}ms`;
     c.classList.remove("show");
     void c.offsetWidth;
     c.classList.add("show");
@@ -535,6 +619,7 @@ const BattleScene = {
     const intro = document.getElementById("scene-intro");
     if (!intro) return;
     intro.classList.remove("show");
+    intro.style.animationDuration = `${this.visualDuration(1400)}ms`;
     void intro.offsetWidth;
     intro.classList.add("show");
     this.timers.push(setTimeout(() => intro.classList.remove("show"), (1400 * this.eventScale) / this.speed));
@@ -549,6 +634,7 @@ const BattleScene = {
       : `ROUND ${round - 1} 終了`;
     document.getElementById("round-number").textContent = `ROUND ${round}`;
     b.classList.remove("show");
+    b.style.animationDuration = `${this.visualDuration(1080)}ms`;
     void b.offsetWidth;
     b.classList.add("show");
     this.timers.push(setTimeout(() => b.classList.remove("show"), (1080 * this.eventScale) / this.speed));
@@ -571,6 +657,8 @@ const BattleScene = {
     s.classList.add(cls);
     void s.offsetWidth;
     s.classList.add("fx-active");
+    const fx = s.querySelector(".scene-fx");
+    if (fx) fx.style.animationDuration = `${this.visualDuration(1450)}ms`;
     this.timers.push(setTimeout(() => {
       s.classList.remove("fx-active", cls);
     }, (1450 * this.eventScale) / this.speed));
@@ -603,6 +691,7 @@ const BattleScene = {
     portrait.src = hasPortrait ? UI.PORTRAIT_DIR + "king_slime.png" : "";
     portrait.alt = hasPortrait ? "キングスライム" : "";
     c.classList.toggle("has-portrait", hasPortrait);
+    c.style.animationDuration = `${this.visualDuration(1300)}ms`;
     for (const cls of this.EFFECT_CLASSES) c.classList.remove(cls);
     const tone = this.EFFECT_CLASSES.find(cls => cls === `fx-${synergyId}`) || "fx-incident";
     c.classList.add(tone);
