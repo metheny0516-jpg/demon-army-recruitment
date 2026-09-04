@@ -1,5 +1,17 @@
 # 種族モーション追加（2026-09-04）
 
+## コボルト・ゾンビ
+
+内蔵image_genで各1シート。共通3x2・右向き・全身・太線・抑えた色・実RGBA。
+保存先 `assets/battle/units/{kobold,zombie}/motion-source.png` と6WebP。
+Kobold prompt: little tan terrier humanoid, pointed ears, security cap/jacket, collar/tag, baton;
+idle alert / windup low crouch / strike spring forward baton jab / recover light landing / hurt ears flat / fallen curled.
+Zombie prompt: grey-green office worker, sparse hair, worried eyes, ragged olive suit, loose tie;
+idle slump / windup rock back / strike lurch arms forward / recover drag upright / hurt fold / fallen limp, no gore.
+切り分けは空白境界を選び、共通倍率・足元492。再生成はprepare_species_motion.py。
+軽快な飛び込みと身体を引きずる突進をmeleeFramesで分ける。両者は斬撃を出さない。
+検証: species各種・role-motion、128px比較kobold-zombie-review.jpg。
+
 ## 味方魔法系3種
 
 内蔵image_genで各履歴書PNGを人物・画風だけの参考として戦闘専用6ポーズを生成し、

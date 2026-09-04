@@ -23,7 +23,9 @@ const BattleScene = {
     sage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     mage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     imp: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    necromancer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    necromancer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    kobold: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    zombie: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
@@ -570,6 +572,21 @@ const BattleScene = {
   },
 
   meleeFrames(u, dx, dy, direction) {
+    if (u.tplId === "kobold") return [
+      { transform: "translate(0,0) scale(1)", offset: 0 },
+      { transform: `translate(${-direction * 12}px,6px) scale(1.05,.9)`, offset: .23 },
+      { transform: `translate(${dx * .7}px,${dy - 14}px) scale(1)`, offset: .32 },
+      { transform: `translate(${dx}px,${dy}px) scale(1)`, offset: .38 },
+      { transform: `translate(${dx * .45}px,${dy - 7}px) scale(1)`, offset: .64 },
+      { transform: "translate(0,0) scale(1)", offset: 1 }
+    ];
+    if (u.tplId === "zombie") return [
+      { transform: "translate(0,0) rotate(0deg)", offset: 0 },
+      { transform: `translate(${-direction * 5}px,2px) rotate(${-direction * 8}deg)`, offset: .26 },
+      { transform: `translate(${dx}px,${dy + 3}px) rotate(${direction * 7}deg)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy + 3}px) rotate(${direction * 7}deg)`, offset: .6 },
+      { transform: "translate(0,0) rotate(0deg)", offset: 1 }
+    ];
     if (u.tplId === "orc") return [
       { transform: "translate(0,0) scale(1)", offset: 0 },
       { transform: `translate(${-direction * 7}px,4px) rotate(${-direction * 8}deg) scale(1.04,.94)`, offset: .27 },
@@ -684,7 +701,7 @@ const BattleScene = {
       this.pendingHits.delete(settle);
       if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side });
       if (!to) return;
-      if (ev.type !== "splash" && !ranged && from?.tplId !== "slime") this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
+      if (ev.type !== "splash" && !ranged && !["slime", "kobold", "zombie"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
       this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
       this.hit(to, ev.dmg, ev.emphasis, ev.label);
       this.setPose(to, "hurt");

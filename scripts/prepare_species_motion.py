@@ -25,6 +25,12 @@ def main():
             if args.species in ('mage', 'necromancer') and i % 3 in (1, 2):
                 edge = 900 if args.species == 'mage' else 930
                 cell = source.crop((512 if i % 3 == 1 else edge, y, edge if i % 3 == 1 else 1536, y + 512))
+            if args.species == 'kobold':
+                edges = (0, 480, 980, 1536) if i < 3 else (0, 512, 1024, 1536)
+                cell = source.crop((edges[i % 3], y, edges[i % 3 + 1], y + 512))
+            if args.species == 'zombie' and i >= 3:
+                edges = (0, 512, 970, 1536)
+                cell = source.crop((edges[i % 3], y, edges[i % 3 + 1], y + 512))
             bounds = cell.getchannel('A').point(lambda a: 255 if a > 20 else 0).getbbox()
             assert bounds, 'Empty pose'
             cells.append(cell.crop(bounds))
