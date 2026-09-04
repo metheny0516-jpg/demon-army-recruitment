@@ -38,6 +38,7 @@ for t in daily smoke autoplay mission recruitment facility clear scene cutin eff
   run "$t" DUMMY=1
 done
 run portrait MODE=present
+run species DUMMY=1
 
 rm -f "$TMP"
 echo

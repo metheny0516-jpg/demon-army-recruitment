@@ -50,6 +50,12 @@
 .battlefield [data-side="enemy"] .bu-icon { transform: scaleX(-1); }
 .battlefield .bu:not(.dead):not(.acting):not(.targeted) .battle-sprite { animation: actorBreath 2.3s ease-in-out infinite; transform-origin: center bottom; }
 @keyframes actorBreath { 50% { transform: translateY(-2px) scaleY(1.025); } }
+.battlefield .bu:not(.dead):not(.acting):not(.targeted) .battle-sprite:has([data-tpl-id="slime"]) { animation: slimeBreath 1.8s ease-in-out infinite; }
+.battlefield .bu:not(.dead):not(.acting):not(.targeted) .battle-sprite:has([data-tpl-id="skeleton"]) { animation: skeletonBreath 2.8s ease-in-out infinite; }
+@keyframes slimeBreath { 50% { transform: scale(1.06,.92); } }
+@keyframes skeletonBreath { 50% { transform: rotate(-1.5deg) translateY(-1px); } }
+/* The accepted atlas has a neighboring spear tip in the idle cell's empty corner. */
+.battlefield .bu-sprite-img[data-tpl-id="skeleton"][data-pose="idle"] { clip-path: polygon(0 0, 80% 0, 80% 38%, 100% 38%, 100% 100%, 0 100%); }
 .game-scene-battle .battlefield .bu-name { margin: 0 0 3px; font: 700 11px/1.3 sans-serif; background: #101019c9; border-radius: 3px; }
 .battlefield .bu-hp { width: 78%; margin: 0 auto; }
 .battlefield .bu.dead { opacity: .45; filter: grayscale(.8); transform: none; }

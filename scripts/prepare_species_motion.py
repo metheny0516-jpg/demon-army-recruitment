@@ -1,0 +1,35 @@
+"""Prepare accepted six-pose battle sheets with one shared scale per species."""
+import argparse
+from pathlib import Path
+from PIL import Image
+
+POSES = ('idle', 'attack-windup', 'strike', 'recover', 'hurt', 'fallen')
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('species', choices=('slime', 'skeleton'))
+    parser.add_argument('source', type=Path)
+    args = parser.parse_args()
+    output = Path(__file__).resolve().parents[1] / 'assets/battle/units' / args.species
+    output.mkdir(parents=True, exist_ok=True)
+    with Image.open(args.source) as source:
+        assert source.mode == 'RGBA' and source.size == (1536, 1024)
+        assert source.getchannel('A').getextrema()[0] == 0
+        cells = []
+        for i in range(6):
+            x, y = (i % 3) * 512, (i // 3) * 512
+            cell = source.crop((x, y, x + 512, y + 512))
+            bounds = cell.getchannel('A').point(lambda a: 255 if a > 20 else 0).getbbox()
+            assert bounds, 'Empty pose'
+            cells.append(cell.crop(bounds))
+        scale = min(450 / max(c.width for c in cells), 440 / max(c.height for c in cells))
+        for pose, cell in zip(POSES, cells):
+            cell = cell.resize((round(cell.width * scale), round(cell.height * scale)), Image.Resampling.LANCZOS)
+            canvas = Image.new('RGBA', (512, 512))
+            canvas.alpha_composite(cell, ((512 - cell.width) // 2, 492 - cell.height))
+            target = output / (pose + '.webp')
+            canvas.save(target, 'WEBP', quality=90, method=6)
+            print(target.name, target.stat().st_size)
+
+if __name__ == '__main__':
+    main()

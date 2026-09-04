@@ -14,6 +14,8 @@ const BattleScene = {
   vfxPreloaded: false,
   BATTLE_SPRITES: {
     goblin: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    skeleton: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     swordsman: new Set(["idle"])
   },
   motions: new Set(),
@@ -557,6 +559,33 @@ const BattleScene = {
     motion.onfinish = () => { this.motions.delete(motion); motion.cancel(); };
   },
 
+  meleeFrames(u, dx, dy, direction) {
+    if (u.tplId === "slime") return [
+      { transform: "translate(0,0) scale(1)", offset: 0 },
+      { transform: `translate(${-direction * 8}px,7px) scale(1.2,.75)`, offset: .2 },
+      { transform: `translate(${dx * .5}px,${dy * .5 - 28}px) scale(.9,1.13)`, offset: .29 },
+      { transform: `translate(${dx}px,${dy}px) scale(1.12,.86)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy + 5}px) scale(1.18,.8)`, offset: .48 },
+      { transform: "translate(0,-8px) scale(.96,1.06)", offset: .83 },
+      { transform: "translate(0,0) scale(1)", offset: 1 }
+    ];
+    if (u.tplId === "skeleton") return [
+      { transform: "translate(0,0) rotate(0deg)", offset: 0 },
+      { transform: `translate(${-direction * 13}px,2px) rotate(${-direction * 7}deg)`, offset: .25 },
+      { transform: `translate(${dx}px,${dy}px) rotate(${direction * 4}deg)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy}px) rotate(0deg)`, offset: .48 },
+      { transform: "translate(0,0) rotate(-2deg)", offset: .85 },
+      { transform: "translate(0,0) rotate(0deg)", offset: 1 }
+    ];
+    return [
+      { transform: "translate(0,0) scale(1)", offset: 0 },
+      { transform: `translate(${-direction * 10}px,4px) scale(.94,1.04)`, offset: .2 },
+      { transform: `translate(${dx}px,${dy}px) scale(1.05,.97)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy}px) scale(1.05,.97)`, offset: .48 },
+      { transform: "translate(0,0) scale(1)", offset: 1 }
+    ];
+  },
+
   projectileMotion(from, to, kind, contact) {
     const scene = document.getElementById("scene");
     if (!scene || !from?.actor || !to?.actor) return () => {};
@@ -609,13 +638,7 @@ const BattleScene = {
       const dx = b.x + b.width / 2 - a.x - a.width / 2 - direction * b.width * .75;
       const dy = b.y - a.y;
       this.setPose(from, "attack-windup");
-      this.animateActor(from, [
-        { transform: "translate(0,0) scale(1)", offset: 0 },
-        { transform: `translate(${-direction * 10}px,4px) scale(.94,1.04)`, offset: .2 },
-        { transform: `translate(${dx}px,${dy}px) scale(1.05,.97)`, offset: .38 },
-        { transform: `translate(${dx}px,${dy}px) scale(1.05,.97)`, offset: .48 },
-        { transform: "translate(0,0) scale(1)", offset: 1 }
-      ], total);
+      this.animateActor(from, this.meleeFrames(from, dx, dy, direction), total);
       later(() => this.setPose(from, "strike"), contact * .85);
       later(() => this.setPose(from, "recover"), total * .6);
       later(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : "idle"), total);
@@ -626,12 +649,17 @@ const BattleScene = {
       this.pendingHits.delete(settle);
       if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side });
       if (!to) return;
-      if (ev.type !== "splash" && !ranged) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
+      if (ev.type !== "splash" && !ranged && from?.tplId !== "slime") this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
       this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
       this.hit(to, ev.dmg, ev.emphasis, ev.label);
       this.setPose(to, "hurt");
       const recoil = to.side === "player" ? -1 : 1;
-      this.animateActor(to, [
+      this.animateActor(to, to.tplId === "slime" ? [
+        { transform: "scale(1)" },
+        { transform: `translateX(${recoil * 9}px) scale(1.25,.7)`, offset: .22 },
+        { transform: "scale(.9,1.1)", offset: .7 },
+        { transform: "scale(1)" }
+      ] : [
         { transform: "translateX(0)" },
         { transform: `translateX(${recoil * 13}px) rotate(${recoil * 8}deg)`, offset: .22 },
         { transform: "translateX(0)" }
