@@ -22,6 +22,9 @@ def main():
             # Accepted sage fallen toe extends 5px into the empty left gutter.
             if args.species == 'sage' and i == 5:
                 cell = source.crop((1000, y, 1536, y + 512))
+            if args.species in ('mage', 'necromancer') and i % 3 in (1, 2):
+                edge = 900 if args.species == 'mage' else 930
+                cell = source.crop((512 if i % 3 == 1 else edge, y, edge if i % 3 == 1 else 1536, y + 512))
             bounds = cell.getchannel('A').point(lambda a: 255 if a > 20 else 0).getbbox()
             assert bounds, 'Empty pose'
             cells.append(cell.crop(bounds))
@@ -31,7 +34,7 @@ def main():
             canvas = Image.new('RGBA', (512, 512))
             canvas.alpha_composite(cell, ((512 - cell.width) // 2, 492 - cell.height))
             target = output / (pose + '.webp')
-            canvas.save(target, 'WEBP', quality=90, method=6)
+            canvas.save(target, 'WEBP', quality=90, method=4)
             print(target.name, target.stat().st_size)
 
 if __name__ == '__main__':

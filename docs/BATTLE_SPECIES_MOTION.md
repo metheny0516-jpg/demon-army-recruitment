@@ -1,5 +1,21 @@
 # 種族モーション追加（2026-09-04）
 
+## 味方魔法系3種
+
+内蔵image_genで各履歴書PNGを人物・画風だけの参考として戦闘専用6ポーズを生成し、
+背景抽出でチェック柄を実alphaへ変更。保存先 `assets/battle/units/{mage,imp,necromancer}/`。
+各motion-source.pngと512px6WebP。再生成は同じprepare_species_motion.py。
+mageの杖/足、necromancerの裾/足を切らないよう列2/3の空白境界を900/930pxへ調整。
+共通プロンプトは遠隔敵と同じ3x2・右向き・共通体格・全身・太線・抑えた色・透過。
+Mage: tired long-nosed man, drooping pointed hat, shabby olive brown robe, crooked staff;
+idle hunched / windup draw staff back / strike thrust staff / recover retract / hurt grip hat / fallen.
+Imp: red skin, horns, ears, ragged vest/tie, bat wings/tail;
+idle crouch / windup compress cupped hands / strike hop flick hands / recover land / hurt tumble / fallen.
+Necromancer: pale man, neat black hair, round glasses, skull brooch, charcoal coat, skeletal hands;
+idle folded hands / windup hand raised / strike command forward / recover straighten / hurt stagger / fallen.
+インプのみ小跳躍、死霊術師は微小な重心移動。62%命中・総尺は共通。
+検証: 各種species、role-motion、ranged、arrival、vfx-lifecycle。縮小比較はcasters-review.jpg。
+
 ## 遠隔敵3役
 
 内蔵image_genで役割ごとに1回ずつ6ポーズシートを生成。保存先は

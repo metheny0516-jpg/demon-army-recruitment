@@ -20,7 +20,10 @@ const BattleScene = {
     swordsman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     archer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     cleric: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    sage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    sage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    mage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    imp: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    necromancer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
@@ -644,12 +647,25 @@ const BattleScene = {
       later(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : "idle"), total);
       removeProjectile = this.projectileMotion(from, to, kind, contact);
       const direction = from.side === "player" ? 1 : -1;
-      this.animateActor(from, [
+      const frames = from.tplId === "imp" ? [
+        { transform: "translateY(0) scale(1)", offset: 0 },
+        { transform: "translateY(4px) scale(1.08,.88)", offset: .18 },
+        { transform: "translateY(-14px) scale(.97,1.03)", offset: .3 },
+        { transform: "translateY(-8px) scale(1)", offset: .62 },
+        { transform: "translateY(2px) scale(1.04,.96)", offset: .78 },
+        { transform: "translateY(0) scale(1)", offset: 1 }
+      ] : from.tplId === "necromancer" ? [
+        { transform: "translateX(0)", offset: 0 },
+        { transform: `translateX(${-direction * 2}px)`, offset: .2 },
+        { transform: `translateX(${direction * 3}px)`, offset: .4 },
+        { transform: "translateX(0)", offset: 1 }
+      ] : [
         { transform: "translateX(0)" },
         { transform: `translateX(${-direction * 6}px) rotate(${-direction * 3}deg)`, offset: .22 },
         { transform: "translateX(0)", offset: .45 },
         { transform: "translateX(0)" }
-      ], total);
+      ];
+      this.animateActor(from, frames, total);
     }
     if (from && to && ev.type === "attack" && !ranged && !reduced) {
       const a = from.actor.getBoundingClientRect(), b = to.actor.getBoundingClientRect();
