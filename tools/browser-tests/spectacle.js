@@ -16,8 +16,10 @@ const scenario = () => {
     ev({ type: 'synergy', id: 'overload', name: '魔王軍完成', desc: 'C' }),
     ev({ type: 'attack', fromId: 'p0', toId: 'e0', dmg: 60, hp: 0, maxHp: 20, dead: true, chainId: 'c1', chainDepth: 1, text: 'a' }),
     ev({ type: 'overkill', fromId: 'p0', toId: 'e0', excess: 40, percent: 200, rank: '蹂躙', rankId: 'overkill', emphasis: 3, chainId: 'c1', chainDepth: 2 }),
+    ev({ type: 'momentum', gain: 14, total: 14, mult: 1.14, emphasis: 2, chainId: 'c1', chainDepth: 3, text: '戦意' }),
     ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', emphasis: 3, chainId: 'c1', chainDepth: 3, text: 'b' }),
     ev({ type: 'splash', fromId: 'p0', toId: 'e1', dmg: 44, hp: 0, maxHp: 20, dead: true, chainId: 'c1', chainDepth: 4, text: 'c' }),
+    ev({ type: 'momentum', gain: 21, total: 35, mult: 1.35, emphasis: 3, chainId: 'c1', chainDepth: 5, text: '戦意' }),
     ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', emphasis: 3, chainId: 'c1', chainDepth: 5, text: 'd' }),
     ev({ type: 'splash', fromId: 'p0', toId: 'e2', dmg: 38, hp: 0, maxHp: 20, dead: true, chainId: 'c1', chainDepth: 6, text: 'e' }),
     ev({ type: 'round_start', round: 2 }),
@@ -26,7 +28,7 @@ const scenario = () => {
 };
 
 const watch = async (page, ms, step) => {
-  const seen = { burst: [], chain: [], bolts: 0, settle: false, heat: new Set(), cutins: new Set() };
+  const seen = { burst: [], chain: [], bolts: 0, settle: false, heat: new Set(), cutins: new Set(), morale: [], moraleLit: false };
   for (let t = 0; t < ms; t += step) {
     await page.waitForTimeout(step);
     const st = await page.evaluate(() => ({
@@ -35,13 +37,17 @@ const watch = async (page, ms, step) => {
       settle: !!document.querySelector('.chain-flare.settle'),
       bolts: document.querySelectorAll('.chain-bolt').length,
       cutin: document.querySelector('.cutin.show') ? (document.getElementById('cutin-name').textContent || '') : '',
-      heat: [...document.getElementById('scene').classList].filter(c => c.startsWith('heat-'))
+      heat: [...document.getElementById('scene').classList].filter(c => c.startsWith('heat-')),
+      morale: (document.getElementById('morale-mult') || {}).textContent || '',
+      moraleLit: !!document.querySelector('.morale.lit')
     }));
     if (st.burst) seen.burst.push(st.burst);
     if (st.chain) seen.chain.push(Number(st.chain));
     if (st.settle) seen.settle = true;
     seen.bolts += st.bolts;
     if (st.cutin) seen.cutins.add(st.cutin);
+    if (st.morale) seen.morale.push(st.morale);
+    if (st.moraleLit) seen.moraleLit = true;
     for (const h of st.heat) seen.heat.add(h);
   }
   return seen;
@@ -69,6 +75,13 @@ const watch = async (page, ms, step) => {
     assert.ok(seen.settle, '鎖が途切れたら×Nで締める');
     assert.ok(seen.bolts > 0, '伝播は次の敵へ稲妻が走る');
     assert.ok(seen.heat.has('heat-3'), '深い連鎖では戦場そのものが焼ける');
+    // 戦意：OVERKILLの見返りが常に画面に出ていて、上がっていくこと
+    assert.ok(seen.morale.includes('×1.00'), '戦意メーターは戦闘開始から出ている');
+    assert.ok(seen.morale.includes('×1.14') && seen.morale.includes('×1.35'),
+      `戦意が段階的に上がる（観測 ${[...new Set(seen.morale)]}）`);
+    assert.ok(seen.moraleLit, '戦意が上がったら点灯する');
+    const nums = seen.morale.map(t => Number(t.replace('×', '')));
+    assert.deepEqual(nums, nums.slice().sort((a, b) => a - b), '戦意は戦闘中に下がらない');
     assert.deepEqual(errors, [], 'JSエラーが出ていない');
 
     // 倍速でも同じ見せ場が出る（尺だけ縮む）
@@ -99,7 +112,7 @@ const watch = async (page, ms, step) => {
     assert.ok(calm.burst.includes('魔王軍完成'), '低モーションでも何が起きたかは読める');
     await reduced.close();
 
-    console.log('✓ 見せ場：帯と全画面の出し分け・積み上がるCHAIN・締め・伝播の稲妻・熱・倍速・スキップ・低モーション');
+    console.log('✓ 見せ場：帯と全画面の出し分け・積み上がるCHAIN・締め・伝播の稲妻・熱・戦意メーター・倍速・スキップ・低モーション');
   } finally {
     await browser.close();
   }

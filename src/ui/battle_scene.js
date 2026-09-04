@@ -46,7 +46,7 @@ const BattleScene = {
     battle_start: 500, round_start: 1150, synergy: 1650, facility_trigger: 1250,
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
     heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
-    resource_forfeit: 900, resource_consume: 750, overkill: 1250, result: 1200
+    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200
   },
 
   // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
@@ -59,7 +59,7 @@ const BattleScene = {
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
     "battle_start", "dialogue", "synergy", "facility_trigger", "trait_trigger",
-    "resource_gain", "resource_forfeit", "resource_consume",
+    "resource_gain", "resource_forfeit", "resource_consume", "momentum",
     "overkill", "revive", "summon", "survive", "incident", "result"
   ]),
 
@@ -143,6 +143,8 @@ const BattleScene = {
       scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
       scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
+      const morale = document.getElementById("morale");
+      if (morale) morale.classList.remove("bump");
     }
     for (const u of Object.values(this.units || {})) {
       u.el.classList.remove("acting", "targeted", "trouble", "lunge-up", "lunge-down", "hit", "hit-big", "revive-rise", "summon-rise", "pop");
@@ -167,6 +169,12 @@ const BattleScene = {
       <div class="${sceneClass}" id="scene">
         <div class="scene-fx" id="scene-fx"></div>
         <div class="battle-streak" id="battle-streak"><i></i><i></i><i></i></div>
+        <div class="morale" id="morale">
+          <span class="morale-label">魔王軍の戦意</span>
+          <b id="morale-mult">×1.00</b>
+          <div class="morale-bar"><i id="morale-fill"></i></div>
+          <span class="morale-gain" id="morale-gain"></span>
+        </div>
         <div class="chain-flare" id="chain-flare">
           <span class="chain-label">CHAIN</span><b></b><i class="chain-mult"></i>
           <div class="chain-rungs" id="chain-rungs"></div>
@@ -403,6 +411,7 @@ const BattleScene = {
     switch (ev.type) {
       case "battle_start":
         this.synergyNames = [];
+        this.setMorale(1, 0);
         if (this.isFinalBattle) this.battleIntro();
         break;
       case "round_start":
@@ -510,12 +519,22 @@ const BattleScene = {
         if (ev.resource === "soul") this.showAction(`魂を${ev.amount}消費`, 750);
         break;
       }
+      // 戦意：OVERKILLの見返りを数字で見せ続ける。
+      // 常設のメーターが上がっていくことが「爆発力が上がった」の実体。
+      case "momentum": {
+        this.setMorale(ev.mult, ev.gain);
+        this.showAction(`戦意 +${ev.gain}%　与ダメージ ×${ev.mult.toFixed(2)}`, 900);
+        this.flash(1);
+        break;
+      }
       case "trait_trigger": {
         const u = this.units[ev.sourceId];
         this.clearFocus();
         if (u) u.el.classList.add("acting");
         const propagating = ev.traitId === "overload" || ev.traitId === "chain_massacre";
-        this.showAction(propagating ? `【${ev.name}】余剰が伝播！` : `【${ev.name}】発動！`, 1000);
+        this.showAction(propagating
+          ? `【${ev.name}】連鎖${ev.propagationDepth || 1}段目！　余剰の${ev.ratio || 35}%が流れ込む`
+          : `【${ev.name}】発動！`, 1000);
         this.pulse(ev.traitId);
         if (propagating) {
           this.flash(1);
@@ -547,7 +566,7 @@ const BattleScene = {
           this.burst({
             kicker: "OVERKILL",
             name: ev.rank,
-            desc: `余剰 ${ev.excess} ダメージ　${ev.percent}%`,
+            desc: `余剰 ${ev.excess} ダメージ（${ev.percent}%）→ 魔王軍の戦意へ`,
             stacks: ev.percent >= 300 ? 4 : ev.percent >= 200 ? 3 : 2,
             tone: "fx-overkill"
           });
@@ -1053,6 +1072,33 @@ const BattleScene = {
     s.classList.remove("shake");
     void s.offsetWidth;
     s.classList.add("shake");
+  },
+
+  // 戦意メーター。戦闘のあいだ常に出ていて、上がるたびに叩かれる。
+  // 「いま何倍で殴っているか」が常に読めないと、強くなった実感が出ない。
+  setMorale(mult, gain) {
+    const box = document.getElementById("morale");
+    if (!box) return;
+    const value = Math.max(1, Number(mult) || 1);
+    document.getElementById("morale-mult").textContent = `×${value.toFixed(2)}`;
+    const fill = document.getElementById("morale-fill");
+    if (fill) fill.style.width = `${Math.min(100, (value - 1) / 1.2 * 100)}%`;
+    box.classList.remove("m1", "m2", "m3");
+    box.classList.add(value >= 1.6 ? "m3" : value >= 1.25 ? "m2" : "m1");
+    box.classList.toggle("lit", value > 1);
+    if (gain) {
+      const g = document.getElementById("morale-gain");
+      g.textContent = `+${gain}%`;
+      g.classList.remove("show");
+      void g.offsetWidth;
+      g.style.animationDuration = `${this.visualDuration(900)}ms`;
+      g.classList.add("show");
+      this.timers.push(setTimeout(() => g.classList.remove("show"), this.visualDuration(900)));
+    }
+    box.classList.remove("bump");
+    void box.offsetWidth;
+    box.style.setProperty("--morale-bump", `${this.visualDuration(420)}ms`);
+    box.classList.add("bump");
   },
 
   // 一瞬の白飛び。次に来るものを「構えさせる」ための予備動作。

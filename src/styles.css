@@ -2662,3 +2662,60 @@ button.primary::first-letter { color: var(--gold); }
 }
 .scene.zoomed { animation: sceneZoom var(--burst-life, 1.2s) ease-out; }
 @media (prefers-reduced-motion: reduce) { .scene.zoomed { animation: none; } }
+
+/* ── 魔王軍の戦意 ──────────────────────────────
+   OVERKILLの見返りを常に画面へ出す。「いま何倍で殴っているか」が読めないと、
+   連鎖しても強くなった実感が出ない（=ふつうの戦闘に見える）。 */
+.morale {
+  position: absolute;
+  z-index: 6;
+  left: 3%;
+  top: 46%;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 6px 10px 7px;
+  border-radius: 3px;
+  pointer-events: none;
+  color: #d8d2e6;
+  background: rgba(12, 8, 18, .62);
+  border: 1px solid rgba(255, 255, 255, .14);
+  transition: color .2s linear, border-color .2s linear, box-shadow .2s linear;
+}
+.morale-label { font: 700 9px/1 sans-serif; letter-spacing: .22em; opacity: .8; }
+.morale b { font: 900 clamp(20px, 2.6vw, 30px)/1 Georgia, serif; }
+.morale-bar { width: clamp(64px, 9vw, 108px); height: 4px; border-radius: 2px; background: rgba(255,255,255,.16); overflow: hidden; }
+.morale-bar i { display: block; height: 100%; width: 0; background: currentColor; box-shadow: 0 0 10px currentColor; transition: width .25s ease-out; }
+.morale.lit { color: #ffe6a6; border-color: rgba(255, 209, 102, .5); }
+.morale.m2 { color: #ffb14d; border-color: rgba(255, 150, 60, .6); box-shadow: 0 0 20px rgba(255, 140, 50, .3); }
+.morale.m3 { color: #ff6a45; border-color: rgba(255, 90, 60, .75); box-shadow: 0 0 30px rgba(255, 70, 45, .45); }
+.morale b { text-shadow: 0 2px 8px #000, 0 0 18px currentColor; }
+
+@keyframes moraleBump {
+  0%   { transform: translateY(-50%) scale(1); }
+  30%  { transform: translateY(-50%) scale(1.16); }
+  100% { transform: translateY(-50%) scale(1); }
+}
+.morale.bump { animation: moraleBump var(--morale-bump, .42s) cubic-bezier(.2,1.6,.3,1); }
+
+.morale-gain {
+  position: absolute; left: 100%; top: 4px; margin-left: 6px;
+  font: 900 clamp(13px, 1.8vw, 18px)/1 Georgia, serif; white-space: nowrap;
+  opacity: 0; color: #fff3c4; text-shadow: 0 2px 8px #000;
+}
+@keyframes moraleGain {
+  0%   { opacity: 0; transform: translateY(6px) scale(.8); }
+  22%  { opacity: 1; transform: translateY(-2px) scale(1.15); }
+  70%  { opacity: 1; transform: translateY(-8px) scale(1); }
+  100% { opacity: 0; transform: translateY(-18px) scale(1); }
+}
+.morale-gain.show { animation: moraleGain .9s ease-out; }
+
+@media (max-width: 560px) {
+  .morale { left: 4%; top: 26%; padding: 4px 7px 5px; }
+  .morale b { font-size: 18px; }
+  .morale-bar { width: 62px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .morale.bump, .morale-gain.show { animation: none; }
+  .morale-gain { opacity: 1; }
+}

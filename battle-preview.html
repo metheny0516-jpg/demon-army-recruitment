@@ -115,10 +115,12 @@ function replaySpectacle() {
     // 連鎖：攻撃→死亡→OVERKILL→伝播→死亡→伝播…と深さが伸びていく
     ev({ type: 'attack', fromId: 'p0', toId: 'e0', dmg: 60, hp: 0, maxHp: 20, dead: true, chainId: 'c1', chainDepth: 1, text: 'ゴブ太 → 剣士見習い に 60 ダメージ' }),
     ev({ type: 'overkill', fromId: 'p0', toId: 'e0', excess: 40, percent: 200, rankId: 'overkill', rank: '蹂躙', emphasis: 3, chainId: 'c1', chainDepth: 2 }),
-    ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', emphasis: 3, chainId: 'c1', chainDepth: 3, text: '余剰が伝播！' }),
-    ev({ type: 'attack', fromId: 'p0', toId: 'e1', dmg: 44, hp: 0, maxHp: 20, dead: true, label: '魔王軍完成', chainId: 'c1', chainDepth: 4, text: '伝播 → 剣士見習い1 に 44 ダメージ' }),
-    ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', emphasis: 3, chainId: 'c1', chainDepth: 5, text: 'さらに伝播！' }),
-    ev({ type: 'attack', fromId: 'p0', toId: 'e2', dmg: 38, hp: 0, maxHp: 20, dead: true, label: '魔王軍完成', chainId: 'c1', chainDepth: 6, text: '伝播 → 剣士見習い2 に 38 ダメージ' }),
+    ev({ type: 'momentum', gain: 14, total: 14, mult: 1.14, emphasis: 2, chainId: 'c1', chainDepth: 2, text: '　魔王軍の戦意が上がった！ 与ダメージ ×1.14' }),
+    ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', propagationDepth: 1, ratio: 35, emphasis: 3, chainId: 'c1', chainDepth: 3, text: '余剰が伝播！' }),
+    ev({ type: 'attack', fromId: 'p0', toId: 'e1', dmg: 44, hp: 0, maxHp: 20, dead: true, label: '魔王軍完成', chainId: 'c1', chainDepth: 4, text: '伝播1段目 → 剣士見習い1 に 44 ダメージ' }),
+    ev({ type: 'momentum', gain: 21, total: 35, mult: 1.35, emphasis: 3, chainId: 'c1', chainDepth: 4, text: '　魔王軍の戦意が上がった！ 与ダメージ ×1.35' }),
+    ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', propagationDepth: 2, ratio: 60, emphasis: 3, chainId: 'c1', chainDepth: 5, text: 'さらに伝播！' }),
+    ev({ type: 'attack', fromId: 'p0', toId: 'e2', dmg: 76, hp: 0, maxHp: 20, dead: true, label: '魔王軍完成', chainId: 'c1', chainDepth: 6, text: '伝播2段目 → 剣士見習い2 に 76 ダメージ' }),
     ev({ type: 'round_start', round: 2 }),
     ev({ type: 'attack', fromId: 'p1', toId: 'e3', dmg: 22, hp: 0, maxHp: 20, dead: true, chainId: 'c2', chainDepth: 1, text: 'ゴブ太1 → 剣士見習い3 に 22 ダメージ' }),
     ev({ type: 'result', victory: true })

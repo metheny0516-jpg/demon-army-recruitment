@@ -172,6 +172,29 @@ const Battle = {
     // その深さは同時発動数そのものになる。積むほど連鎖が伸びる。
     const overloadStacks = activeSyn.some(s => s.id === "overload")
       ? Math.min(4, activeSyn.filter(s => !s.meta).length) : 0;
+
+    // 戦意：OVERKILLの見返り。これまでOVERKILLは伝播の入口になるだけで、
+    // それ自体には何の得も無かった（だから「明示」しようにも中身が無かった）。
+    // 余剰を出すほど味方全員の与ダメージが上がり、その倍率を画面に出し続ける。
+    // 連鎖が進むほど数字そのものが大きくなるので、「爆発力が上がった」が見える。
+    let momentum = 0;
+    const MOMENTUM_CAP = 1.2;   // 与ダメージ+120%まで。青天井にすると1戦目から壊れる
+    const gainMomentum = (percent, parent, depth) => {
+      if (momentum >= MOMENTUM_CAP) return;
+      // 余剰が大きいほど、そして連鎖が深いほど戦意が乗る
+      const gain = Math.min(.25, .04 + percent / 100 * .05 + Math.max(0, (depth || 1) - 1) * .035);
+      const before = momentum;
+      momentum = Math.min(MOMENTUM_CAP, momentum + gain);
+      if (momentum <= before) return;
+      emitCausal("momentum", {
+        gain: Math.round((momentum - before) * 100),
+        total: Math.round(momentum * 100),
+        mult: Number((1 + momentum).toFixed(2)),
+        emphasis: momentum >= .8 ? 3 : 2,
+        text: `　魔王軍の戦意が上がった！ 与ダメージ ×${(1 + momentum).toFixed(2)}`,
+        cls: "momentum"
+      }, parent);
+    };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;
@@ -310,6 +333,10 @@ const Battle = {
           rankId: rank.id, rank: rank.name, emphasis: rank.emphasis,
           text: `　${rank.name}！ 余剰${excess}ダメージ（${percent}% OVERKILL）`, cls: "overkill"
         }, damageEvent);
+        // 余剰は捨て値にしない。魔王軍の戦意へ変える。
+        if (attacker.side === "player") {
+          gainMomentum(percent, overkillEvent, (opts.propagationDepth || 0) + 1);
+        }
       }
       if (survived) {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
@@ -326,27 +353,32 @@ const Battle = {
         // 後者は魔王軍の編成が起こすものなので味方側だけ。深さは積んだ枚数で伸びる。
         const byTrait = attacker.traits.includes("chain_massacre");
         const byOverload = !byTrait && attacker.side === "player" && overloadStacks > 0;
-        const limit = byTrait ? 3 : overloadStacks;
-        // 積むほど深くなるだけでなく、積むほど点きやすくする。
-        // 余剰100%（相手の最大HPの2倍を一撃で出す）は滅多に起きないので、
-        // 深さの上限だけ上げても実際には伸びなかった。
-        const needPercent = byTrait ? 100 : Math.max(40, 125 - 25 * overloadStacks);
+        const limit = byTrait ? 3 : overloadStacks + 1;
+        // 余剰を出した撃破は、そのまま次へ流れる。以前は「余剰125-25×段数%以上」を
+        // 求めていたが、実プレイでは滅多に満たされず連鎖が始まらなかった。
+        // 《魔王軍完成》が立っている＝すでに札を積んだ状態なので、そこは緩くてよい。
+        const needPercent = byTrait ? 100 : Math.max(15, 60 - 15 * overloadStacks);
         if (overkillEvent && overkillEvent.percent >= needPercent && propagationDepth < limit
           && (byTrait || byOverload)) {
           const opponents = attacker.side === "player" ? enemyUnits : playerUnits;
           const next = opponents.find(unit => unit.alive);
           if (next) {
             const label = byTrait ? "連鎖虐殺" : "魔王軍完成";
+            const step = propagationDepth + 1;
+            // 連鎖は進むほど強くなる。以前は「余剰×0.22」で、余剰は撃破のたびに
+            // 小さくなるため段が進むほど威力が落ちていた。演出は盛り上がるのに
+            // 数字はしぼむので、爆発しているように見えなかった。
+            const ratio = byTrait ? 0.3 + 0.1 * (step - 1) : 0.35 + 0.25 * (step - 1);
             const trigger = emitCausal("trait_trigger", {
               sourceId: attacker.id, traitId: byTrait ? "chain_massacre" : "overload", name: label,
-              propagationDepth: propagationDepth + 1, emphasis: byTrait ? 2 : 3,
+              propagationDepth: step, ratio: Math.round(ratio * 100), emphasis: 3,
               text: byTrait
                 ? `　${attacker.name}の【連鎖虐殺】 余剰ダメージが${next.name}へ伝播！`
-                : `　【魔王軍完成】 ${attacker.name}の余剰が止まらない！ ${next.name}へ伝播（${propagationDepth + 1}/${limit}）`,
+                : `　【魔王軍完成】 連鎖${step}段目！ 余剰の${Math.round(ratio * 100)}%が${next.name}へ流れ込む`,
               cls: "trait"
             }, overkillEvent);
-            applyDamage(attacker, next, overkillEvent.excess * (byTrait ? 0.3 : 0.22), "splash", {
-              label, parentEvent: trigger, propagationDepth: propagationDepth + 1
+            applyDamage(attacker, next, overkillEvent.excess * ratio, "splash", {
+              label, parentEvent: trigger, propagationDepth: step
             });
           }
         }
@@ -401,6 +433,8 @@ const Battle = {
         ctx.notes.push("恐喝帳簿");
         ledgerBoost = null;
       }
+      // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
+      if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
       const variance = 0.9 + U.rand() * 0.2;
       const raw = unit.atk * ctx.mult * variance * (actionOpts.mult || 1);
       const amount = Math.max(1, Math.round(raw) - Math.floor(target.def / 2));
