@@ -262,7 +262,7 @@ const UI = {
       <div><b>🔨 ${builders}</b><span>建設所属</span></div>
       <div><b>🍲 ${life}</b><span>生活所属</span></div>
       <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
-      <div class="${balance < 0 ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `不足 ${-balance}！` : `余剰 ${balance}`}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）</span></div>
+      <div class="${balance < 0 && st.food < -balance ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `赤字 ${-balance}（備蓄 ${st.food} であと${Math.floor(st.food / -balance)}戦）` : `余剰 +${balance}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）`}</span></div>
       <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
       ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>経理部の圧縮</span></div>` : ""}
       ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>人事部の集客</span></div>` : ""}
