@@ -25,7 +25,9 @@ const BattleScene = {
     imp: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     necromancer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     kobold: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    zombie: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    zombie: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    ogre: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    king_slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
@@ -572,6 +574,22 @@ const BattleScene = {
   },
 
   meleeFrames(u, dx, dy, direction) {
+    if (u.tplId === "king_slime") return [
+      { transform: "translate(0,0) scale(1)", offset: 0 },
+      { transform: `translate(${-direction * 7}px,8px) scale(1.2,.74)`, offset: .27 },
+      { transform: `translate(${dx}px,${dy}px) scale(1.12,.9)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy}px) scale(.95,1.1)`, offset: .53 },
+      { transform: `translate(${dx * .35}px,${dy * .35}px) scale(1.1,.91)`, offset: .76 },
+      { transform: "translate(0,0) scale(.98,1.02)", offset: .91 },
+      { transform: "translate(0,0) scale(1)", offset: 1 }
+    ];
+    if (u.tplId === "ogre") return [
+      { transform: "translate(0,0) rotate(0deg)", offset: 0 },
+      { transform: `translate(${-direction * 9}px,4px) rotate(${-direction * 5}deg)`, offset: .28 },
+      { transform: `translate(${dx}px,${dy + 6}px) rotate(${direction * 4}deg)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy + 6}px) rotate(${direction * 4}deg)`, offset: .62 },
+      { transform: "translate(0,0) rotate(0deg)", offset: 1 }
+    ];
     if (u.tplId === "kobold") return [
       { transform: "translate(0,0) scale(1)", offset: 0 },
       { transform: `translate(${-direction * 12}px,6px) scale(1.05,.9)`, offset: .23 },
@@ -701,12 +719,12 @@ const BattleScene = {
       this.pendingHits.delete(settle);
       if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side });
       if (!to) return;
-      if (ev.type !== "splash" && !ranged && !["slime", "kobold", "zombie"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
+      if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
       this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
       this.hit(to, ev.dmg, ev.emphasis, ev.label);
       this.setPose(to, "hurt");
       const recoil = to.side === "player" ? -1 : 1;
-      this.animateActor(to, to.tplId === "slime" ? [
+      this.animateActor(to, ["slime", "king_slime"].includes(to.tplId) ? [
         { transform: "scale(1)" },
         { transform: `translateX(${recoil * 9}px) scale(1.25,.7)`, offset: .22 },
         { transform: "scale(.9,1.1)", offset: .7 },

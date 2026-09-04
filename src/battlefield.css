@@ -59,6 +59,8 @@
 .battlefield .bu:not(.dead):not(.acting):not(.targeted) .battle-sprite:has([data-tpl-id="imp"]) { animation: impBreath 1.6s ease-in-out infinite; }
 .battlefield .bu:not(.dead):not(.acting):not(.targeted) .battle-sprite:has([data-tpl-id="necromancer"]) { animation: none; }
 @keyframes impBreath { 50% { transform: translateY(-3px) rotate(1deg); } }
+.battlefield .bu:not(.dead):not(.acting):not(.targeted) .battle-sprite:has([data-tpl-id="ogre"]) { animation: orcBreath 3.8s ease-in-out infinite; }
+.battlefield .bu:not(.dead):not(.acting):not(.targeted) .battle-sprite:has([data-tpl-id="king_slime"]) { animation: slimeBreath 2.8s ease-in-out infinite; }
 /* The accepted atlas has a neighboring spear tip in the idle cell's empty corner. */
 .battlefield .bu-sprite-img[data-tpl-id="skeleton"][data-pose="idle"] { clip-path: polygon(0 0, 80% 0, 80% 38%, 100% 38%, 100% 100%, 0 100%); }
 .game-scene-battle .battlefield .bu-name { margin: 0 0 3px; font: 700 11px/1.3 sans-serif; background: #101019c9; border-radius: 3px; }

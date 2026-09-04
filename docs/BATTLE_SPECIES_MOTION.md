@@ -1,5 +1,18 @@
 # 種族モーション追加（2026-09-04）
 
+## オーガ・キングスライム
+
+内蔵image_gen各1シート、実RGBA。保存先 `assets/battle/units/{ogre,king_slime}/`。
+共通プロンプト: 1536x1024 3x2, six right-facing full-body poses same scale, thick uneven ink,
+muted matte 1990s bestiary, complete silhouette, empty margins, real alpha, no backdrop/effects/text.
+Ogre: giant grey-blue worker, tiny brown cap, patched lace-front tunic, huge wooden club;
+idle low club / windup overhead / strike downward smash / recover heave club / hurt rock back / fallen.
+King slime: three fused blue lobes, stern crowned center/anxious left/sleepy right;
+idle settled / windup wide compression / strike surge right / recover staggered wobble / hurt dent / fallen puddle.
+オーガは空白境界500/960で切る。再生成はprepare_species_motion.py。
+38%命中・総尺を維持。棍棒の停止区間と大スライムの戻りの揺れを専用化、斬撃なし。
+検証: species各種、role-motion、縮小比較heavy-review.jpg。
+
 ## コボルト・ゾンビ
 
 内蔵image_genで各1シート。共通3x2・右向き・全身・太線・抑えた色・実RGBA。

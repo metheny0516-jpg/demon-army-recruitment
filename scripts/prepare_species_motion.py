@@ -31,6 +31,9 @@ def main():
             if args.species == 'zombie' and i >= 3:
                 edges = (0, 512, 970, 1536)
                 cell = source.crop((edges[i % 3], y, edges[i % 3 + 1], y + 512))
+            if args.species == 'ogre':
+                edges = (0, 500, 960, 1536)
+                cell = source.crop((edges[i % 3], y, edges[i % 3 + 1], y + 512))
             bounds = cell.getchannel('A').point(lambda a: 255 if a > 20 else 0).getbbox()
             assert bounds, 'Empty pose'
             cells.append(cell.crop(bounds))
