@@ -17,7 +17,10 @@ const BattleScene = {
     slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     skeleton: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     orc: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    swordsman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    swordsman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    archer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    cleric: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    sage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
@@ -64,7 +67,10 @@ const BattleScene = {
   // 敵はデータのアイコン、味方は種族アイコン
   iconOf(u) { return u.icon || (u.side === "enemy" ? "🗡" : UI.icon(u.race)); },
   artId(u) {
-    return u.tplId || (u.side === "enemy" && ["🗡", "🗡️", "⚔️"].includes(u.icon) ? "swordsman" : undefined);
+    return u.tplId || (u.side === "enemy" ? {
+      "🗡": "swordsman", "🗡️": "swordsman", "⚔️": "swordsman",
+      "🏹": "archer", "✨": "cleric", "📖": "sage"
+    }[u.icon] : undefined);
   },
 
   // 表示上の分類だけ。射程・ダメージ種別・命中率などの戦闘ルールではない。
@@ -632,6 +638,10 @@ const BattleScene = {
     const later = (fn, ms) => this.timers.push(setTimeout(fn, ms));
     let removeProjectile = () => {};
     if (from && to && ranged && !reduced) {
+      this.setPose(from, "attack-windup");
+      later(() => this.setPose(from, "strike"), total * .22);
+      later(() => this.setPose(from, "recover"), total * .68);
+      later(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : "idle"), total);
       removeProjectile = this.projectileMotion(from, to, kind, contact);
       const direction = from.side === "player" ? 1 : -1;
       this.animateActor(from, [

@@ -7,7 +7,7 @@ POSES = ('idle', 'attack-windup', 'strike', 'recover', 'hurt', 'fallen')
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('species', choices=('slime', 'skeleton', 'orc'))
+    parser.add_argument('species', choices=('slime', 'skeleton', 'orc', 'archer', 'cleric', 'sage', 'kobold', 'zombie', 'imp', 'mage', 'necromancer', 'ogre', 'king_slime', 'shield', 'slinger', 'axeman', 'cavalry', 'commander', 'hero'))
     parser.add_argument('source', type=Path)
     args = parser.parse_args()
     output = Path(__file__).resolve().parents[1] / 'assets/battle/units' / args.species
@@ -19,6 +19,9 @@ def main():
         for i in range(6):
             x, y = (i % 3) * 512, (i // 3) * 512
             cell = source.crop((x, y, x + 512, y + 512))
+            # Accepted sage fallen toe extends 5px into the empty left gutter.
+            if args.species == 'sage' and i == 5:
+                cell = source.crop((1000, y, 1536, y + 512))
             bounds = cell.getchannel('A').point(lambda a: 255 if a > 20 else 0).getbbox()
             assert bounds, 'Empty pose'
             cells.append(cell.crop(bounds))

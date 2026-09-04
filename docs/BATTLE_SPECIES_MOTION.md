@@ -1,5 +1,24 @@
 # 種族モーション追加（2026-09-04）
 
+## 遠隔敵3役
+
+内蔵image_genで役割ごとに1回ずつ6ポーズシートを生成。保存先は
+`assets/battle/units/{archer,cleric,sage}/motion-source.png` と各6WebP。
+実RGBA・1536x1024を検査し、共通倍率で512角に整形。縮小比較は `ranged-review.jpg`。
+再生成は `python scripts/prepare_species_motion.py ROLE assets/battle/units/ROLE/motion-source.png`。
+賢者fallenのみ空白の区切りを1000pxへ移し、足先を保持する。
+共通プロンプト: 1536x1024 3x2 equal cells, same right-facing full-body character and scale,
+thick uneven ink, muted matte flat cel colors, 1990s RPG bestiary, real RGBA alpha,
+complete equipment, empty margins, no crossing cells, no backdrop/shadow/effects/grid/text.
+Archer: brown ponytail, green hood/tunic, cream trousers, bow/quiver;
+idle bow lowered / windup draw to cheek / strike release / recover reach quiver / hurt recoil / fallen sidewise.
+Cleric: short dark hair, ivory hood/robe, gold stole, circular brass finial staff;
+idle upright / windup staff raised palm close / strike palm forward / recover lower staff / hurt recoil / fallen.
+Sage: grey bob, round spectacles, plum robe, brown book;
+idle reading / windup book raised finger near temple / strike point forward / recover turn page / hurt clutch book / fallen.
+遠隔の予備動作→発射姿→戻りを登録絵で再生し、飛翔体・62%命中・HP/音同期を維持。
+検証: 各役species、role-motion（実際のポーズ遷移）、ranged、battlefield、arrival、vfx-lifecycle。
+
 ## 剣士の単体差分（2026-09-04）
 
 内蔵image_genで既存 `swordsman/idle.webp` を毎回参照し、5差分を単体生成。
