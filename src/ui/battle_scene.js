@@ -596,11 +596,15 @@ const BattleScene = {
     u.fill.classList.toggle("low", hp / maxHp <= 0.3);
   },
 
-  hit(u, dmg, emphasis, label) {
+  hit(u, dmg, emphasis, label, scale) {
     u.el.classList.remove("hit", "hit-big");
     void u.el.offsetWidth;
     u.el.classList.add(emphasis >= 2 ? "hit-big" : "hit");
-    this.float(u, (label ? label + " " : "") + dmg, emphasis >= 2 ? "big" : "");
+    // 連鎖が深いほど、戦意が高いほど、数字そのものを大きく出す。
+    // 「爆発力が上がった」を伝えるのに一番直接的な信号は、でかい数字。
+    const tier = Math.min(3, Math.max(0, scale || 0));
+    const cls = [emphasis >= 2 ? "big" : "", tier ? `surge s${tier}` : ""].filter(Boolean).join(" ");
+    this.float(u, (label ? label + " " : "") + dmg, cls);
   },
 
   clearFocus() {
@@ -853,7 +857,12 @@ const BattleScene = {
       if (!to) return;
       if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
       this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
-      this.hit(to, ev.dmg, ev.emphasis, ev.label);
+      // 連鎖の段と戦意の高さで数字の大きさが変わる
+      const surge = Math.max(
+        Math.max(0, (ev.chainDepth || 1) - 2),
+        this.moraleTier || 0
+      );
+      this.hit(to, ev.dmg, ev.emphasis, ev.label, surge);
       this.setPose(to, "hurt");
       const recoil = to.side === "player" ? -1 : 1;
       this.animateActor(to, ["slime", "king_slime"].includes(to.tplId) ? [
@@ -1084,6 +1093,7 @@ const BattleScene = {
     const fill = document.getElementById("morale-fill");
     if (fill) fill.style.width = `${Math.min(100, (value - 1) / 1.2 * 100)}%`;
     box.classList.remove("m1", "m2", "m3");
+    this.moraleTier = value >= 1.6 ? 3 : value >= 1.25 ? 2 : value > 1 ? 1 : 0;
     box.classList.add(value >= 1.6 ? "m3" : value >= 1.25 ? "m2" : "m1");
     box.classList.toggle("lit", value > 1);
     if (gain) {

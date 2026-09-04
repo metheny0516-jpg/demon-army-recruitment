@@ -2719,3 +2719,10 @@ button.primary::first-letter { color: var(--gold); }
   .morale.bump, .morale-gain.show { animation: none; }
   .morale-gain { opacity: 1; }
 }
+
+/* 連鎖が深いほど・戦意が高いほど、ダメージ数字そのものを大きく出す。
+   「爆発力が上がった」を伝えるのに一番直接的な信号は、でかい数字。 */
+.fnum.surge { font-weight: 900; }
+.fnum.surge.s1 { font-size: 1.35em; color: #ffe08a; text-shadow: 0 2px 8px #000, 0 0 16px rgba(255,200,90,.8); }
+.fnum.surge.s2 { font-size: 1.75em; color: #ffab4d; text-shadow: 0 2px 10px #000, 0 0 24px rgba(255,150,60,.9); }
+.fnum.surge.s3 { font-size: 2.2em; color: #ff6a45; text-shadow: 0 3px 12px #000, 0 0 34px rgba(255,80,50,.95); }

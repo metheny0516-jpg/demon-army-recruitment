@@ -28,7 +28,7 @@ const scenario = () => {
 };
 
 const watch = async (page, ms, step) => {
-  const seen = { burst: [], chain: [], bolts: 0, settle: false, heat: new Set(), cutins: new Set(), morale: [], moraleLit: false };
+  const seen = { burst: [], chain: [], bolts: 0, settle: false, heat: new Set(), cutins: new Set(), morale: [], moraleLit: false, surge: new Set() };
   for (let t = 0; t < ms; t += step) {
     await page.waitForTimeout(step);
     const st = await page.evaluate(() => ({
@@ -38,6 +38,7 @@ const watch = async (page, ms, step) => {
       bolts: document.querySelectorAll('.chain-bolt').length,
       cutin: document.querySelector('.cutin.show') ? (document.getElementById('cutin-name').textContent || '') : '',
       heat: [...document.getElementById('scene').classList].filter(c => c.startsWith('heat-')),
+      surge: [...document.querySelectorAll('.fnum.surge')].map(e => [...e.classList].find(c => /^s\d$/.test(c)) || ''),
       morale: (document.getElementById('morale-mult') || {}).textContent || '',
       moraleLit: !!document.querySelector('.morale.lit')
     }));
@@ -46,6 +47,7 @@ const watch = async (page, ms, step) => {
     if (st.settle) seen.settle = true;
     seen.bolts += st.bolts;
     if (st.cutin) seen.cutins.add(st.cutin);
+    for (const t of st.surge) if (t) seen.surge.add(t);
     if (st.morale) seen.morale.push(st.morale);
     if (st.moraleLit) seen.moraleLit = true;
     for (const h of st.heat) seen.heat.add(h);
@@ -82,6 +84,7 @@ const watch = async (page, ms, step) => {
     assert.ok(seen.moraleLit, '戦意が上がったら点灯する');
     const nums = seen.morale.map(t => Number(t.replace('×', '')));
     assert.deepEqual(nums, nums.slice().sort((a, b) => a - b), '戦意は戦闘中に下がらない');
+    assert.ok(seen.surge.size > 0, `連鎖と戦意でダメージ数字が大きくなる（観測 ${[...seen.surge]}）`);
     assert.deepEqual(errors, [], 'JSエラーが出ていない');
 
     // 倍速でも同じ見せ場が出る（尺だけ縮む）
