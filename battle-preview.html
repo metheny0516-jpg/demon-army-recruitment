@@ -11,6 +11,7 @@
   <p>演出確認用の固定シナリオです。本編のセーブ・戦績は変更しません。</p>
   <button id="replay">▶ 1対1を再生</button>
   <button id="crowd">5対5を確認</button>
+  <button id="spectacle" style="font-weight:bold">🔥 シナジーと連鎖の演出を確認</button>
   <button id="ranged">弓と魔法を確認</button>
   <button id="arrival">召喚と復活を確認</button>
   <button id="species">スライム・骸骨兵を確認</button>
@@ -96,6 +97,35 @@ function replayArrival() {
   ], () => {});
 }
 document.getElementById('arrival').onclick = replayArrival;
+
+// シナジーの重ねがけ→魔王軍完成→OVERKILL→連鎖伝播、という「見せ場」だけを通しで見る。
+// 実プレイでは揃わないと出ないので、演出の調整はここで行う。
+function replaySpectacle() {
+  const player = Array.from({ length: 3 }, (_, i) => ({ id: 'p' + i, tplId: 'goblin', side: 'player', name: 'ゴブ太' + (i || ''), icon: '👺', hp: 40, maxHp: 40 }));
+  const enemy = Array.from({ length: 5 }, (_, i) => ({ id: 'e' + i, side: 'enemy', name: '剣士見習い' + (i || ''), icon: '🗡', hp: 20, maxHp: 20 }));
+  let n = 0;
+  const ev = (o) => ({ eventId: 'ev' + (++n), emphasis: 0, ...o });
+  const events = [
+    ev({ type: 'battle_start', player, enemy, text: '戦闘開始' }),
+    ev({ type: 'round_start', round: 1 }),
+    ev({ type: 'synergy', id: 'goblin_horde', name: 'ゴブリン軍団', desc: '出撃したゴブリンの与ダメージ+12%刻み' }),
+    ev({ type: 'synergy', id: 'arcane_circle', name: '魔法結社', desc: '出撃した魔法職の与ダメージ+18%刻み' }),
+    ev({ type: 'synergy', id: 'legion_of_dead', name: '死の軍勢', desc: 'アンデッドの与ダメージ+22%刻み' }),
+    ev({ type: 'synergy', id: 'overload', name: '魔王軍完成', desc: '同時発動数-1につき出撃隊全員+20%' }),
+    // 連鎖：攻撃→死亡→OVERKILL→伝播→死亡→伝播…と深さが伸びていく
+    ev({ type: 'attack', fromId: 'p0', toId: 'e0', dmg: 60, hp: 0, maxHp: 20, dead: true, chainId: 'c1', chainDepth: 1, text: 'ゴブ太 → 剣士見習い に 60 ダメージ' }),
+    ev({ type: 'overkill', fromId: 'p0', toId: 'e0', excess: 40, percent: 200, rankId: 'overkill', rank: '蹂躙', emphasis: 3, chainId: 'c1', chainDepth: 2 }),
+    ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', emphasis: 3, chainId: 'c1', chainDepth: 3, text: '余剰が伝播！' }),
+    ev({ type: 'attack', fromId: 'p0', toId: 'e1', dmg: 44, hp: 0, maxHp: 20, dead: true, label: '魔王軍完成', chainId: 'c1', chainDepth: 4, text: '伝播 → 剣士見習い1 に 44 ダメージ' }),
+    ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', emphasis: 3, chainId: 'c1', chainDepth: 5, text: 'さらに伝播！' }),
+    ev({ type: 'attack', fromId: 'p0', toId: 'e2', dmg: 38, hp: 0, maxHp: 20, dead: true, label: '魔王軍完成', chainId: 'c1', chainDepth: 6, text: '伝播 → 剣士見習い2 に 38 ダメージ' }),
+    ev({ type: 'round_start', round: 2 }),
+    ev({ type: 'attack', fromId: 'p1', toId: 'e3', dmg: 22, hp: 0, maxHp: 20, dead: true, chainId: 'c2', chainDepth: 1, text: 'ゴブ太1 → 剣士見習い3 に 22 ダメージ' }),
+    ev({ type: 'result', victory: true })
+  ];
+  BattleScene.play(events, () => { document.getElementById('next-btn').textContent = 'もう一度見る'; });
+}
+document.getElementById('spectacle').onclick = replaySpectacle;
 UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replay(); });
 replay();
 </script>

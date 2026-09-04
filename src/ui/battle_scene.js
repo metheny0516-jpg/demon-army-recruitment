@@ -66,7 +66,7 @@ const BattleScene = {
   EFFECT_CLASSES: [
     "fx-goblin_horde", "fx-king_slime", "fx-legion_of_dead", "fx-arcane_circle",
     "fx-cheap_labor", "fx-elite_few", "fx-general_command", "fx-incident",
-    "fx-revive", "fx-guard", "fx-overkill"
+    "fx-revive", "fx-guard", "fx-overkill", "fx-overload"
   ],
 
   speed: 1,
@@ -131,6 +131,7 @@ const BattleScene = {
   saveSpeed() { try { localStorage.setItem("maou_speed", String(this.speed)); } catch (e) {} },
 
   stop() {
+    this.resetChain(true);
     for (const settle of this.pendingHits) settle();
     this.pendingHits.clear();
     for (const motion of this.motions) motion.cancel();
@@ -139,9 +140,9 @@ const BattleScene = {
     this.timers = [];
     const scene = document.getElementById("scene");
     if (scene) {
-      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile").forEach(el => el.remove());
+      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
-      scene.classList.remove("fx-active", "shake", ...this.EFFECT_CLASSES);
+      scene.classList.remove("fx-active", "shake", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
     }
     for (const u of Object.values(this.units || {})) {
       u.el.classList.remove("acting", "targeted", "trouble", "lunge-up", "lunge-down", "hit", "hit-big", "revive-rise", "summon-rise", "pop");
@@ -166,7 +167,21 @@ const BattleScene = {
       <div class="${sceneClass}" id="scene">
         <div class="scene-fx" id="scene-fx"></div>
         <div class="battle-streak" id="battle-streak"><i></i><i></i><i></i></div>
-        <div class="chain-flare" id="chain-flare"><b></b><span>CHAIN</span></div>
+        <div class="chain-flare" id="chain-flare">
+          <span class="chain-label">CHAIN</span><b></b><i class="chain-mult"></i>
+          <div class="chain-rungs" id="chain-rungs"></div>
+        </div>
+        <div class="burst" id="burst" aria-hidden="true">
+          <div class="burst-rays"></div>
+          <div class="burst-ring"></div>
+          <div class="burst-copy">
+            <span class="burst-kicker" id="burst-kicker"></span>
+            <b id="burst-name"></b>
+            <span class="burst-desc" id="burst-desc"></span>
+            <div class="burst-stack" id="burst-stack"></div>
+          </div>
+        </div>
+        <div class="screen-flash" id="screen-flash" aria-hidden="true"></div>
         <div class="scene-band" id="band-enemy"></div>
         <div class="scene-mid">
           <span class="scene-army">魔王軍</span>
@@ -387,9 +402,12 @@ const BattleScene = {
 
     switch (ev.type) {
       case "battle_start":
+        this.synergyNames = [];
         if (this.isFinalBattle) this.battleIntro();
         break;
       case "round_start":
+        // ラウンドが変わったら、伸びていた鎖はそこで締める
+        this.settleChain();
         this.roundBanner(ev.round);
         break;
       case "dialogue": {
@@ -445,7 +463,22 @@ const BattleScene = {
       }
       case "synergy":
         this.pulse(ev.id);
-        this.cutin(ev.name, ev.desc, ev.id);
+        // 積み上げた結果である《魔王軍完成》だけは全画面で見せる。
+        // ここが「揃った瞬間」そのものなので、他のシナジーと同じ扱いにしない。
+        if (ev.id === "overload") {
+          this.burst({
+            kicker: "SYNERGY OVERLOAD",
+            name: "魔王軍完成",
+            desc: ev.desc || "",
+            parts: this.synergyNames.slice(),
+            stacks: Math.max(2, this.synergyNames.length),
+            tone: "fx-overload"
+          });
+        } else {
+          this.synergyNames.push(ev.name);
+          this.flash(1);
+          this.cutin(ev.name, ev.desc, ev.id, this.synergyNames.length);
+        }
         break;
       case "facility_trigger":
         this.pulse("overkill");
@@ -481,8 +514,19 @@ const BattleScene = {
         const u = this.units[ev.sourceId];
         this.clearFocus();
         if (u) u.el.classList.add("acting");
-        this.showAction(`【${ev.name}】発動！`, 1000);
+        const propagating = ev.traitId === "overload" || ev.traitId === "chain_massacre";
+        this.showAction(propagating ? `【${ev.name}】余剰が伝播！` : `【${ev.name}】発動！`, 1000);
         this.pulse(ev.traitId);
+        if (propagating) {
+          this.flash(1);
+          if (u) this.unitVfx(u, "overkill", "", 3);
+          // このイベントの直後に殴られる相手へ稲妻を渡す。
+          const next = this.timeline.slice(this.index).find(e =>
+            (e.type === "splash" || e.type === "attack") && this.units[e.toId]);
+          const target = next && this.units[next.toId];
+          if (u && target) this.bolt(u, target, ev.chainDepth || 2);
+          else this.streak(u ? u.side : "player", true, 3);
+        }
         break;
       }
       case "overkill": {
@@ -500,7 +544,13 @@ const BattleScene = {
         // 見せ場が一度も立っていなかった。蹂躙以上（100%以上・約10戦に1回）を見せ場にする。
         if (ev.percent >= 100) {
           this.shake();
-          this.cutin(ev.rank, `${ev.percent}% OVERKILL`, "overkill");
+          this.burst({
+            kicker: "OVERKILL",
+            name: ev.rank,
+            desc: `余剰 ${ev.excess} ダメージ　${ev.percent}%`,
+            stacks: ev.percent >= 300 ? 4 : ev.percent >= 200 ? 3 : 2,
+            tone: "fx-overkill"
+          });
         }
         break;
       }
@@ -677,6 +727,31 @@ const BattleScene = {
     ];
   },
 
+  // 伝播は「次の敵へ走る」ことが見えないと連鎖に見えない。
+  // 汎用の斜め集中線ではなく、2体のあいだに実際に稲妻を渡す。
+  bolt(from, to, depth) {
+    const scene = document.getElementById("scene");
+    if (!scene || !from?.actor || !to?.actor) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const stage = scene.getBoundingClientRect();
+    const a = from.actor.getBoundingClientRect(), b = to.actor.getBoundingClientRect();
+    const start = { x: a.x + a.width / 2 - stage.x, y: a.y + a.height * .5 - stage.y };
+    const end = { x: b.x + b.width / 2 - stage.x, y: b.y + b.height * .5 - stage.y };
+    const dx = end.x - start.x, dy = end.y - start.y;
+    const len = Math.max(1, Math.hypot(dx, dy));
+    const el = document.createElement("span");
+    el.className = `chain-bolt d${Math.min(4, Math.max(1, depth - 2))}`;
+    el.setAttribute("aria-hidden", "true");
+    el.style.left = `${start.x}px`;
+    el.style.top = `${start.y}px`;
+    el.style.width = `${len}px`;
+    el.style.transform = `rotate(${Math.atan2(dy, dx) * 180 / Math.PI}deg)`;
+    const life = this.visualDuration(460);
+    el.style.animationDuration = `${life}ms`;
+    scene.appendChild(el);
+    this.timers.push(setTimeout(() => el.remove(), life));
+  },
+
   projectileMotion(from, to, kind, contact) {
     const scene = document.getElementById("scene");
     if (!scene || !from?.actor || !to?.actor) return () => {};
@@ -806,17 +881,97 @@ const BattleScene = {
     this.timers.push(setTimeout(() => streak.classList.remove("show"), (520 * this.eventScale) / this.speed));
   },
 
-  chainFlare(ev) {
-    const depth = ev && ev.chainDepth || 0;
+  // CHAINは「点いて消える」ではなく「積み上がって居座る」。
+  // 一発ごとに光って消えると、伸びていることが体感できない。
+  // 同じ chainId のあいだ数字は画面に残り、深くなるほど大きく熱くなる。
+  CHAIN_TIERS: ["t2", "t3", "t4", "t5"],
+
+  resetChain(immediate) {
     const flare = document.getElementById("chain-flare");
-    if (!flare || depth < 2) return;
+    this.chainLive = null;
+    if (!flare) return;
+    if (this.chainSettleTimer) { clearTimeout(this.chainSettleTimer); this.chainSettleTimer = null; }
+    if (immediate) {
+      flare.className = "chain-flare";
+      const rungs = document.getElementById("chain-rungs");
+      if (rungs) rungs.innerHTML = "";
+    }
+  },
+
+  chainFlare(ev) {
+    const depth = (ev && ev.chainDepth) || 0;
+    const flare = document.getElementById("chain-flare");
+    if (!flare) return;
+    // 連鎖でない出来事が挟まったら、いま伸びている鎖はそこで終わり。
+    if (depth < 2 || !ev.chainId) {
+      if (this.chainLive && ev && ev.chainId && ev.chainId !== this.chainLive.id) this.settleChain();
+      return;
+    }
+    const live = this.chainLive;
+    if (!live || live.id !== ev.chainId) {
+      this.settleChain(true);
+      this.chainLive = { id: ev.chainId, depth: 0 };
+    }
+    if (depth <= this.chainLive.depth) return;   // 同じ深さの枝は数え直さない
+    this.chainLive.depth = depth;
+
+    const tier = this.CHAIN_TIERS[Math.min(this.CHAIN_TIERS.length - 1, depth - 2)];
+    flare.className = `chain-flare live ${tier}`;
     flare.querySelector("b").textContent = depth;
-    flare.classList.remove("show", "deep");
-    if (depth >= 4) flare.classList.add("deep");
+    flare.querySelector(".chain-mult").textContent = depth >= 4 ? "!!" : depth >= 3 ? "!" : "";
+    // 段が increments するたび、数字そのものを叩く
+    flare.classList.remove("bump");
     void flare.offsetWidth;
-    flare.classList.add("show");
-    flare.style.animationDuration = `${this.visualDuration(850)}ms`;
-    this.timers.push(setTimeout(() => flare.classList.remove("show"), (850 * this.eventScale) / this.speed));
+    flare.classList.add("bump");
+    flare.style.setProperty("--chain-bump", `${this.visualDuration(420)}ms`);
+
+    // 伸びた段を横に積む。何段目まで来たかが一目で残る。
+    const rungs = document.getElementById("chain-rungs");
+    if (rungs) {
+      const rung = document.createElement("i");
+      rung.style.animationDuration = `${this.visualDuration(380)}ms`;
+      rungs.appendChild(rung);
+    }
+    // 深いほど画面ごと熱くなる
+    if (depth >= 4 && !matchMedia("(prefers-reduced-motion: reduce)").matches) this.shake();
+    this.heat(Math.min(3, depth - 1));
+  },
+
+  // 鎖が途切れた瞬間に「×N」で締める。締めがないと、伸びた実感が残らない。
+  settleChain(silent) {
+    const live = this.chainLive;
+    this.chainLive = null;
+    const flare = document.getElementById("chain-flare");
+    if (!flare) return;
+    if (this.chainSettleTimer) { clearTimeout(this.chainSettleTimer); this.chainSettleTimer = null; }
+    if (!live || silent || live.depth < 2) {
+      flare.className = "chain-flare";
+      const r = document.getElementById("chain-rungs");
+      if (r) r.innerHTML = "";
+      return;
+    }
+    flare.classList.add("settle");
+    const life = this.visualDuration(live.depth >= 4 ? 1100 : 760);
+    flare.style.setProperty("--chain-settle", `${life}ms`);
+    this.chainSettleTimer = setTimeout(() => {
+      flare.className = "chain-flare";
+      const r = document.getElementById("chain-rungs");
+      if (r) r.innerHTML = "";
+      this.chainSettleTimer = null;
+    }, life);
+    this.timers.push(this.chainSettleTimer);
+  },
+
+  // 画面全体の熱。連鎖が深いほど背景が焼ける。
+  heat(level) {
+    const s = document.getElementById("scene");
+    if (!s) return;
+    s.classList.remove("heat-1", "heat-2", "heat-3");
+    if (level > 0) s.classList.add(`heat-${level}`);
+    if (this.heatTimer) clearTimeout(this.heatTimer);
+    this.heatTimer = setTimeout(() => s.classList.remove("heat-1", "heat-2", "heat-3"),
+      this.visualDuration(1200));
+    this.timers.push(this.heatTimer);
   },
 
   showAction(text, duration) {
@@ -862,13 +1017,15 @@ const BattleScene = {
     for (const cls of this.EFFECT_CLASSES) s.classList.remove(cls);
     const synergyKinds = [
       "goblin_horde", "king_slime", "legion_of_dead", "arcane_circle",
-      "cheap_labor", "elite_few", "general_command"
+      "cheap_labor", "elite_few", "general_command", "overload"
     ];
     const cls = synergyKinds.includes(kind) ? `fx-${kind}`
       : kind === "revive" ? "fx-revive"
         : kind === "guard" ? "fx-guard"
           : kind === "overkill" ? "fx-overkill"
-          : "fx-incident";
+            // 伝播と魔王軍完成は魔王軍の手柄。事件（赤い縞）の色に落とさない。
+            : (kind === "overload" || kind === "chain_massacre") ? "fx-overload"
+              : "fx-incident";
     s.classList.add(cls);
     void s.offsetWidth;
     s.classList.add("fx-active");
@@ -898,7 +1055,51 @@ const BattleScene = {
     s.classList.add("shake");
   },
 
-  cutin(name, desc, synergyId) {
+  // 一瞬の白飛び。次に来るものを「構えさせる」ための予備動作。
+  flash(strength) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const f = document.getElementById("screen-flash");
+    if (!f) return;
+    f.className = "screen-flash";
+    void f.offsetWidth;
+    f.style.animationDuration = `${this.visualDuration(strength >= 2 ? 420 : 260)}ms`;
+    f.classList.add("show", strength >= 2 ? "hard" : "soft");
+    this.timers.push(setTimeout(() => { f.className = "screen-flash"; },
+      this.visualDuration(strength >= 2 ? 420 : 260)));
+  },
+
+  // 見せ場だけに使う全画面演出。集中線・光輪・巨大な文字。
+  // 通常のシナジーは cutin の帯で流し、これは《魔王軍完成》と深い連鎖にだけ出す。
+  // 設計憲法 第3節「尺は事件の大きさに比例する」に従い、段数ぶん尺も伸ばす。
+  burst(opts) {
+    const b = document.getElementById("burst");
+    if (!b) return 0;
+    const stacks = Math.max(1, opts.stacks || 1);
+    const life = this.visualDuration(900 + Math.min(3, stacks) * 220);
+    this.flash(2);
+    document.getElementById("burst-kicker").textContent = opts.kicker || "";
+    document.getElementById("burst-name").textContent = opts.name || "";
+    document.getElementById("burst-desc").textContent = opts.desc || "";
+    const stack = document.getElementById("burst-stack");
+    stack.innerHTML = "";
+    // 積み上げた札を1枚ずつ立てる。何で到達したかが読めると「自分の手柄」になる。
+    (opts.parts || []).forEach((part, i) => {
+      const chip = document.createElement("span");
+      chip.textContent = part;
+      chip.style.animationDelay = `${this.visualDuration(90 + i * 110)}ms`;
+      chip.style.animationDuration = `${this.visualDuration(420)}ms`;
+      stack.appendChild(chip);
+    });
+    b.className = `burst ${opts.tone || "fx-incident"} s${Math.min(4, stacks)}`;
+    void b.offsetWidth;
+    b.style.setProperty("--burst-life", `${life}ms`);
+    b.classList.add("show");
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) this.shake();
+    this.timers.push(setTimeout(() => b.classList.remove("show"), life));
+    return life;
+  },
+
+  cutin(name, desc, synergyId, stackIndex) {
     const c = document.getElementById("cutin");
     if (!c) return;
     const portrait = document.getElementById("cutin-portrait");
@@ -908,8 +1109,12 @@ const BattleScene = {
     c.classList.toggle("has-portrait", hasPortrait);
     c.style.animationDuration = `${this.visualDuration(1300)}ms`;
     for (const cls of this.EFFECT_CLASSES) c.classList.remove(cls);
+    c.classList.remove("stack-2", "stack-3");
     const tone = this.EFFECT_CLASSES.find(cls => cls === `fx-${synergyId}`) || "fx-incident";
     c.classList.add(tone);
+    // 2枚目・3枚目は帯を高く・文字を大きく。重なっていることを帯そのもので見せる。
+    if (stackIndex >= 3) c.classList.add("stack-3");
+    else if (stackIndex === 2) c.classList.add("stack-2");
     document.getElementById("cutin-name").textContent = name;
     document.getElementById("cutin-desc").textContent = desc;
     c.classList.remove("show");
