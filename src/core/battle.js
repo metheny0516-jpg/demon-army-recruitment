@@ -167,6 +167,11 @@ const Battle = {
     // 発火条件は出撃5枠の外まで数える（options.synergyPool＝軍団全体）。
     // 効果は出撃したユニットにしか乗らないので、控えが戦うわけではない。
     const activeSyn = Synergy.applyAll(playerUnits, { pool: options.synergyPool || playerUnits });
+    // 揃えた枚数を「画面の出来事」に変える。倍率だけだと数字が増えるだけで爆発に見えない。
+    // 《魔王軍完成》が立っているあいだ、味方のOVERKILL撃破は次の敵へ伝播し、
+    // その深さは同時発動数そのものになる。積むほど連鎖が伸びる。
+    const overloadStacks = activeSyn.some(s => s.id === "overload")
+      ? Math.min(4, activeSyn.filter(s => !s.meta).length) : 0;
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;
@@ -317,18 +322,31 @@ const Battle = {
         }, damageEvent);
         reactToDeath(target, deathEvent);
         const propagationDepth = opts.propagationDepth || 0;
-        if (overkillEvent && overkillEvent.percent >= 100 && propagationDepth < 3
-          && attacker.traits.includes("chain_massacre")) {
+        // 伝播の入口は2つ。特性《連鎖虐殺》と、シナジーを積んだ《魔王軍完成》。
+        // 後者は魔王軍の編成が起こすものなので味方側だけ。深さは積んだ枚数で伸びる。
+        const byTrait = attacker.traits.includes("chain_massacre");
+        const byOverload = !byTrait && attacker.side === "player" && overloadStacks > 0;
+        const limit = byTrait ? 3 : overloadStacks;
+        // 積むほど深くなるだけでなく、積むほど点きやすくする。
+        // 余剰100%（相手の最大HPの2倍を一撃で出す）は滅多に起きないので、
+        // 深さの上限だけ上げても実際には伸びなかった。
+        const needPercent = byTrait ? 100 : Math.max(40, 125 - 25 * overloadStacks);
+        if (overkillEvent && overkillEvent.percent >= needPercent && propagationDepth < limit
+          && (byTrait || byOverload)) {
           const opponents = attacker.side === "player" ? enemyUnits : playerUnits;
           const next = opponents.find(unit => unit.alive);
           if (next) {
+            const label = byTrait ? "連鎖虐殺" : "魔王軍完成";
             const trigger = emitCausal("trait_trigger", {
-              sourceId: attacker.id, traitId: "chain_massacre", name: "連鎖虐殺",
-              propagationDepth: propagationDepth + 1, emphasis: 2,
-              text: `　${attacker.name}の【連鎖虐殺】 余剰ダメージが${next.name}へ伝播！`, cls: "trait"
+              sourceId: attacker.id, traitId: byTrait ? "chain_massacre" : "overload", name: label,
+              propagationDepth: propagationDepth + 1, emphasis: byTrait ? 2 : 3,
+              text: byTrait
+                ? `　${attacker.name}の【連鎖虐殺】 余剰ダメージが${next.name}へ伝播！`
+                : `　【魔王軍完成】 ${attacker.name}の余剰が止まらない！ ${next.name}へ伝播（${propagationDepth + 1}/${limit}）`,
+              cls: "trait"
             }, overkillEvent);
-            applyDamage(attacker, next, overkillEvent.excess * 0.3, "splash", {
-              label: "連鎖虐殺", parentEvent: trigger, propagationDepth: propagationDepth + 1
+            applyDamage(attacker, next, overkillEvent.excess * (byTrait ? 0.3 : 0.22), "splash", {
+              label, parentEvent: trigger, propagationDepth: propagationDepth + 1
             });
           }
         }

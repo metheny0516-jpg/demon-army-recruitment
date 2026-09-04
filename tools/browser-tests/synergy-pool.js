@@ -76,7 +76,43 @@ const { autoDismissMormo } = require('./helpers.js');
     });
     assert.deepEqual(preview.rows, preview.real, '予告と本番の発動シナジーが一致する');
 
-    console.log('✓ シナジー: 枠外の発火条件・出撃者だけへの効果・重ねがけ・予告の一致');
+    // 6) 積んだシナジーが「画面の出来事」になる：OVERKILL撃破が次の敵へ伝播する
+    const chain = await page.evaluate(() => {
+      const stage = ENEMY_STAGES[2];
+      const squad = () => ['goblin', 'ogre', 'goblin'].map((id, j) => {
+        const t = MONSTER_TEMPLATES.find(x => x.id === id);
+        return Battle.makeUnit({ uid: 100 + j, tplId: id, name: t.race + j, race: t.race, job: '',
+          hp: t.base.hp * 3, maxHp: t.base.hp * 3, atk: t.base.atk * 3, def: t.base.def,
+          spd: t.base.spd, salary: 1, loyalty: 70, traits: [], tags: (t.tags || []).slice(),
+          battleDmgMult: 1, battleTakenMult: 1 }, 'player');
+      });
+      const foes = () => stage.units.map((u, j) => Battle.makeUnit({ ...u, uid: 900 + j,
+        name: u.name || '敵', maxHp: u.hp, traits: u.traits || [], tags: u.tags || [] }, 'enemy'));
+      const army = ids => Synergy.sandbox(ids.map((id, j) => {
+        const t = MONSTER_TEMPLATES.find(x => x.id === id);
+        return { uid: j + 1, tplId: id, race: t.race, name: t.race + j, traits: [], tags: (t.tags || []).slice(),
+          hp: t.base.hp, atk: t.base.atk, def: t.base.def, spd: t.base.spd, salary: t.salary[0] };
+      }));
+      const measure = pool => {
+        let deep = 0, fired = 0;
+        for (let i = 0; i < 60; i++) {
+          const r = Battle.simulate(squad(), foes(), { synergyPool: pool });
+          if (((r.chainSummary && r.chainSummary.maxChain) || 0) >= 4) deep++;
+          if ((r.timeline || []).some(e => e.traitId === 'overload')) fired++;
+        }
+        return { deep, fired };
+      };
+      const flat = measure(army(['goblin', 'ogre']));
+      const stacked = measure(army(['goblin', 'goblin', 'goblin', 'goblin',
+        'mage', 'mage', 'mage', 'mage', 'ogre']));
+      return { flat, stacked };
+    });
+    assert.equal(chain.flat.fired, 0, 'シナジーを積んでいなければ伝播しない');
+    assert.ok(chain.stacked.fired > 0, '魔王軍完成が立つと余剰が次の敵へ伝播する');
+    assert.ok(chain.stacked.deep > chain.flat.deep,
+      `積んだほうが連鎖が深い（積まない ${chain.flat.deep}/60 → 積んだ ${chain.stacked.deep}/60）`);
+
+    console.log('✓ シナジー: 枠外の発火条件・出撃者だけへの効果・重ねがけ・積むほど伸びる連鎖・予告の一致');
   } finally {
     await browser.close();
   }
