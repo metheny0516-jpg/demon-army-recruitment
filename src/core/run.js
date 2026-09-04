@@ -350,6 +350,27 @@ const Game = {
     return appetite > 0 ? Math.max(1, Math.ceil(appetite / DEPARTMENT_RULES.foodPerRoster)) : 0;
   },
 
+  // 収支を1か所で作る。HUD・採用・編成が同じ数字を見ないと「わかりにくい」が直らない。
+  // produce は生活部門の調達、need は軍団全体の消費、delta が黒字か赤字か。
+  foodBalance(roster) {
+    const list = roster || this.state.roster;
+    let produce = 0;
+    for (const m of list) {
+      produce += Aptitude.contribution(m, this.departmentOf(m).id).food;
+    }
+    const need = this.foodNeedFor(list);
+    return { produce, need, delta: produce - need, stock: Math.max(0, this.state.food || 0) };
+  },
+
+  // 「この応募者を採ったら収支がどう動くか」を採用前に見せるための試算。
+  // 正解を出さず、判断材料だけを出す（設計原則 第15節）。
+  foodBalanceIfHired(monster) {
+    const before = this.foodBalance();
+    // 新人は既定部門に入る。配属前なので調達は数えず、食う量だけが確実に増える。
+    const after = this.foodNeedFor([...this.state.roster, monster]);
+    return { before, needAfter: after, needDelta: after - before.need };
+  },
+
   battleRationQuote() {
     const foodBefore = Math.max(0, this.state.food || 0);
     const kitchen = this.state.activeFacilityId === "grand_kitchen";

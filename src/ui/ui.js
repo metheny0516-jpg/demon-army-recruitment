@@ -75,6 +75,7 @@ const UI = {
     const sd = Game.stageData();
     const salary = Game.salaryTotal();
     const opening = st.openingPrototype;
+    const fb = Game.foodBalance();
     return `<div class="hud">
       <span>第 <b>${st.generation}</b> 代魔王軍</span>
       ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
@@ -82,7 +83,7 @@ const UI = {
       <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
       <span>警戒度 <b>${st.alert}</b></span>
       <span class="gold">所持金 <b>${st.gold}G</b></span>
-      <span class="food">食料 <b>${st.food}</b></span>
+      <span class="food">食料 <b>${st.food}</b><small class="${fb.delta < 0 ? "food-warn" : "food-ok"}"> 調達${fb.produce} / 消費${fb.need} = ${fb.delta >= 0 ? "+" : ""}${fb.delta}</small></span>
       <span class="materials">建材 <b>${st.materials}</b></span>
       <span>施設 <b>Lv.${st.facilityLevel}${Game.activeFacility() ? ` ${U.esc(Game.activeFacility().name)}` : ""}</b></span>
       <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
@@ -218,12 +219,13 @@ const UI = {
   aptitudeHtml(m) {
     const apt = Aptitude.of(m);
     const chips = [];
-    if (apt.food > 0) chips.push(`<span class="apt apt-food">🍲 食料+${apt.food}</span>`);
+    if (apt.food > 0) chips.push(`<span class="apt apt-food">🍲 調達 食料+${apt.food}</span>`);
     if (apt.material > 0) chips.push(`<span class="apt apt-material">🔨 施工+${apt.material}</span>`);
     if (apt.wage > 0) chips.push(`<span class="apt apt-wage">💰 給与-${apt.wage}%</span>`);
     if (apt.recruit > 0) chips.push(`<span class="apt apt-recruit">📋 応募+${apt.recruit}</span>`);
+    // 調達は食料そのもの、食う量は「口」。3口で食料1を食うので、単位を書かないと読めない。
     chips.push(apt.appetite > 0
-      ? `<span class="apt apt-appetite">🍖 食う量 ${apt.appetite}</span>`
+      ? `<span class="apt apt-appetite">🍖 食う量 ${apt.appetite}口<small>（3口＝食料1）</small></span>`
       : `<span class="apt apt-appetite none">🍖 食事不要</span>`);
     const note = apt.labels.length ? `<span class="apt-note">${U.esc(apt.labels.join("・"))}</span>` : "";
     return `<div class="aptitudes">${chips.join("")}${note}</div>`;
@@ -577,12 +579,21 @@ const UI = {
     const cards = st.applicants.map((m, i) => this.monsterCard(m, {
       resume: true,
       footer: (() => {
+        // 「採ったら食えるのか」を採用の瞬間に見せる。答えではなく、収支の動きだけを出す。
+        const fq = Game.foodBalanceIfHired(m);
+        const after = fq.before.produce - fq.needAfter;
+        // 赤字そのものは普通の状態なので煽らない。備蓄で吸収できなくなる時だけ警告する。
+        const runsOut = after < 0 && fq.before.stock + after < 0;
+        const foodNote = `<div class="hire-food ${runsOut ? "warn" : ""}">🍖 採ると 消費 ${fq.before.need} → ${fq.needAfter}`
+          + `（収支 ${fq.before.delta >= 0 ? "+" : ""}${fq.before.delta} → ${after >= 0 ? "+" : ""}${after}`
+          + `／備蓄 ${fq.before.stock}）`
+          + `${runsOut ? "　次の戦いで食料が尽きる" : ""}</div>`;
         const cost = Game.hireCost();
         const allowed = Game.canHireApplicant(i);
         const label = full ? "軍団が満員（誰かを解雇せよ）"
           : cost > 0 ? `追加採用（紹介料 ${cost}G・給与 ${m.salary}G）`
           : `無料枠で採用（給与 ${m.salary}G）`;
-        return `<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`;
+        return `${foodNote}<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`;
       })()
     })).join("");
     // 満員でも応募者を逃さず入れ替えられるよう、この画面から解雇できるようにする
@@ -831,7 +842,7 @@ const UI = {
         <div class="muted department-help">勝利後、施工能力のぶんだけ備蓄建材を投入する。能力は種族と前職で決まる（オーガの重量物運搬は桁が違う）。施設効果は次の出撃隊全員に付く。</div>
         <div class="cards">${builderCards || `<div class="department-empty">建材はあっても、働く者がいなければ城は育たない。</div>`}</div></div>
       <div class="army-section department-section department-life-section"><h3>🍲 食料・生活部門 ${lifeWorkers.length}</h3>
-        <div class="muted department-help">勝利後、食料適性のぶんだけ調達する。食う量は種族ごとに違い、アンデッドは何も食べない。足りれば軍団全員の忠誠も少し上がる。</div>
+        <div class="muted department-help">ここに置いた者だけが調達する。食う量は種族ごとに違い（3口＝食料1）、アンデッドは何も食べない。足りれば軍団全員の忠誠も少し上がる。</div>
         <div class="cards">${lifeCards || `<div class="department-empty">現在は自炊。食料が尽きれば全員の忠誠が下がる。</div>`}</div></div>
       </section>
       <aside class="formation-intel">
