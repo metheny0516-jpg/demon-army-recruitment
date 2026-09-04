@@ -2652,3 +2652,13 @@ button.primary::first-letter { color: var(--gold); }
   100% { opacity: 0; clip-path: inset(0 0 0 82%); }
 }
 @media (prefers-reduced-motion: reduce) { .chain-bolt { display: none; } }
+
+/* 全画面演出のあいだ、戦場ごとわずかに寄る。画面が近づくと圧が出る。 */
+@keyframes sceneZoom {
+  0%   { transform: scale(1); }
+  10%  { transform: scale(1.055); }
+  78%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+.scene.zoomed { animation: sceneZoom var(--burst-life, 1.2s) ease-out; }
+@media (prefers-reduced-motion: reduce) { .scene.zoomed { animation: none; } }

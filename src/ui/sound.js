@@ -151,7 +151,8 @@ const Sound = {
       : `assets/sfx/recorded/${this.SAMPLE_ROLES[family]}-${variant}.wav`;
     const prototype = this.samples.get(url);
     const audio = prototype && prototype.cloneNode ? prototype.cloneNode() : new Audio(url);
-    audio.volume = this.volume * (family === "physical" ? .9 : family === "zushi" ? .9 : .78);
+    const boost = Number(data.boost) || 1;
+    audio.volume = Math.min(1, this.volume * (family === "physical" ? .9 : family === "zushi" ? .9 : .78) * boost);
     // Speed changes timing, not the weight/pitch of every blow.
     audio.playbackRate = data.heavy ? .9 : 1;
     while (this.media.size >= 4) {
@@ -311,6 +312,16 @@ const Sound = {
         }));
         this.tone(110, .4 * pace, { type: "square", gain: .025 });
         break;
+      // OVERKILLと伝播にはこれまで音が無かった。オーナー選定済みの打撃原音
+      // （thwack 08/09）をそのまま使い、段数ぶん強く・重ねて鳴らす。
+      // 新しい合成音は作らない（過去に何度も失敗しているため）。
+      case "overkill_hit": {
+        const weight = Math.max(1, Math.min(4, Number(data.weight) || 1));
+        this.playSample("physical", { ...data, heavy: true, boost: 1 + 0.12 * weight });
+        if (weight >= 2) setTimeout(() => this.playSample("physical", { ...data, heavy: true }), 70);
+        if (weight >= 4) setTimeout(() => this.playSample("physical", { ...data, heavy: true }), 145);
+        break;
+      }
       case "incident":
         this.tone(233, .34 * pace, { type: "sawtooth", gain: .05, to: 175 });
         this.tone(220, .34 * pace, { type: "square", gain: .035, to: 142, detune: -12 });
@@ -359,6 +370,15 @@ const Sound = {
       case "heal": this.cue("heal", data); break;
       case "survive": this.cue("guard", data); break;
       case "synergy": this.cue("synergy", data); break;
+      // 見せ場は音でも段を作る。積んだ数・余剰の大きさで打撃の重さが変わる。
+      case "overkill":
+        this.cue("overkill_hit", { ...data, weight: event.percent >= 300 ? 4 : event.percent >= 100 ? 3 : 1 });
+        break;
+      case "trait_trigger":
+        if (event.traitId === "overload" || event.traitId === "chain_massacre") {
+          this.cue("overkill_hit", { ...data, weight: Math.min(4, Math.max(2, (event.chainDepth || 2) - 1)) });
+        }
+        break;
       case "incident": this.cue("incident", data); break;
       case "result": this.cue(event.victory ? "win" : "lose", data); break;
     }

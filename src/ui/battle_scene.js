@@ -142,7 +142,7 @@ const BattleScene = {
     if (scene) {
       scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
-      scene.classList.remove("fx-active", "shake", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
+      scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
     }
     for (const u of Object.values(this.units || {})) {
       u.el.classList.remove("acting", "targeted", "trouble", "lunge-up", "lunge-down", "hit", "hit-big", "revive-rise", "summon-rise", "pop");
@@ -1094,6 +1094,15 @@ const BattleScene = {
     void b.offsetWidth;
     b.style.setProperty("--burst-life", `${life}ms`);
     b.classList.add("show");
+    // 戦場ごとわずかに寄る。画面が近づくと圧が出る。
+    const scene = document.getElementById("scene");
+    if (scene && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      scene.style.setProperty("--burst-life", `${life}ms`);
+      scene.classList.remove("zoomed");
+      void scene.offsetWidth;
+      scene.classList.add("zoomed");
+      this.timers.push(setTimeout(() => scene.classList.remove("zoomed"), life));
+    }
     if (!matchMedia("(prefers-reduced-motion: reduce)").matches) this.shake();
     this.timers.push(setTimeout(() => b.classList.remove("show"), life));
     return life;

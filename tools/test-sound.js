@@ -57,6 +57,9 @@ const ctx = {
   console, Math,
   window: { AudioContext },
   Audio: AudioElement,
+  // 重ねて鳴らす見せ場の音がタイマーを使う。ブラウザと同じく即時実行で代用する。
+  setTimeout: fn => { fn(); return 0; },
+  clearTimeout: () => {},
   localStorage: {
     getItem: key => key in store ? store[key] : null,
     setItem: (key, value) => { store[key] = String(value); }
@@ -99,6 +102,42 @@ for (const cue of ['click', 'confirm', 'hire', 'shuffle', 'dismiss', 'deploy', '
 if (started < 20) throw new Error(`生成された音が少なすぎる: ${started}`);
 if (samplePlays < 2) throw new Error(`WAV攻撃音が再生されない: ${samplePlays}`);
 
+// 見せ場（OVERKILL・伝播）に音が付いていること。段が深いほど強く・重ねて鳴る。
+// 新しい合成音は作らず、オーナー選定済みの打撃原音を使う契約もここで縛る。
+{
+  const seen = [];
+  const realPlay = Sound.playSample.bind(Sound);
+  Sound.playSample = (family, data) => { seen.push({ family, boost: (data && data.boost) || 1 }); return realPlay(family, data); };
+  Sound.muted = false;
+
+  Sound.battle({ type: 'overkill', percent: 40, emphasis: 1 }, {});
+  const small = seen.length;
+  if (small < 1) throw new Error('小さなOVERKILLにも音が要る');
+
+  seen.length = 0;
+  Sound.battle({ type: 'overkill', percent: 320, emphasis: 3 }, {});
+  if (seen.length <= small) throw new Error('大きなOVERKILLで音が重ならない');
+  if (!seen.every(x => x.family === 'physical')) throw new Error('見せ場の音は選定済みの打撃原音を使うこと');
+  const loud = Math.max(...seen.map(x => x.boost));
+
+  seen.length = 0;
+  Sound.battle({ type: 'trait_trigger', traitId: 'overload', chainDepth: 5 }, {});
+  if (!seen.length) throw new Error('伝播に音が付いていない');
+  const deep = Math.max(...seen.map(x => x.boost));
+
+  seen.length = 0;
+  Sound.battle({ type: 'trait_trigger', traitId: 'overload', chainDepth: 2 }, {});
+  const shallow = Math.max(...seen.map(x => x.boost));
+  if (!(deep > shallow)) throw new Error(`連鎖が深いほど強く鳴らない: 浅${shallow} 深${deep}`);
+  if (!(loud > 1)) throw new Error('大きなOVERKILLで音量が上がらない');
+
+  seen.length = 0;
+  Sound.battle({ type: 'trait_trigger', traitId: 'pickpocket' }, {});
+  if (seen.length) throw new Error('伝播以外の特性で打撃音を鳴らさない');
+
+  Sound.playSample = realPlay;
+}
+
 Sound.setVolume(0.35);
 if (store.maou_volume !== '0.35') throw new Error('音量を保存できない');
 const beforeMute = started;
@@ -107,4 +146,4 @@ Sound.cue('win');
 if (started !== beforeMute) throw new Error('ミュート中に音を生成した');
 if (store.maou_muted !== '1') throw new Error('ミュート設定を保存できない');
 
-console.log('✓ 効果音21種・衝撃WAV12種・モルモ発話音・音量保存・ミュート');
+console.log('✓ 効果音21種・衝撃WAV12種・モルモ発話音・音量保存・ミュート・見せ場の打撃音（段で強くなる）');
