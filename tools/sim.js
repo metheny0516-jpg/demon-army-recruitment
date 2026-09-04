@@ -144,6 +144,9 @@ function runOnce(strat, stats){
         else if (avgLoyalty < 45 && Game.payrollQuote('advance').affordable) payroll = 'advance';
       }
       Game.setPayrollPolicy(payroll);
+      // キングスライム合体は編成画面で断れる（既定は合体）。罠かどうかを測るための軸。
+      if (strat.kingMerge !== undefined) st.kingSlimeMerge = strat.kingMerge;
+      if (Synergy.active(Game.activeRoster()).some(x => x.id === 'king_slime')) stats.kingEligible++;
       stats.payroll[payroll] = (stats.payroll[payroll] || 0) + 1;
       for (const s of Synergy.active(Game.activeRoster())) stats.syn[s.name] = (stats.syn[s.name]||0)+1;
       const stageNow = st.stage;
@@ -220,6 +223,10 @@ const strategies = [
   {name:'方針: 建設重視+接収', kind:'greedy', mission:'build', departments:'build', seize:'always'},
   {name:'方針: 施設を使わない', kind:'greedy', mission:'invade', seize:'never', facility:'none'},
 
+  // キングスライム合体は罠か（バックログ 中2）。採用も作戦もそろえ、合体の可否だけを変える。
+  {name:'スライム: 合体する', kind:'race', race:'スライム', kingMerge:true},
+  {name:'スライム: 合体しない', kind:'race', race:'スライム', kingMerge:false},
+
   // 施設3択そのものの比較。建設重視で必ず到達させ、選ぶ施設だけを変える。
   // 「戦略ごとに施設が決め打ち」という前提を外すとどれが効くのかを見る。
   {name:'施設: 墓地', kind:'greedy', mission:'build', departments:'build', facility:'graveyard'},
@@ -239,7 +246,7 @@ const kpiOut = (() => {
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {
-  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, seizeDeclined:0, facilityLeaked:0 };
+  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, seizeDeclined:0, facilityLeaked:0, kingEligible:0 };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -262,6 +269,7 @@ for (const s of strategies) {
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);
   if (s.paidHire) console.log(`  追加採用: ${stats.paidHires}人／紹介料 ${stats.paidHireGold}G（${N}ラン合計）`);
+  if (s.kingMerge !== undefined) console.log(`  合体条件を満たした出撃: ${stats.kingEligible}回（合体${s.kingMerge ? 'する' : 'しない'}）`);
   // 「1ランで仮説を何回試せたか」。同じ編成の連戦は試行に数えない（設計憲法 第14節）
   const kpiData = KPI.load();
   const kpiRuns = kpiData.runs;
