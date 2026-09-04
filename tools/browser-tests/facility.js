@@ -17,7 +17,10 @@ const { autoDismissMormo } = require('./helpers.js');
   if (await page.locator('[data-action="choosefacility"]').count() !== 3) throw new Error('大型施設が3択でない');
   const text = await page.locator('.mission-grid').innerText();
   for (const name of ['恐喝帳簿', '巨大厨房', '墓地']) if (!text.includes(name)) throw new Error(`${name}が表示されない`);
-  for (const hint of ['会計職を出撃隊へ配置', '大食漢か魔界料理人', '死霊術師を建設部門へ配置']) {
+  // 発火条件を広げたら、run.js の ledgerCrew / graveCrew と同じ語をここも直すこと。
+  // 表示と実際の条件がズレると「不足」と出ているのに発火する。
+  for (const hint of ['会計職か《強欲》《追い剥ぎ》持ちを出撃隊へ配置', '大食漢か魔界料理人',
+                      '死霊術師かアンデッドを建設部門へ配置']) {
     if (!text.includes(hint)) throw new Error(`不足部品「${hint}」が表示されない`);
   }
   await page.locator('[data-action="choosefacility"][data-id="grand_kitchen"]').click();

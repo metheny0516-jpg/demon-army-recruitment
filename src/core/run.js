@@ -1140,10 +1140,21 @@ const Game = {
       feastUid: battleRations.consumed >= 4
         ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null
     } : null;
-    const extortionLedger = st.activeFacilityId === "extortion_ledger"
-      && this.activeRoster().some(m => (m.job || "").includes("会計"));
-    const graveyard = st.activeFacilityId === "graveyard"
-      && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
+    // 施設の発火条件は、単一の職・単一のtplIdではなく「その施設が扱う語彙」へ接続する。
+    // 2026-09-03の30ラン計測で、恐喝帳簿は発火0回・墓地は6回しか働いていなかった。
+    // 帳簿はゴブリンの会計職1つ、墓地は終盤tierの死霊術師を建設へ寝かせることが条件で、
+    // 選んでも動かない置物になっていた。条件を広げるほど「この人材を置いたら施設が動く」
+    // という接続が増える（設計憲法 第4節：コンテンツ数より既存要素との接続数）。
+    const ledgerCrew = this.activeRoster().some(m =>
+      (m.job || "").includes("会計")
+      || (m.traits || []).includes("greedy")        // 金貨に反応する者は帳簿を回せる
+      || (m.traits || []).includes("pickpocket"));  // 金貨を作る者も同じ
+    const extortionLedger = st.activeFacilityId === "extortion_ledger" && ledgerCrew;
+    const graveCrew = this.departmentRoster("construction").some(m =>
+      m.tplId === "necromancer"
+      || (m.tags || []).includes("undead")          // 骸骨兵・ゾンビでも墓地は回る
+      || (m.traits || []).includes("gravekeeper"));
+    const graveyard = st.activeFacilityId === "graveyard" && graveCrew;
     const result = Battle.simulate(playerUnits, enemyUnits,
       { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks() });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
