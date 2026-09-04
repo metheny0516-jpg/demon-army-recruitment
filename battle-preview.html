@@ -12,6 +12,7 @@
   <button id="replay">▶ 1対1を再生</button>
   <button id="crowd">5対5を確認</button>
   <button id="ranged">弓と魔法を確認</button>
+  <button id="arrival">召喚と復活を確認</button>
 </header>
 <div id="app"></div>
 <script src="src/data/portraits.js"></script>
@@ -47,6 +48,22 @@ function replay(count = 1, ranged = false) {
 document.getElementById('replay').onclick = () => replay();
 document.getElementById('crowd').onclick = () => replay(5);
 document.getElementById('ranged').onclick = () => replay(1, true);
+function replayArrival() {
+  UI.set(BattleScene.shell({ stage: 1, army: '演出確認', region: '召喚・復活' }));
+  const player = [{ id: 'p0', tplId: 'goblin', side: 'player', name: 'ゴブ太', icon: '👺', hp: 30, maxHp: 30 }];
+  const enemy = [{ id: 'e0', side: 'enemy', name: '剣士見習い', icon: '🗡', hp: 24, maxHp: 24 }];
+  BattleScene.play([
+    { type: 'battle_start', player, enemy },
+    { type: 'attack', fromId: 'e0', toId: 'p0', dmg: 30, hp: 0, maxHp: 30 },
+    { type: 'death', unitId: 'p0' },
+    { type: 'summon', unit: { id: 'ps0', side: 'player', name: '召喚スケルトン', icon: '💀', hp: 12, maxHp: 12 } },
+    { type: 'revive', unitId: 'p0', hp: 10, maxHp: 30 },
+    { type: 'attack', fromId: 'ps0', toId: 'e0', dmg: 24, hp: 0, maxHp: 24 },
+    { type: 'death', unitId: 'e0' },
+    { type: 'result', victory: true }
+  ], () => {});
+}
+document.getElementById('arrival').onclick = replayArrival;
 UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replay(); });
 replay();
 </script>

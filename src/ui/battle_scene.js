@@ -182,6 +182,7 @@ const BattleScene = {
       <div class="bu-actor"><div class="bu-icon">${this.portraitHtml(u)}</div></div>
       <div class="bu-name">${U.esc(u.name)}</div>
       <div class="bu-hp"><div class="bu-hpfill" id="hp-${u.id}"></div></div>
+      <span class="bu-state"></span>
       <div class="bu-pop" id="pop-${u.id}"></div>
     </div>`;
   },
@@ -209,11 +210,55 @@ const BattleScene = {
       side: u.side,
       icon: u.icon,
       name: u.name,
+      summoned: !!u.summoned,
       tplId: artId,
       sprite: document.getElementById("bu-" + u.id).querySelector(".bu-sprite-img"),
       actor: document.getElementById("bu-" + u.id).querySelector(".bu-actor")
     };
     this.setHp(this.units[u.id], u.hp, u.maxHp);
+    this.setLife(this.units[u.id], u.hp <= 0);
+    const count = Math.max(...["player", "enemy"].map(side => Object.values(this.units).filter(unit => unit.side === side).length));
+    const scene = document.getElementById("scene");
+    if (scene) scene.style.minHeight = count > 5 ? `${count * 83 + 175}px` : "";
+  },
+
+  addSummon(data) {
+    if (!data || this.units[data.id]) return null;
+    const band = document.getElementById(data.side === "player" ? "band-player" : "band-enemy");
+    if (!band) return null;
+    const unit = { ...data, summoned: true };
+    band.insertAdjacentHTML("beforeend", this.unitHtml(unit));
+    this.registerUnit(unit);
+    return this.units[data.id];
+  },
+
+  setLife(u, dead, permanent = false) {
+    u.el.classList.toggle("dead", dead);
+    u.el.dataset.life = dead ? (permanent ? "fallen" : "down") : "alive";
+    const label = u.el.querySelector(".bu-state");
+    if (label) label.textContent = dead ? (permanent ? "戦死" : "倒れた") : (u.summoned ? "召喚" : "");
+    this.setPose(u, dead ? "fallen" : "idle");
+  },
+
+  arrival(u, kind) {
+    this.clearFocus();
+    u.el.classList.remove("revive-rise", "summon-rise");
+    u.el.classList.add(kind === "summon" ? "summon-rise" : "revive-rise");
+    const life = this.visualDuration(kind === "summon" ? 820 : 700);
+    u.el.style.setProperty("--arrival-duration", `${life}ms`);
+    this.animateActor(u, kind === "summon" ? [
+      { opacity: 0, transform: "translateY(22px) scale(.6)" },
+      { opacity: 1, transform: "translateY(-5px) scale(1.08)", offset: .7 },
+      { opacity: 1, transform: "translateY(0) scale(1)" }
+    ] : [
+      { opacity: .35, transform: "translateY(10px) scaleY(.85)" },
+      { opacity: 1, transform: "translateY(-8px) scaleY(1.04)", offset: .6 },
+      { opacity: 1, transform: "translateY(0) scaleY(1)" }
+    ], life);
+    this.float(u, kind === "summon" ? "召喚！" : "復活！", "heal");
+    this.showAction(`${u.name}が${kind === "summon" ? "参戦！" : "復活！"}`, 1000);
+    this.unitVfx(u, "revive", kind === "summon" ? "summon-glow" : "", 2);
+    this.timers.push(setTimeout(() => u.el.classList.remove("revive-rise", "summon-rise"), life));
   },
 
   // ── 再生 ──────────────────────────────────
@@ -340,38 +385,23 @@ const BattleScene = {
       case "death": {
         const u = this.units[ev.unitId];
         if (u) {
-          u.el.classList.add("dead");
-          this.setPose(u, "fallen");
-          this.float(u, "倒れた！", "fallen");
+          this.setLife(u, true, !!ev.permanent);
+          this.float(u, ev.permanent ? "戦死…" : "倒れた！", "fallen");
         }
         break;
       }
       case "revive": {
         const u = this.units[ev.unitId];
         if (u) {
-          u.el.classList.remove("dead");
-          this.setPose(u, "idle");
-          u.el.classList.remove("pop", "revive-rise");
-          void u.el.offsetWidth;
-          u.el.classList.add("revive-rise");
+          this.setLife(u, false);
           this.setHp(u, ev.hp, ev.maxHp);
-          this.float(u, "復活！", "heal");
-          this.unitVfx(u, "revive", "", 2);
-          this.pulse("revive");
+          this.arrival(u, "revive");
         }
         break;
       }
       case "summon": {
-        const data = ev.unit;
-        const band = document.getElementById(data.side === "player" ? "band-player" : "band-enemy");
-        if (band && !this.units[data.id]) {
-          band.insertAdjacentHTML("beforeend", this.unitHtml(data));
-          this.registerUnit(data);
-          const summoned = this.units[data.id];
-          summoned.el.classList.add("summon-rise");
-          this.float(summoned, "召喚！", "heal");
-          this.pulse("revive");
-        }
+        const summoned = this.addSummon(ev.unit);
+        if (summoned) this.arrival(summoned, "summon");
         break;
       }
       case "heal": {
@@ -784,10 +814,11 @@ const BattleScene = {
     while (this.index < this.timeline.length) {
       const ev = this.timeline[this.index++];
       if (ev.text) this.appendLog(ev.text, ev.cls);
+      if (ev.type === "summon") this.addSummon(ev.unit);
       const u = this.units[ev.toId] || this.units[ev.unitId];
       if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
-      if (ev.type === "death" && u) u.el.classList.add("dead");
-      if (ev.type === "revive" && u) u.el.classList.remove("dead");
+      if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
+      if (ev.type === "revive" && u) this.setLife(u, false);
       if (ev.type === "result") this.banner(ev.victory);
     }
     this.finish();
