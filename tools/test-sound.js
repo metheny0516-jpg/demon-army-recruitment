@@ -69,16 +69,25 @@ const Sound = vm.runInContext('Sound', ctx);
 Sound.load();
 if (Sound.volume !== 0.55) throw new Error(`初期音量が不正: ${Sound.volume}`);
 if (!Sound.unlock() || !Sound.ctx || !Sound.master) throw new Error('AudioContextを初期化できない');
-if (Sound.samples.size !== 12) throw new Error(`WAVを事前読込できない: ${Sound.samples.size}`);
+if (Sound.samples.size !== 14) throw new Error(`WAVを事前読込できない: ${Sound.samples.size}`);
 for (const url of Sound.samples.keys()) {
-  if (!url.includes('/recorded/') || !fs.existsSync(url)) throw new Error(`実録素材が見つからない: ${url}`);
+  if (!fs.existsSync(url)) throw new Error(`実録素材が見つからない: ${url}`);
 }
-for (const [tplId, role] of [['swordsman', 'slash'], ['ogre', 'blunt'], ['archer', 'pierce'], ['shield', 'guard']]) {
+for (const tplId of ['swordsman', 'ogre', 'archer', 'shield']) {
   Sound.stopAll();
   Sound.battle({ type: 'attack' }, { tplId, speed: 4 });
   const audio = [...Sound.media][0];
-  if (!audio.src.includes(role + '-')) throw new Error(`攻撃音の割当違い: ${tplId}`);
+  if (!Sound.PHYSICAL_SAMPLES.includes(audio.src)) throw new Error(`攻撃音の割当違い: ${tplId}`);
   if (audio.playbackRate > 1) throw new Error('倍速で攻撃音が軽くなる');
+}
+Sound.stopAll();
+const magicBefore = samplePlays;
+Sound.battle({ type: 'attack' }, { attackKind: 'magic' });
+if (samplePlays !== magicBefore) throw new Error('魔法で打撃音が鳴る');
+Sound.physicalSeq = 0;
+for (const expected of [...Sound.PHYSICAL_SAMPLES, ...Sound.PHYSICAL_SAMPLES]) {
+  Sound.stopAll(); Sound.cue('attack');
+  if ([...Sound.media][0].src !== expected) throw new Error('8・9の交互再生が崩れた');
 }
 for (let i = 0; i < 12; i++) Sound.cue('attack');
 if (Sound.media.size > 4) throw new Error('同時発音数が無制限');

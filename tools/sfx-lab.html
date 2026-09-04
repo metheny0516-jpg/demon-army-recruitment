@@ -12,7 +12,7 @@ p{color:#b7a9ce}.now{color:#79e39c;font-weight:bold;min-height:1.6em}
 </head>
 <body><main>
 <h1>⚔ 効果音試聴室</h1>
-<p>上段はゲームに仮接続したCC0実録音です。斬撃・打撃・刺突用の短い打撃・金属防御を聞き比べてください。旧合成音は比較用に残しています。</p>
+<p>通常の物理攻撃は、選定済みの「鈍い打撃 08・09」を交互に使います。魔法は別音です。ほかの実録候補・旧合成音は比較用に残しています。</p>
 <p><a href="../battle-preview.html" style="color:#f0c46a">戦闘試写室で動きと一緒に確認する</a></p>
 <div id="families"></div><div class="now" id="now"></div>
 </main>
@@ -30,7 +30,8 @@ function addGroup(desc, files, path){
   box.innerHTML=`<h2>${desc}</h2><div class="row">${files.map(({file,label})=>`<button data-path="${path}" data-file="${file}">▶ ${label}</button>`).join('')}</div>`;
   root.appendChild(box);
 }
-for(const [name,desc] of Object.entries({slash:'実録：斬撃',blunt:'実録：打撃',pierce:'実録：刺突用の短い打撃',guard:'実録：金属防御'})) addGroup(desc,['a','b','c'].map(v=>({file:`${name}-${v}.wav`,label:v.toUpperCase()})),'../assets/sfx/recorded/');
+addGroup('採用：通常の物理攻撃',['08','09'].map(n=>({file:`candidate-antum-thwack-${n}.wav`,label:`打撃 ${n}`})),'../assets/sfx/candidates/');
+for(const [name,desc] of Object.entries({slash:'比較：斬撃',blunt:'比較：打撃',pierce:'比較：刺突用の短い打撃',guard:'防御：金属'})) addGroup(desc,['a','b','c'].map(v=>({file:`${name}-${v}.wav`,label:v.toUpperCase()})),'../assets/sfx/recorded/');
 for(const [name,desc] of Object.entries(current)) addGroup('旧合成：'+desc,['a','b','c'].map(v=>({file:`${name}-${v}.wav`,label:`旧 ${v.toUpperCase()}`})),'../assets/sfx/');
 for(const group of candidateGroups) addGroup(group.label,Array.from({length:group.count},(_,i)=>{const n=String(i+1).padStart(2,'0');return {file:`${group.prefix}${n}.wav`,label:`候補 ${n}`};}),'../assets/sfx/candidates/');
 let playing;

@@ -755,7 +755,7 @@ const BattleScene = {
       removeProjectile();
       settle();
       this.pendingHits.delete(settle);
-      if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId });
+      if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId, attackKind: kind });
       if (!to) return;
       if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
       this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);

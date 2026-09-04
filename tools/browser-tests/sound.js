@@ -21,7 +21,7 @@ const { autoDismissMormo } = require('./helpers.js');
   }));
   const unlocked = audioState.unlocked;
   if (!unlocked) errors.push('最初の操作で音声を解禁できない');
-  if (audioState.samples !== 12) errors.push(`衝撃WAVの事前読込が${audioState.samples}/12`);
+  if (audioState.samples !== 14) errors.push(`衝撃WAVの事前読込が${audioState.samples}/14`);
 
   await page.locator('#sound-volume').evaluate(el => {
     el.value = '35';

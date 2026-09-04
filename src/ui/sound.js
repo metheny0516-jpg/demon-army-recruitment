@@ -9,6 +9,11 @@ const Sound = {
   samples: new Map(),
   sampleSeq: 0,
   SAMPLE_ROLES: { basun: "pierce", gachan: "guard", zushi: "blunt", zuba: "slash" },
+  PHYSICAL_SAMPLES: [
+    "assets/sfx/candidates/candidate-antum-thwack-08.wav",
+    "assets/sfx/candidates/candidate-antum-thwack-09.wav"
+  ],
+  physicalSeq: 0,
   volume: 0.55,
   muted: false,
 
@@ -129,16 +134,24 @@ const Sound = {
         this.samples.set(url, audio);
       }
     }
+    for (const url of this.PHYSICAL_SAMPLES) {
+      const audio = new Audio(url);
+      audio.preload = "auto";
+      if (audio.load) audio.load();
+      this.samples.set(url, audio);
+    }
   },
 
   playSample(family, data = {}) {
     if (this.muted || typeof Audio === "undefined") return false;
     this.preloadSamples();
     const variant = ["a", "b", "c"][this.sampleSeq++ % 3];
-    const url = `assets/sfx/recorded/${this.SAMPLE_ROLES[family]}-${variant}.wav`;
+    const url = family === "physical"
+      ? this.PHYSICAL_SAMPLES[this.physicalSeq++ % this.PHYSICAL_SAMPLES.length]
+      : `assets/sfx/recorded/${this.SAMPLE_ROLES[family]}-${variant}.wav`;
     const prototype = this.samples.get(url);
     const audio = prototype && prototype.cloneNode ? prototype.cloneNode() : new Audio(url);
-    audio.volume = this.volume * (family === "zushi" ? .9 : .78);
+    audio.volume = this.volume * (family === "physical" ? .9 : family === "zushi" ? .9 : .78);
     // Speed changes timing, not the weight/pitch of every blow.
     audio.playbackRate = data.heavy ? .9 : 1;
     while (this.media.size >= 4) {
@@ -218,12 +231,7 @@ const Sound = {
   cue(name, data = {}) {
     if (this.muted) return;
     if (name === "attack") {
-      const id = data.tplId;
-      const heavy = ["orc", "ogre", "king_slime", "axeman"].includes(id);
-      const family = id === "shield" ? "gachan"
-        : ["archer", "skeleton", "cavalry", "commander"].includes(id) ? "basun"
-        : heavy || ["slime", "zombie", "kobold", "slinger"].includes(id) ? "zushi" : "zuba";
-      this.playSample(family, { ...data, heavy });
+      this.playSample("physical", data);
       return;
     }
     if (name === "guard") { this.playSample("gachan", data); return; }
@@ -344,7 +352,7 @@ const Sound = {
     switch (event.type) {
       case "battle_start": if (options.final) this.cue("final", data); break;
       case "round_start": this.cue("round", data); break;
-      case "attack": this.cue("attack", { ...data, enemy: options.fromSide === "enemy" }); break;
+      case "attack": this.cue(options.attackKind === "magic" ? "magic" : "attack", { ...data, enemy: options.fromSide === "enemy" }); break;
       case "splash": this.cue(event.label === "仲間割れ" ? "attack" : "magic", data); break;
       case "death": this.cue("death", data); break;
       case "revive": this.cue("revive", data); break;
