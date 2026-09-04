@@ -176,8 +176,8 @@ const BattleScene = {
     let mult = 1;
     // 深いCHAINほど1段を長く見せる（最大+50%）
     if (ev.chainDepth >= 3) mult += Math.min(0.5, 0.1 * (ev.chainDepth - 2));
-    // 蹂躙・粉砕+50%、消滅・魔王級+75%。小さな余剰は日常茶飯事なので短いままにし、
-    // 大きい余剰だけがはっきり長くなるようにする（尺は事件の大きさに比例）
+    // OVERKILL・蹂躙+50%、粉砕・消滅+75%。2026-09-04に下限が100%へ上がり、
+    // OVERKILLは1戦0.14回の見せ場になったので、いちばん軽い段でも尺を取る
     if (ev.type === "overkill") mult += 0.25 * (ev.emphasis || 0);
     // カットインを読み切れる尺にする
     if (ev.type === "synergy" && ev.firstDiscovery) mult += 0.45;
@@ -358,13 +358,10 @@ const BattleScene = {
         }
         this.showAction(`${ev.rank}　余剰${ev.excess}ダメージ`, 1100);
         this.pulse("overkill");
-        // 実測でOVERKILLは1戦4回出るが、その97%は余剰100%未満の「日常」。
-        // 旧しきい値（揺れ300%・カットイン500%）は実プレイでほぼ発火しておらず、
-        // 見せ場が一度も立っていなかった。蹂躙以上（100%以上・約10戦に1回）を見せ場にする。
-        if (ev.percent >= 100) {
-          this.shake();
-          this.cutin(ev.rank, `${ev.percent}% OVERKILL`, "overkill");
-        }
+        // 2026-09-04にゲーム側の下限が100%へ上がり、ここへ届く時点で見せ場が確定している
+        // （1戦0.14回＝約7戦に1回）。描画側での二重の絞り込みはやめ、来たものは必ず見せる。
+        this.shake();
+        this.cutin(ev.rank, `${ev.percent}% OVERKILL`, "overkill");
         break;
       }
       case "incident": {

@@ -34,18 +34,26 @@ const Battle = {
   MAX_ROUNDS: 30,
 
   // 余剰がこの割合（敵の最大HP比）に満たない撃破は OVERKILL と呼ばない。
-  // 実測では撃破のほぼ全部——1戦3.94回——が OVERKILL 判定になっており、
-  // 余剰割合の中央値は18%だった。毎回起きるものは見せ場ではなく日常なので、
-  // 「やりすぎた撃破」だけに名前を与える（40%で1戦0.85回）。
+  //
+  // 2026-09-04に 40 → 100 へ引き上げた。40%では1戦0.95回、つまり毎戦かならず1回起きており、
+  // 見せ場ではなく日常になっていた。100%なら1戦0.14回（約7戦に1回＝1ランに1回強）で、
+  // 「余った分でもう1体倒せた」がそのまま OVERKILL の意味になる。
+  //
+  // 下限未満のイベントを黙って残す案は取り下げた。overkill に反応するのは《連鎖虐殺》だけで
+  // その条件が percent >= 100 なので、100%未満のOVERKILLは**ゲーム上なにも起こしていない**。
+  // 残しても「理由のわからない連鎖」は生まれない代わりに、KPIの連鎖指標を水増しするだけだった
+  // （実測で event:overkill が連鎖構成要素の2位・552回を占めていたが、その大半が無効果）。
+  //
   // ここは演出の都合ではなくゲーム語彙の線引きなので core 側に置く。
-  OVERKILL_MIN_PERCENT: 40,
+  OVERKILL_MIN_PERCENT: 100,
 
+  // 刻みは実測レンジに合わせてある（504戦での最大余剰は343%）。
+  // 旧表は 300/500/1000% で、上2つは一度も到達しない飾りだった。1000%の「魔王級殲滅」は廃止。
   overkillRank(percent) {
-    if (percent >= 1000) return { id: "demon_king", name: "魔王級殲滅", emphasis: 3 };
-    if (percent >= 500) return { id: "annihilation", name: "消滅", emphasis: 3 };
-    if (percent >= 300) return { id: "pulverize", name: "粉砕", emphasis: 2 };
-    if (percent >= 100) return { id: "trample", name: "蹂躙", emphasis: 2 };
-    return { id: "overkill", name: "OVERKILL", emphasis: 1 };
+    if (percent >= 400) return { id: "annihilation", name: "消滅", emphasis: 3 };
+    if (percent >= 250) return { id: "pulverize", name: "粉砕", emphasis: 3 };
+    if (percent >= 150) return { id: "trample", name: "蹂躙", emphasis: 2 };
+    return { id: "overkill", name: "OVERKILL", emphasis: 2 };
   },
 
   // ロスターのモンスター → 戦闘ユニット

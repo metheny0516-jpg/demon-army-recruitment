@@ -23,7 +23,7 @@ const result = Battle.simulate([attacker], [target]);
 const hit = result.timeline.find(e => e.type === 'attack');
 const overkill = result.timeline.find(e => e.type === 'overkill');
 assert(overkill && overkill.excess === 400 && overkill.percent === 400, '残HP100へ500ダメージで余剰400・400%を記録する');
-assert(overkill.rank === '粉砕' && overkill.rankId === 'pulverize', '300%以上を粉砕ランクにする');
+assert(overkill.rank === '消滅' && overkill.rankId === 'annihilation', '400%以上を消滅ランクにする');
 assert(overkill.parentEventId === hit.eventId && overkill.chainId === hit.chainId,
   'OVERKILLを致死攻撃の子イベントとして同じCHAINへ接続する');
 assert(result.overkillSummary.count === 1 && result.overkillSummary.maxPercent === 400
@@ -36,23 +36,28 @@ const exact = Battle.simulate([make('適量砲', 100, 100, 'player')], [make('�
 assert(!exact.timeline.some(e => e.type === 'overkill'), '残HPと同値の致死ダメージはOVERKILLにしない');
 
 // 「やりすぎた撃破」だけに名前を与える。わずかな余剰は日常なのでOVERKILLと呼ばない。
-// （実測で撃破のほぼ全部がOVERKILL判定になり、1戦3.94回＝見せ場が日常になっていた）
+// 2026-09-04に下限を40→100へ引き上げた。40%は1戦0.95回＝毎戦起きる日常で、
+// しかも100%未満のOVERKILLは《連鎖虐殺》の条件(>=100)に届かず何も起こしていなかった。
 const excessOf = (targetHp, damage) => {
   const shooter = make('試験砲', 100, damage, 'player');
   const dummy = make('的', targetHp, 1, 'enemy');
   return Battle.simulate([shooter], [dummy]).timeline.find(e => e.type === 'overkill') || null;
 };
-assert(Battle.OVERKILL_MIN_PERCENT === 40, 'OVERKILLと呼ぶ下限を1か所の定数で持つ');
-assert(excessOf(100, 130) === null, '余剰30%（下限未満）はOVERKILLと呼ばない');
-const atThreshold = excessOf(100, 140);
-assert(atThreshold && atThreshold.percent === 40, '余剰40%（下限ちょうど）からOVERKILLと呼ぶ');
+assert(Battle.OVERKILL_MIN_PERCENT === 100, 'OVERKILLと呼ぶ下限を1か所の定数で持つ');
+assert(excessOf(100, 140) === null, '余剰40%（旧下限・現在は下限未満）はOVERKILLと呼ばない');
+assert(excessOf(100, 199) === null, '余剰99%（下限直前）もOVERKILLと呼ばない');
+const atThreshold = excessOf(100, 200);
+assert(atThreshold && atThreshold.percent === 100, '余剰100%（下限ちょうど）からOVERKILLと呼ぶ');
 assert(atThreshold.rank === 'OVERKILL' && atThreshold.rankId === 'overkill',
-  '下限〜100%未満は基本ランクのまま');
+  '下限〜150%未満は基本ランクのまま');
 assert(exact.overkillSummary.count === 0 && exact.overkillSummary.maxPercent === 0, '未発生時は0で安全に集計する');
 
-assert(Battle.overkillRank(100).name === '蹂躙'
-  && Battle.overkillRank(500).name === '消滅'
-  && Battle.overkillRank(1000).name === '魔王級殲滅', '各OVERKILL閾値を固定する');
+// 刻みは実測レンジ（最大343%）に合わせてある。到達しない飾りのランクを置かない。
+assert(Battle.overkillRank(100).name === 'OVERKILL'
+  && Battle.overkillRank(150).name === '蹂躙'
+  && Battle.overkillRank(250).name === '粉砕'
+  && Battle.overkillRank(400).name === '消滅', '各OVERKILL閾値を固定する');
+assert(Battle.overkillRank(9999).name === '消滅', '消滅より上のランクは置かない（魔王級殲滅は廃止）');
 
 const butcher = make('連鎖砲', 100, 1000, 'player');
 butcher.traits.push('chain_massacre');
