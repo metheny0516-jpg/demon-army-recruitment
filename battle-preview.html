@@ -24,7 +24,7 @@
   <button id="necromancer">死霊術師を確認</button>
   <button id="kobold">コボルトを確認</button>
   <button id="zombie">ゾンビを確認</button><button id="ogre">オーガを確認</button><button id="king_slime">キングスライムを確認</button>
-</header>
+<button id="shield">盾兵を確認</button><button id="slinger">投石兵を確認</button><button id="axeman">斧兵を確認</button></header>
 <div id="app"></div>
 <script src="src/data/portraits.js"></script>
 <script src="src/core/util.js"></script>
@@ -55,7 +55,7 @@ function replay(count = 1, ranged = false, species = false) {
   if (species === 'swordsman') {
     for (const unit of [...player, ...enemy]) Object.assign(unit, { tplId: 'swordsman', name: '剣士', icon: '🗡' });
   }
-  const roles = { archer: ['弓兵', '🏹'], cleric: ['聖職者', '✨'], sage: ['賢者', '📖'], mage: ['魔法使い', '🔥'], imp: ['インプ', '😈'], necromancer: ['死霊術師', '💀'], kobold: ['コボルト', '🐶'], zombie: ['ゾンビ', '🧟'], ogre: ['オーガ', '👹'], king_slime: ['キングスライム', '💧'] };
+  const roles = { archer: ['弓兵', '🏹'], cleric: ['聖職者', '✨'], sage: ['賢者', '📖'], mage: ['魔法使い', '🔥'], imp: ['インプ', '😈'], necromancer: ['死霊術師', '💀'], kobold: ['コボルト', '🐶'], zombie: ['ゾンビ', '🧟'], ogre: ['オーガ', '👹'], king_slime: ['キングスライム', '💧'], shield: ['盾兵', '🛡️'], slinger: ['投石兵', '🪨'], axeman: ['斧兵', '🪓'] };
   if (roles[species]) {
     for (const unit of [...player, ...enemy]) Object.assign(unit, { tplId: species, name: roles[species][0], icon: roles[species][1] });
   }
@@ -79,7 +79,7 @@ document.getElementById('ranged').onclick = () => replay(1, true);
 document.getElementById('species').onclick = () => replay(2, false, true);
 document.getElementById('orc').onclick = () => replay(1, false, 'orc');
 document.getElementById('swordsman').onclick = () => replay(1, false, 'swordsman');
-for (const id of ['archer', 'cleric', 'sage', 'mage', 'imp', 'necromancer', 'kobold', 'zombie', 'ogre', 'king_slime']) document.getElementById(id).onclick = () => replay(1, false, id);
+for (const id of ['archer', 'cleric', 'sage', 'mage', 'imp', 'necromancer', 'kobold', 'zombie', 'ogre', 'king_slime', 'shield', 'slinger', 'axeman']) document.getElementById(id).onclick = () => replay(1, false, id);
 function replayArrival() {
   UI.set(BattleScene.shell({ stage: 1, army: '演出確認', region: '召喚・復活' }));
   const player = [{ id: 'p0', tplId: 'goblin', side: 'player', name: 'ゴブ太', icon: '👺', hp: 30, maxHp: 30 }];

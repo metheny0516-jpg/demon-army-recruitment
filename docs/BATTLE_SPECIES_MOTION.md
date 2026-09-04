@@ -1,5 +1,19 @@
 # 種族モーション追加（2026-09-04）
 
+## 盾兵・投石兵・斧兵
+
+内蔵image_gen各1シート。保存先 `assets/battle/units/{shield,slinger,axeman}/`。
+共通: 1536x1024 3x2 right-facing full-body, same scale, thick ink muted matte 90s bestiary, real alpha, no backdrop/effects/text.
+Shield: steel kettle helmet/breastplate, blue tunic, tall wooden shield, short sword;
+idle behind shield / windup brace / strike shield bash / recover withdraw / hurt recoil / fallen.
+Slinger: ochre cap/tunic, cream trousers, leather sling and stone pouch;
+idle lowered / windup loaded sling overhead / strike release forward / recover reach pouch / hurt guard head / fallen.
+Axeman: brown beard, red headband/sleeves, leather jerkin, two-handed iron axe;
+idle low axe / windup twist back / strike diagonal chop / recover retract / hurt stagger / fallen.
+空白の境界で切り分け、512角共通倍率・足元492。再生成prepare_species_motion.py。
+盾は斬撃なし、斧は重量級の溜め、投石は22%放つ姿・62%命中。ルール変更なし。
+検証: species各役、role-motion、ranged、縮小比較soldiers-review.jpg。
+
 ## オーガ・キングスライム
 
 内蔵image_gen各1シート、実RGBA。保存先 `assets/battle/units/{ogre,king_slime}/`。

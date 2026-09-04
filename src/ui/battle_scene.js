@@ -27,7 +27,10 @@ const BattleScene = {
     kobold: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     zombie: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     ogre: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    king_slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    king_slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    shield: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    slinger: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    axeman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
@@ -76,7 +79,8 @@ const BattleScene = {
   artId(u) {
     return u.tplId || (u.side === "enemy" ? {
       "🗡": "swordsman", "🗡️": "swordsman", "⚔️": "swordsman",
-      "🏹": "archer", "✨": "cleric", "📖": "sage"
+      "🏹": "archer", "✨": "cleric", "📖": "sage",
+      "🛡️": "shield", "🪨": "slinger", "🪓": "axeman"
     }[u.icon] : undefined);
   },
 
@@ -574,6 +578,13 @@ const BattleScene = {
   },
 
   meleeFrames(u, dx, dy, direction) {
+    if (u.tplId === "shield") return [
+      { transform: "translate(0,0)", offset: 0 },
+      { transform: `translate(${-direction * 5}px,4px)`, offset: .25 },
+      { transform: `translate(${dx}px,${dy + 2}px)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy + 2}px)`, offset: .58 },
+      { transform: "translate(0,0)", offset: 1 }
+    ];
     if (u.tplId === "king_slime") return [
       { transform: "translate(0,0) scale(1)", offset: 0 },
       { transform: `translate(${-direction * 7}px,8px) scale(1.2,.74)`, offset: .27 },
@@ -605,7 +616,7 @@ const BattleScene = {
       { transform: `translate(${dx}px,${dy + 3}px) rotate(${direction * 7}deg)`, offset: .6 },
       { transform: "translate(0,0) rotate(0deg)", offset: 1 }
     ];
-    if (u.tplId === "orc") return [
+    if (["orc", "axeman"].includes(u.tplId)) return [
       { transform: "translate(0,0) scale(1)", offset: 0 },
       { transform: `translate(${-direction * 7}px,4px) rotate(${-direction * 8}deg) scale(1.04,.94)`, offset: .27 },
       { transform: `translate(${dx}px,${dy + 5}px) rotate(${direction * 9}deg) scale(1.06,.94)`, offset: .38 },
@@ -719,7 +730,7 @@ const BattleScene = {
       this.pendingHits.delete(settle);
       if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side });
       if (!to) return;
-      if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
+      if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
       this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
       this.hit(to, ev.dmg, ev.emphasis, ev.label);
       this.setPose(to, "hurt");
