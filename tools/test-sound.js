@@ -70,6 +70,18 @@ Sound.load();
 if (Sound.volume !== 0.55) throw new Error(`初期音量が不正: ${Sound.volume}`);
 if (!Sound.unlock() || !Sound.ctx || !Sound.master) throw new Error('AudioContextを初期化できない');
 if (Sound.samples.size !== 12) throw new Error(`WAVを事前読込できない: ${Sound.samples.size}`);
+for (const url of Sound.samples.keys()) {
+  if (!url.includes('/recorded/') || !fs.existsSync(url)) throw new Error(`実録素材が見つからない: ${url}`);
+}
+for (const [tplId, role] of [['swordsman', 'slash'], ['ogre', 'blunt'], ['archer', 'pierce'], ['shield', 'guard']]) {
+  Sound.stopAll();
+  Sound.battle({ type: 'attack' }, { tplId, speed: 4 });
+  const audio = [...Sound.media][0];
+  if (!audio.src.includes(role + '-')) throw new Error(`攻撃音の割当違い: ${tplId}`);
+  if (audio.playbackRate > 1) throw new Error('倍速で攻撃音が軽くなる');
+}
+for (let i = 0; i < 12; i++) Sound.cue('attack');
+if (Sound.media.size > 4) throw new Error('同時発音数が無制限');
 
 for (const cue of ['click', 'confirm', 'hire', 'shuffle', 'dismiss', 'deploy', 'round', 'attack', 'magic', 'death',
   'revive', 'heal', 'guard', 'synergy', 'promotion', 'incident', 'final', 'win', 'lose', 'skip', 'mormo']) {

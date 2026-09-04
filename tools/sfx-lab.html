@@ -12,8 +12,8 @@ p{color:#b7a9ce}.now{color:#79e39c;font-weight:bold;min-height:1.6em}
 </head>
 <body><main>
 <h1>⚔ 効果音試聴室</h1>
-<p>上段は現在ゲームで鳴る合成WAV、下段は<strong>まだゲーム本体では鳴らない</strong>CC0実録候補。連打して、耳に痛くないか・重量があるか・反復感が少ないかを確認する。</p>
-<p>候補は「風切り」「金属衝突」「鈍い打撃」を分けて収録している。採用後に初めてレイヤーしてゲーム用の短い一音に仕上げる。</p>
+<p>上段はゲームに仮接続したCC0実録音です。斬撃・打撃・刺突用の短い打撃・金属防御を聞き比べてください。旧合成音は比較用に残しています。</p>
+<p><a href="../battle-preview.html" style="color:#f0c46a">戦闘試写室で動きと一緒に確認する</a></p>
 <div id="families"></div><div class="now" id="now"></div>
 </main>
 <script>
@@ -30,7 +30,9 @@ function addGroup(desc, files, path){
   box.innerHTML=`<h2>${desc}</h2><div class="row">${files.map(({file,label})=>`<button data-path="${path}" data-file="${file}">▶ ${label}</button>`).join('')}</div>`;
   root.appendChild(box);
 }
-for(const [name,desc] of Object.entries(current)) addGroup(desc,['a','b','c'].map(v=>({file:`${name}-${v}.wav`,label:`現行 ${v.toUpperCase()}`})),'../assets/sfx/');
+for(const [name,desc] of Object.entries({slash:'実録：斬撃',blunt:'実録：打撃',pierce:'実録：刺突用の短い打撃',guard:'実録：金属防御'})) addGroup(desc,['a','b','c'].map(v=>({file:`${name}-${v}.wav`,label:v.toUpperCase()})),'../assets/sfx/recorded/');
+for(const [name,desc] of Object.entries(current)) addGroup('旧合成：'+desc,['a','b','c'].map(v=>({file:`${name}-${v}.wav`,label:`旧 ${v.toUpperCase()}`})),'../assets/sfx/');
 for(const group of candidateGroups) addGroup(group.label,Array.from({length:group.count},(_,i)=>{const n=String(i+1).padStart(2,'0');return {file:`${group.prefix}${n}.wav`,label:`候補 ${n}`};}),'../assets/sfx/candidates/');
-root.addEventListener('click',e=>{const b=e.target.closest('[data-file]');if(!b)return;const a=new Audio(b.dataset.path+b.dataset.file);a.volume=.65;a.play();now.textContent='再生中: '+b.dataset.file;});
+let playing;
+root.addEventListener('click',e=>{const b=e.target.closest('[data-file]');if(!b)return;if(playing)playing.pause();const a=playing=new Audio(b.dataset.path+b.dataset.file);a.volume=.65;a.play();now.textContent='再生中: '+b.dataset.file;});
 </script></body></html>

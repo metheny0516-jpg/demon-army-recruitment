@@ -8,6 +8,7 @@ const Sound = {
   media: new Set(),
   samples: new Map(),
   sampleSeq: 0,
+  SAMPLE_ROLES: { basun: "pierce", gachan: "guard", zushi: "blunt", zuba: "slash" },
   volume: 0.55,
   muted: false,
 
@@ -120,7 +121,7 @@ const Sound = {
     if (typeof Audio === "undefined" || this.samples.size) return;
     for (const family of ["basun", "gachan", "zushi", "zuba"]) {
       for (const variant of ["a", "b", "c"]) {
-        const url = `assets/sfx/${family}-${variant}.wav`;
+        const url = `assets/sfx/recorded/${this.SAMPLE_ROLES[family]}-${variant}.wav`;
         const audio = new Audio();
         audio.preload = "auto";
         audio.src = url;
@@ -134,11 +135,16 @@ const Sound = {
     if (this.muted || typeof Audio === "undefined") return false;
     this.preloadSamples();
     const variant = ["a", "b", "c"][this.sampleSeq++ % 3];
-    const url = `assets/sfx/${family}-${variant}.wav`;
+    const url = `assets/sfx/recorded/${this.SAMPLE_ROLES[family]}-${variant}.wav`;
     const prototype = this.samples.get(url);
     const audio = prototype && prototype.cloneNode ? prototype.cloneNode() : new Audio(url);
     audio.volume = this.volume * (family === "zushi" ? .9 : .78);
-    audio.playbackRate = Math.min(1.35, Math.sqrt(Math.max(1, data.speed || 1)));
+    // Speed changes timing, not the weight/pitch of every blow.
+    audio.playbackRate = data.heavy ? .9 : 1;
+    while (this.media.size >= 4) {
+      const oldest = this.media.values().next().value;
+      oldest.pause(); this.media.delete(oldest);
+    }
     this.media.add(audio);
     const cleanup = () => this.media.delete(audio);
     if (audio.addEventListener) audio.addEventListener("ended", cleanup, { once: true });
@@ -212,10 +218,15 @@ const Sound = {
   cue(name, data = {}) {
     if (this.muted) return;
     if (name === "attack") {
-      const family = (data.emphasis || 0) >= 3 ? "zushi" : (data.emphasis || 0) >= 2 ? "basun" : "zuba";
-      if (this.playSample(family, data)) return;
+      const id = data.tplId;
+      const heavy = ["orc", "ogre", "king_slime", "axeman"].includes(id);
+      const family = id === "shield" ? "gachan"
+        : ["archer", "skeleton", "cavalry", "commander"].includes(id) ? "basun"
+        : heavy || ["slime", "zombie", "kobold", "slinger"].includes(id) ? "zushi" : "zuba";
+      this.playSample(family, { ...data, heavy });
+      return;
     }
-    if (name === "guard" && this.playSample("gachan", data)) return;
+    if (name === "guard") { this.playSample("gachan", data); return; }
     const pace = 1 / Math.sqrt(Math.max(1, data.speed || 1));
     switch (name) {
       case "click":

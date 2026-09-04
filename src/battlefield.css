@@ -76,6 +76,9 @@
 .game-scene-battle .battlefield .bu-vfx-anchor { top: -65px; bottom: 20px; }
 .battlefield .bu-pop { top: -65px; }
 .battlefield .action-caption { top: 65px; bottom: auto; }
+.game-scene-battle .battlefield .cutin { top: 85px; padding: 6px 12px; }
+.game-scene-battle .battlefield .cutin b { font-size: 17px; }
+.game-scene-battle .battlefield .cutin-portrait { width: 34px; height: 38px; }
 .battlefield .chain-flare { top: 24%; right: 5%; }
 .battlefield .battle-streak { display: none; }
 .game-scene-battle .battlefield .scene-band:not(:has(.bu:nth-child(3))) .bu { width: 160px; max-width: 160px; height: 140px; }

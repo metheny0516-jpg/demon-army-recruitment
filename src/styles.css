@@ -268,6 +268,10 @@ button.wide { width: 100%; }
 }
 .card.compact { padding: 10px; }
 .card-head { display: flex; align-items: center; gap: 8px; }
+.card-identity { min-width: 0; flex: 1 1 110px; overflow-wrap: anywhere; }
+.game-scene-formation .card-head { flex-wrap: wrap; }
+.game-scene-formation .pos-badge { flex: 0 0 auto; }
+.first-guide { color: #f0d89e; font-size: 13px; line-height: 1.7; margin: 8px 0; }
 .avatar {
   width: 40px; height: 40px; flex: 0 0 40px;
   border-radius: 50%;

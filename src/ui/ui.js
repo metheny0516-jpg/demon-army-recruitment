@@ -135,7 +135,7 @@ const UI = {
     return `<div class="card">
       <div class="card-head">
         ${this.avatarHtml(m, opts.resume ? "photo" : "")}
-        <div>
+        <div class="card-identity">
           <div class="card-name">${U.esc(m.name)} <span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span></div>
           <div class="card-job">${U.esc(m.race)} / ${U.esc(m.job)}</div>
         </div>
@@ -295,6 +295,7 @@ const UI = {
     const steps = (chain && chain.deepest && chain.deepest.steps) || [];
     const path = steps.length >= 2
       ? `<div class="chain-caption">いちばん長くつながった連鎖（${steps.length}段）</div>
+         ${Game.state && Game.state.generation === 1 && Game.state.turn <= 2 ? `<p class="first-guide">モルモ：これがCHAIN、能力の連鎖デス。矢印の順に、誰の働きが次の能力を動かしたかを追ってみてくださいネ。</p>` : ""}
          <div class="chain-path">${steps.map(step =>
           `<span class="chain-step">${U.esc(step.label)}</span>`).join(`<span class="chain-arrow">→</span>`)}</div>`
       : `<div class="muted">連鎖は起きなかった（ひと突きで終わっている）</div>`;
@@ -599,6 +600,7 @@ const UI = {
     this.set(`${this.hud()}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
+        ${st.generation === 1 && st.turn <= 2 ? `<p class="first-guide">モルモ：${st.roster.length ? "「今の軍団との接続」は、仲間の能力とつながる手がかりデス。" : "まずは能力の発動条件を一つ見てみましょう。どんな仲間がいれば活かせそうですか？"}</p>` : ""}
         <div class="muted">${
           st.turn === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
           : st.hiresLeft > 1 ? `先の戦いで欠員が出た。${st.hiresLeft}名まで補充できる。`

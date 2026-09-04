@@ -1,0 +1,70 @@
+{
+  "slash": [
+    {
+      "file": "slash-a.wav",
+      "source": "candidate-starninjas-sword-01.wav",
+      "seconds": 0.841
+    },
+    {
+      "file": "slash-b.wav",
+      "source": "candidate-starninjas-sword-04.wav",
+      "seconds": 0.537
+    },
+    {
+      "file": "slash-c.wav",
+      "source": "candidate-starninjas-sword-07.wav",
+      "seconds": 0.563
+    }
+  ],
+  "blunt": [
+    {
+      "file": "blunt-a.wav",
+      "source": "candidate-antum-thwack-01.wav",
+      "seconds": 0.31
+    },
+    {
+      "file": "blunt-b.wav",
+      "source": "candidate-antum-thwack-03.wav",
+      "seconds": 0.151
+    },
+    {
+      "file": "blunt-c.wav",
+      "source": "candidate-antum-thwack-10.wav",
+      "seconds": 0.494
+    }
+  ],
+  "pierce": [
+    {
+      "file": "pierce-a.wav",
+      "source": "candidate-antum-thwack-02.wav",
+      "seconds": 0.18
+    },
+    {
+      "file": "pierce-b.wav",
+      "source": "candidate-antum-thwack-04.wav",
+      "seconds": 0.566
+    },
+    {
+      "file": "pierce-c.wav",
+      "source": "candidate-antum-thwack-06.wav",
+      "seconds": 0.358
+    }
+  ],
+  "guard": [
+    {
+      "file": "guard-a.wav",
+      "source": "candidate-starninjas-clash-01.wav",
+      "seconds": 0.878
+    },
+    {
+      "file": "guard-b.wav",
+      "source": "candidate-starninjas-clash-04.wav",
+      "seconds": 0.57
+    },
+    {
+      "file": "guard-c.wav",
+      "source": "candidate-starninjas-clash-07.wav",
+      "seconds": 0.896
+    }
+  ]
+}

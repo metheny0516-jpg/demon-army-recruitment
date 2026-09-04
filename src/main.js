@@ -41,6 +41,12 @@ const App = {
     const st = Game.state;
     const mission = st && st.selectedMission;
     const foodRisk = st && st.food <= Game.foodNeed();
+    if (st && st.generation === 1 && st.turn <= 2) {
+      return this.report("report", st.turn === 1
+        ? "並び順が配置デス。先頭ほど狙われやすくなります。\n誰に攻撃を受けてもらうか、能力を見ながら決めてくださいネ。"
+        : "前の戦果を手がかりに、組み合わせを試しましょう。\n能力の条件を作れそうな仲間はいますか？",
+        { kicker: "出撃前の人事", title: "宰相モルモ" });
+    }
     this.report(foodRisk ? "worried" : "report",
       `${mission ? `作戦は「${mission.missionTitle}」に決まりました。` : "作戦を承りました。"}\n`
       + (foodRisk
@@ -111,7 +117,9 @@ const App = {
           return this.report(returning ? "joy" : "welcome",
             returning
               ? `${king.name}様の魔王軍設立デス！\nそれと魔界史に名を残した ${returning.name} が再応募してきましたヨ！ 能力と階級は新任からデスが、これは運命かもしれませんネ。`
-              : `${king.name}様の魔王軍設立デス！\n${king.desc}\n強さだけでなく、どこで働けるかも見て採用してくださいネ。`,
+              : Game.state.generation === 1
+                ? `${king.name}様の魔王軍設立デス！\n履歴書の能力は「いつ起きるか → 何が起きるか」で読めます。まずは気になる能力を持つ人材を探してくださいネ。`
+                : `${king.name}様の魔王軍設立デス！\n${king.desc}\n強さだけでなく、どこで働けるかも見て採用してくださいネ。`,
             { kicker: returning ? "歴史が動いた" : "第1回 魔王軍人事", title: "宰相モルモ" });
         }
 
