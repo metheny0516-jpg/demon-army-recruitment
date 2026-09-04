@@ -30,7 +30,10 @@ const BattleScene = {
     king_slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     shield: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     slinger: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    axeman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    axeman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    cavalry: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    commander: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    hero: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
@@ -80,7 +83,8 @@ const BattleScene = {
     return u.tplId || (u.side === "enemy" ? {
       "🗡": "swordsman", "🗡️": "swordsman", "⚔️": "swordsman",
       "🏹": "archer", "✨": "cleric", "📖": "sage",
-      "🛡️": "shield", "🪨": "slinger", "🪓": "axeman"
+      "🛡️": "shield", "🪨": "slinger", "🪓": "axeman",
+      "🐎": "cavalry", "🎖️": "commander", "👑": "hero"
     }[u.icon] : undefined);
   },
 
@@ -93,7 +97,7 @@ const BattleScene = {
     return "melee";
   },
 
-  // 戦闘絵→履歴書→絵文字。剣士の敵だけ共通の戦闘絵を使用する。
+  // 戦闘絵→履歴書→絵文字。敵は役割アイコンで共通の戦闘絵を使用する。
   portraitHtml(u) {
     const emoji = this.iconOf(u);
     const id = this.artId(u);
@@ -578,6 +582,29 @@ const BattleScene = {
   },
 
   meleeFrames(u, dx, dy, direction) {
+    if (u.tplId === "cavalry") return [
+      { transform: "translate(0,0)", offset: 0 },
+      { transform: `translate(${-direction * 8}px,-3px)`, offset: .2 },
+      { transform: `translate(${dx * .65}px,${dy - 10}px)`, offset: .3 },
+      { transform: `translate(${dx}px,${dy}px)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy}px)`, offset: .48 },
+      { transform: `translate(${dx * .45}px,${dy - 4}px)`, offset: .7 },
+      { transform: "translate(0,0)", offset: 1 }
+    ];
+    if (u.tplId === "commander") return [
+      { transform: "translate(0,0)", offset: 0 },
+      { transform: `translate(${-direction * 6}px,1px)`, offset: .22 },
+      { transform: `translate(${dx}px,${dy}px)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy}px)`, offset: .52 },
+      { transform: "translate(0,0)", offset: 1 }
+    ];
+    if (u.tplId === "hero") return [
+      { transform: "translate(0,0) rotate(0deg)", offset: 0 },
+      { transform: `translate(${-direction * 12}px,5px) rotate(${-direction * 5}deg)`, offset: .27 },
+      { transform: `translate(${dx}px,${dy}px) rotate(${direction * 4}deg)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy}px) rotate(${direction * 4}deg)`, offset: .54 },
+      { transform: "translate(0,0) rotate(0deg)", offset: 1 }
+    ];
     if (u.tplId === "shield") return [
       { transform: "translate(0,0)", offset: 0 },
       { transform: `translate(${-direction * 5}px,4px)`, offset: .25 },

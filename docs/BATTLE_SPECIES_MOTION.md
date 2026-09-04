@@ -1,5 +1,24 @@
 # 種族モーション追加（2026-09-04）
 
+## 騎兵・指揮官・勇者：全役完了
+
+内蔵image_gen各1シート。保存先 `assets/battle/units/{cavalry,commander,hero}/`。
+共通プロンプト: 1536x1024 3x2, six right-facing full-body poses, same identity and scale,
+thick uneven ink, muted matte 1990s RPG bestiary, real alpha, empty gutters, no backdrop/effects/text/gore.
+Cavalry: steel helmet and armor, blue cloth, brown horse, short lance;
+idle horse standing / windup gather legs / strike gallop lance forward / recover rein in / hurt rear back / fallen rider and horse.
+Commander: middle-aged dark-haired officer, grey armor, burgundy cloak, straight sword;
+idle upright / windup draw sword back / strike controlled thrust / recover withdraw / hurt stagger / fallen.
+Hero: young brown-haired adventurer, blue cloak, ivory and gold armor, long sword;
+idle ready / windup sword high / strike sweeping downward slash / recover return guard / hurt kneel / fallen sidewise.
+空白境界で切り分け、共通倍率・足元492で512角透過WebP化。
+再生成: `python scripts/prepare_species_motion.py ROLE assets/battle/units/ROLE/motion-source.png`。
+騎兵は馬の跳ねる踏み込み、指揮官は短い突き、勇者は大きな斬り下ろし。38%接触を維持。
+縮小比較 `assets/battle/units/elite-review.jpg`。各役speciesとrole-motionを検証。
+全体は味方11種・敵10役・126ポーズ。art-coverageが通常/variants全49敵エントリと全画像を確認。
+最終回帰: species通常/orc、battlefield、ranged、arrival、vfx-lifecycle。
+モルモ・src/core・バランス・タイムライン契約に変更なし。骸骨兵原画の槍先修正は別の残件。
+
 ## 盾兵・投石兵・斧兵
 
 内蔵image_gen各1シート。保存先 `assets/battle/units/{shield,slinger,axeman}/`。

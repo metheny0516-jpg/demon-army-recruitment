@@ -39,6 +39,11 @@ def main():
                 top = (0 if i < 3 else 500) if args.species == 'shield' else y
                 bottom = (500 if i < 3 else 1024) if args.species == 'shield' else y + 512
                 cell = source.crop((edges[i % 3], top, edges[i % 3 + 1], bottom))
+            if args.species in ('cavalry', 'commander', 'hero'):
+                edges = (0, 512, 950 if args.species == 'commander' else 980, 1536)
+                top = (0 if i < 3 else 505) if args.species == 'hero' else y
+                bottom = (505 if i < 3 else 1024) if args.species == 'hero' else y + 512
+                cell = source.crop((edges[i % 3], top, edges[i % 3 + 1], bottom))
             bounds = cell.getchannel('A').point(lambda a: 255 if a > 20 else 0).getbbox()
             assert bounds, 'Empty pose'
             cells.append(cell.crop(bounds))
