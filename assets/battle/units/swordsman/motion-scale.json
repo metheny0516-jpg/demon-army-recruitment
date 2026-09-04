@@ -1,0 +1,5 @@
+{
+  "referencePixels": 330,
+  "landmark": "helmet width, including brim; measured from accepted individual sources",
+  "landmarkPixels": {"idle": 350, "attack-windup": 330, "strike": 330, "recover": 350, "hurt": 350, "fallen": 320}
+}

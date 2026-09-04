@@ -1,7 +1,8 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const orc = process.env.SPECIES === 'orc';
+const species = process.env.SPECIES || true;
+const orc = species !== true;
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   try {
@@ -11,7 +12,7 @@ const orc = process.env.SPECIES === 'orc';
     await page.goto('file://' + process.env.GAME + '/battle-preview.html');
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.evaluate(orc => { replay(2, false, orc ? 'orc' : true); BattleScene.stop(); }, orc);
+      await page.evaluate(species => { replay(2, false, species); BattleScene.stop(); }, species);
       await page.waitForFunction(() => [...document.querySelectorAll('.bu-sprite-img')].every(i => i.complete && i.naturalWidth === 512));
       for (const id of ['p0', 'p1']) {
         for (const pose of ['idle', 'attack-windup', 'strike', 'recover', 'hurt', 'fallen']) {
@@ -47,11 +48,11 @@ const orc = process.env.SPECIES === 'orc';
     });
     assert.equal(await page.evaluate(() => BattleScene.motions.size), 0);
     if (!orc) assert.equal(await page.locator('.vfx-slash').count(), 0);
-    await page.evaluate(orc => { replay(2, false, orc ? 'orc' : true); BattleScene.skip(); }, orc);
+    await page.evaluate(species => { replay(2, false, species); BattleScene.skip(); }, species);
     assert.equal(await page.evaluate(() => BattleScene.motions.size + BattleScene.pendingHits.size), 0);
     await page.evaluate(() => BattleScene.spriteFailed(BattleScene.units.p0.sprite));
     assert.equal(await page.locator('#bu-p0 .battle-sprite').count(), 0);
     assert.deepEqual(errors, []);
-    console.log(`✓ ${orc ? 'orc: 6' : 'species: 12'} poses, both sides, x1/x2/x4, HP timing, skip, reduced motion, fallback`);
+    console.log(`✓ ${orc ? species + ': 6' : 'species: 12'} poses, both sides, x1/x2/x4, HP timing, skip, reduced motion, fallback`);
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exit(1); });

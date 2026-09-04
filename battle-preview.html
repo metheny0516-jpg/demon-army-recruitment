@@ -15,6 +15,7 @@
   <button id="arrival">召喚と復活を確認</button>
   <button id="species">スライム・骸骨兵を確認</button>
   <button id="orc">オークの斧撃を確認</button>
+  <button id="swordsman">剣士の斬撃を確認</button>
 </header>
 <div id="app"></div>
 <script src="src/data/portraits.js"></script>
@@ -43,6 +44,9 @@ function replay(count = 1, ranged = false, species = false) {
   if (species === 'orc') {
     for (const unit of [...player, ...enemy]) Object.assign(unit, { tplId: 'orc', name: 'オーク', icon: '👹' });
   }
+  if (species === 'swordsman') {
+    for (const unit of [...player, ...enemy]) Object.assign(unit, { tplId: 'swordsman', name: '剣士', icon: '🗡' });
+  }
   UI.set(BattleScene.shell({ stage: 1, army: '見習い冒険者', region: '演出試写' }));
   const events = [{ type: 'battle_start', player, enemy }, { type: 'round_start', round: 1 }];
   for (let i = 0; i < count; i++) {
@@ -62,6 +66,7 @@ document.getElementById('crowd').onclick = () => replay(5);
 document.getElementById('ranged').onclick = () => replay(1, true);
 document.getElementById('species').onclick = () => replay(2, false, true);
 document.getElementById('orc').onclick = () => replay(1, false, 'orc');
+document.getElementById('swordsman').onclick = () => replay(1, false, 'swordsman');
 function replayArrival() {
   UI.set(BattleScene.shell({ stage: 1, army: '演出確認', region: '召喚・復活' }));
   const player = [{ id: 'p0', tplId: 'goblin', side: 'player', name: 'ゴブ太', icon: '👺', hp: 30, maxHp: 30 }];

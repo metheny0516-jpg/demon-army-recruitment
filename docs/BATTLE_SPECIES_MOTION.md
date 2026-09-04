@@ -1,5 +1,20 @@
 # 種族モーション追加（2026-09-04）
 
+## 剣士の単体差分（2026-09-04）
+
+内蔵image_genで既存 `swordsman/idle.webp` を毎回参照し、5差分を単体生成。
+共通指示: same character/equipment, right-facing full body, thick uneven ink, muted matte
+1990s RPG bestiary, generous margins, real RGBA transparency, no backdrop/shadow/effects/text.
+ポーズ指示: windup=pull sword back and bend knees; strike=lunge and slash low forward;
+recover=shift weight back and draw sword to hip; hurt=recoil backward, eyes closed;
+fallen=collapse on side, head right, equipment beside hands, no gore.
+windup/hurt初稿はRGBチェック柄だったためbackground-extractionで実alphaへ修正した。
+保存先 `assets/battle/units/swordsman/`。各 `*-source.png` が採用原画。
+`motion-scale.json` の兜寸法を基準に出力画像間の体格を校正し、その後は全ポーズ共通倍率・足元492。
+再生成: `python scripts/prepare_single_motion.py assets/battle/units/swordsman`
+`motion-review.jpg` は左右の128px比較。命中38%・総尺・HP/音・フォールバック契約を維持。
+検証: species通常/orc/swordsman、battlefield、ranged、arrival、vfx-lifecycle。
+
 スライム・骸骨兵の6ポーズ（idle/attack-windup/strike/recover/hurt/fallen）。
 内蔵image_genで生成。履歴書写真ではなく戦闘用全身絵とするオーナー指示を優先。
 設計ゲート7の「短い映像でも種族の個性が伝わる」に対応。ルールや戦闘尺は増やさない。

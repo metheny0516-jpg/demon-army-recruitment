@@ -17,7 +17,7 @@ const BattleScene = {
     slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     skeleton: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     orc: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    swordsman: new Set(["idle"])
+    swordsman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
