@@ -21,6 +21,18 @@ UI既存の戦闘絵→履歴書→絵文字フォールバックを保持。
 
 ## 生成プロンプト
 
+### Orc（追加・2026-09-04）
+
+内蔵image_genの初回生成を採用。`assets/battle/units/orc/` にmotion-source.pngと
+6種の512×512透過WebPを保存。モンスター画像スキルの色/輪郭を踏襲し、
+オーナー指定の戦闘専用全身絵として制作。データの「斧が仕事をした」という人物像に合わせた。
+溜め27%→振り下ろし38%→踏ん張り56%→引き戻し。総尺・命中・ダメージは従来通り。
+設計ゲート7: 重量級という見た目の違いを短い戦闘で伝える。新しいルールは追加しない。
+再生成: `python scripts/prepare_species_motion.py orc assets/battle/units/orc/motion-source.png`
+回帰試験: `SPECIES=orc node tools/browser-tests/species.js`（Windowsは環境変数を先に設定）。
+
+Use case: stylized-concept. Production transparent RGBA 2D RPG sprite sheet, 1536x1024, EXACT 3 columns x 2 rows of 512x512 cells. Six full body poses of ONE same stocky olive-green ORC worker soldier, big square jaw, two small tusks, irritated tired face, tense huge shoulders, short legs, patched brown leather tunic, dull red waist cloth, iron wristbands, heavy short-handled single-bladed axe held in BOTH hands. Thick uneven dark ink contour, muted earthy flat cel colors, matte 1990s tabletop bestiary/SNES monster manual, awkward not heroic. All face RIGHT. Row1: idle broad planted stance axe held low; attack-windup axe lifted high overhead knees bent; strike heavy downward chop axe low forward-right torso leaning into blow. Row2: recover pulls axe up from ground; hurt rocked back with hunched shoulders; fallen lying sideways on ground axe beside him. SAME SCALE in all six poses. Every body and weapon stays within center 400x440 area of EACH 512 cell with generous transparent margins; NOTHING crosses any cell boundary. Actual ALPHA TRANSPARENCY, NO painted checkerboard, no backdrop, no ground, no shadow, no haze, no labels or grid, no effects, no gore, no cinematic lighting or glossy 3D.
+
 ### Slime
 
 Use case: stylized-concept. Production 2D RPG animation sprite sheet, EXACT 1536x1024, 3 columns x 2 rows of equal 512 cells, six poses of ONE identical faceless blue slime with a crooked partly submerged burgundy necktie. Thick uneven dark ink outlines, muted teal blue, restrained matte cel shading, 1990s tabletop bestiary / SNES monster manual, deliberately awkward lowly employee monster. No eyes, no mouth. All facing right. Each cell full body, generous transparent margins, no overlap. Row1: idle squat dome; attack-windup compressed wide puddle; strike stretched diagonally forward-right body slam. Row2: recover wobbling back; hurt deeply indented soft body; fallen flattened limp puddle with tie. Keep common physical scale across cells, same mass, ground under each body. Genuinely transparent alpha background. No grid, text, effects, scenery, cast shadows, glow or glossy 3D.

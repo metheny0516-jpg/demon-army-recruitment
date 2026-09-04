@@ -1,6 +1,7 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const orc = process.env.SPECIES === 'orc';
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   try {
@@ -10,7 +11,7 @@ const path = require('node:path');
     await page.goto('file://' + process.env.GAME + '/battle-preview.html');
     for (const width of [390, 1280]) {
       await page.setViewportSize({ width, height: 900 });
-      await page.evaluate(() => { replay(2, false, true); BattleScene.stop(); });
+      await page.evaluate(orc => { replay(2, false, orc ? 'orc' : true); BattleScene.stop(); }, orc);
       await page.waitForFunction(() => [...document.querySelectorAll('.bu-sprite-img')].every(i => i.complete && i.naturalWidth === 512));
       for (const id of ['p0', 'p1']) {
         for (const pose of ['idle', 'attack-windup', 'strike', 'recover', 'hurt', 'fallen']) {
@@ -23,7 +24,7 @@ const path = require('node:path');
       }
       await page.evaluate(() => BattleScene.stop());
       await page.waitForTimeout(500);
-      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `species-${width}.png`) });
+      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `${orc ? 'orc' : 'species'}-${width}.png`) });
     }
     for (const speed of [1, 2, 4]) {
       for (const id of ['p0', 'p1', 'e0', 'e1']) {
@@ -45,12 +46,12 @@ const path = require('node:path');
       BattleScene.render({type:'attack',fromId:'p0',toId:'e0',dmg:1,hp:17,maxHp:30});
     });
     assert.equal(await page.evaluate(() => BattleScene.motions.size), 0);
-    assert.equal(await page.locator('.vfx-slash').count(), 0);
-    await page.evaluate(() => { replay(2, false, true); BattleScene.skip(); });
+    if (!orc) assert.equal(await page.locator('.vfx-slash').count(), 0);
+    await page.evaluate(orc => { replay(2, false, orc ? 'orc' : true); BattleScene.skip(); }, orc);
     assert.equal(await page.evaluate(() => BattleScene.motions.size + BattleScene.pendingHits.size), 0);
     await page.evaluate(() => BattleScene.spriteFailed(BattleScene.units.p0.sprite));
     assert.equal(await page.locator('#bu-p0 .battle-sprite').count(), 0);
     assert.deepEqual(errors, []);
-    console.log('✓ species: 12 poses, both sides, x1/x2/x4, HP timing, skip, reduced motion, fallback');
+    console.log(`✓ ${orc ? 'orc: 6' : 'species: 12'} poses, both sides, x1/x2/x4, HP timing, skip, reduced motion, fallback`);
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exit(1); });

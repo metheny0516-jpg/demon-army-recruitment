@@ -39,6 +39,7 @@ for t in daily smoke autoplay mission recruitment facility clear scene cutin eff
 done
 run portrait MODE=present
 run species DUMMY=1
+run species SPECIES=orc
 
 rm -f "$TMP"
 echo

@@ -7,7 +7,7 @@ POSES = ('idle', 'attack-windup', 'strike', 'recover', 'hurt', 'fallen')
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('species', choices=('slime', 'skeleton'))
+    parser.add_argument('species', choices=('slime', 'skeleton', 'orc'))
     parser.add_argument('source', type=Path)
     args = parser.parse_args()
     output = Path(__file__).resolve().parents[1] / 'assets/battle/units' / args.species

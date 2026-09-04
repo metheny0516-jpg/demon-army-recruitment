@@ -16,6 +16,7 @@ const BattleScene = {
     goblin: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     skeleton: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    orc: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     swordsman: new Set(["idle"])
   },
   motions: new Set(),
@@ -560,6 +561,14 @@ const BattleScene = {
   },
 
   meleeFrames(u, dx, dy, direction) {
+    if (u.tplId === "orc") return [
+      { transform: "translate(0,0) scale(1)", offset: 0 },
+      { transform: `translate(${-direction * 7}px,4px) rotate(${-direction * 8}deg) scale(1.04,.94)`, offset: .27 },
+      { transform: `translate(${dx}px,${dy + 5}px) rotate(${direction * 9}deg) scale(1.06,.94)`, offset: .38 },
+      { transform: `translate(${dx}px,${dy + 5}px) rotate(${direction * 9}deg) scale(1.06,.94)`, offset: .56 },
+      { transform: `translate(${dx * .3}px,${dy * .3 + 2}px) rotate(${direction * 3}deg)`, offset: .82 },
+      { transform: "translate(0,0) scale(1)", offset: 1 }
+    ];
     if (u.tplId === "slime") return [
       { transform: "translate(0,0) scale(1)", offset: 0 },
       { transform: `translate(${-direction * 8}px,7px) scale(1.2,.75)`, offset: .2 },
