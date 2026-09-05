@@ -26,10 +26,11 @@
 - 正のブランチは **`claude/owner-playtest-tuning-3vr0tt`**。着手前に必ず `git pull`。
   CodeX が同じブランチへ push してくるので、pull せずに始めると弾かれる。
 - 進行中の作業表は **`docs/WORK_SPLIT_2026-09-05.md`**（オーナー試遊の不満点6つ → A〜J の分担）。
-- Claude 分の進捗: **A・D・I・G 完了**（詳細は下の各ブロック）。**残りは B のみ**。
-  - B = 戦果画面に「CHAIN 7・魔王軍完成×2・戦意×1.8」を1行で併記する
-    （`src/core/run.js` の戦果 / `src/ui/ui.js`）。最深CHAINと起点の名前は既にあるので、
-    その戦闘で使ったシナジー名と戦意倍率を足すだけ。
+- Claude 分の進捗: **A・D・I・G・B すべて完了**（詳細は下の各ブロック）。Claude 分の残りは無い。
+  - B = 「今回の大暴れ」パネルの先頭に1行サマリ `.breakthrough-headline` を足した。
+    `⛓ CHAIN 4 ・ ⚡《魔王軍完成》《ゴブリンの群れ》 ・ 🔥 戦意 ×1.80` の形。
+    シナジー名は4つ以上で `ほかN種` に畳む。戦意は新フィールド `lastBattle.momentumPeak`
+    （タイムライン導出・第2節に契約を追記）。**試遊で「達成感が残るか」を確認**。
 - 他担当の残り: **C**（シナジー母数8→16、下書き `docs/drafts/cfj-2026-09-05/` のまま未採用）、
   **E**（戦間イベント16→30、Gemini台本→CodeXデータ化）、**J**（表情差分、CodeX）。
   E と J が入れば G で作った器（立ち絵＋吹き出し）がそのまま効く。
@@ -878,6 +879,11 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
 施設の働きは個人へ付けない代わりに `facilitySummary` / `deathChains`（同じくタイムライン導出）として
 戦果へ残す。**新しい施設を足したら `facility_trigger` に `facilityId / name` を付ける**こと。
 付いていないと戦果の施設行に出ない。
+
+**契約追加（2026-09-05・Claude / 作業表 B）**: `st.lastBattle.momentumPeak`（数値・戦意の到達倍率）。
+`run.js` がタイムラインの `momentum` イベントの `mult` の最大値を取るだけの導出で、戦闘式・数値は変えていない。
+戦意は戦闘中の帯にしか出ず、終わると消えていたので戦果に残らなかった。**古いセーブには無い**ので、
+表示側は `1` として扱い、`1` のときは1行サマリから戦意を落とす（`UI.breakthroughPanel`）。
 
 ### 2-2. アニメーションは `transform` と `opacity` だけ
 

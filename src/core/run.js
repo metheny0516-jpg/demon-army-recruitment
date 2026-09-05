@@ -1423,6 +1423,11 @@ const Game = {
       nearMiss: result.nearMiss,
       chainSummary: result.chainSummary,
       overkillSummary: result.overkillSummary,
+      // 戦意（momentum）の到達倍率。戦闘中は帯に出続けるが、終わると消えてしまい
+      // 「今日はどれだけ乗ったのか」が戦果に残らなかった。タイムラインから導出するだけで、
+      // 戦闘式・数値は変えていない。古いセーブには無いので表示側で 1 として扱う。
+      momentumPeak: (result.timeline || []).reduce((max, e) =>
+        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
       // 施設は「誰の手柄か」を個人へ付けない代わりに、戦果へ短い要約として残す。
       // 共通補正（Lv）と稼働施設（Joker）を分けて書き、どちらを体感したか読めるようにする。

@@ -303,6 +303,22 @@ const UI = {
           `<span class="chain-step">${U.esc(step.label)}</span>`).join(`<span class="chain-arrow">→</span>`)}</div>`
       : `<div class="muted">連鎖は起きなかった（ひと突きで終わっている）</div>`;
 
+    // 「その戦闘で何を揃えて、どこまで壊れたか」を1行に畳む（作業表 B）。
+    // CHAIN・シナジー名・戦意倍率は今までバラバラの場所にあり、達成感が戦果に残らなかった。
+    // 数える対象は既にある戦果データだけで、新しい計算も戦闘式の変更もしていない。
+    const synergyNames = (battle.synergies || []).filter(Boolean);
+    const synergyLabel = synergyNames.length
+      ? (synergyNames.length > 3
+        ? `${synergyNames.slice(0, 3).map(n => `《${n}》`).join("")}ほか${synergyNames.length - 3}種`
+        : synergyNames.map(n => `《${n}》`).join(""))
+      : "";
+    const momentum = Math.max(1, Number(battle.momentumPeak) || 1);
+    const headline = [
+      maxChain ? `⛓ CHAIN ${maxChain}` : "",
+      synergyLabel ? `⚡ ${synergyLabel}` : "",
+      momentum > 1 ? `🔥 戦意 ×${momentum.toFixed(2)}` : ""
+    ].filter(Boolean);
+
     const details = [];
     if (overkill && overkill.count) details.push(`${U.esc(overkill.rank || "OVERKILL")} ほか ${overkill.count}回・総余剰 ${overkill.totalExcess}`);
     const revives = (battle.contribution || []).reduce((sum, c) => sum + (c.revivesGiven || 0) + (c.selfRevives || 0), 0);
@@ -310,6 +326,8 @@ const UI = {
     if (battle.summonCount) details.push(`召喚 ${battle.summonCount}体`);
 
     return `<div class="panel breakthrough-panel"><h3>💥 今回の大暴れ</h3>
+      ${headline.length ? `<div class="breakthrough-headline">${headline.map(part =>
+        `<span>${U.esc(part)}</span>`).join(`<span class="sep">・</span>`)}</div>` : ""}
       <div class="breakthrough-records">
         <div><b>${maxChain}</b><span>最大CHAIN</span></div>
         <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>

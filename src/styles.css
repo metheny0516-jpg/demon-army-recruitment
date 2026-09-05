@@ -2505,6 +2505,15 @@ button.primary::first-letter { color: var(--gold); }
 .record-highlights span { font-size: 11px; color: var(--muted); }
 
 /* 今回の大暴れ。主要記録は2つだけ、下に代表CHAIN経路を一本だけ出す */
+/* 戦果の1行サマリ（CHAIN・シナジー・戦意）。数字の羅列より先に読ませたいので
+   記録タイルの上に置き、金色でひとまとまりに見せる */
+.breakthrough-panel .breakthrough-headline {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px;
+  font-size: 14px; font-weight: bold; color: var(--gold);
+  margin-bottom: 8px; line-height: 1.5;
+}
+.breakthrough-panel .breakthrough-headline .sep { color: var(--muted); font-weight: normal; }
+
 .breakthrough-panel .breakthrough-records {
   display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px;
 }
