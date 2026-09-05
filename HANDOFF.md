@@ -21,6 +21,24 @@
 
 ## 0. 次チャットの開始点（2026-09-03）
 
+### いまここ（2026-09-05 時点の要約・まずこれを読む）
+
+- 正のブランチは **`claude/owner-playtest-tuning-3vr0tt`**。着手前に必ず `git pull`。
+  CodeX が同じブランチへ push してくるので、pull せずに始めると弾かれる。
+- 進行中の作業表は **`docs/WORK_SPLIT_2026-09-05.md`**（オーナー試遊の不満点6つ → A〜J の分担）。
+- Claude 分の進捗: **A・D・I・G 完了**（詳細は下の各ブロック）。**残りは B のみ**。
+  - B = 戦果画面に「CHAIN 7・魔王軍完成×2・戦意×1.8」を1行で併記する
+    （`src/core/run.js` の戦果 / `src/ui/ui.js`）。最深CHAINと起点の名前は既にあるので、
+    その戦闘で使ったシナジー名と戦意倍率を足すだけ。
+- 他担当の残り: **C**（シナジー母数8→16、下書き `docs/drafts/cfj-2026-09-05/` のまま未採用）、
+  **E**（戦間イベント16→30、Gemini台本→CodeXデータ化）、**J**（表情差分、CodeX）。
+  E と J が入れば G で作った器（立ち絵＋吹き出し）がそのまま効く。
+- 検証の型（毎回これ）: データを触ったら `node tools/sim.js 50`（クリア率がおおむね5〜50%の帯）、
+  UIやフローを触ったら `sh tools/browser-tests/run-all.sh`。
+  **playwright はコンテナに入っていないことがある**ので、その時は
+  `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright` を先に打つ
+  （Chromium は `/opt/pw-browsers/chromium-*/chrome-linux/chrome` にあり、run-all.sh が自動で探す）。
+
 ### ブランチ一本化とテンポの戻し（2026-09-05・Claude）
 
 `claude/owner-playtest-tuning-3vr0tt` と `…-3vr0tt-b03d6e` が 764f2c2 から分岐していたので
