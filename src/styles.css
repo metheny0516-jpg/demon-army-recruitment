@@ -2533,6 +2533,14 @@ button.primary::first-letter { color: var(--gold); }
 .facility-panel .chain-step.permanent { color: var(--red); }
 .fallen-panel { border-left: 4px solid #6a2020; }
 
+/* ツケ（後で祟る選択の伝票）。期限が近いほど手前に来るので、上から読めばよい */
+.debt-panel { border-left: 4px solid #6a5320; }
+.debt-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; margin: 3px 0; }
+.debt-row .debt-due {
+  flex: 0 0 auto; font-weight: bold; color: var(--gold);
+  background: #1b1526; border: 1px solid #3a2f52; border-radius: 10px; padding: 1px 8px;
+}
+
 /* 部門適性チップ。応募者カードでも軍団カードでも同じ見え方にする */
 .aptitudes { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; align-items: center; }
 .aptitudes .apt {

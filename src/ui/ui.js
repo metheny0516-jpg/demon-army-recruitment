@@ -372,6 +372,21 @@ const UI = {
     </div>`;
   },
 
+  // ツケ（後で祟る選択の伝票）。**隠さない**のが要点。
+  // 数戦あとに理由の分からない不幸が降ってくると、それは事件ではなく理不尽になる。
+  // 「自分がいつ何と引き換えにしたか」が見えているから、支払いの日が事件になる。
+  debtPanel() {
+    const debts = Game.pendingDebts();
+    if (!debts.length) return "";
+    return `<div class="panel debt-panel"><h3>🧾 ツケ <span class="muted">${debts.length}件</span></h3>
+      ${debts.map(d => `<div class="debt-row">
+        <span class="debt-due">あと${d.battlesLeft}戦</span>
+        <span>${U.esc(d.text || "取り立てが来る")}</span>
+      </div>`).join("")}
+      <div class="muted">戦闘が終わるたびに期限が縮む。負けても取り立ては来る。</div>
+    </div>`;
+  },
+
   // 余った食料の使い道。備蓄が積み上がるだけの資源だったので、判断に変える。
   feastPanel() {
     const q = Game.feastQuote();
@@ -907,6 +922,7 @@ const UI = {
       ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房</b>
         <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍にする。</span>
       </div>` : ""}
+      ${opening ? "" : this.debtPanel()}
       ${opening ? "" : this.feastPanel()}
       ${this.payrollPanel()}
       ${opening ? "" : this.mercenaryPanel()}
@@ -973,6 +989,7 @@ const UI = {
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
       ${this.breakthroughPanel(b)}
+      ${this.debtPanel()}
       ${this.facilityPanel(b)}
       ${this.contributionPanel(b.contribution)}
       ${(b.incidents && b.incidents.length) ? `<div class="panel incident-panel"><h3>💥 この戦いの不祥事</h3>
