@@ -86,6 +86,8 @@ const Game = {
       briefsThisPhase: 0,
       pendingEvent: null,
       eventOutcome: null,
+      // 結果画面でも立ち絵と吹き出しを出すため、当事者の uid だけ残す（表示専用）
+      eventCast: null,
       laborDispute: null,
       legacyReturn,
       legacyOffered: false,
@@ -184,7 +186,7 @@ const Game = {
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, extraHiresThisPhase: 0, maxPower: 0, maxArmySize: 0,
       maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
-      rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
+      rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
       generalsMade: [],
@@ -2029,6 +2031,7 @@ const Game = {
     const st = this.state;
     st.pendingEvent = null;
     st.eventOutcome = null;
+    st.eventCast = null;
     if (st.roster.length === 0) return false;
     if (!U.chance(this.EVENT_CHANCE)) return false;
 
@@ -2083,11 +2086,13 @@ const Game = {
     // 登場人物が既に居ない場合は何も起こさない
     for (const k of Object.keys(cast)) if (cast[k] === null && st.pendingEvent.cast[k] !== undefined) {
       st.eventOutcome = "……当人はもう軍にいなかった。話は流れた。";
+      st.eventCast = null;
       st.pendingEvent = null;
       this.save();
       return true;
     }
     const notes = [];
+    st.eventCast = st.pendingEvent.cast;
     st.eventOutcome = ev.options[index].apply(st, cast) || "";
     this.processDepartures(notes);
     if (notes.length) st.eventOutcome += "\n" + notes.join("\n");
@@ -2129,6 +2134,7 @@ const Game = {
     st.briefId = null;
     st.pendingEvent = null;
     st.eventOutcome = null;
+    st.eventCast = null;
     st.selectedMission = null;
     st.missionOffers = [];
     this.saveCheckpoint();   // ここが「一戦手前」の戻り先になる

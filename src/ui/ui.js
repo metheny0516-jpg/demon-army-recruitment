@@ -1008,17 +1008,92 @@ const UI = {
   },
 
   // ハプニング画面。選択肢を出し、選んだ後は結果を見せてから採用へ進む。
+  // ── イベントの本文を「地の文」と「台詞」に割る ────────────────
+  // events.js の契約（text は1本の文字列）は変えない。本文中の 「…」 を台詞とみなし、
+  // その直前に名前が出ている登場人物へ割り当てる。名前が無ければ直前の話者が続けて話す。
+  // 誰にも割り当てられない台詞は地の文のまま残す。**嘘の話者を作らない**のが唯一の約束。
+  // これで、台本側（E・H）は本文に「」を書くだけで立ち絵と吹き出しになる。
+  eventCastList(cast) {
+    return Object.keys(cast || {}).map(k => cast[k]).filter(m => m && m.name);
+  },
+
+  // before の中で「いちばん後ろに名前が出ている」者が話者。同じ行に2人いても取り違えない。
+  eventSpeakerIn(before, speakers, previous) {
+    let found = null, at = -1;
+    for (const m of speakers) {
+      const i = before.lastIndexOf(m.name);
+      if (i > at) { at = i; found = m; }
+    }
+    const mormoAt = before.lastIndexOf("モルモ");
+    if (mormoAt > at) return { name: "モルモ", mormo: true };
+    if (found) return found;
+    if (previous) return previous;
+    // 登場人物が1人しかいない場面なら、名乗らなくても本人の台詞と分かる
+    return speakers.length === 1 ? speakers[0] : null;
+  },
+
+  eventScript(text, cast) {
+    const speakers = this.eventCastList(cast);
+    const blocks = [];
+    let previous = null;
+    // 話者の付かない台詞は、前後の地の文と切り離さずに1つの段落へ戻す。
+    // 「食堂に『払え』の張り紙があった。」を3つに割ると、かえって読みにくい。
+    let pending = "";
+    const flush = () => { if (pending.trim()) blocks.push({ say: null, body: pending.trim() }); pending = ""; };
+    for (const line of String(text || "").split("\n")) {
+      const quote = /「([^」]*)」/g;
+      let cursor = 0, m;
+      while ((m = quote.exec(line))) {
+        const before = line.slice(cursor, m.index);
+        const who = this.eventSpeakerIn(before, speakers, previous);
+        cursor = m.index + m[0].length;
+        if (!who) { pending += before + m[0]; continue; }
+        pending += before;
+        flush();
+        previous = who.mormo ? previous : who;
+        blocks.push({ say: who, body: m[1] });
+      }
+      pending += line.slice(cursor);
+      flush();
+    }
+    return blocks;
+  },
+
+  eventFaceHtml(who) {
+    if (who.mormo) return `<span class="avatar mormo-face"><img src="assets/mormo/report.webp" alt=""></span>`;
+    return this.avatarHtml(who);
+  },
+
+  eventScriptHtml(text, cast) {
+    return this.eventScript(text, cast).map(b => b.say
+      ? `<div class="event-say${b.say.mormo ? " mormo" : ""}">${this.eventFaceHtml(b.say)}
+          <p class="event-bubble"><b>${U.esc(b.say.name)}</b>「${U.esc(b.body)}」</p></div>`
+      : `<p class="event-line">${U.esc(b.body)}</p>`).join("");
+  },
+
+  // 登場人物の並び。誰の話か・いま忠誠がいくつかを見てから選ばせる。
+  eventCastHtml(cast) {
+    const list = this.eventCastList(cast);
+    if (!list.length) return "";
+    return `<div class="event-cast">${list.map(m => `<div class="event-cast-card">
+      ${this.avatarHtml(m)}
+      <div><b>${U.esc(m.name)}</b><small>${U.esc(m.race)}・忠誠${Math.round(m.loyalty)}</small></div>
+    </div>`).join("")}</div>`;
+  },
+
   event() {
     const st = Game.state;
     const ev = Game.currentEvent();
 
     // 選択済み → 結果を見せる
     if (!ev || st.eventOutcome) {
+      const done = Game.resolveCast(st.eventCast || {});
       return this.set(`${this.hud()}
         <div class="event-desk resolved"><div class="event-seal">処理済</div>
         <div class="panel event-panel">
           <div class="event-kicker">魔王城・案件報告</div><h2>⚡ その後</h2>
-          <div class="event-text">${U.esc(st.eventOutcome || "")}</div>
+          ${this.eventCastHtml(done)}
+          <div class="event-text">${this.eventScriptHtml(st.eventOutcome || "", done)}</div>
         </div>
         <button class="primary wide" data-action="eventdone">次の応募者を面接する</button></div>`, "event");
     }
@@ -1032,7 +1107,8 @@ const UI = {
       <div class="event-desk"><div class="event-seal">至急</div>
       <div class="panel event-panel">
         <div class="event-kicker">モルモ提出・緊急案件</div><h2>⚡ ${U.esc(ev.title)}</h2>
-        <div class="event-text">${U.esc(st.pendingEvent.text)}</div>
+        ${this.eventCastHtml(Game.resolveCast(st.pendingEvent.cast))}
+        <div class="event-text">${this.eventScriptHtml(st.pendingEvent.text, Game.resolveCast(st.pendingEvent.cast))}</div>
       </div>
       <div class="event-options">${opts}</div></div>`, "event");
   },

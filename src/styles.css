@@ -1039,6 +1039,50 @@ button.wide { width: 100%; }
   font-size: 14px;
   margin-top: 6px;
 }
+/* 本文は「地の文」と「台詞」に分かれたブロックの並び。
+   改行そのものはブロック分割で表現するので、外側の pre-wrap は切る
+   （切らないとタグ間の改行がそのまま空行になる）。 */
+.event-text { white-space: normal; display: flex; flex-direction: column; gap: 8px; }
+.event-line { margin: 0; white-space: pre-wrap; }
+.event-say { display: flex; align-items: flex-start; gap: 9px; margin: 2px 0; }
+.event-say .avatar, .event-say .mormo-face {
+  flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center; background: #3a2f57; border: 1px solid rgba(100, 55, 67, .4);
+}
+.event-say .mormo-face img { width: 100%; height: 100%; object-fit: cover; }
+.event-bubble {
+  position: relative;
+  margin: 0; padding: 8px 13px;
+  border: 1px solid rgba(100, 55, 67, .38);
+  border-radius: 3px 14px 14px 14px;
+  background: rgba(255, 252, 244, .82);
+  white-space: pre-wrap;
+}
+.event-bubble b {
+  display: block;
+  color: #7d5164; font-size: 11px; font-weight: 800; letter-spacing: .12em;
+  font-family: system-ui, sans-serif;
+}
+.event-say.mormo .event-bubble { background: rgba(247, 240, 255, .88); border-color: rgba(96, 70, 122, .4); }
+.event-say.mormo .event-bubble b { color: #6b4d8d; }
+/* 登場人物の並び。誰の話かと、いまの忠誠を見てから選ばせる。 */
+.event-cast { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 4px; }
+.event-cast-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 11px 5px 5px;
+  border: 1px solid rgba(100, 55, 67, .3);
+  border-radius: 999px;
+  background: rgba(255, 252, 244, .7);
+}
+.event-cast-card .avatar { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%; }
+.event-cast-card b { display: block; font-size: 13px; }
+.event-cast-card small { color: #7d5164; font-size: 11px; }
+@media (max-width: 700px) {
+  .event-say .avatar, .event-say .mormo-face { width: 42px; height: 42px; flex-basis: 42px; }
+  .event-cast-card .avatar { width: 32px; height: 32px; flex-basis: 32px; }
+  .event-cast-card { padding: 4px 9px 4px 4px; }
+}
+
 .event-options { display: flex; flex-direction: column; gap: 8px; }
 .event-choice { text-align: left; }
 
