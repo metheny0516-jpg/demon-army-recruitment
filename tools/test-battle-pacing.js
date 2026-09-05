@@ -39,12 +39,12 @@ const shortPlan = Scene.plan(short);
 assert(shortPlan.items.every(i => i.scale === 1) && shortPlan.compressScale === 1,
   '総尺が予算内なら全イベントの倍率が1のまま');
 
-// 2. 通常攻撃だけで予算超過 → 圧縮されるが下限は守る
+// 2. 通常攻撃だけで目安を超えても自動圧縮しない
 const longPlan = Scene.plan(many(200));
 assert(longPlan.rawMs > Scene.BUDGET_MS, '通常攻撃200発は予算を超える');
-assert(longPlan.compressScale < 1 && longPlan.compressScale >= Scene.MIN_COMPRESS,
-  '予算超過時は圧縮対象を縮めるが MIN_COMPRESS より深くはしない');
-assert(longPlan.items.every(i => i.scale === longPlan.compressScale), '通常攻撃はすべて圧縮対象');
+assert(longPlan.compressScale === 1,
+  '長い戦闘も等速を保ち、自動では早送りしない');
+assert(longPlan.items.every(i => i.scale === longPlan.compressScale), '通常攻撃も等速を維持');
 
 // 3. 同じ長さの戦闘に事件を混ぜる → 事件は縮まない
 const mixed = [
@@ -58,7 +58,7 @@ const mixed = [
   { type: 'result', victory: true, reversal: true, eventId: 'r2' }
 ];
 const mixedPlan = Scene.plan(mixed);
-assert(mixedPlan.compressScale < 1, '事件混じりの長期戦でも圧縮は起きる');
+assert(mixedPlan.compressScale === 1, '事件混じりの長期戦も自動圧縮しない');
 for (const type of ['synergy', 'overkill', 'revive', 'summon', 'death', 'result']) {
   assert(of(mixedPlan, mixed, type).scale === 1, `${type} は圧縮されない`);
 }
@@ -75,18 +75,18 @@ const childPlan = Scene.plan(withChild);
 assert(childPlan.items[0].protected && childPlan.items[0].scale === 1,
   '何かが反応した攻撃は起点として保護される');
 
-// 5. 何も反応しなかった火球の追撃（深度2）は圧縮対象
+// 5. 何も反応しなかった火球の追撃（深度2）も等速
 const splashIdx = withChild.length;
 const withSplash = [...withChild, { type: 'splash', fromId: 'p0', toId: 'e1', dmg: 2, label: '火球', emphasis: 1, chainDepth: 2, eventId: 'sp1' }];
 const splashPlan = Scene.plan(withSplash);
-assert(!splashPlan.items[splashIdx].protected && splashPlan.items[splashIdx].scale < 1,
-  '子を持たない深度2の追撃は圧縮対象');
+assert(!splashPlan.items[splashIdx].protected && splashPlan.items[splashIdx].scale === 1,
+  '子を持たない追撃も等速を保つ');
 
 // 6. 保護区間だけで予算を超えても、保護は1.0のまま
 const heavy = [...Array.from({ length: 60 }, (_, i) => ({ type: 'synergy', id: 'goblin_horde', name: 'x', emphasis: 3, eventId: `h${i}` })), ...many(20)];
 const heavyPlan = Scene.plan(heavy);
 assert(heavyPlan.protectedMs > Scene.BUDGET_MS, '保護区間だけで予算を超える戦闘を作れている');
-assert(heavyPlan.compressScale === Scene.MIN_COMPRESS, '保護だけで予算超過なら圧縮対象は下限まで縮む');
+assert(heavyPlan.compressScale === Scene.MIN_COMPRESS, '長期戦でも待ち時間は縮まない');
 assert(heavyPlan.items.filter(i => i.protected).every(i => i.scale === 1),
   '予算を超えても保護区間は縮めない（予算は上限ではない）');
 assert(heavyPlan.plannedMs > Scene.BUDGET_MS, '事件が多い戦闘は予算を超えて長くなってよい');
@@ -105,7 +105,7 @@ assert(Scene.durationOf({ type: 'death', unitId: 'p0', permanent: true }) > Scen
 assert(Scene.durationOf(attack({ chainDepth: 5 })) === Scene.durationOf(attack({ chainDepth: 1 })),
   '深さだけで一段ずつ延長せず、連鎖全体の緩急を計画する');
 
-// 一つの鎖の起点・初条件・決着は保護し、中間だけを畳み掛ける。
+// 一つの鎖の中間・再発火も読み切れる尺を守る。
 const relay = [
   attack({ chainId:'relay', eventId:'r0' }),
   {type:'resource_gain', resource:'gold', chainId:'relay', chainDepth:2},
@@ -118,8 +118,8 @@ const relay = [
   {type:'revive', chainId:'relay', chainDepth:9}
 ];
 const rhythm = Scene.plan(relay);
-for (const i of [0,1,2,6,7,8]) assert(rhythm.items[i].duration === Scene.durationOf(relay[i]), `連鎖の保護点${i}は読む尺を維持`);
-assert(rhythm.items[3].duration < Scene.durationOf(relay[3]) && rhythm.items[5].duration < Scene.durationOf(relay[5]), '中間追撃と繰り返しの反応は短くつながる');
+for (const i of [0,1,2,6,7,8]) assert(rhythm.items[i].duration >= Scene.durationOf(relay[i]), `連鎖の保護点${i}は読む尺を維持`);
+assert(rhythm.items.every(i => i.duration >= 3000 && i.scale === 1), '繰り返しを含む全段に最低3秒の読む時間を確保する');
 assert(rhythm.items.length === relay.length, '中間イベント自体は省略しない');
 
 // 8. core側の印: 実際の戦闘で永久戦死と逆転フラグが付く

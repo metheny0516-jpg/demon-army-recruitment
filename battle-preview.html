@@ -166,7 +166,7 @@ function replayLootRelay() {
   return result;
 }
 document.getElementById('loot-relay').onclick = replayLootRelay;
-UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replayCurrent(); });
+UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'pausebattle') BattleScene.togglePause(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replayCurrent(); });
 Sound.load();
 if (location.hash === '#loot') replayLootRelay(); else replay();
 </script>

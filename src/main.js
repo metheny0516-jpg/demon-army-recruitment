@@ -270,6 +270,10 @@ const App = {
         BattleScene.cycleSpeed();
         return;
 
+      case "pausebattle":
+        BattleScene.togglePause();
+        return;
+
       case "afterbattle":
         this.render();
         return this.battleReport();

@@ -28,14 +28,14 @@ const path = require('node:path');
           raw: result.timeline.reduce((n, e) => n + BattleScene.durationOf(e), 0) };
       }, speed);
       assert.ok(result.chain >= 6, '実戦エンジンから複数人の連鎖が生まれる');
-      assert.ok(result.planned < result.raw, '同じイベント数のまま中間の待ち時間を削る');
-      await page.waitForFunction(() => relaySeen.some(e => e.type === 'trait_trigger' && e.sourceId === 'p2'), null, {timeout: 45000});
+      assert.ok(result.planned >= result.raw, '中間も省略・圧縮せず読む間を確保する');
+      await page.waitForFunction(() => relaySeen.some(e => e.type === 'trait_trigger' && e.sourceId === 'p2'), null, {timeout: 90000});
       if (!reduced) {
         const dir = process.env.SP || '.screenshots';
         fs.mkdirSync(dir, {recursive: true});
         await page.screenshot({path: path.join(dir, `loot-relay-${width}.png`), fullPage: true});
       }
-      await page.waitForFunction(() => BattleScene.finished, null, {timeout: 45000});
+      await page.waitForFunction(() => BattleScene.finished, null, {timeout: 90000});
       const snapshot = () => ({
         hp: Object.values(BattleScene.units).map(u => u.fill.style.transform),
         dead: Object.values(BattleScene.units).map(u => u.el.dataset.life),

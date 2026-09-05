@@ -38,23 +38,23 @@ const BattleScene = {
   motions: new Set(),
   pendingHits: new Set(),
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
-  DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
+  DURATION: { 0: 1000, 1: 1200, 2: 1500, 3: 1800 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
   // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
   // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
-    battle_start: 500, round_start: 1150, synergy: 1650, facility_trigger: 1250,
-    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
-    heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
-    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200
+    battle_start: 900, round_start: 1600, synergy: 3000, facility_trigger: 3000,
+    note: 1200, dialogue: 3200, incident: 3200, death: 2200, revive: 3000, survive: 2600,
+    heal: 2200, summon: 3000, trait_trigger: 3000, resource_gain: 3000,
+    resource_forfeit: 3000, resource_consume: 2800, overkill: 3000, momentum: 3000, result: 4400
   },
+  VICTORY_PAUSE_MS: 900,
+  VICTORY_HOLD_MS: 3500,
 
-  // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
-  // 長期戦がだらけても一律には速めない。x1の目標総尺を「予算」として置き、
-  // 超えたぶんは通常攻撃と何も反応しなかった区間からだけ削る。
-  // 連鎖の中間は緩急を付ける。起点・初条件・最大余剰・蘇生・召喚・永久戦死を保護する。
-  BUDGET_MS: 45000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
-  MIN_COMPRESS: 0.45,   // 圧縮対象イベントの最小倍率（退屈な区間なので深く縮めてよい）
+  // 2026-09-05試遊：読むのが遅めの人を基準にし、自動圧縮は行わない。
+  // 急ぐときはプレイヤーがx2/x4を選ぶ。長い戦闘でも等速の意味を変えない。
+  BUDGET_MS: 45000, // 過去比較用の目安。尺を縮める判定には使わない
+  MIN_COMPRESS: 1,
 
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
@@ -169,6 +169,11 @@ const BattleScene = {
       <div class="chain-story" id="chain-story">
         <span class="chain-origin" id="chain-origin">能力がつながる瞬間を見届けよう</span>
         <b id="chain-reason"></b>
+        <details class="chain-history" id="chain-history">
+          <summary>ここまでの連鎖を読み返す <span id="chain-history-count"></span></summary>
+          <p>最初の行動が1段目。その行動が次の出来事を起こすと2段目、さらに続くと3段目です。同じ段から別の反応に分かれることもあります。</p>
+          <ol id="chain-history-list"></ol>
+        </details>
       </div>
       <div class="${sceneClass}" id="scene">
         <div class="scene-fx" id="scene-fx"></div>
@@ -180,7 +185,7 @@ const BattleScene = {
           <span class="morale-gain" id="morale-gain"></span>
         </div>
         <div class="chain-flare" id="chain-flare">
-          <span class="chain-label">CHAIN</span><b></b><i class="chain-mult"></i>
+          <span class="chain-label">連鎖</span><b></b><i class="chain-mult"></i>
           <div class="chain-rungs" id="chain-rungs"></div>
         </div>
         <div class="burst" id="burst" aria-hidden="true">
@@ -215,6 +220,7 @@ const BattleScene = {
       </div>
       <div class="scene-ctrl">
         <button class="small" data-action="speed" id="speed-btn">速度 x1</button>
+        <button class="small" data-action="pausebattle" id="pause-btn">⏸ 読むために停止</button>
         <button class="small" data-action="skiplog">▶▶ 最後まで飛ばす</button>
         <button class="primary" data-action="afterbattle" id="next-btn" style="display:none">結果を見る</button>
       </div>
@@ -315,10 +321,26 @@ const BattleScene = {
   // ── 再生 ──────────────────────────────────
   play(timeline, onDone) {
     this.stop();
+    if (typeof Sound !== "undefined") Sound.stopAll();
     this.loadSpeed();
     this.units = {};
     this.onDone = onDone;
     this.finished = false;
+    this.paused = false;
+    this.resultPending = null;
+    this.historySeen = new Set();
+    const history = document.getElementById("chain-history-list");
+    if (history) history.innerHTML = "";
+    const count = document.getElementById("chain-history-count");
+    if (count) count.textContent = "";
+    const nextButton = document.getElementById("next-btn");
+    if (nextButton) nextButton.style.display = "none";
+    const pauseButton = document.getElementById("pause-btn");
+    if (pauseButton) { pauseButton.disabled = false; pauseButton.textContent = "⏸ 読むために停止"; }
+    const historyBox = document.getElementById("chain-history");
+    if (historyBox) historyBox.ontoggle = () => {
+      if (historyBox.open && !this.paused && !this.finished && !this.resultPending) this.togglePause();
+    };
 
     const start = timeline.find(e => e.type === "battle_start");
     document.getElementById("band-enemy").innerHTML = start.enemy.map(u => this.unitHtml(u)).join("");
@@ -342,15 +364,34 @@ const BattleScene = {
   },
 
   step() {
+    if (this.paused) return;
     if (this.index >= this.timeline.length) return this.finish();
     const item = (this.pacing && this.pacing.items[this.index]) || { scale: 1 };
     const ev = this.timeline[this.index++];
     // 付随演出（字幕・光・カットイン）もこのイベントの倍率で伸縮させる
     this.activeBeat = item;
-    this.eventScale = item.scale * ((item.duration || this.durationOf(ev)) / this.durationOf(ev));
+    this.eventScale = item.scale;
     const dur = this.render(ev);
-    const wait = Math.max(60, (dur * this.eventScale) / this.speed);
-    this.timers.push(setTimeout(() => this.step(), wait));
+    if (ev.type === "result") return; // 勝利の一拍と曲は倍速から独立
+    const wait = Math.max(60, ((item.duration || dur) * this.eventScale) / this.speed);
+    this.scheduleStep(wait);
+  },
+
+  scheduleStep(wait) {
+    this.nextStepAt = Date.now() + wait;
+    this.stepTimer = setTimeout(() => this.step(), wait);
+    this.timers.push(this.stepTimer);
+  },
+
+  togglePause() {
+    if (this.finished || this.resultPending) return;
+    this.paused = !this.paused;
+    if (this.paused) {
+      clearTimeout(this.stepTimer);
+      this.readingRemaining = Math.max(0, this.nextStepAt - Date.now());
+    } else this.scheduleStep(this.readingRemaining || 0);
+    const button = document.getElementById("pause-btn");
+    if (button) button.textContent = this.paused ? "▶ 再開" : "⏸ 読むために停止";
   },
 
   durationOf(ev) {
@@ -405,43 +446,23 @@ const BattleScene = {
       if (!hits.length) continue;
       const overkills = indices.filter(i => events[i].type === "overkill");
       const peak = overkills.reduce((best, i) => best === null || events[i].percent > events[best].percent ? i : best, null);
-      const seen = new Set();
-      let hitCount = 0;
       for (const i of indices) {
         const ev = events[i], item = items[i];
-        const hit = hits.includes(i);
-        if (hit) hitCount++;
-        const key = `${ev.type}:${ev.traitId || ev.facilityId || ev.resource || ""}`;
-        const firstAbility = ["trait_trigger", "facility_trigger", "resource_gain", "resource_consume"].includes(ev.type) && !seen.has(key);
-        seen.add(key);
         item.beat = "relay";
         item.showBurst = ev.type !== "overkill" || i === peak;
         if (i === hits[0]) item.beat = "origin";
         else if (i === peak || (i === hits[hits.length - 1] && hits.length > 1)) item.beat = "payoff";
-        const preserve = item.beat !== "relay" || firstAbility || ev.firstDiscovery || ev.permanent
-          || ["revive", "summon", "survive", "result", "synergy", "incident", "dialogue"].includes(ev.type);
-        if (preserve) {
-          item.protected = true;
-          continue;
-        }
-        // 初めての条件は読ませる。続く反応は順序を保って畳み掛ける。
-        const floor = hit ? 380 : ev.type === "overkill" ? 520 : 240;
-        const rhythm = Math.max(.36, .68 - Math.max(0, hitCount - 1) * .08);
-        item.duration = Math.min(item.duration, Math.max(floor, Math.round(item.duration * rhythm)));
-        item.protected = true; // 総尺予算による二重の圧縮はしない
+        // 遅めに読む人を基準にする。中間・同じ能力の再発火も同じだけ読ませる。
+        const letters = Array.from(ev.text || ev.desc || ev.name || ev.label || "").length;
+        item.duration = Math.max(item.duration, Math.min(6500, Math.max(3000, 1600 + letters * 65)));
+        item.protected = true;
       }
     }
     const sum = (list, fn) => list.reduce((total, item) => total + fn(item), 0);
     const protectedMs = sum(items.filter(i => i.protected), i => i.duration);
     const compressibleMs = sum(items.filter(i => !i.protected), i => i.duration);
     const rawMs = protectedMs + compressibleMs;
-    let compressScale = 1;
-    if (rawMs > this.BUDGET_MS && compressibleMs > 0) {
-      // 保護区間だけで予算を超える戦闘は、圧縮対象を最小まで縮めたうえで予算超過を許す
-      const room = (this.BUDGET_MS - protectedMs) / compressibleMs;
-      compressScale = Math.min(1, Math.max(this.MIN_COMPRESS, room));
-    }
-    for (const item of items) if (!item.protected) item.scale = compressScale;
+    const compressScale = 1;
     return {
       items, rawMs, protectedMs, compressibleMs, compressScale,
       plannedMs: sum(items, i => i.duration * i.scale)
@@ -453,7 +474,7 @@ const BattleScene = {
     if (ev.text) this.appendLog(ev.text, ev.cls);
     this.chainFlare(ev);
     this.tellChain(ev);
-    if (typeof Sound !== "undefined" && ev.type !== "attack" && ev.type !== "splash") {
+    if (typeof Sound !== "undefined" && !["attack", "splash", "result"].includes(ev.type)) {
       const from = this.units[ev.fromId];
       Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from && from.side });
     }
@@ -638,7 +659,7 @@ const BattleScene = {
         break;
       }
       case "result":
-        this.banner(ev.victory);
+        this.resolveBattle(ev);
         break;
     }
     return this.durationOf(ev);
@@ -683,7 +704,31 @@ const BattleScene = {
       return `${who}${who ? "の" : ""}${e.name || e.label || ({revive: "蘇生", summon: "召喚", survive: "生存", heal: "回復"}[e.type] || "反応")}`;
     };
     origin.textContent = starter ? `起点：${starter.name}` : "能力がつながった";
-    reason.textContent = `${label(parent)} → ${label(ev)}`;
+    const who = actor(ev)?.name || "味方";
+    let explanation;
+    if (ev.type === "trait_trigger" && ev.traitId === "greedy") {
+      explanation = `${label(parent)}を得たので、${who}の「強欲」が発動。追加でもう一度攻撃する。`;
+    } else if (ev.type === "attack" || ev.type === "splash") {
+      explanation = `${label(parent)}がきっかけで、${who}が${this.units[ev.toId]?.name || "敵"}へ追撃。${ev.dmg}ダメージ。`;
+    } else if (ev.type === "resource_gain") {
+      explanation = `${label(parent)}がきっかけで、${label(ev)}を獲得。`;
+    } else if (ev.type === "momentum") {
+      explanation = `${label(parent)}の余剰ダメージで味方全員の戦意が上昇。与えるダメージが${Number(ev.mult).toFixed(2)}倍に。`;
+    } else if (ev.type === "overkill") {
+      explanation = `${label(parent)}が敵の残りHPを超えた！ 余剰${ev.excess}ダメージ（${ev.percent}% OVERKILL）。`;
+    } else explanation = `${label(parent)}がきっかけで、${label(ev)}。`;
+    reason.textContent = `第${ev.chainDepth}段：${explanation}`;
+    this.historySeen ||= new Set();
+    const list = document.getElementById("chain-history-list");
+    for (const entry of [root, parent, ev]) {
+      if (!list || !entry.eventId || this.historySeen.has(entry.eventId)) continue;
+      this.historySeen.add(entry.eventId);
+      const row = document.createElement("li");
+      row.innerHTML = `<b>第${entry.chainDepth || 1}段</b> ${U.esc(label(entry))}${entry === ev ? `<small>${U.esc(explanation)}</small>` : ""}`;
+      list.appendChild(row);
+    }
+    const count = document.getElementById("chain-history-count");
+    if (count) count.textContent = `（${this.historySeen.size}件）`;
     const from = actor(parent), to = actor(ev);
     if (animate && ev.type === "trait_trigger" && from && to && from !== to) this.bolt(from, to, ev.chainDepth || 2, "relay");
   },
@@ -895,7 +940,8 @@ const BattleScene = {
   // 中断時は pendingHits でHPだけ確定し、次イベントやスキップと食い違わせない。
   attackMotion(from, to, ev) {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const total = this.visualDuration(this.durationOf(ev) * .88);
+    // 読む時間を長くしても、攻撃動作自体はスローモーションにしない。
+    const total = this.visualDuration(Math.min(950, this.durationOf(ev) * .88));
     const kind = ev.type === "splash" ? "melee" : this.attackKind(from);
     const ranged = kind !== "melee";
     const contact = reduced ? 0 : total * (ranged ? .62 : .38);
@@ -1103,8 +1149,7 @@ const BattleScene = {
     c.classList.remove("show");
     void c.offsetWidth;
     c.classList.add("show");
-    this.captionTimer = setTimeout(() => c.classList.remove("show"), this.visualDuration(duration || 600));
-    this.timers.push(this.captionTimer);
+    // 次の説明で置き換えるまで残す。読む途中でフェードアウトしない。
   },
 
   battleIntro() {
@@ -1284,17 +1329,34 @@ const BattleScene = {
     this.timers.push(setTimeout(() => c.classList.remove("show"), (1300 * this.eventScale) / this.speed));
   },
 
+  resolveBattle(ev) {
+    this.stop();
+    this.resultPending = ev;
+    this.paused = false;
+    const pause = document.getElementById("pause-btn");
+    if (pause) pause.disabled = true;
+    if (typeof Music !== "undefined") Music.suspend();
+    if (typeof Sound !== "undefined") Sound.stopAll();
+    const announce = () => {
+      this.banner(ev.victory);
+      if (typeof Sound !== "undefined") Sound.cue(ev.victory ? "win" : "lose", { speed: 1 });
+    };
+    const silence = ev.victory ? this.VICTORY_PAUSE_MS : 500;
+    this.timers.push(setTimeout(announce, silence));
+    this.timers.push(setTimeout(() => this.finish(), silence + (ev.victory ? this.VICTORY_HOLD_MS : 1800)));
+  },
+
   banner(victory) {
-    if (typeof Music !== "undefined") Music.update(Game.state, { scene: victory ? "victory" : "defeat" });
     const s = document.getElementById("scene");
     if (!s) return;
+    if (s.querySelector(".scene-result")) return;
     // 決着表示は画面中央に出るため、同じ位置にある「VS」帯を隠す。
     // 隠さないと「勝 VS 利」のように文字が重なって読めなくなる。
     s.classList.add("decided");
     const b = document.createElement("div");
     b.className = "scene-result " + (victory ? "win" : "lose") + (this.isFinalBattle ? " final" : "");
-    b.innerHTML = `<b>${victory ? "勝　利" : "敗　北"}</b>${
-      this.isFinalBattle && victory ? "<small>王国最終防衛線 突破</small>" : ""}`;
+    b.innerHTML = `${victory ? '<span class="victory-kicker">魔王軍、凱旋</span>' : ''}<b>${victory ? "勝　利" : "敗　北"}</b>${
+      this.isFinalBattle && victory ? "<small>王国最終防衛線 突破</small>" : victory ? '<small>よく戦った。戦果を確かめよう。</small>' : ""}`;
     s.appendChild(b);
   },
 
@@ -1307,7 +1369,10 @@ const BattleScene = {
 
   // 残りを一気に適用して終わらせる
   skip() {
+    if (this.finished) return;
+    const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
+    if (typeof Music !== "undefined") Music.suspend();
     if (typeof KPI !== "undefined") KPI.logSkipped();
     if (typeof Sound !== "undefined") {
       Sound.stopAll();
@@ -1323,7 +1388,11 @@ const BattleScene = {
       if (ev.type === "revive" && u) this.setLife(u, false);
       if (ev.type === "momentum") this.setMorale(ev.mult, 0);
       this.tellChain(ev, false);
-      if (ev.type === "result") this.banner(ev.victory);
+    }
+    const result = this.timeline.find(e => e.type === "result");
+    if (result) {
+      this.banner(result.victory);
+      if (!announced && typeof Sound !== "undefined") Sound.cue(result.victory ? "win" : "lose", { speed: 1 });
     }
     this.finish();
   },
@@ -1343,7 +1412,11 @@ const BattleScene = {
   finish() {
     if (this.finished) return;
     this.finished = true;
+    this.paused = false;
+    this.resultPending = null;
     this.stop();
+    const pause = document.getElementById("pause-btn");
+    if (pause) pause.disabled = true;
     const btn = document.getElementById("next-btn");
     if (btn) btn.style.display = "";
     if (this.onDone) this.onDone();
