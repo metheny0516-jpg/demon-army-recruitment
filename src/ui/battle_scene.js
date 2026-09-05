@@ -145,7 +145,7 @@ const BattleScene = {
     this.timers = [];
     const scene = document.getElementById("scene");
     if (scene) {
-      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt").forEach(el => el.remove());
+      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt, .mormo-aside").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
       scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
       const morale = document.getElementById("morale");
@@ -364,6 +364,7 @@ const BattleScene = {
     this.synergyPlanned = timeline.filter(e => e.type === "synergy").length;
     this.synergyFired = 0;
     this.showForecast();
+    this.mormoAside = this.pickMormoAside(timeline);
     document.getElementById("scene").querySelectorAll(".scene-result").forEach(e => e.remove());
     document.getElementById("scene").classList.remove("decided");
     this.eventScale = 1;
@@ -503,6 +504,8 @@ const BattleScene = {
   // 1イベントを描画し、次までの尺(ms)を返す
   render(ev) {
     if (ev.text) this.appendLog(ev.text, ev.cls);
+    // 全滅の一言だけは決着表示と一緒に出す（banner 側）。ここは戦闘中の2場面。
+    if (this.mormoAside && this.mormoAside.at === ev && this.mormoAside.scene !== "wipe") this.sayMormo();
     this.chainFlare(ev);
     this.tellChain(ev);
     if (typeof Sound !== "undefined" && !["attack", "splash", "result"].includes(ev.type)) {
@@ -1231,6 +1234,39 @@ const BattleScene = {
     // 次の説明で置き換えるまで残す。読む途中でフェードアウトしない。
   },
 
+  // モルモは1戦闘に一度だけ顔を出す。「連発しない」を後追いの判定で守ろうとすると、
+  // 先に来た場面が必ず勝ってしまい、いちばん面白い瞬間を取り逃がす。
+  // タイムライン全体を先に見て、出る場面を1つだけ決めてしまう。
+  // 優先度は 全滅 ＞ 初めて見るシナジー ＞ 5段以上の連鎖（珍しい順）。
+  MORMO_ASIDE_MS: 3600,
+
+  pickMormoAside(timeline) {
+    if (typeof MORMO_BATTLE_LINES === "undefined" || typeof MormoScene === "undefined") return null;
+    const pick = (scene, at) => at ? { scene, at } : null;
+    return pick("wipe", timeline.find(e => e.type === "result" && e.wipe === "player"))
+      || pick("discovery", timeline.find(e => e.type === "synergy" && e.firstDiscovery))
+      || pick("chain", timeline.find(e => (e.chainDepth || 0) >= 5));
+  },
+
+  sayMormo() {
+    const plan = this.mormoAside;
+    if (!plan) return;
+    this.mormoAside = null; // 1戦闘1回。撃ったら予約を消す
+    const set = MORMO_BATTLE_LINES[plan.scene];
+    if (!set || !set.lines.length) return;
+    // 直前に出た1本は避ける。同じ場面が続いても同じ声にはならない。
+    this.lastMormoLine ||= {};
+    const pool = set.lines.filter(line => line !== this.lastMormoLine[plan.scene]);
+    const text = (pool.length ? pool : set.lines)[Math.floor(Math.random() * (pool.length || set.lines.length))];
+    this.lastMormoLine[plan.scene] = text;
+    const box = MormoScene.aside({ expression: set.expression, text, host: document.getElementById("scene") });
+    if (!box) return;
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+    // 決着の一言は結果画面まで残す。戦闘中の一言だけ自動で引く。
+    if (plan.scene === "wipe") return;
+    this.timers.push(setTimeout(() => box.remove(), this.MORMO_ASIDE_MS / this.speed));
+  },
+
   // 戦闘開始の時点で「今日いくつ発動するか」だけ先に約束する。
   // 名前は伏せる。何が起きるかは伏せたまま、何回起きるかだけ渡すのが期待になる。
   // 数が減っていく（0/3 → 3/3）のを見せることで、予告が回収されたと分かる。
@@ -1529,6 +1565,8 @@ const BattleScene = {
     this.paused = false;
     this.resultPending = null;
     this.stop();
+    // 全滅の一言は決着表示のあと、片付けが済んでから。stop() より前に出すと自分で消してしまう。
+    if (this.mormoAside && this.mormoAside.scene === "wipe") this.sayMormo();
     // ファンファーレ（Sound）のあいだ BGM は止めてある。区切りが済んだら決着の場面曲へ切り替える。
     // 通常再生もスキップもここを通るので、場面名が battle のまま残らない。
     const result = (this.timeline || []).find(e => e.type === "result");

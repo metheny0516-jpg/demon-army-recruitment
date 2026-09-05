@@ -772,6 +772,46 @@ button.wide { width: 100%; }
 }
 .scene-intro.show { animation: finalIntro 1.4s ease-out; }
 
+/* ── 戦闘中のモルモの一言 ── */
+/* 全画面報告と違い、戦場を覆わない。読み飛ばしても進行が止まらないのが条件。 */
+.mormo-aside {
+  position: absolute;
+  left: 10px; bottom: 10px;
+  z-index: 9;
+  display: flex; align-items: flex-end; gap: 8px;
+  max-width: min(78%, 460px);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity .28s ease-out, transform .28s ease-out;
+}
+.mormo-aside.show { opacity: 1; transform: none; }
+.mormo-aside-portrait {
+  width: 62px; height: 62px; flex: 0 0 auto;
+  border-radius: 50%; object-fit: cover;
+  border: 2px solid #c79a52;
+  background: #241a24;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .55);
+}
+.mormo-aside-bubble {
+  margin: 0; padding: 8px 12px;
+  border: 1px solid #7c6136; border-radius: 12px 12px 12px 2px;
+  background: rgba(24, 17, 28, .93);
+  color: #f6e6c2; font-size: 13px; line-height: 1.5;
+}
+.mormo-aside-bubble b {
+  display: block;
+  color: #f4ce80; font-size: 10px; letter-spacing: .1em; margin-bottom: 2px;
+}
+@media (max-width: 700px) {
+  .mormo-aside { left: 6px; bottom: 6px; max-width: 88%; gap: 6px; }
+  .mormo-aside-portrait { width: 44px; height: 44px; }
+  .mormo-aside-bubble { font-size: 12px; padding: 6px 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mormo-aside { transition: none; }
+}
+
 /* ── シナジー カットイン ── */
 .cutin {
   position: absolute;

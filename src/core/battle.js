@@ -649,6 +649,9 @@ const Battle = {
       : "長期戦の末、判定負け……魔王軍は敗走した。";
     emit("result", {
       victory, reversal: this.detectReversal(timeline, victory), emphasis: 3,
+      // permanent / reversal / firstDiscovery と同じ「重要度の印」。勝敗確定後に導出して付け、
+      // 描画側だけが読む（戦闘計算には一切使わない）。判定決着と全滅を見分けるために要る。
+      wipe: wiped(playerUnits) ? "player" : wiped(enemyUnits) ? "enemy" : null,
       text: resultText, cls: victory ? "result-win" : "result-lose"
     });
 

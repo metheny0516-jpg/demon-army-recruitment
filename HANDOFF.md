@@ -42,8 +42,18 @@ D は `.chain-story` の先頭に予告帯 `#chain-forecast` を足した。タ�
 `play()` で数え、`render()` と `skip()` の両方で加算するので倍速・スキップでも一致する。
 戦闘式・数値・保存契約の変更なし。
 
+**I 完了（同日・Claude）**: 戦闘中のモルモを `MormoScene.aside()` として足した。
+全画面の `show()` と違い操作を奪わず自動で消える「野次」。台詞は `src/data/mormo_lines.js` の
+`MORMO_BATTLE_LINES`（chain / discovery / wipe、各3本）。
+**1戦闘1回**を守るため、後追いの判定ではなく `play()` でタイムラインを先読みして出る場面を1つだけ決める
+（`BattleScene.pickMormoAside`）。優先度は 全滅 ＞ 初めて見るシナジー ＞ 5段以上の連鎖。
+全滅の一言だけは `finish()`（`stop()` の後）で出す。`stop()` より前に出すと自分で片付けてしまう。
+`result.wipe`（"player" / "enemy" / null）を新設。`permanent` / `reversal` / `firstDiscovery` と同じ
+**重要度の印**で、勝敗確定後に導出して付け、描画側だけが読む（2-1節に追記済み）。
+テストは `tools/browser-tests/mormo-aside.js`。
+
 **次にやること**: `docs/WORK_SPLIT_2026-09-05.md` の分担表。Claude の残りは G（イベント本文を立ち絵＋吹き出しへ）、
-そのあと B・I。C（シナジー母数8→16）は下書きのまま未採用。
+そのあと B。C（シナジー母数8→16）は下書きのまま未採用。
 
 **C 混成シナジー 8→15（同日・CodeX 下書き → Claude 調整）**
 異種を混ぜると既存特性を別種族へ貸す7件（`src/data/synergies.js` 末尾、`grant: true`）。
@@ -830,6 +840,8 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
 描画側の圧縮判定（`BattleScene.isProtected` / `magnitude`）だけが読み、**戦闘計算には一切使わない**。
 `permanent` と `reversal` は勝敗確定後にタイムラインから導出して付け、`firstDiscovery` は
 `Game.recordDiscoveredSynergies()` が登録時に付ける。増やすときも同じ作法（計算に混ぜない）を守ること。
+`result.wipe`（`"player"` / `"enemy"` / `null`）も同じ印。**判定決着と全滅を見分ける**ためだけにあり、
+勝敗そのものは `victory` が持つ。描画側（モルモの一言）しか読まない。
 
 戦果の集計もすべてタイムラインからの導出で完結している。`chainSummary.deepest`（代表CHAIN経路）と
 `contribution` の非ダメージ項目（`traitTriggers` / `resources` / `revivesGiven` / `selfRevives` / `healed`）は
