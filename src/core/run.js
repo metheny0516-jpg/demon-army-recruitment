@@ -1364,6 +1364,7 @@ const Game = {
       st.gold += stageData.reward + lootGold;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
       if (lootGold > 0) notes.push(`戦闘中の略奪 ${lootGold}G を確定（所持金 ${st.gold}G）`);
+      this.applyOvertime(result.overtime, notes);
       this.processCasualties(result.contribution, notes);
       this.awardMerit(result.contribution, notes);
       this.applyMissionOutcome(stageData, notes);
@@ -1434,7 +1435,8 @@ const Game = {
         };
       })(),
       facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
-      deathChains: result.deathChains || []
+      deathChains: result.deathChains || [],
+      overtime: st.lastOvertime || { hours: 0, deepest: 0, loyalty: 0, supper: 0 }
     };
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
     // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
@@ -1475,6 +1477,36 @@ const Game = {
     if (mission.alertDelta) {
       notes.push(`王国警戒度+${mission.alertDelta}（現在 ${st.alert}）`);
     }
+  },
+
+  // 深い連鎖の請求書。連鎖は壊れてよいが、壊れたまま連戦はできない。
+  // 4段目以降の味方の行動＝残業1時間として、出撃者の忠誠と備蓄食料（夜食）へ請求する。
+  // 「今回の爆発をもう一度起こせるか」を、次の戦いの手前で必ず考えさせるための代償。
+  applyOvertime(overtime, notes) {
+    const hours = Math.max(0, Math.round((overtime && overtime.hours) || 0));
+    const st = this.state;
+    st.lastOvertime = { hours, deepest: (overtime && overtime.deepest) || 0, loyalty: 0, supper: 0 };
+    if (hours <= 0) return st.lastOvertime;
+
+    const penalty = Math.min(20, Math.floor(hours / 2));
+    if (penalty > 0) {
+      for (const m of st.roster) {
+        if (!st.activeUids.includes(m.uid)) continue;   // 残業したのは出撃した者だけ
+        m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
+      }
+      st.lastOvertime.loyalty = -penalty;
+    }
+    // 夜食。備蓄があれば食われ、無ければ何も出ない（不足判定は生活部門側が行う）
+    const supper = Math.min(Math.max(0, st.food || 0), Math.floor(hours / 3));
+    if (supper > 0) {
+      st.food -= supper;
+      st.lastOvertime.supper = supper;
+    }
+    st.overtimeTotal = (st.overtimeTotal || 0) + hours;
+    notes.push(`残業 ${hours}時間（連鎖${st.lastOvertime.deepest}段）`
+      + (penalty > 0 ? `：出撃者の忠誠-${penalty}` : "：忠誠への影響なし")
+      + (supper > 0 ? ` / 夜食に食料-${supper}` : ""));
+    return st.lastOvertime;
   },
 
   // 戦闘で得た資源を、非戦闘部門が次の戦いへつなぐ。

@@ -81,6 +81,9 @@ const Battle = {
     };
   },
 
+  // 連鎖の上限。壊れてよいが、無限には伸ばさない（1戦が終わらなくなる）。
+  MAX_CHAIN_DEPTH: 12,
+
   simulate(playerUnits, enemyUnits, options) {
     options = options || {};
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
@@ -411,17 +414,40 @@ const Battle = {
       return false;
     };
 
+    // 連鎖の段数そのものを能力が読めるようにするための最小限の状態。
+    // 深度は親イベントから導出するので新しい数値は持たない。持つのは
+    // 「この鎖で誰がもう動いたか」だけ（同じ鎖で同じ人が無限に動かないため）。
+    const chainActors = new Map();
+    const actedInChain = (chainId, unit) => {
+      if (!chainId) return false;
+      const set = chainActors.get(chainId);
+      return !!(set && set.has(unit.id));
+    };
+    const markChainActor = (chainId, unit) => {
+      if (!chainId) return;
+      if (!chainActors.has(chainId)) chainActors.set(chainId, new Set());
+      chainActors.get(chainId).add(unit.id);
+    };
+
     const act = (unit, allies, enemies, round, actionOpts) => {
       actionOpts = actionOpts || {};
       const living = enemies.filter(u => u.alive);
       if (living.length === 0) return;
       if (!actionOpts.isExtra && tryIncident(unit, allies)) return;
+      // この行動が鎖の何段目か。親を持たない通常攻撃が1段目。
+      const parentChain = actionOpts.parentEvent || null;
+      const chainDepth = parentChain ? (parentChain.chainDepth || 1) + 1 : 1;
+      const chainId = parentChain ? (parentChain.chainId || parentChain.eventId) : null;
+      if (chainDepth > Battle.MAX_CHAIN_DEPTH) return;
+      markChainActor(chainId, unit);
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = U.chance(0.6) ? living[0] : U.pick(living);
 
       const ctx = {
         attacker: unit, target, allies, enemies, round,
-        mult: unit.mods.dmgMult, notes: [], rng: U.rand
+        mult: unit.mods.dmgMult, notes: [], rng: U.rand,
+        // 連鎖段数を参照する能力群のための入力。読むだけで、書き換えない。
+        chainDepth, defIgnore: 0
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
@@ -437,7 +463,8 @@ const Battle = {
       if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
       const variance = 0.9 + U.rand() * 0.2;
       const raw = unit.atk * ctx.mult * variance * (actionOpts.mult || 1);
-      const amount = Math.max(1, Math.round(raw) - Math.floor(target.def / 2));
+      const defIgnore = Math.min(1, Math.max(0, ctx.defIgnore || 0));
+      const amount = Math.max(1, Math.round(raw) - Math.floor(target.def / 2 * (1 - defIgnore)));
       if (ctx.notes.length) {
         note(`　${unit.name}の特性（${ctx.notes.join("・")}！）`, "trait");
       }
@@ -472,6 +499,19 @@ const Battle = {
         const tr = TRAITS[tid];
         if (tr && tr.postAttack && target) tr.postAttack(post);
       }
+      // 【歩合】連鎖が3段目まで伸びたら、反応した者に金貨が落ちる。
+      // 深さそのものが資源になる入口。金貨は既存の《強欲》へつながる。
+      const tollChainId = applied.event.chainId || null;
+      if (chainDepth >= 3 && tollChainId) {
+        for (const reactor of allies) {
+          if (!reactor.alive || !reactor.traits.includes("chain_toll")) continue;
+          if (!reactor.flags.tollChains) reactor.flags.tollChains = new Set();
+          if (reactor.flags.tollChains.has(tollChainId)) continue;
+          reactor.flags.tollChains.add(tollChainId);
+          triggeredEvents.push(
+            gainBattleResource(reactor, "gold", chainDepth - 2, "歩合", applied.event));
+        }
+      }
       if (triggeredEvents.length) {
         // 金貨は軍団の成果。盗む役と反応する役を別の人材で組める。
         // 各人の greedyChains が再帰に入る前に使用済みになるため、
@@ -492,6 +532,30 @@ const Battle = {
             const tr = TRAITS[tid];
             if (tr && tr.onTriggeredEvents) tr.onTriggeredEvents(reaction);
           }
+        }
+      }
+
+      // 【押し出し】鎖の中で撃破が出たとき、その鎖でまだ動いていない仲間へ手番を渡す。
+      // 「段数を伸ばす役」。同じ鎖で同じ人は一度しか動けないので、伸びる長さは
+      // 押し出しを何人採ったか＝編成そのものになる。
+      // 撃破そのものが鎖の入口。押し出しを何人採ったかが、そのまま鎖の長さになる。
+      const relayChainId = applied.deathEvent && (applied.deathEvent.chainId || null);
+      const relayDepth = applied.deathEvent ? (applied.deathEvent.chainDepth || 1) + 1 : 0;
+      if (applied.deathEvent && relayChainId && target.side !== unit.side
+        && relayDepth < Battle.MAX_CHAIN_DEPTH && enemies.some(e => e.alive)) {
+        const runner = allies.find(a => a.alive && a !== unit
+          && a.traits.includes("relay_kick") && !actedInChain(relayChainId, a));
+        if (runner) {
+          markChainActor(relayChainId, runner);
+          const trigger = emitCausal("trait_trigger", {
+            sourceId: runner.id, traitId: "relay_kick", name: "押し出し",
+            chainDepth: relayDepth, emphasis: 2,
+            text: `　${runner.name}の【押し出し】 ${unit.name}の撃破を受けて連鎖${relayDepth}段目へ！`,
+            cls: "trait"
+          }, applied.deathEvent);
+          act(runner, allies, enemies, round, {
+            mult: 0.6, parentEvent: trigger, label: "押し出し", isExtra: true
+          });
         }
       }
     };
@@ -656,6 +720,7 @@ const Battle = {
       contribution: this.summarizeContribution(timeline, playerUnits),
       nearMiss: this.summarizeNearMiss(timeline),
       chainSummary: this.summarizeChains(timeline),
+      overtime: this.summarizeOvertime(timeline),
       overkillSummary: this.summarizeOverkill(timeline),
       summonCount: timeline.filter(e => e.type === "summon").length,
       facilitySummary: this.summarizeFacility(timeline),
@@ -695,6 +760,23 @@ const Battle = {
     // 全滅救済（総HP0）からの勝利もこの条件に自然に含まれる。
     const REVERSAL_HP_RATIO = 0.30;
     return lowest <= REVERSAL_HP_RATIO;
+  },
+
+  // 深い連鎖は「タダで爆発した」ことにしない。魔王軍は労働組織である。
+  // 4段目以降の味方の行動を1時間の残業として数え、戦闘後に忠誠と食料へ請求する。
+  // 戦闘中に別状態を持ち回らず、確定したタイムラインから導出するだけ。
+  summarizeOvertime(timeline) {
+    const events = (timeline || []).filter(e => Number.isFinite(e.chainDepth) && e.chainDepth >= 4);
+    let hours = 0;
+    let deepest = 0;
+    for (const event of events) {
+      const actorId = event.fromId || event.sourceId || null;
+      if (!actorId || !String(actorId).startsWith("p")) continue;   // 敵の連鎖は魔王軍の労務ではない
+      if (event.type !== "attack" && event.type !== "splash" && event.type !== "trait_trigger") continue;
+      hours += 1;
+      deepest = Math.max(deepest, event.chainDepth);
+    }
+    return { hours, deepest };
   },
 
   // 因果メタデータだけからCHAINを集計する。戦闘計算へ別状態を持ち込まない。

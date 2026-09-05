@@ -210,7 +210,7 @@ const TRAITS = {
   chain_massacre: {
     name: "連鎖虐殺",
     desc: "100%以上OVERKILL：余剰の30%→40%→50%を次の敵へ伝播（最大3体）",
-    links: { reacts: ["OVERKILL"], emits: ["伝播攻撃"] }
+    links: { reacts: ["OVERKILL"], emits: ["伝播攻撃", "連鎖"] }
   },
   mischief: {
     name: "悪戯",
@@ -250,5 +250,45 @@ const TRAITS = {
         ctx.notes.push("覚醒");
       }
     }
+  },
+
+  // ---- 連鎖段数を参照する能力群（設計原則 第4節「既存要素との接続数」） ----
+  // 共通の入力は ctx.chainDepth（この行動が鎖の何段目か）だけ。
+  // 「伸ばす役（押し出し）／深さを火力にする役（深追い・深淵の恐怖）／
+  //   深さを資源にする役（歩合）」がそろって初めて壊れる。
+  // 代償は戦闘の外にある。深い連鎖は戦闘後に「残業」として忠誠と食料を削る。
+  escalate: {
+    name: "深追い",
+    desc: "連鎖3段目以降、1段深まるごとにダメージ+60%",
+    links: { reacts: ["伝播攻撃", "連鎖"], emits: ["OVERKILL"] },
+    modDealt(ctx) {
+      const over = (ctx.chainDepth || 1) - 2;
+      if (over <= 0) return;
+      ctx.mult *= 1 + 0.6 * over;
+      ctx.notes.push(`深追い${ctx.chainDepth}段`);
+    }
+  },
+  deep_dread: {
+    name: "深淵の恐怖",
+    desc: "連鎖が深いほど敵の防御を無視（1段につき15%・最大75%）",
+    links: { reacts: ["伝播攻撃", "連鎖"] },
+    modDealt(ctx) {
+      const over = (ctx.chainDepth || 1) - 1;
+      if (over <= 0) return;
+      ctx.defIgnore = Math.max(ctx.defIgnore || 0, Math.min(0.75, 0.15 * over));
+      ctx.notes.push(`深淵の恐怖${Math.round(ctx.defIgnore * 100)}%`);
+    }
+  },
+  // 押し出し・歩合はフックを持たない。battle.js が連鎖の構造そのものを見て発火する
+  // （どちらも「鎖の中でしか意味を持たない」ため、攻撃単体のフックでは書けない）。
+  relay_kick: {
+    name: "押し出し",
+    desc: "連鎖の中で仲間が敵を倒すと、まだ動いていない自分が威力60%で追撃（1鎖1回）",
+    links: { reacts: ["伝播攻撃", "連鎖"], emits: ["連鎖"] }
+  },
+  chain_toll: {
+    name: "歩合",
+    desc: "連鎖が3段目に達するたび、深さに応じた金貨を略奪予約（1鎖1回）",
+    links: { reacts: ["伝播攻撃", "連鎖"], emits: ["金貨獲得"] }
   }
 };

@@ -31,6 +31,13 @@ function chooseIndex(apps, roster, strat){
     const rich = apps.map((m,i)=>[m,i]).filter(([m])=> m.salary >= 5);
     if (rich.length) return rich.reduce((b,x)=> power(x[0])>power(b[0])?x:b)[1];
   }
+  if (strat.kind === 'chain') {
+    // 連鎖特化：段数を参照する能力を持つ応募者を優先する
+    const CHAIN_TRAITS = ['relay_kick', 'escalate', 'chain_toll', 'deep_dread', 'chain_massacre', 'greedy'];
+    const score = m => (m.traits || []).filter(t => CHAIN_TRAITS.includes(t)).length;
+    const best = apps.map((m,i)=>[m,i]).filter(([m])=> score(m) > 0);
+    if (best.length) return best.reduce((b,x)=> score(x[0]) > score(b[0]) ? x : b)[1];
+  }
   return apps.reduce((b,m,i)=> power(m) > power(apps[b]) ? i : b, 0);
 }
 
@@ -182,6 +189,7 @@ const strategies = [
   {name:'略奪4回→侵攻', kind:'greedy', mission:'raid'},
   {name:'慎重経営', kind:'greedy', mission:'careful'},
   {name:'三部門均衡', kind:'greedy', mission:'careful', departments:'balanced'},
+  {name:'連鎖特化', kind:'chain', mission:'careful', departments:'balanced'},
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
 ];
 const N = Number(process.argv[2] || 400);
