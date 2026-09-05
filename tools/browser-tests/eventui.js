@@ -26,7 +26,8 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
 
   // 結果画面 →「次へ」でイベントへ（確率なので、出るまで戦闘を繰り返す）
   let fired=false;
-  for (let i=0;i<12 && !fired;i++){
+  // 出現は確率。12戦では3回に1回ほど出ずに落ちたので30戦まで粘る。
+  for (let i=0;i<30 && !fired;i++){
     if (await page.locator('[data-action="afterresult"]').count()) {
       await page.click('[data-action="afterresult"]'); await page.waitForTimeout(120);
     }
