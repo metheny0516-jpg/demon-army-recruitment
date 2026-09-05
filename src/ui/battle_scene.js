@@ -38,23 +38,28 @@ const BattleScene = {
   motions: new Set(),
   pendingHits: new Set(),
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
-  DURATION: { 0: 1000, 1: 1200, 2: 1500, 3: 1800 },
+  DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
   // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
   // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
-    battle_start: 900, round_start: 1600, synergy: 3000, facility_trigger: 3000,
-    note: 1200, dialogue: 3200, incident: 3200, death: 2200, revive: 3000, survive: 2600,
-    heal: 2200, summon: 3000, trait_trigger: 3000, resource_gain: 3000,
-    resource_forfeit: 3000, resource_consume: 2800, overkill: 3000, momentum: 3000, result: 4400
+    battle_start: 500, round_start: 1150, synergy: 1650, facility_trigger: 1250,
+    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
+    heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
+    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200
   },
   VICTORY_PAUSE_MS: 900,
   VICTORY_HOLD_MS: 3500,
 
-  // 2026-09-05試遊：読むのが遅めの人を基準にし、自動圧縮は行わない。
-  // 急ぐときはプレイヤーがx2/x4を選ぶ。長い戦闘でも等速の意味を変えない。
-  BUDGET_MS: 45000, // 過去比較用の目安。尺を縮める判定には使わない
-  MIN_COMPRESS: 1,
+  // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
+  // 長期戦がだらけても一律には速めない。x1の目標総尺を「予算」として置き、
+  // 超えたぶんは通常攻撃と何も反応しなかった区間からだけ削る。
+  // 連鎖の中間は緩急を付ける。起点・初条件・最大余剰・蘇生・召喚・永久戦死を保護する。
+  // 2026-09-05 試遊: 全段を等速3秒にした版はオーナーが否定。「強弱を付ける」へ戻し、
+  // ただし連鎖の各段は CHAIN_STEP_FLOOR より短くしない（一瞬で流れて読めなかったため）。
+  BUDGET_MS: 45000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
+  MIN_COMPRESS: 0.45,   // 圧縮対象イベントの最小倍率（退屈な区間なので深く縮めてよい）
+  CHAIN_STEP_FLOOR: { hit: 560, overkill: 800, other: 520 },
 
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
@@ -446,23 +451,44 @@ const BattleScene = {
       if (!hits.length) continue;
       const overkills = indices.filter(i => events[i].type === "overkill");
       const peak = overkills.reduce((best, i) => best === null || events[i].percent > events[best].percent ? i : best, null);
+      const seen = new Set();
+      let hitCount = 0;
       for (const i of indices) {
         const ev = events[i], item = items[i];
+        const hit = hits.includes(i);
+        if (hit) hitCount++;
+        const key = `${ev.type}:${ev.traitId || ev.facilityId || ev.resource || ""}`;
+        const firstAbility = ["trait_trigger", "facility_trigger", "resource_gain", "resource_consume"].includes(ev.type) && !seen.has(key);
+        seen.add(key);
         item.beat = "relay";
         item.showBurst = ev.type !== "overkill" || i === peak;
         if (i === hits[0]) item.beat = "origin";
         else if (i === peak || (i === hits[hits.length - 1] && hits.length > 1)) item.beat = "payoff";
-        // 遅めに読む人を基準にする。中間・同じ能力の再発火も同じだけ読ませる。
-        const letters = Array.from(ev.text || ev.desc || ev.name || ev.label || "").length;
-        item.duration = Math.max(item.duration, Math.min(6500, Math.max(3000, 1600 + letters * 65)));
-        item.protected = true;
+        const preserve = item.beat !== "relay" || firstAbility || ev.firstDiscovery || ev.permanent
+          || ["revive", "summon", "survive", "result", "synergy", "incident", "dialogue"].includes(ev.type);
+        if (preserve) {
+          item.protected = true;
+          continue;
+        }
+        // 初めての条件は読ませる。続く反応は順序を保って畳み掛ける。
+        // ただし各段に「止まって見える」下限を置く。段が進むほど短くはするが、一瞬にはしない。
+        const floor = this.CHAIN_STEP_FLOOR[hit ? "hit" : ev.type === "overkill" ? "overkill" : "other"];
+        const rhythm = Math.max(.36, .68 - Math.max(0, hitCount - 1) * .08);
+        item.duration = Math.min(item.duration, Math.max(floor, Math.round(item.duration * rhythm)));
+        item.protected = true; // 総尺予算による二重の圧縮はしない
       }
     }
     const sum = (list, fn) => list.reduce((total, item) => total + fn(item), 0);
     const protectedMs = sum(items.filter(i => i.protected), i => i.duration);
     const compressibleMs = sum(items.filter(i => !i.protected), i => i.duration);
     const rawMs = protectedMs + compressibleMs;
-    const compressScale = 1;
+    let compressScale = 1;
+    if (rawMs > this.BUDGET_MS && compressibleMs > 0) {
+      // 保護区間だけで予算を超える戦闘は、圧縮対象を最小まで縮めたうえで予算超過を許す
+      const room = (this.BUDGET_MS - protectedMs) / compressibleMs;
+      compressScale = Math.min(1, Math.max(this.MIN_COMPRESS, room));
+    }
+    for (const item of items) if (!item.protected) item.scale = compressScale;
     return {
       items, rawMs, protectedMs, compressibleMs, compressScale,
       plannedMs: sum(items, i => i.duration * i.scale)
