@@ -1,6 +1,6 @@
 // 戦死したモンスターが本当に軍から去るか、蘇生した者が残るかを検証する
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
+const { autoDismissMormo, enterMissionPhase, passCommandPhase } = require('./helpers.js');
 const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m); };
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -34,6 +34,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   console.log('    出撃前:', before.join('、'));
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
+  await passCommandPhase(page);
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(200);
 

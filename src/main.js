@@ -22,7 +22,7 @@ const App = {
   // 編成・昇進・未払い・忠誠・警戒度は Music 側が状態から読み取る。
   MUSIC_SCENES: {
     recruit: "recruit", event: "recruit",
-    mission: "mission", formation: "mission", preparation: "mission",
+    mission: "mission", formation: "mission", preparation: "mission", command: "mission",
     result: "mission", facility: "mission", defeat: "defeat",
     gameover: "defeat", clear: "victory"
   },
@@ -95,6 +95,10 @@ const App = {
       case "mission": return UI.mission();
       case "formation": return UI.formation();
       case "preparation": return UI.formation();
+      case "command":
+        // 命令待ちは生の戦闘を抱えている。再読込などで失われていたら編成へ戻す。
+        if (!Game.pendingBattle) { st.phase = "formation"; st.pendingCommandInfo = null; return UI.formation(); }
+        return UI.command();
       case "result": return UI.result();
       case "facility": return UI.facility();
       case "event": return UI.event();
@@ -259,7 +263,17 @@ const App = {
         const out = Game.deploy();
         if (!out) return;
         this.pendingBattle = out;
+        // 区切りで止まった戦闘は、前半を見せてから命令画面へ渡す。
+        if (out.paused) return UI.battle(out.result, out.stageData, () => UI.command());
         return UI.battle(out.result, out.stageData);
+      }
+
+      case "command": {
+        const out = Game.issueCommand(data.id || null);
+        if (!out) return this.render();
+        this.pendingBattle = out;
+        // 後半だけを再生する（前半はもう見せてある）
+        return UI.battle(out.segment, out.stageData);
       }
 
       case "skiplog":

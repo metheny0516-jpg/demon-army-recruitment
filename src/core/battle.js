@@ -81,6 +81,79 @@ const Battle = {
     };
   },
 
+  // ── 魔王命令 ──────────────────────────────────
+  // 魔王は戦わない。報告を受けて、一度だけ命令を出す。
+  // どれも「自分が殴る」ではなく「軍団に何かをさせる／与える」形にしてある。
+  // 効果量そのものより、既存の何と噛み合うかで選ぶことを狙っている。
+  COMMANDS: [
+    {
+      id: "rally", name: "檄を飛ばす", icon: "📣",
+      desc: "残りの戦闘のあいだ、味方全員の与ダメージ+55%",
+      cost: "出撃者の忠誠 -14",
+      hint: "素の火力が足りないときの直球。連鎖がなくても効く。怒鳴られた側は覚えている。",
+      loyalty: -14
+    },
+    {
+      id: "charge", name: "総員突撃", icon: "⚔",
+      desc: "味方全員が、いちばん弱った敵へ数珠つなぎに殺到する",
+      cost: "突撃した1体につき戦闘後の残業+3時間／突撃した者は被ダメージ+30%",
+      hint: "撃破が一本の鎖になるので、押し出しがいるほど深く伸びる。人数ぶん、あとで請求が来る。",
+      overtimePerUnit: 3
+    },
+    {
+      id: "advance_pay", name: "その場で支払う", icon: "🪙",
+      desc: "未払いを帳消しにし、味方全員の被ダメージ-30%",
+      cost: "給与総額の半額を即金で",
+      hint: "耐えて長引かせる手。ただしオークの《血の気》は消える。",
+      goldRate: 0.5
+    }
+  ],
+
+  commandById(id) {
+    return this.COMMANDS.find(c => c.id === id) || null;
+  },
+
+  // 命令の効果は再開時の冒頭で一度だけ適用する。
+  // ctx は simulate() の内側から渡され、ここでは公開された道具しか使わない。
+  applyCommand(id, ctx) {
+    const command = this.commandById(id);
+    if (!command) return null;
+    const { playerUnits, enemyUnits, emit } = ctx;
+    const living = playerUnits.filter(u => u.alive);
+    const trigger = emit("command", {
+      commandId: command.id, name: command.name, desc: command.desc, emphasis: 3,
+      text: `魔王命令【${command.name}】 ${command.desc}`, cls: "synergy"
+    });
+    if (command.id === "rally") {
+      for (const u of living) u.mods.dmgMult *= 1.55;
+    } else if (command.id === "advance_pay") {
+      for (const u of living) {
+        u.unpaid = false;
+        u.mods.takenMult *= 0.7;
+      }
+    } else if (command.id === "charge") {
+      // 全員が「いちばん倒せそうな敵」へ殺到する。総攻撃の意味はダメージ量ではなく、
+      // 撃破が固まって起きることにある。撃破は鎖の入口なので、押し出しがいれば伸びる。
+      // 数珠つなぎにするのが要点。全員を命令イベントの子にすると横並びの兄弟になり、
+      // 1つの鎖にならない（押し出しは1鎖1人1回なので、それだと1回しか伸びない）。
+      // 前の者の一撃を親にして繋ぐことで、突撃そのものが1本の鎖になる。
+      // 全力で前へ出るぶん、隙を晒す。
+      for (const u of living) u.mods.takenMult *= 1.3;
+      let link = trigger;
+      for (const u of living) {
+        if (!u.alive) break;
+        const weakest = enemyUnits.filter(e => e.alive).sort((a, b) => a.hp - b.hp)[0];
+        if (!weakest) break;
+        const before = ctx.timeline.length;
+        ctx.act(u, { mult: 1, target: weakest, parentEvent: link, label: "総員突撃", isExtra: true });
+        // この一撃が生んだ最後の出来事を次の起点にする（撃破があればそれが親になる）
+        const produced = ctx.timeline.slice(before).filter(e => e.chainId);
+        if (produced.length) link = produced[produced.length - 1];
+      }
+    }
+    return trigger;
+  },
+
   // 連鎖の上限。壊れてよいが、無限には伸ばさない（1戦が終わらなくなる）。
   MAX_CHAIN_DEPTH: 12,
 
@@ -89,8 +162,12 @@ const Battle = {
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
     enemyUnits.forEach((u, i) => { u.id = "e" + i; });
 
+    // 魔王命令のために、戦闘は途中で止めて再開できる。
+    // carry は「閉じ込みに置いていた状態」だけを持ち運ぶ入れ物で、
+    // ユニットそのものは呼び出し側が同じオブジェクトを渡し直す（その場で書き換わるため）。
+    const carry = options.carry || null;
     const timeline = [];
-    let nextEventId = 1;
+    let nextEventId = carry ? carry.nextEventId : 1;
     const emit = (type, data) => {
       data = data || {};
       data.type = type;
@@ -114,12 +191,12 @@ const Battle = {
     };
     // 特性から呼ばれるテキスト専用ログ（traits.js の ctx.log がこれ）
     const note = (text, cls) => emit("note", { text, cls: cls || "info", emphasis: cls === "revive" ? 2 : 0 });
-    const soulState = { player: { amount: 0 }, enemy: { amount: 0 } };
+    const soulState = carry ? carry.soulState : { player: { amount: 0 }, enemy: { amount: 0 } };
     // 施設Lv.＝Jokerが働ける回数。0/未指定なら従来どおり1回だけ働く。
     const facilityWorks = Math.max(1, Number(options.facilityWorks) || 1);
-    const graveyardQueue = [];
-    let graveyardUsed = 0;
-    let nextSummonId = 1;
+    const graveyardQueue = carry ? carry.graveyardQueue : [];
+    let graveyardUsed = carry ? carry.graveyardUsed : 0;
+    let nextSummonId = carry ? carry.nextSummonId : 1;
 
     const reactToDeath = (target, deathEvent) => {
       if (target.flags.summoned) return;
@@ -169,7 +246,9 @@ const Battle = {
     // シナジー適用（merge型は出撃時に処理済み）
     // 発火条件は出撃5枠の外まで数える（options.synergyPool＝軍団全体）。
     // 効果は出撃したユニットにしか乗らないので、控えが戦うわけではない。
-    const activeSyn = Synergy.applyAll(playerUnits, { pool: options.synergyPool || playerUnits });
+    // 再開時に applyAll を呼び直すと unit.mods へ二重に乗る。前半の結果をそのまま使う。
+    const activeSyn = carry ? carry.activeSyn
+      : Synergy.applyAll(playerUnits, { pool: options.synergyPool || playerUnits });
     // 揃えた枚数を「画面の出来事」に変える。倍率だけだと数字が増えるだけで爆発に見えない。
     // 《魔王軍完成》が立っているあいだ、味方のOVERKILL撃破は次の敵へ伝播し、
     // その深さは同時発動数そのものになる。積むほど連鎖が伸びる。
@@ -180,7 +259,7 @@ const Battle = {
     // それ自体には何の得も無かった（だから「明示」しようにも中身が無かった）。
     // 余剰を出すほど味方全員の与ダメージが上がり、その倍率を画面に出し続ける。
     // 連鎖が進むほど数字そのものが大きくなるので、「爆発力が上がった」が見える。
-    let momentum = 0;
+    let momentum = carry ? carry.momentum : 0;
     const MOMENTUM_CAP = 1.2;   // 与ダメージ+120%まで。青天井にすると1戦目から壊れる
     const gainMomentum = (percent, parent, depth) => {
       if (momentum >= MOMENTUM_CAP) return;
@@ -200,9 +279,9 @@ const Battle = {
     };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
-    let reservedGold = 0;
-    let ledgerFires = 0;
-    let ledgerBoost = null;
+    let reservedGold = carry ? carry.reservedGold : 0;
+    let ledgerFires = carry ? carry.ledgerFires : 0;
+    let ledgerBoost = null;   // 「次の1発」の予約なので、区切りをまたいでは持ち越さない
     const gainBattleResource = (unit, resource, value, label, parent) => {
       const resourceName = resource === "gold" ? "G" : resource;
       const verb = label === "殉職手当" ? "支給予約" : "略奪予約";
@@ -229,10 +308,11 @@ const Battle = {
 
     emit("battle_start", {
       player: playerUnits.map(snap),
-      enemy: enemyUnits.map(snap)
+      enemy: enemyUnits.map(snap),
+      resumed: !!carry
     });
     let feastTrigger = null;
-    const rations = options.rations;
+    const rations = carry ? null : options.rations;   // 糧食・登場台詞・シナジー宣言は前半で済んでいる
     if (rations) {
       const rationEvent = emitCausal("resource_consume", {
         resource: "food", amount: rations.consumed, need: rations.need, shortage: rations.shortage,
@@ -266,14 +346,14 @@ const Battle = {
           text: `　【暴食の宴】 ${feast.name}が食後の追加行動を狙う`, cls: "trait" }, rationEvent);
       }
     }
-    for (const u of [...enemyUnits, ...playerUnits]) {
+    for (const u of (carry ? [] : [...enemyUnits, ...playerUnits])) {
       if (!u.introQuote) continue;
       emit("dialogue", {
         unitId: u.id, name: u.name, side: u.side, quote: u.introQuote,
         emphasis: 2, text: `${u.name}「${u.introQuote}」`, cls: "dialogue"
       });
     }
-    for (const s of activeSyn) {
+    for (const s of (carry ? [] : activeSyn)) {
       // merge型（キングスライム合体）は「合体した戦闘」でだけ run.js がイベントを差し込む。
       // 条件を満たしているだけで「合体する！」と出すと、合体していないのに宣言することになる
       // （合体を魔王の選択にした時点でそうなった）。
@@ -441,7 +521,10 @@ const Battle = {
       if (chainDepth > Battle.MAX_CHAIN_DEPTH) return;
       markChainActor(chainId, unit);
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
-      const target = U.chance(0.6) ? living[0] : U.pick(living);
+      // 狙いを指定された行動（魔王命令の総員突撃）だけは、その相手を殴る。
+      const target = (actionOpts.target && actionOpts.target.alive)
+        ? actionOpts.target
+        : (U.chance(0.6) ? living[0] : U.pick(living));
 
       const ctx = {
         attacker: unit, target, allies, enemies, round,
@@ -626,10 +709,18 @@ const Battle = {
       const rescued = rescueSide === "enemy" ? enemyUnits : playerUnits;
       return !wiped(rescued);
     };
-    let round = 0;
+    // 魔王命令。再開した戦闘の冒頭で一度だけ効く。魔王は戦わないので、
+    // どれも「自分が殴る」ではなく「軍団に何かをさせる／与える」形にしてある。
+    if (carry && options.command) this.applyCommand(options.command, {
+      playerUnits, enemyUnits, emit, emitCausal, timeline,
+      act: (u, o) => act(u, playerUnits, enemyUnits, carry.round, o)
+    });
+
+    let round = carry ? carry.round : 0;
+    const firstRound = carry ? carry.round + 1 : 1;
 
     outer:
-    for (round = 1; round <= this.MAX_ROUNDS; round++) {
+    for (round = firstRound; round <= this.MAX_ROUNDS; round++) {
       emit("round_start", { round, emphasis: 1, text: `── ラウンド ${round} ──`, cls: "round" });
 
       const order = all()
@@ -669,6 +760,22 @@ const Battle = {
       }
 
       if (wiped(playerUnits) || wiped(enemyUnits)) break;
+
+      // 魔王命令のための区切り。決着していないラウンド終わりでだけ止まる。
+      // ここで返す carry を同じユニットと一緒に渡し直せば、続きから再開できる。
+      if (options.pauseAfterRound && round === options.pauseAfterRound) {
+        return {
+          paused: true,
+          timeline,
+          log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
+          rounds: round,
+          activeSynergies: activeSyn.filter(s => s.type !== "merge").map(s => s.name),
+          carry: {
+            round, nextEventId, nextSummonId, momentum, soulState,
+            reservedGold, ledgerFires, graveyardQueue, graveyardUsed, activeSyn
+          }
+        };
+      }
     }
 
     let victory;

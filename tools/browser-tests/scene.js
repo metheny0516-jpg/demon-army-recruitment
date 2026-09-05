@@ -1,5 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo } = require('./helpers.js');
+const { autoDismissMormo, passCommandPhase } = require('./helpers.js');
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
@@ -56,6 +56,8 @@ const { autoDismissMormo } = require('./helpers.js');
   const res = await page.locator('.scene-result').count();
   console.log(`スキップ後: 結果ボタン=${nextVisible} 死亡表示=${dead}体 決着バナー=${res}`);
   await page.screenshot({ path: process.env.SP + '/scene-end.png' });
+
+  await passCommandPhase(page);
 
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(150);

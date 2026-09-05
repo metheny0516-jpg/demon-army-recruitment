@@ -1,5 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo } = require('./helpers.js');
+const { autoDismissMormo, passCommandPhase } = require('./helpers.js');
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 900, height: 1000 } });
@@ -23,6 +23,7 @@ const { autoDismissMormo } = require('./helpers.js');
   });
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
+  await passCommandPhase(page);
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(150);
   const win = await page.locator('.banner.win').count();

@@ -1,5 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo } = require('./helpers.js');
+const { autoDismissMormo, passCommandPhase } = require('./helpers.js');
 const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -25,7 +25,8 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
     Game.state.phase='formation'; App.render();
   });
   await page.click('[data-action="deploy"]');
-  await page.click('[data-action="skiplog"]'); await page.click('[data-action="afterbattle"]');
+  await page.click('[data-action="skiplog"]'); await passCommandPhase(page);
+  await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(150);
   console.log('▼ 敗北 → 再起の提示');
   ok(await page.locator('[data-action="retry"]').count()===1, '「再起する」ボタンが出る');
@@ -63,7 +64,8 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
     Game.state.phase='formation'; App.render();
   });
   await page.click('[data-action="deploy"]');
-  await page.click('[data-action="skiplog"]'); await page.click('[data-action="afterbattle"]');
+  await page.click('[data-action="skiplog"]'); await passCommandPhase(page);
+  await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(150);
   console.log('▼ 再起を使い切った後の敗北');
   ok(await page.locator('[data-action="retry"]').count()===0, '再起ボタンは出ない');

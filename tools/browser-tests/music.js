@@ -1,7 +1,7 @@
 // BGM（軍団が演奏する行進曲）が実際のプレイで鳴り、場面と編成に追従するか。
 // 曲そのものではなく「軍団の状態が演奏へ届いているか」を見る。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
+const { autoDismissMormo, enterMissionPhase, passCommandPhase } = require('./helpers.js');
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -67,6 +67,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   await page.click('[data-action="skiplog"]');
   const settled = await page.evaluate(() => Music.desc.scene);
   if (!['victory', 'defeat'].includes(settled)) errors.push(`決着後の場面名が ${settled}`);
+  await passCommandPhase(page);
   await page.click('[data-action="afterbattle"]');
 
   // 未払いは演奏を痩せさせる（ゲーム状態からの導出が生きているか）

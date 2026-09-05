@@ -1,6 +1,6 @@
 // 傭兵市場が編成画面で使えること。クリック操作の安定待ちに依存しない。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
+const { autoDismissMormo, enterMissionPhase, passCommandPhase } = require('./helpers.js');
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -69,6 +69,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   // 戦って、戦果に傭兵として出て、戦闘後は去る
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
+  await passCommandPhase(page);
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(200);
   const result = await page.evaluate(() => ({

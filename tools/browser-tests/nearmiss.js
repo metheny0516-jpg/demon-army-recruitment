@@ -1,5 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo } = require('./helpers.js');
+const { autoDismissMormo, passCommandPhase } = require('./helpers.js');
 const ok = (condition, message) => { if (!condition) process.exitCode = 1; console.log((condition ? '  ✓ ' : '  ✗ ') + message); };
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -18,6 +18,7 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   });
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
+  await passCommandPhase(page);
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(120);
 

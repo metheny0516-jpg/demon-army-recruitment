@@ -1,6 +1,6 @@
 // キングスライム合体を編成画面で断れること。クリック操作の安定待ちに依存しない。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
+const { autoDismissMormo, enterMissionPhase, passCommandPhase } = require('./helpers.js');
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -47,6 +47,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   // 断ったまま出撃すると3体のまま戦う
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
+  await passCommandPhase(page);
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(200);
   const after = await page.evaluate(() => ({

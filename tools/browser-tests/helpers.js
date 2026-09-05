@@ -66,4 +66,38 @@ async function enterMissionPhase(page) {
   await page.waitForTimeout(30);
 }
 
-module.exports = { dismissMormo, autoDismissMormo, silenceMormoFromNow, enterMissionPhase };
+// 戦闘はラウンド2の終わりで一度止まり、魔王命令を待つ（UI.command）。
+// 命令そのものは command.js が見る。他のテストはここを通して先へ進める。
+// id を省略すると「命令しない」を選ぶ（分割前とまったく同じ戦闘結果になる）。
+async function passCommandPhase(page, id) {
+  const selector = id ? `[data-action="command"][data-id="${id}"]` : '[data-action="command"][data-id=""]';
+  for (let i = 0; i < 200; i++) {
+    if (await page.locator(selector).count()) {
+      await page.locator(selector).first().click();
+      await page.waitForTimeout(60);
+      // 命令のあとは後半の再生が始まる。中身を見ないテストのために送っておく。
+      if (await page.locator('[data-action="skiplog"]').count()) {
+        await page.locator('[data-action="skiplog"]').first().click();
+        await page.waitForTimeout(60);
+      }
+      return true;
+    }
+    // 命令待ちにならずに決着した戦闘（2ラウンド以内に終わった）
+    if (await page.locator('[data-action="afterbattle"]').count()) return false;
+    await page.waitForTimeout(50);
+  }
+  return false;
+}
+
+// 戦闘を最後まで終わらせて「結果を見る」まで進める。命令は既定で見送る。
+async function finishBattle(page, id) {
+  if (await page.locator('[data-action="skiplog"]').count()) {
+    await page.locator('[data-action="skiplog"]').first().click();
+  }
+  await passCommandPhase(page, id);
+  await page.locator('[data-action="afterbattle"]').first().click();
+  await page.waitForTimeout(80);
+}
+
+module.exports = { dismissMormo, autoDismissMormo, silenceMormoFromNow, enterMissionPhase,
+  passCommandPhase, finishBattle };

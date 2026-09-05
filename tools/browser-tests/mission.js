@@ -1,5 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
+const { autoDismissMormo, enterMissionPhase, passCommandPhase } = require('./helpers.js');
 const ok = (condition, message) => console.log((condition ? '  ✓ ' : '  ✗ ') + message);
 
 (async () => {
@@ -31,6 +31,7 @@ const ok = (condition, message) => console.log((condition ? '  ✓ ' : '  ✗ ')
   await page.evaluate(() => Game.state.roster.forEach(m => { m.hp = 9999; m.atk = 999; m.def = 99; m.spd = 99; }));
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
+  await passCommandPhase(page);
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(100);
   const after = await page.evaluate(() => ({

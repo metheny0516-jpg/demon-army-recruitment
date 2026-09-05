@@ -965,10 +965,47 @@ const UI = {
       </div></aside></div>`);
   },
 
-  battle(result, stageData) {
+  battle(result, stageData, onDone) {
     // 描画はレンダラに委譲する。UIは戦闘の中身を知らない。
     this.set(BattleScene.shell(stageData));
-    BattleScene.play(result.timeline);
+    BattleScene.play(result.timeline, onDone);
+  },
+
+  // 魔王命令。魔王は戦わないので、報告を受けて一度だけ命令を出す。
+  // 力くらべ（戦う前）と対になる、戦いのなかでの1回の判断。
+  command() {
+    const st = Game.state;
+    const info = st.pendingCommandInfo;
+    if (!info) { st.phase = "formation"; return this.formation(); }
+    const bar = (side, cls) => {
+      const ratio = side.maxHp > 0 ? Math.round(side.hp / side.maxHp * 100) : 0;
+      return `<div class="command-side">
+        <div class="command-side-head"><b>${cls === "player" ? "魔王軍" : "王国軍"}</b>
+          <span class="muted">${side.alive}/${side.total}体　残HP ${side.hp}（${ratio}%）</span></div>
+        <div class="command-gauge"><i class="${cls}" style="width:${ratio}%"></i></div>
+        <div class="command-members">${side.members.map(m =>
+          `<span class="${m.alive ? "" : "down"}">${U.esc(m.name)} ${m.alive ? m.hp : "戦闘不能"}</span>`).join("")}</div>
+      </div>`;
+    };
+    const cards = Battle.COMMANDS.map(c => {
+      const gold = Game.commandGoldCost(c.id);
+      const affordable = Game.commandAffordable(c.id);
+      return `<button class="command-card" data-action="command" data-id="${c.id}" ${affordable ? "" : "disabled"}>
+        <b>${c.icon} ${U.esc(c.name)}</b>
+        <span class="command-desc">${U.esc(c.desc)}</span>
+        <span class="command-cost">代償：${U.esc(c.cost)}${gold > 0 ? `（${gold}G／所持金 ${st.gold}G）` : ""}</span>
+        <span class="command-hint">${U.esc(c.hint)}</span>
+      </button>`;
+    }).join("");
+    this.set(`${this.hud()}
+      <div class="panel command-panel">
+        <h2>📯 ラウンド${info.round}終了・戦況報告 <span class="command-left">残り ${Game.commandsLeft()} 回</span></h2>
+        <div class="muted">モルモ：「魔王様、ご命令を。${info.losing ? "……押されてマス。" : "今なら、押し込めマス。"}」<br>
+          魔王は戦わない。命令できるのは<b>このランであと ${Game.commandsLeft()} 回</b>。見送れば減らない。</div>
+        <div class="command-sides">${bar(info.player, "player")}${bar(info.enemy, "enemy")}</div>
+      </div>
+      <div class="command-cards">${cards}</div>
+      <button class="wide" data-action="command" data-id="">命令しない（このまま戦わせる）</button>`);
   },
 
   result() {

@@ -51,6 +51,7 @@ const Game = {
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       gold: demonKing.start.gold,
       food: demonKing.start.food,
+      commandsLeft: Game.COMMANDS_PER_RUN,
       materials: demonKing.start.materials,
       buildProgress: 0,
       facilityLevel: 0,
@@ -245,6 +246,12 @@ const Game = {
     if (typeof st.raceCounts !== "object" || Array.isArray(st.raceCounts)) st.raceCounts = {};
     if (typeof st.missionCounts !== "object" || Array.isArray(st.missionCounts)) {
       st.missionCounts = { raid: 0, suppress: 0, invade: 0 };
+    }
+    // 命令待ちの戦闘は生のユニットを抱えているためセーブできない。
+    // 再読込でそれが失われていたら、その戦闘は無かったことにして編成へ戻す。
+    if (st.phase === "command" && !Game.pendingBattle) {
+      st.phase = "formation";
+      st.pendingCommandInfo = null;
     }
     if (!PAYROLL_POLICIES[st.payrollPolicy]) st.payrollPolicy = "regular";
     if (!DEMON_KINGS.some(k => k.id === st.demonKingId)) st.demonKingId = "standard";
@@ -1387,9 +1394,141 @@ const Game = {
       && this.activeRoster().some(m => (m.job || "").includes("会計"));
     const graveyard = st.activeFacilityId === "graveyard"
       && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
-    const result = Battle.simulate(playerUnits, enemyUnits,
-      { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks(),
-        synergyPool: this.synergyPool() });
+    const battleOptions = { rations: rationContext, extortionLedger, graveyard,
+      facilityWorks: this.facilityWorks(), synergyPool: this.synergyPool() };
+    // 魔王は戦わない。報告を受けて一度だけ命令を出す。そのため戦闘を区切りで止める。
+    // 止めた戦闘は Game.pendingBattle（セーブしない生のオブジェクト）に置き、
+    // issueCommand() が同じユニットを渡し直して続きを回す。
+    // 命令を使い切っていれば止まらない。判断が無い画面を挟まない。
+    const first = Battle.simulate(playerUnits, enemyUnits,
+      { ...battleOptions,
+        pauseAfterRound: this.commandsLeft() > 0 ? this.COMMAND_ROUND : 0 });
+    if (first.paused) {
+      Game.pendingBattle = {
+        playerUnits, enemyUnits, battleOptions, carry: first.carry,
+        timeline: first.timeline, notes, stageData, kingMerged, kingSyn,
+        battleRations, openingBattle, goldBefore: st.gold
+      };
+      st.phase = "command";
+      st.pendingCommandInfo = {
+      ...this.commandSituation(playerUnits, enemyUnits, first),
+      left: this.commandsLeft()
+    };
+      this.save();
+      return { paused: true, result: first, notes, stageData };
+    }
+    return this.finishBattle(first, {
+      playerUnits, notes, stageData, kingMerged, kingSyn, battleRations, openingBattle
+    });
+  },
+
+  // 魔王命令を出す区切り（このラウンドの終わりで報告が入る）。
+  COMMAND_ROUND: 2,
+  // 1ランで出せる命令の数。毎戦使える号令にすると、全部の戦いが同じ手順になる。
+  // 「ここで使うか、取っておくか」を判断にするために絞ってある。
+  COMMANDS_PER_RUN: 3,
+
+  commandsLeft() {
+    const st = this.state;
+    return Math.max(0, st.commandsLeft === undefined ? this.COMMANDS_PER_RUN : st.commandsLeft);
+  },
+
+  // 命令画面に出す戦況。戦闘計算には使わず、判断のための現況だけを返す。
+  commandSituation(playerUnits, enemyUnits, part) {
+    const side = units => {
+      const alive = units.filter(u => u.alive);
+      return {
+        alive: alive.length, total: units.length,
+        hp: alive.reduce((sum, u) => sum + u.hp, 0),
+        maxHp: units.reduce((sum, u) => sum + u.maxHp, 0),
+        members: units.map(u => ({ name: u.name, hp: u.hp, maxHp: u.maxHp, alive: u.alive }))
+      };
+    };
+    const player = side(playerUnits), enemy = side(enemyUnits);
+    return {
+      round: (part && part.rounds) || 0, player, enemy,
+      // 「このまま殴り合えばどちらが先に落ちるか」だけを言う。連鎖は数えない。
+      losing: enemy.maxHp > 0 && (player.hp / Math.max(1, player.maxHp)) < (enemy.hp / Math.max(1, enemy.maxHp))
+    };
+  },
+
+  // 命令の代金（その場で支払う）。給与総額に連動するので、大所帯ほど重い。
+  commandGoldCost(commandId) {
+    const command = Battle.commandById(commandId);
+    if (!command || !command.goldRate) return 0;
+    return Math.ceil(this.salaryTotal() * command.goldRate);
+  },
+
+  commandAffordable(commandId) {
+    return this.state.gold >= this.commandGoldCost(commandId);
+  },
+
+  // 命令を出して戦闘の続きを回す。命令なし（見送り）も同じ道を通る。
+  issueCommand(commandId) {
+    const pending = Game.pendingBattle;
+    if (!pending || this.state.phase !== "command") return null;
+    if (commandId && !this.commandAffordable(commandId)) return null;
+    Game.pendingBattle = null;
+    const st = this.state;
+    st.pendingCommandInfo = null;
+    const command = commandId ? Battle.commandById(commandId) : null;
+    if (command) st.commandsLeft = this.commandsLeft() - 1;   // 見送りは消費しない
+    const second = Battle.simulate(pending.playerUnits, pending.enemyUnits,
+      { ...pending.battleOptions, carry: pending.carry, command: command ? command.id : null });
+    // 前半と後半を1つの戦闘として綴じ直す。以後の処理は分割前とまったく同じものを通る。
+    const result = { ...second, timeline: [...pending.timeline, ...second.timeline] };
+    result.log = result.timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls }));
+    // 集計はタイムライン導出なので、綴じ直した全体からやり直すのが正しい。
+    result.contribution = Battle.summarizeContribution(result.timeline, pending.playerUnits);
+    result.nearMiss = Battle.summarizeNearMiss(result.timeline);
+    result.chainSummary = Battle.summarizeChains(result.timeline);
+    result.overkillSummary = Battle.summarizeOverkill(result.timeline);
+    result.facilitySummary = Battle.summarizeFacility(result.timeline);
+    result.deathChains = Battle.summarizeDeathChains(result.timeline);
+    result.resourceChanges = Battle.summarizeResourceChanges(result.timeline);
+    result.overtime = Battle.summarizeOvertime(result.timeline);
+    result.summonCount = result.timeline.filter(e => e.type === "summon").length;
+    result.incidents = result.timeline.filter(e => e.type === "incident")
+      .map(e => ({ id: e.id, name: e.name, text: e.text }));
+    result.rounds = second.rounds;
+    // 命令の代償（総員突撃の残業）は戦闘の外の請求なので、ここで足す。
+    // 突撃は動かした人数ぶん請求が来る。5体を走らせたら5体ぶん働かせたということ。
+    if (command && (command.overtime || command.overtimePerUnit)) {
+      const charged = new Set(second.timeline
+        .filter(e => e.label === "総員突撃" && e.fromId).map(e => e.fromId)).size;
+      const extra = (command.overtime || 0) + (command.overtimePerUnit || 0) * charged;
+      if (extra > 0) {
+        result.overtime = { ...result.overtime, hours: (result.overtime.hours || 0) + extra };
+        pending.notes.push(`魔王命令【${command.name}】の代償：${charged}体ぶんの残業+${extra}時間`);
+      }
+    }
+    if (command) {
+      pending.notes.push(`魔王命令【${command.name}】を発した`);
+      // 代償は戦闘の外で払う。どれも既にある仕組み（忠誠・所持金・残業）へ返す。
+      const gold = this.commandGoldCost(command.id);
+      if (gold > 0) {
+        st.gold = Math.max(0, st.gold - gold);
+        for (const m of st.roster) { m.unpaid = false; m.unpaidStreak = 0; }
+        pending.notes.push(`その場の支払い ${gold}G（所持金 ${st.gold}G）。未払いは解消した`);
+      }
+      if (command.loyalty) {
+        for (const m of st.roster) {
+          if (!st.activeUids.includes(m.uid)) continue;
+          m.loyalty = U.clamp(m.loyalty + command.loyalty, 0, 100);
+        }
+        pending.notes.push(`檄の代償：出撃者の忠誠${command.loyalty}`);
+      }
+    }
+    const out = this.finishBattle(result, pending);
+    // 描画側は後半だけを再生する（前半はもう見せてある）。
+    return out ? { ...out, command, segment: second } : out;
+  },
+
+  // 戦闘が終わったあとの処理。分割前の deploy() の後半そのままで、
+  // 前半だけを止めた戦闘も、止めなかった戦闘も、必ずここを通る。
+  finishBattle(result, context) {
+    const st = this.state;
+    const { playerUnits, notes, stageData, kingMerged, kingSyn, battleRations, openingBattle } = context;
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);

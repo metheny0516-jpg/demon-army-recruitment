@@ -1,5 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
+const { autoDismissMormo, enterMissionPhase, passCommandPhase } = require('./helpers.js');
 const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m); };
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
@@ -21,6 +21,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   });
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
+  await passCommandPhase(page);
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(150);
 
@@ -37,7 +38,8 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
     // イベントが出なければ次の戦闘へ
     if (await page.locator('[data-action="deploy"]:not([disabled])').count()) {
       await page.click('[data-action="deploy"]'); await page.click('[data-action="skiplog"]');
-      await page.click('[data-action="afterbattle"]'); await page.waitForTimeout(120);
+      await passCommandPhase(page);
+      await passCommandPhase(page); await page.click('[data-action="afterbattle"]'); await page.waitForTimeout(120);
     } else if (await page.locator('[data-action="skip"]').count()
         && await page.evaluate(() => Game.state.hiresLeft <= 0)) {
       await page.locator('[data-action="skip"]').click(); await page.waitForTimeout(100);

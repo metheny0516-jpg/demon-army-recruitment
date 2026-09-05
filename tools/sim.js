@@ -140,8 +140,19 @@ function runOnce(strat, stats){
       stats.payroll[payroll] = (stats.payroll[payroll] || 0) + 1;
       for (const s of Synergy.active(Game.activeRoster())) stats.syn[s.name] = (stats.syn[s.name]||0)+1;
       const stageNow = st.stage;
-      const out = Game.deploy();
+      let out = Game.deploy();
       if (!out) break;
+      // 戦闘はラウンド2の終わりで魔王命令を待つ。simは戦略ごとの既定命令を出す
+      // （strat.command 未指定なら見送り＝分割前とまったく同じ戦闘になる）。
+      if (out.paused) {
+        stats.commandChances = (stats.commandChances || 0) + 1;
+        // 命令は1ランで数回しか出せない。simは出せるうちは出す（上限の効きを測るため）
+        let pick = strat.command || null;
+        if (pick && !Game.commandAffordable(pick)) pick = null;
+        if (pick) stats.commandsUsed = (stats.commandsUsed || 0) + 1;
+        out = Game.issueCommand(pick);
+        if (!out) break;
+      }
       stats.incidents += (out.result.incidents || []).length;
       if (st.lastDepartmentReport && st.lastDepartmentReport.foodShortage) stats.foodShortages++;
       if (st.roster.some(m => m.unpaid)) stats.unpaid++;
@@ -202,6 +213,8 @@ const strategies = [
   {name:'慎重経営', kind:'greedy', mission:'careful'},
   {name:'三部門均衡', kind:'greedy', mission:'careful', departments:'balanced'},
   {name:'連鎖特化', kind:'chain', mission:'careful', departments:'balanced'},
+  {name:'連鎖特化+総員突撃', kind:'chain', mission:'careful', departments:'balanced', command:'charge'},
+  {name:'三部門均衡+檄', kind:'greedy', mission:'careful', departments:'balanced', command:'rally'},
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
 ];
 const N = Number(process.argv[2] || 400);
@@ -228,6 +241,7 @@ for (const s of strategies) {
   const laborIds = ['labor_inspection', 'karoshi', 'overtime_bragging'];
   const labor = laborIds.map(id => `${id}:${(stats.eventIds || {})[id] || 0}`).join(' ');
   console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  平均施設Lv ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
+  console.log(`  魔王命令 機会${stats.commandChances || 0}回／実行${stats.commandsUsed || 0}回（${stats.battles}戦中）`);
   console.log(`  労務事件: ${labor}　残業 合計${stats.overtime||0}h（1戦あたり ${((stats.overtime||0)/Math.max(1,stats.battles)).toFixed(2)}h）　個人最大 ${stats.maxPersonOvertime||0}h`);
   const lv1Rate = (res.filter(r=>(r.facilityLevel||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.facilityLevel||0) >= 3).length/N*100).toFixed(1);

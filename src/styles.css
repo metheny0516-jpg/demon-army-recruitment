@@ -2799,3 +2799,29 @@ button.primary::first-letter { color: var(--gold); }
 .mission-forecast.forecast-short { border-left-color: #e2685f; }
 .mission-forecast span { color: var(--muted); }
 .mission-forecast.forecast-short span { color: #ff8f84; }
+
+/* ── 魔王命令 ──────────────────────────────────
+   戦いの途中で一度だけ押すボタン。ここだけは「見ている」から「決める」へ変わる。 */
+.command-panel { border-left: 3px solid var(--gold); }
+.command-left { font-size: 12px; color: var(--gold); }
+.command-sides { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 10px; }
+.command-side { flex: 1 1 240px; }
+.command-side-head { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+.command-gauge { height: 10px; background: #241c33; border-radius: 5px; overflow: hidden; margin: 4px 0; }
+.command-gauge i { display: block; height: 100%; }
+.command-gauge i.player { background: #57b573; }
+.command-gauge i.enemy { background: #e2685f; }
+.command-members { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--muted); }
+.command-members .down { text-decoration: line-through; opacity: .5; }
+.command-cards { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
+.command-card {
+  flex: 1 1 240px; display: flex; flex-direction: column; gap: 4px; text-align: left;
+  padding: 12px 14px; border: 1px solid #4a3f6b; border-radius: 8px; background: #1b1526;
+  color: inherit; cursor: pointer;
+}
+.command-card:hover { border-color: var(--gold); background: #221a30; }
+.command-card b { font-size: 15px; }
+.command-card .command-desc { font-size: 12px; }
+.command-card .command-cost { font-size: 11px; color: #ff8f84; }
+.command-card .command-hint { font-size: 11px; color: var(--muted); }
+.command-card[disabled] { opacity: .45; cursor: not-allowed; }

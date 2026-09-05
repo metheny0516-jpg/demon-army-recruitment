@@ -1,5 +1,5 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
+const { silenceMormoFromNow, enterMissionPhase, passCommandPhase } = require('./helpers.js');
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } }); // スマホ縦
@@ -86,6 +86,7 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
   await page.screenshot({ path: process.env.SP + '/shot-battle.png' });
 
   await step('結果画面へ', async () => {
+    await passCommandPhase(page);
     await page.click('[data-action="afterbattle"]');
   });
   const won = await page.locator('.banner.win').count() > 0;
@@ -108,6 +109,7 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
       if (await page.locator('[data-action="deploy"]').count()) {
         await page.click('[data-action="deploy"]');
         await page.click('[data-action="skiplog"]');
+        await passCommandPhase(page);
         await page.click('[data-action="afterbattle"]');
       }
       await page.waitForTimeout(80);
