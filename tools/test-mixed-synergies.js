@@ -7,7 +7,7 @@ assert.equal(SYNERGIES.length,16);
 const make = (race, traits=[], tags=[]) => Battle.makeUnit({name:race,race,hp:100,atk:8,def:0,spd:8,salary:3,loyalty:80,traits,tags},'player');
 const cases = [
   ['slime_collection',[make('ゴブリン'),make('ゴブリン'),make('スライム'),make('スライム')],2,'pickpocket'],
-  ['bone_fire',[make('魔法使い',['fireball'],['caster']),make('骸骨兵',[],['undead']),make('ゾンビ',[],['undead'])],0,'fireballAll'],
+  ['bone_fire',[make('魔法使い',['fireball'],['caster']),make('死霊術師',['necromancy'],['caster']),make('骸骨兵',[],['undead']),make('ゾンビ',[],['undead'])],0,'fireballAll'],
   ['hound_audit',[make('コボルト'),make('コボルト'),make('ゴブリン'),make('ゴブリン')],0,'greedy'],
   ['grave_shift',[make('ゾンビ'),make('ゾンビ'),make('骸骨兵'),make('骸骨兵'),make('死霊術師',['necromancy'])],0,'necromancy'],
   ['orc_imp_collection',[make('オーク'),make('オーク'),make('インプ'),make('インプ')],0,'pickpocket'],
