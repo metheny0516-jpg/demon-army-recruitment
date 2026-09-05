@@ -74,7 +74,9 @@
 .battlefield .bu.acting .bu-name { color: #ffe38b; }
 .battlefield .bu.targeted .bu-name { color: #ffaaa0; }
 .game-scene-battle .battlefield .bu-vfx-anchor { top: -65px; bottom: 20px; }
-.battlefield .bu-pop { top: -65px; }
+/* 数字の出発点。-65px（頭の上）だと浮き上がった先が戦場の上端やVS帯に重なり、
+   最上段の者の与ダメ・被ダメが読めなかった（2026-09-05 試遊）。胸元から出して頭の高さで消える。 */
+.battlefield .bu-pop { top: -26px; z-index: 8; }
 .battlefield .action-caption { top: 65px; bottom: auto; }
 .game-scene-battle .battlefield .cutin { top: 85px; padding: 6px 12px; }
 .game-scene-battle .battlefield .cutin b { font-size: 17px; }

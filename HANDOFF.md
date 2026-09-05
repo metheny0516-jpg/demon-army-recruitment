@@ -36,6 +36,11 @@ sim 200: クリア率 12.5%〜54.5%（マージ前の3vr0tt側と同水準。戦
 
 **次にやること**: `docs/WORK_SPLIT_2026-09-05.md` の分担表。Claude は A（連鎖の文の定型化）から。
 
+**試遊指摘: 最上段のダメージ数字が見えない（同日・Claude）**: `battlefield.css` が数字の出発点を
+立ち絵の頭上65pxに置き、そこから更に34px浮くため、最上段の者では戦場の上端・VS帯に重なって読めなかった。
+出発点を胸元（-26px）へ下げ、`z-index: 8` で隣の立ち絵より前に。数字自体も一回り大きく（17/24px）。
+`.bu-vfx-anchor` の -65px は斬撃VFXの位置なので触っていない。
+
 **F の取り込み（同日・CodeX → Claude）**: CodeX が制限直前に `codex/f-wip` へ退避した分を cherry-pick。
 `battle.js` の unit に `starved` `feast` `chainDepth` を持たせ（保存しない）、追撃中は `duringChain: true` の
 ハプニングだけ判定するようにした。7件追加、確率は0.3〜0.4%。sim 50 で不祥事は1.06倍、クリア率 8〜48%。
