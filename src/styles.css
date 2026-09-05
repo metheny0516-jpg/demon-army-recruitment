@@ -2736,6 +2736,32 @@ button.primary::first-letter { color: var(--gold); }
 }
 .chain-origin { color: #d5ba87; font-size: 12px; }
 .chain-story b { color: #fff0c5; font-size: 14px; overflow-wrap: anywhere; }
+
+/* 連鎖の1行は「誰が・何で・誰に・いくら」の固定語順。枠の見た目も固定し、
+   段の深さだけを色で示す。深くなるほど熱くなるので、色を見ただけで段が読める。 */
+#chain-reason { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 6px; font-style: normal; }
+#chain-reason i { font-style: normal; }
+#chain-reason .cs-step {
+  font-size: 11px; font-weight: 900; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px;
+  color: #1b1410; background: var(--chain-depth, #d5ba87); white-space: nowrap;
+}
+#chain-reason .cs-who { color: #fff; font-weight: 800; }
+#chain-reason .cs-by { color: #e2d2ae; font-weight: 500; }
+#chain-reason .cs-to { color: #ffd9c8; font-weight: 700; }
+#chain-reason .cs-amt { color: var(--chain-depth, #ffe6ae); font-weight: 900; }
+#chain-reason .cs-sep { color: #8b7a5c; }
+#chain-reason[data-depth="1"] { --chain-depth: #cfe3ff; }
+#chain-reason[data-depth="2"] { --chain-depth: #9fe6c8; }
+#chain-reason[data-depth="3"] { --chain-depth: #ffe08a; }
+#chain-reason[data-depth="4"] { --chain-depth: #ffb45c; }
+#chain-reason[data-depth="5"] { --chain-depth: #ff8a5c; }
+#chain-reason[data-depth="6"] { --chain-depth: #ff6a6a; }
+.chain-history li[data-depth="1"] b { color: #cfe3ff; }
+.chain-history li[data-depth="2"] b { color: #9fe6c8; }
+.chain-history li[data-depth="3"] b { color: #ffe08a; }
+.chain-history li[data-depth="4"] b { color: #ffb45c; }
+.chain-history li[data-depth="5"] b { color: #ff8a5c; }
+.chain-history li[data-depth="6"] b { color: #ff6a6a; }
 .chain-bolt.relay { background: #ffe99c; box-shadow: 0 0 14px #ffd46c; height: 4px; }
 .scene.fx-loot .scene-fx {
   background: radial-gradient(ellipse at 25% 65%, rgba(255,201,80,.32), transparent 65%);

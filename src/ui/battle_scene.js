@@ -358,7 +358,7 @@ const BattleScene = {
     this.activeBeat = null;
     const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
     if (origin) origin.textContent = "能力がつながる瞬間を見届けよう";
-    if (reason) reason.textContent = "";
+    if (reason) { reason.textContent = ""; delete reason.dataset.depth; }
     document.getElementById("scene").querySelectorAll(".scene-result").forEach(e => e.remove());
     document.getElementById("scene").classList.remove("decided");
     this.eventScale = 1;
@@ -697,12 +697,45 @@ const BattleScene = {
   },
 
   // 表示済みの因果だけを使う。未来の撃破や報酬を先に見せない。
+  // 連鎖の1行は「誰が・何で・誰に・いくら」の順で固定する。
+  // 段ごとに文章の形が変わると、初見の人は毎回読み方を作り直すことになる。
+  // 語順を固定し、段の色だけを変えることで「同じ形の行が積み上がっていく」ように見せる。
+  CHAIN_SLOTS: [["who", "cs-who"], ["by", "cs-by"], ["to", "cs-to"], ["amount", "cs-amt"]],
+  CHAIN_DEPTH_TIERS: 6,
+
+  chainDepthTier(depth) {
+    return Math.min(this.CHAIN_DEPTH_TIERS, Math.max(1, depth || 1));
+  },
+
+  chainLineText(depth, slots) {
+    return [`第${depth || 1}段`, ...this.CHAIN_SLOTS.map(([k]) => slots[k]).filter(Boolean)].join(" ");
+  },
+
+  chainLineHtml(depth, slots) {
+    const cells = this.CHAIN_SLOTS
+      .filter(([k]) => slots[k])
+      .map(([k, cls]) => `<i class="${cls}">${U.esc(slots[k])}</i>`);
+    return `<i class="cs-step">第${depth || 1}段</i>${cells.join('<i class="cs-sep">›</i>')}`;
+  },
+
+  // 因果を固定帯へ書き込む。表示はHTML、テストや読み上げ向けにtextContentも同じ語順になる。
+  showChainLine(reason, depth, slots) {
+    reason.dataset.depth = this.chainDepthTier(depth);
+    reason.innerHTML = this.chainLineHtml(depth, slots);
+  },
+
   tellChain(ev, animate = true) {
     if (ev.chainId && !ev.parentEventId && ["attack", "splash"].includes(ev.type)) {
       const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
       const from = this.units[ev.fromId], to = this.units[ev.toId];
       if (origin) origin.textContent = from ? `${from.name}が動く` : "次の攻撃";
-      if (reason) reason.textContent = from && to ? `${from.name} → ${to.name}` : "";
+      if (reason) {
+        if (from && to) this.showChainLine(reason, 1, {
+          who: from.name, by: `自分の${ev.label || "攻撃"}で`,
+          to: `${to.name}へ`, amount: ev.dmg != null ? `${ev.dmg}ダメージ` : ""
+        });
+        else reason.textContent = "";
+      }
       return;
     }
     if (!ev.chainId || !ev.parentEventId || !this.eventById) return;
@@ -731,25 +764,38 @@ const BattleScene = {
     };
     origin.textContent = starter ? `起点：${starter.name}` : "能力がつながった";
     const who = actor(ev)?.name || "味方";
-    let explanation;
-    if (ev.type === "trait_trigger" && ev.traitId === "greedy") {
-      explanation = `${label(parent)}を得たので、${who}の「強欲」が発動。追加でもう一度攻撃する。`;
+    const cause = label(parent);
+    const means = ev.name || ev.label || "反応";
+    // 何が起きても同じ4つの枠に収める。空いた枠だけ落ちる。
+    let slots;
+    if (ev.type === "trait_trigger") {
+      slots = { who, by: `${cause}で《${means}》`, to: "",
+        amount: ev.traitId === "greedy" ? "もう一度攻撃" : "発動" };
     } else if (ev.type === "attack" || ev.type === "splash") {
-      explanation = `${label(parent)}がきっかけで、${who}が${this.units[ev.toId]?.name || "敵"}へ追撃。${ev.dmg}ダメージ。`;
+      slots = { who, by: `${cause}で${ev.label || "追撃"}`,
+        to: `${this.units[ev.toId]?.name || "敵"}へ`, amount: `${ev.dmg}ダメージ` };
     } else if (ev.type === "resource_gain") {
-      explanation = `${label(parent)}がきっかけで、${label(ev)}を獲得。`;
+      const unit = ev.resource === "gold" ? "G" : ev.resource === "soul" ? "魂" : ev.resource;
+      slots = { who, by: `${cause}で${ev.label || "獲得"}`, to: "", amount: `+${ev.amount}${unit}` };
     } else if (ev.type === "momentum") {
-      explanation = `${label(parent)}の余剰ダメージで味方全員の戦意が上昇。与えるダメージが${Number(ev.mult).toFixed(2)}倍に。`;
+      slots = { who: "味方全員", by: `${cause}の余剰ダメージで戦意上昇`, to: "",
+        amount: `与ダメージ ×${Number(ev.mult).toFixed(2)}` };
     } else if (ev.type === "overkill") {
-      explanation = `${label(parent)}が敵の残りHPを超えた！ 余剰${ev.excess}ダメージ（${ev.percent}% OVERKILL）。`;
-    } else explanation = `${label(parent)}がきっかけで、${label(ev)}。`;
-    reason.textContent = `第${ev.chainDepth}段：${explanation}`;
+      slots = { who: actor(parent)?.name || who, by: `${cause}が残りHPを超えた`,
+        to: `${this.units[parent.toId]?.name || this.units[ev.toId]?.name || "敵"}に`,
+        amount: `余剰${ev.excess}（${ev.percent}% ${ev.rank || "OVERKILL"}）` };
+    } else {
+      slots = { who, by: `${cause}で${means}`, to: "", amount: "" };
+    }
+    const explanation = this.chainLineText(ev.chainDepth, slots);
+    this.showChainLine(reason, ev.chainDepth, slots);
     this.historySeen ||= new Set();
     const list = document.getElementById("chain-history-list");
     for (const entry of [root, parent, ev]) {
       if (!list || !entry.eventId || this.historySeen.has(entry.eventId)) continue;
       this.historySeen.add(entry.eventId);
       const row = document.createElement("li");
+      row.dataset.depth = this.chainDepthTier(entry.chainDepth);
       row.innerHTML = `<b>第${entry.chainDepth || 1}段</b> ${U.esc(label(entry))}${entry === ev ? `<small>${U.esc(explanation)}</small>` : ""}`;
       list.appendChild(row);
     }
