@@ -1094,14 +1094,35 @@ const UI = {
     return blocks;
   },
 
-  eventFaceHtml(who) {
+  eventExpressionFor(body) {
+    const text = String(body || "");
+    if (/泣|涙|悲|寂|すまな|ごめん|辞め|退職|死|葬|弔|つら|辛/.test(text)) return "tears";
+    if (/得|儲|金|報酬|成功|勝|任せ|計画通り|いただ|へへ|ふふ|ニヤ|にや/.test(text)) return "smirk";
+    if (/[！？!?]|まさか|なんだと|えっ|うわ|驚/.test(text)) return "surprise";
+    return null;
+  },
+
+  eventFaceHtml(who, expression) {
     if (who.mormo) return `<span class="avatar mormo-face"><img src="assets/mormo/report.webp" alt=""></span>`;
+    const id = who.tplId;
+    if (expression && EVENT_EXPRESSIONS[id] && EVENT_EXPRESSIONS[id].includes(expression)) {
+      const fallback = this.avatarHtml(who);
+      return `<span class="avatar event-expression" data-fallback-html="${U.esc(fallback)}"><img
+        src="assets/monsters/events/${U.esc(id)}/${U.esc(expression)}.webp" alt=""
+        onerror="UI.eventExpressionError(this)"></span>`;
+    }
     return this.avatarHtml(who);
+  },
+
+  eventExpressionError(img) {
+    const holder = img && img.parentElement;
+    if (!holder) return;
+    holder.outerHTML = holder.dataset.fallbackHtml || "";
   },
 
   eventScriptHtml(text, cast) {
     return this.eventScript(text, cast).map(b => b.say
-      ? `<div class="event-say${b.say.mormo ? " mormo" : ""}">${this.eventFaceHtml(b.say)}
+      ? `<div class="event-say${b.say.mormo ? " mormo" : ""}">${this.eventFaceHtml(b.say, this.eventExpressionFor(b.body))}
           <p class="event-bubble"><b>${U.esc(b.say.name)}</b>「${U.esc(b.body)}」</p></div>`
       : `<p class="event-line">${U.esc(b.body)}</p>`).join("");
   },

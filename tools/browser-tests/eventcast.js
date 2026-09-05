@@ -56,6 +56,28 @@ const assert = require('node:assert/strict');
       orphan: UI.eventScript('食堂に「払え」の張り紙があった。', two).map(x => [x.say && x.say.name, x.body])
     };
   });
+
+  const expressions = await page.evaluate(() => ({
+    surprise: UI.eventExpressionFor('えっ、まさか！？'),
+    smirk: UI.eventExpressionFor('へへ、報酬はいただきだ。'),
+    tears: UI.eventExpressionFor('ごめん、もう辞めたい。'),
+    plain: UI.eventExpressionFor('了解した。'),
+    goblin: UI.eventFaceHtml({ tplId: 'goblin', race: 'ゴブリン' }, 'surprise'),
+    fallback: UI.eventFaceHtml({ tplId: 'orc', race: 'オーク' }, 'surprise')
+  }));
+  assert.deepEqual([expressions.surprise, expressions.smirk, expressions.tears, expressions.plain],
+    ['surprise', 'smirk', 'tears', null], '台詞の感情語から表情を選ぶ');
+  assert.match(expressions.goblin, /events\/goblin\/surprise\.webp/, '制作済み差分を使う');
+  assert.doesNotMatch(expressions.fallback, /event-expression/, '未制作種族は通常絵へ戻す');
+  const loaded = await page.evaluate(async () => {
+    const host = document.createElement('div');
+    host.innerHTML = UI.eventFaceHtml({ tplId: 'goblin', race: 'ゴブリン' }, 'tears');
+    document.body.appendChild(host);
+    const img = host.querySelector('img');
+    await new Promise(resolve => img.complete ? resolve() : img.addEventListener('load', resolve, { once: true }));
+    return { width: img.naturalWidth, height: img.naturalHeight };
+  });
+  assert.deepEqual(loaded, { width: 512, height: 512 }, '表情差分の実ファイルを透過正方形で読める');
   assert.deepEqual(rules.nearest, [['ボル', 'うるさい']], '台詞の直前に名前がある方が話者');
   assert.deepEqual(rules.carry, [['ボル', 'うるさい'], ['ボル', '二度は言わん']], '名乗らない続きは直前の話者');
   assert.deepEqual(rules.mormo, [['モルモ', 'け、経費デス！']], 'モルモも話者になれる');

@@ -1050,6 +1050,10 @@ button.wide { width: 100%; }
   display: grid; place-items: center; background: #3a2f57; border: 1px solid rgba(100, 55, 67, .4);
 }
 .event-say .mormo-face img { width: 100%; height: 100%; object-fit: cover; }
+.event-say .event-expression img {
+  width: 100%; height: 100%; object-fit: contain; object-position: center bottom;
+  filter: drop-shadow(0 2px 2px rgba(35, 20, 30, .28));
+}
 .event-bubble {
   position: relative;
   margin: 0; padding: 8px 13px;

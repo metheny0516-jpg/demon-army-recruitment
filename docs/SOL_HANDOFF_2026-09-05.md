@@ -2,7 +2,7 @@
 
 ## 最初に読む短い指示
 
-このメモを読み、**残件J（味方11種×驚き・にやり・涙）を進める**。この依頼は引き継ぎメモ作成までで、モデル変更・新規タスク作成・画像生成の再開は行っていない。Solで再開するときも、現在のタスクを引き継げる。
+このメモを読み、**残件J（味方11種×驚き・にやり・涙）を進める**。2026-09-06にゴブリン3差分の制作・接続まで完了した。次はスライムから再開する。
 
 正のブランチは `claude/owner-playtest-tuning-3vr0tt`。メモ作成時の基準HEADは `316f372a921355230db01941412d27264120cd9e`。着手前に `git pull origin claude/owner-playtest-tuning-3vr0tt`、`git status` を確認する。
 
@@ -17,7 +17,7 @@
 | F | 3→10件と最小限のbattle.js接続を取り込み済み。既存3件の判定は維持。追加確率0.3〜0.4%、1体1戦1回、将軍で抑制 |
 | E | `316f372`で戦間イベント30件・ツケを実装済み。Gemini台本を再投入しない |
 | H | 台詞の流し込み済み。ただし `hungry/feast/chain` と `MORMO_LINES` の呼び出しは旧HANDOFFで未接続と記載。Jとは別の残件として現在の参照を確認する。Iの戦闘野次は別の `MORMO_BATTLE_LINES` を使用 |
-| J | 未完了。原画10枚を保存、うち8枚はalphaあり・2枚はalphaなし。本番登録・圧縮・縮小QAは未実施 |
+| J | **ゴブリン3差分は本番接続済み**。`assets/monsters/events/goblin/`、`EVENT_EXPRESSIONS`、`UI.eventExpressionFor()` を追加。残り10種×3差分。保存済み原画では slime 2枚・king_slime 3枚・kobold 1枚が利用候補、slime驚きは再生成が必要 |
 
 同日中にClaudeの取り込みが進んだ。**stash内の旧READMEにある「C未採用・E未着手・すべて未push」は古い**。本メモと現在のコードを優先する。旧作業は `7d39498`（`origin/codex/f-wip`）へ保管され、その後正のブランチへ調整して取り込まれた。旧コミットを再cherry-pickしない。
 
@@ -61,7 +61,9 @@ git restore --source='be625ddf091eb32a966f439df73e170fa7d373f4^3' --worktree -- 
 | king_slime 涙 | exec-73614f34-5727-4fe6-825d-697e07c2bbcf.png | RGBA、alpha 0〜255 |
 | kobold 驚き | exec-812199d4-d4a3-46aa-99c4-b4b1bdea2249.png | RGBA、alpha 0〜255。記号追加と拡大率を要QA |
 
-残りの未生成は23枚。上記失敗2枚を加えると**最低25枚の生成が必要**。対象は `goblin, slime, king_slime, kobold, orc, skeleton, zombie, imp, mage, necromancer, ogre`。
+ゴブリンは2026-09-06に完了。残り10種30枚のうち保存済み候補は6枚なので、**最低24枚の生成が必要**。対象は `slime, king_slime, kobold, orc, skeleton, zombie, imp, mage, necromancer, ogre`。
+
+ゴブリンの涙は新しい生成元 `C:/Users/sano/.codex/generated_images/01a073f2-b8e7-7c41-b4a8-b30e4b550a10/exec-992937b9-fb0b-413c-bc54-d1cf19259d11.png` を採用。生成器がチェック柄をRGBへ焼き込んだため、`scripts/prepare_event_expressions.py` がキャンバス端につながる無彩色領域だけを透過化した。今後も真alphaならそのまま保持し、RGBチェック柄だけ同処理を使う。
 
 以前の大量生成セルはオーナーの停止指示で終了済み。新しく生成する前にフォルダを再確認し、完了して保存された追加ファイルがあれば重複生成を避ける。
 
