@@ -51,7 +51,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   ok(st.vacancies === 1, `欠員が1名として記録された (${st.vacancies})`);
   ok(st.fallenTotal === 1, `ラン累計の戦没者数 ${st.fallenTotal}`);
   ok(await page.locator('.fallen-panel').count()===1, '結果画面に戦没者パネルが出る');
-  await page.screenshot({ path:(process.env.SP||'.')+'/casualty-result.png', fullPage:true });
+  await page.screenshot({ path:(process.env.SP || '.screenshots')+'/casualty-result.png', fullPage:true });
 
   console.log('▼ 欠員募集');
   await page.click('[data-action="afterresult"]'); await page.waitForTimeout(150);

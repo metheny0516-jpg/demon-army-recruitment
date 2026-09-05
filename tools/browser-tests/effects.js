@@ -64,7 +64,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     loaded: image.complete && image.naturalWidth > 0
   }));
   if (pose.pose !== 'strike' || !pose.loaded) errors.push('ゴブリンの振り抜きへ切り替わらない');
-  if (process.env.SP) await page.screenshot({ path: process.env.SP + '/scene-image-vfx.png' });
+  if (process.env.SP) await page.screenshot({ path: (process.env.SP || '.screenshots') + '/scene-image-vfx.png' });
 
   await page.evaluate(() => {
     BattleScene.render({ type: 'survive', unitId: 'p0', hp: 1, maxHp: 30, emphasis: 2 });

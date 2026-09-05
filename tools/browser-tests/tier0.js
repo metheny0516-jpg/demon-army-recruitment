@@ -52,7 +52,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   ok(geo.dangers > 0, `取り返しのつかないボタンを検出（解雇 ${geo.dangers}個）`);
   ok(geo.gap !== null && geo.gap >= 20, `解雇と他ボタンの最小間隔: ${geo.gap}px（修正前は6px）… ${geo.gapLabel}`);
   ok(geo.minH !== null && geo.minH >= 40, `小ボタンの最小高さ: ${geo.minH}px（修正前は32px）`);
-  await page.screenshot({ path: process.env.SP+'/tier0-formation.png', fullPage:true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/tier0-formation.png', fullPage:true });
 
   // ── 3) シナジーヒントの文言 ──
   // 戦闘後に測ると勝敗次第で画面が変わり（敗北なら魔界史へ）、パネルに辿り着けない
@@ -85,7 +85,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   });
   ok(overlap && !overlap.midVisible, `決着中はVS帯が非表示（重なっても読める）`);
   console.log(`    決着テキスト: "${overlap.text}" / 領域は重なる: ${overlap.vertOverlap}`);
-  await page.screenshot({ path: process.env.SP+'/tier0-result.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/tier0-result.png' });
 
   console.log(errs.length?'\n✗ '+errs.join(', '):'\n✓ JSエラーなし');
   await b.close(); process.exit(errs.length || process.exitCode ? 1 : 0);

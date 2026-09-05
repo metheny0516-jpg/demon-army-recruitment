@@ -123,7 +123,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!await page.locator('.facility-panel').count()) errors.push('敗北画面に「施設と死者の働き」パネルが無い');
 
   await setup(true);
-  await page.screenshot({ path: (process.env.SP || '.') + '/report-chain.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/report-chain.png', fullPage: true });
 
   // 因果情報の無い旧セーブでも落ちず、経路だけが消える
   const oldText = await page.evaluate(() => {
@@ -137,7 +137,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (await page.locator(".breakthrough-panel .chain-step").count()) errors.push("旧データなのに経路が出ている");
   if (await page.locator('.facility-panel').count()) errors.push('施設要約の無い旧データなのに施設パネルが出ている');
 
-  await page.screenshot({ path: (process.env.SP || '.') + '/report-panel.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/report-panel.png', fullPage: true });
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 主要記録2つ・代表CHAIN経路・非ダメージバッジ');
   await browser.close();
   process.exit(errors.length ? 1 : 0);

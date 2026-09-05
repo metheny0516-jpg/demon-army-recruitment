@@ -6,3 +6,7 @@ package-lock.json
 # （assets/monsters/*.png は成果物なので追跡対象のまま）
 .screenshots/
 /*.png
+
+# SP 未設定でテストを個別に走らせたときの取りこぼし先。
+# 実体は .screenshots へ寄せたが、再発してもコミットされないようにしておく。
+undefined/

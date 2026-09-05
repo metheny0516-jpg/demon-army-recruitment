@@ -17,7 +17,7 @@ const { autoDismissMormo } = require('./helpers.js');
 
   const h = await page.evaluate(() => document.body.scrollHeight);
   console.log(`\n採用画面のスクロール量: ${h}px (${(h/844).toFixed(2)}画面分)`);
-  await page.screenshot({ path: process.env.SP+'/resume-recruit.png', fullPage:true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/resume-recruit.png', fullPage:true });
 
   // 編成画面には出さない（スクロール抑制のため）
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
