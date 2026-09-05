@@ -1,4 +1,6 @@
-# Gemini 台詞 H・第1便（2026-09-05 受領、Claude が整形）
+# Gemini 台詞 H（2026-09-05 受領、Claude が整形）
+
+**流し込み済み**: `src/data/monsters.js` の `voices`（既存7場面へ追記、hungry/feast/chain を新設）と `src/data/mormo_lines.js`。下の「直すもの」は流し込み時に書き換えた。
 
 `docs/GEMINI_BRIEF_H.md` への回答。第2便（同日）で全10種族×10場面×3本＝300本とモルモ5表情×5本＝25本が**揃った**。CodeX はこの表を `src/data/monsters.js` の `voices` へ流し込む（hungry/feast/chain の3場面はキーを新設、発火は Claude 担当）。
 
