@@ -45,6 +45,11 @@ D は `.chain-story` の先頭に予告帯 `#chain-forecast` を足した。タ�
 **次にやること**: `docs/WORK_SPLIT_2026-09-05.md` の分担表。Claude の残りは G（イベント本文を立ち絵＋吹き出しへ）、
 そのあと B・I。C（シナジー母数8→16）は下書きのまま未採用。
 
+**試遊指摘: 最上段のダメージ数字が見えない（同日・Claude）**: `battlefield.css` が数字の出発点を
+立ち絵の頭上65pxに置き、そこから更に34px浮くため、最上段の者では戦場の上端・VS帯に重なって読めなかった。
+出発点を胸元（-26px）へ下げ、`z-index: 8` で隣の立ち絵より前に。数字自体も一回り大きく（17/24px）。
+`.bu-vfx-anchor` の -65px は斬撃VFXの位置なので触っていない。
+
 **F の取り込み（同日・CodeX → Claude）**: CodeX が制限直前に `codex/f-wip` へ退避した分を cherry-pick。
 `battle.js` の unit に `starved` `feast` `chainDepth` を持たせ（保存しない）、追撃中は `duringChain: true` の
 ハプニングだけ判定するようにした。7件追加、確率は0.3〜0.4%。sim 50 で不祥事は1.06倍、クリア率 8〜48%。

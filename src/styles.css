@@ -2827,3 +2827,10 @@ button.primary::first-letter { color: var(--gold); }
   .chain-history ol { max-height: 190px; }
   .scene-result small { letter-spacing: 0; }
 }
+
+/* ── ダメージ数字は戦場のどの段でも読める大きさに ──
+   位置の修正は battlefield.css（.bu-pop）。ここでは数字を一回り大きくし、
+   隣の立ち絵に隠れないよう前面へ出す。 */
+.game-scene-battle .bu-pop { z-index: 8; }
+.game-scene-battle .fnum { font-size: 17px; }
+.game-scene-battle .fnum.big { font-size: 24px; }
