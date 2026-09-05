@@ -35,9 +35,9 @@
 3. ~~**H（Gemini）**~~ 済
 4. ~~**G（Claude）**~~ 済 … 器は完成。**E の台本と J の表情はそのまま乗る**
 5. ~~**I（Claude）**~~ 済
+6. ~~**B（Claude）**~~ 済 … 戦果の1行サマリ。Claude 分はこれで打ち止め
 
-**残り**: **B（Claude）** … A・D・I・G が入った状態で試遊してから測って決める /
-**E（Gemini台本 → CodeX データ化）** … 依頼書はまだ無い（`docs/GEMINI_BRIEF_H.md` が書式の見本） /
+**残り**: **E（Gemini台本 → CodeX データ化）** … 依頼書はまだ無い（`docs/GEMINI_BRIEF_H.md` が書式の見本） /
 **J（CodeX 画像）** … いつ着手してもよい。Claude の層と衝突しない
 
 ## 3. 各担当への渡し方
