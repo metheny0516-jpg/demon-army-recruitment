@@ -68,6 +68,10 @@ const Battle = {
       salary: m.salary || 0,
       loyalty: m.loyalty ?? 50,
       unpaid: !!m.unpaid,
+      // F: 戦闘中ハプニングの読み取り用状態。ロスターへは保存しない。
+      starved: !!m.starved || (m.traits || []).includes("starved"),
+      feast: false,
+      chainDepth: 1,
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
       introQuote: m.introQuote || "",
@@ -230,6 +234,10 @@ const Battle = {
     });
     let feastTrigger = null;
     const rations = options.rations;
+    for (const u of playerUnits) {
+      u.starved = u.starved || !!(rations && rations.shortage > 0 && !u.tags.includes("undead"));
+      u.feast = !!(rations && rations.feastUid != null && rations.consumed >= 4);
+    }
     if (rations) {
       const rationEvent = emitCausal("resource_consume", {
         resource: "food", amount: rations.consumed, need: rations.need, shortage: rations.shortage,
@@ -386,9 +394,10 @@ const Battle = {
       return { dmg, event: damageEvent, deathEvent, overkillEvent };
     };
 
-    const tryIncident = (unit, allies) => {
+    const tryIncident = (unit, allies, actionOpts) => {
       if (unit.side !== "player" || unit.flags.incidentUsed) return false;
-      const candidates = BATTLE_HAPPENINGS.filter(h => h.check(unit));
+      // 既存3件は通常行動だけ。追撃中は明示した連鎖ハプニングだけを判定。
+      const candidates = BATTLE_HAPPENINGS.filter(h => (!actionOpts.isExtra || h.duringChain) && h.check(unit));
       const generalPresent = allies.some(a => a.alive && a.rankId === "general");
       for (const happening of candidates) {
         const chance = happening.chance * (generalPresent ? 0.35 : 1);
@@ -400,11 +409,11 @@ const Battle = {
           target = U.pick(victims);
         }
         unit.flags.incidentUsed = true;
-        emit("incident", {
+        emitCausal("incident", {
           id: happening.id, name: happening.name, unitId: unit.id,
           targetId: target && target.id, emphasis: 3,
           text: happening.text(unit, target), cls: "incident"
-        });
+        }, actionOpts.parentEvent || null);
         if (target) applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true, parentEvent: timeline[timeline.length - 1] });
         return true;
       }
@@ -415,7 +424,8 @@ const Battle = {
       actionOpts = actionOpts || {};
       const living = enemies.filter(u => u.alive);
       if (living.length === 0) return;
-      if (!actionOpts.isExtra && tryIncident(unit, allies)) return;
+      unit.chainDepth = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;
+      if (tryIncident(unit, allies, actionOpts)) return;
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = U.chance(0.6) ? living[0] : U.pick(living);
 

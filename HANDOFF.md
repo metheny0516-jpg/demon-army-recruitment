@@ -36,6 +36,11 @@ sim 200: クリア率 12.5%〜54.5%（マージ前の3vr0tt側と同水準。戦
 
 **次にやること**: `docs/WORK_SPLIT_2026-09-05.md` の分担表。Claude は A（連鎖の文の定型化）から。
 
+**F の取り込み（同日・CodeX → Claude）**: CodeX が制限直前に `codex/f-wip` へ退避した分を cherry-pick。
+`battle.js` の unit に `starved` `feast` `chainDepth` を持たせ（保存しない）、追撃中は `duringChain: true` の
+ハプニングだけ判定するようにした。7件追加、確率は0.3〜0.4%。sim 50 で不祥事は1.06倍、クリア率 8〜48%。
+C（シナジー追加）は `docs/drafts/cfj-2026-09-05/` に下書きと計測のまま。ゴブリン+求人が68%へ跳ねたので未採用。
+
 **H の流し込み（同日・Claude）**: Gemini の台詞325本を `monsters.js` の `voices` へ入れた。
 既存7場面は各3本追記（4→7本）、`hungry` `feast` `chain` を新設（各3本、**まだどこからも参照されていない**）。
 モルモ25本は `src/data/mormo_lines.js` の `MORMO_LINES`（report/panic/joy/worried/angry）。
