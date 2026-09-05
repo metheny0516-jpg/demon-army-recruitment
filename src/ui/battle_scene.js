@@ -172,6 +172,7 @@ const BattleScene = {
         <span class="muted">${U.esc(stageData.region)}</span>
       </div>
       <div class="chain-story" id="chain-story">
+        <span class="chain-forecast" id="chain-forecast" hidden></span>
         <span class="chain-origin" id="chain-origin">能力がつながる瞬間を見届けよう</span>
         <b id="chain-reason"></b>
         <details class="chain-history" id="chain-history">
@@ -359,6 +360,10 @@ const BattleScene = {
     const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
     if (origin) origin.textContent = "能力がつながる瞬間を見届けよう";
     if (reason) { reason.textContent = ""; delete reason.dataset.depth; }
+    // 予告はタイムライン全体が答えを持っている。名前は伏せ、数だけ先に約束する。
+    this.synergyPlanned = timeline.filter(e => e.type === "synergy").length;
+    this.synergyFired = 0;
+    this.showForecast();
     document.getElementById("scene").querySelectorAll(".scene-result").forEach(e => e.remove());
     document.getElementById("scene").classList.remove("decided");
     this.eventScale = 1;
@@ -509,6 +514,7 @@ const BattleScene = {
       case "battle_start":
         this.synergyNames = [];
         this.setMorale(1, 0);
+        this.showForecast(true);
         if (this.isFinalBattle) this.battleIntro();
         break;
       case "round_start":
@@ -585,6 +591,7 @@ const BattleScene = {
           this.flash(1);
           this.cutin(ev.name, ev.desc, ev.id, this.synergyNames.length);
         }
+        this.countSynergy();
         break;
       case "facility_trigger":
         this.pulse("overkill");
@@ -1224,6 +1231,40 @@ const BattleScene = {
     // 次の説明で置き換えるまで残す。読む途中でフェードアウトしない。
   },
 
+  // 戦闘開始の時点で「今日いくつ発動するか」だけ先に約束する。
+  // 名前は伏せる。何が起きるかは伏せたまま、何回起きるかだけ渡すのが期待になる。
+  // 数が減っていく（0/3 → 3/3）のを見せることで、予告が回収されたと分かる。
+  showForecast(announce = false) {
+    const band = document.getElementById("chain-forecast");
+    if (!band) return;
+    const planned = this.synergyPlanned || 0;
+    if (!planned) {
+      band.hidden = true;
+      band.textContent = "";
+      band.removeAttribute("data-state");
+      return;
+    }
+    const fired = Math.min(this.synergyFired || 0, planned);
+    band.hidden = false;
+    band.dataset.state = fired === 0 ? "wait" : fired >= planned ? "done" : "live";
+    band.innerHTML = `<i class="cf-label">今日の発動</i>`
+      + `<i class="cf-count">${fired}<small>/${planned}</small></i>`
+      + `<i class="cf-pips">${'<b></b>'.repeat(planned > 12 ? 0 : planned)}</i>`
+      + `<i class="cf-note">${fired >= planned ? "すべて発動した" : "シナジーが揃うのを待て"}</i>`;
+    const pips = band.querySelectorAll(".cf-pips b");
+    pips.forEach((pip, i) => { if (i < fired) pip.className = "lit"; });
+    if (announce) {
+      band.classList.remove("announce");
+      void band.offsetWidth;
+      band.classList.add("announce");
+    }
+  },
+
+  countSynergy() {
+    this.synergyFired = (this.synergyFired || 0) + 1;
+    this.showForecast();
+  },
+
   battleIntro() {
     const intro = document.getElementById("scene-intro");
     if (!intro) return;
@@ -1459,6 +1500,7 @@ const BattleScene = {
       if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
       if (ev.type === "revive" && u) this.setLife(u, false);
       if (ev.type === "momentum") this.setMorale(ev.mult, 0);
+      if (ev.type === "synergy") this.countSynergy();
       this.tellChain(ev, false);
     }
     const result = this.timeline.find(e => e.type === "result");
