@@ -24,7 +24,7 @@
 | E | 3 | **戦間イベントを16→30**。`EVENTS` の契約（`check/cast/text/options`）どおり末尾追記。**必ず既存資源（食料・忠誠・給与・施設・戦意）へ接続する**選択肢を持たせ、通知だけのイベントは作らない | Gemini（台本）→ CodeX（データ化） | `src/data/events.js` | 各イベントに2択以上、うち1つは「得だが後で祟る」 |
 | F | 3 | **戦闘中ハプニングを3→10**。`BATTLE_HAPPENINGS` の契約どおり。忠誠・未払い以外に「飢餓適応」「宴の翌日」「連鎖の最中」を条件にする | CodeX | `src/data/battle_happenings.js` | `node tools/sim.js 50` で戦場不祥事が現状の1.5倍以内 |
 | G | 3 | **イベントが流し読みされる問題**。イベント画面の本文を、登場モンスターの立ち絵＋吹き出しに分割（H の受け皿） | Claude | `src/ui/ui.js` イベント描画 / `src/styles.css` | `cast` にいる者の立ち絵と台詞が画面に出る |
-| H | 4・5 | **キャラの台詞磨き**。全16種のモンスターに `quotes` を「開戦・撃破・被弾・飢え・未払い・宴」の6場面×3本、モルモに「報告・叱責・喜び・パニック」の4場面×5本 | Gemini | `src/data/monsters.js` `quotes` / モルモは新規 `src/data/mormo_lines.js` | 同じ場面で同じ台詞が3戦続けて出ない |
+| H | 4・5 | **キャラの台詞磨き**。10種族 × 10場面（既存7＋飢え・宴・連鎖）× 3本、モルモ5表情 × 5本。依頼書は `docs/GEMINI_BRIEF_H.md` | Gemini（台本）→ CodeX（`voices` へ流し込み、新規3場面の発火は Claude） | `src/data/monsters.js` `voices` | 同じ場面で同じ台詞が3戦続けて出ない |
 | I | 4 | **モルモの出番を増やす**。`MormoScene` は画面遷移の節目だけ。連鎖CHAIN5以上・全滅・初シナジー発見の3か所で短い一言を追加 | Claude | `src/ui/mormo_scene.js` 呼び出し側 | 1戦闘で最大1回まで（連発しない） |
 | J | 5 | **イベント用の表情差分**。既存の立ち絵に「驚き・にやり・涙」の3表情を追加（味方11種） | CodeX（画像パイプライン） | `assets/` `src/data/portraits.js` | G で使う |
 
@@ -39,9 +39,8 @@
 ## 3. 各担当への渡し方
 
 - **CodeX**: `HANDOFF.md` 0節と本表の C・F・J を読めば足りる。`git pull` → 末尾追記 → `node tools/sim.js 50` → 1タスク1コミット即push
-- **Gemini**: コードは触らせない。**台本を Markdown で受け取り、CodeX か Claude が `quotes` へ流し込む。**
-  渡す資料は `README.md` の世界観節と `src/data/monsters.js` の既存 quotes（口調の見本）。
-  台本の形式は `種族名 / 場面 / 台詞` の3列表。1本40字以内、ですます禁止、くすっと笑える線
+- **Gemini**: コードは触らせない。**`docs/GEMINI_BRIEF_H.md` を丸ごと貼れば完結する**（世界観・口調見本・場面キー・出力形式・禁止事項入り）。
+  返ってきた表を CodeX へ渡して `voices` へ流し込む
 - **Claude**: 上限が来やすいので、**1セッション=A か D か G の1つ**に絞る。着手前に本表の番号を宣言してコミット
 
 ## 4. やらないこと（この表に入れなかった理由つき）
