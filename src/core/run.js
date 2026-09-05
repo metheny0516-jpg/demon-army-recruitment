@@ -629,6 +629,50 @@ const Game = {
     });
   },
 
+  // ── 壁を見せる ────────────────────────────
+  // 「勝てるかどうかは戦ってみないと分からない」ままだと、採用も編成も
+  // 「なんとなく強そう」で止まる。敵の総HPと、素の殴り合いでの往復を先に見せる。
+  //
+  // ここで意図的に数えないもの：シナジー・特性・連鎖・OVERKILL・戦意・不祥事。
+  // つまりこの見積りは**下限**であり、足りない差はプレイヤーが連鎖で作る。
+  // 「素の殴り合いでは2ラウンド足りない」が、そのまま編成の目標になる。
+  battleForecast(mission, roster) {
+    const enemies = (mission && mission.units) || [];
+    const squad = roster || this.activeRoster();
+    if (!enemies.length || !squad.length) return null;
+
+    const info = this.facilityInfo();
+    const hpMult = info.hpMult || 1;
+    const defBonus = info.defBonus || 0;
+
+    const enemyHp = enemies.reduce((sum, e) => sum + (e.hp || 0), 0);
+    const enemyDef = enemies.reduce((sum, e) => sum + (e.def || 0), 0) / enemies.length;
+    const playerHp = squad.reduce((sum, m) => sum + Math.round((m.hp || 0) * hpMult), 0);
+    const playerDef = squad.reduce((sum, m) => sum + (m.def || 0) + defBonus, 0) / squad.length;
+
+    // battle.js の素の1発と同じ形：max(1, atk) - floor(相手def / 2)
+    const hit = (atk, def) => Math.max(1, Math.max(1, Math.round(atk || 0)) - Math.floor(def / 2));
+    const playerRound = squad.reduce((sum, m) => sum + hit(m.atk, enemyDef), 0);
+    const enemyRound = enemies.reduce((sum, e) => sum + hit(e.atk, playerDef), 0);
+
+    const roundsToWin = Math.ceil(enemyHp / Math.max(1, playerRound));
+    const roundsToLose = Math.ceil(playerHp / Math.max(1, enemyRound));
+    // 差が1ラウンド以内なら「ぎりぎり」。負ける側なら、その差が連鎖で埋める量になる。
+    const margin = roundsToLose - roundsToWin;
+    const verdict = margin >= 2 ? "clear" : margin >= 0 ? "close" : "short";
+    // 戦闘には上限ラウンドがある。それを超える見積りは「あと何ラウンド」ではなく
+    // 「この編成では届かない」であって、桁の大きい数字を出しても判断に使えない。
+    const hopeless = roundsToWin > Battle.MAX_ROUNDS;
+    return {
+      enemyHp, playerHp, playerRound, enemyRound, roundsToWin, roundsToLose, margin, verdict, hopeless,
+      enemyCount: enemies.length, squadCount: squad.length,
+      label: verdict === "clear" ? "素の殴り合いでも押し切れる"
+        : verdict === "close" ? "素の殴り合いではぎりぎり"
+          : hopeless ? "この出撃隊では、素の殴り合いでは届かない"
+            : `素の殴り合いでは${-margin}ラウンド足りない`
+    };
+  },
+
   activeRoster() {
     const byId = new Map(this.state.roster.map(m => [m.uid, m]));
     return this.state.activeUids.map(uid => byId.get(uid)).filter(Boolean);

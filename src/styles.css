@@ -2775,3 +2775,27 @@ button.primary::first-letter { color: var(--gold); }
   .chain-history ol { max-height: 190px; }
   .scene-result small { letter-spacing: 0; }
 }
+
+/* ── 壁（力くらべ） ──────────────────────────────
+   戦果ではなく「これから越えるもの」なので、金色にはしない。
+   足りているか・ぎりぎりか・足りないかを枠の色だけで即断できるようにする。 */
+.forecast-panel { border-left: 3px solid #4a4266; }
+.forecast-panel.forecast-clear { border-left-color: #57b573; }
+.forecast-panel.forecast-close { border-left-color: #d8a13c; }
+.forecast-panel.forecast-short { border-left-color: #e2685f; }
+.forecast-bars { display: flex; gap: 18px; flex-wrap: wrap; margin: 4px 0 8px; }
+.forecast-bars div { display: flex; flex-direction: column; }
+.forecast-bars b { font-size: 20px; line-height: 1.1; }
+.forecast-bars span { font-size: 11px; color: var(--muted); }
+.forecast-verdict { font-size: 13px; margin-bottom: 4px; }
+.forecast-verdict.positive { color: #8fe0a4; }
+.forecast-verdict.negative { color: #ff8f84; }
+.mission-forecast {
+  font-size: 12px; margin: 6px 0; padding: 6px 10px;
+  border-left: 3px solid #4a4266; background: #191426; border-radius: 0 6px 6px 0;
+}
+.mission-forecast.forecast-clear { border-left-color: #57b573; }
+.mission-forecast.forecast-close { border-left-color: #d8a13c; }
+.mission-forecast.forecast-short { border-left-color: #e2685f; }
+.mission-forecast span { color: var(--muted); }
+.mission-forecast.forecast-short span { color: #ff8f84; }

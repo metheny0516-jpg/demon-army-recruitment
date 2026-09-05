@@ -754,6 +754,14 @@ const UI = {
           <dt>警戒度</dt><dd>+${m.alertDelta}</dd>
           <dt>軍勢警戒</dt><dd>${m.armyPressure ? `敵能力 +${m.armyPressure}%` : "なし"}</dd>
         </dl>
+        ${(() => {
+          const f = Game.battleForecast(m);
+          if (!f) return "";
+          return `<div class="mission-forecast forecast-${f.verdict}">
+            <b>敵の総HP ${f.enemyHp}</b>（${f.enemyCount}体）／
+            今の出撃隊なら <b>${f.roundsToWin}</b>ラウンドで削り切る・<b>${f.roundsToLose}</b>ラウンドで倒れる<br>
+            <span>${U.esc(f.label)}</span></div>`;
+        })()}
         <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
       </div>`;
     }).join("");
@@ -808,6 +816,31 @@ const UI = {
       <div>施設Lv.${st.pendingFacilityChoiceLevel}が完成した。稼働できる大型施設は1つだけ。現在のビルドをどの方向へ壊すか選べ。</div>
     </div><div class="construction-label">魔王城増築計画 <small>採用した人材と接続する設計案を選べ</small></div>
     <div class="mission-grid construction-plans">${cards}</div></div>`, "facility");
+  },
+
+  // 壁を数字で見せる。ここに出すのは「素の殴り合い」の見積りだけで、
+  // 連鎖・シナジー・特性は入っていない。足りない差はプレイヤーが編成で作る。
+  forecastPanel(forecast, options) {
+    if (!forecast) return "";
+    options = options || {};
+    const f = forecast;
+    const tone = f.verdict === "clear" ? "positive" : f.verdict === "close" ? "" : "negative";
+    return `<div class="panel forecast-panel forecast-${f.verdict}">
+      <h3>⚖ 力くらべ</h3>
+      <div class="forecast-bars">
+        <div><b>${f.enemyHp}</b><span>敵の総HP（${f.enemyCount}体）</span></div>
+        <div><b>${f.playerRound}</b><span>こちらの1ラウンド火力</span></div>
+        <div><b>${f.playerHp}</b><span>出撃隊の総HP（${f.squadCount}体）</span></div>
+        <div><b>${f.enemyRound}</b><span>敵の1ラウンド火力</span></div>
+      </div>
+      <div class="forecast-verdict ${tone}">
+        削り切るまで <b>${f.roundsToWin}</b> ラウンド／こちらが倒れるまで <b>${f.roundsToLose}</b> ラウンド
+        — <b>${U.esc(f.label)}</b>
+      </div>
+      <div class="muted">この見積りに<b>連鎖・シナジー・特性・不祥事は入っていない</b>。
+        足りない差は、組み合わせで作る。</div>
+      ${options.hint ? `<div class="synergy-hint">${U.esc(options.hint)}</div>` : ""}
+    </div>`;
   },
 
   formation() {
@@ -886,6 +919,9 @@ const UI = {
         <div class="muted">${opening ? "配置と給与方針は翌日も維持される。変えたい所だけ直し、業務終了で日次決算を行う。" : "戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。"}</div>
         ${this.departmentSummary()}
       </div>
+      ${opening ? "" : this.forecastPanel(Game.battleForecast(Game.stageData()), {
+        hint: "並び順・出撃者・部門配属を変えると、この数字は動く。"
+      })}
       ${opening ? "" : `<div class="panel"><b>🍖 戦闘糧食 ${rations.consumed}/${rations.need}</b>
         <span class="muted"> — 出撃時に備蓄 ${rations.foodBefore} → ${rations.foodAfter}</span>
         ${rations.shortage ? `<div class="warn">不足 ${rations.shortage}</div>` : ""}
