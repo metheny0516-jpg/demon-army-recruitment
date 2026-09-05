@@ -290,7 +290,9 @@ const UI = {
     const overkill = battle.overkillSummary || null;
     const maxChain = (chain && chain.maxChain) || 0;
     const maxPercent = (overkill && overkill.maxPercent) || 0;
-    if (!maxChain && !maxPercent) return "";
+    const overtime = battle.overtime || null;
+    const hours = (overtime && overtime.hours) || 0;
+    if (!maxChain && !maxPercent && !hours) return "";
 
     // 数字だけでは「CHAIN」が何を指すのか伝わらない。経路の上に一行置いて、
     // 「この芋づるの段数が最大CHAINだ」と読めるようにする（説明画面は作らない）。
@@ -313,7 +315,15 @@ const UI = {
       <div class="breakthrough-records">
         <div><b>${maxChain}</b><span>最大CHAIN</span></div>
         <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>
+        ${hours ? `<div class="overtime-record"><b>${hours}h</b><span>残業</span></div>` : ""}
       </div>
+      ${hours ? `<p class="overtime-bill">${
+        [`連鎖4段目から先は<b>残業</b>だ。今回 <b>${hours}時間</b>。`,
+         overtime.loyalty ? `出撃者の忠誠 <b>${overtime.loyalty}</b>${overtime.advisor ? "（労務顧問が半減）" : ""}。` : "忠誠への影響はなかった。",
+         overtime.supper ? `夜食に食料 <b>-${overtime.supper}</b>。` : "",
+         overtime.advisorLost ? "顧問料を払えず、労務顧問は帰った。" : ""
+        ].filter(Boolean).join(" ")
+      }</p>` : ""}
       ${originName ? `<p class="chain-credit">この連鎖の起点は <b>${U.esc(originName)}</b>。${U.esc(steps[steps.length - 1].label)}までつながった。</p>` : ""}
       ${path}
       ${details.length ? `<div class="muted">${details.join("　/　")}</div>` : ""}

@@ -158,10 +158,22 @@ function runOnce(strat, stats){
       Game.chooseFacility(id);
     }
     // ハプニングは無作為に選ぶ（人間の判断は再現できないため）
+    if (st.lastBattle && st.lastBattle.overtime && st.lastBattle !== stats._seenBattle) {
+      stats._seenBattle = st.lastBattle;
+      stats.overtime = (stats.overtime || 0) + (st.lastBattle.overtime.hours || 0);
+      for (const m of st.roster) {
+        stats.maxPersonOvertime = Math.max(stats.maxPersonOvertime || 0, m.overtimeHours || 0);
+      }
+    }
     if (st.phase === 'event') {
       if (st.pendingEvent) {
         const opts = Game.eventOptions();
-        if (opts.length) { Game.chooseEvent(opts[Math.floor(Math.random()*opts.length)].i); stats.events++; }
+        if (opts.length) {
+          stats.eventIds = stats.eventIds || {};
+          const eid = st.pendingEvent.id;
+          stats.eventIds[eid] = (stats.eventIds[eid] || 0) + 1;
+          Game.chooseEvent(opts[Math.floor(Math.random()*opts.length)].i); stats.events++;
+        }
       }
       Game.nextRecruit();
     }
@@ -213,7 +225,10 @@ for (const s of strategies) {
   const facility = (res.reduce((a,r)=>a+(r.facilityLevel||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
+  const laborIds = ['labor_inspection', 'karoshi', 'overtime_bragging'];
+  const labor = laborIds.map(id => `${id}:${(stats.eventIds || {})[id] || 0}`).join(' ');
   console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  平均施設Lv ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
+  console.log(`  労務事件: ${labor}　残業 合計${stats.overtime||0}h（1戦あたり ${((stats.overtime||0)/Math.max(1,stats.battles)).toFixed(2)}h）　個人最大 ${stats.maxPersonOvertime||0}h`);
   const lv1Rate = (res.filter(r=>(r.facilityLevel||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.facilityLevel||0) >= 3).length/N*100).toFixed(1);
   const nameCount = new Map();

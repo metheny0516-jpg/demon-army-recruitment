@@ -767,5 +767,223 @@ const EVENTS = [
         }
       }
     ]
+  },
+
+  // ── 残業の請求書（連鎖ビルドの出口） ───────────────────
+  // 深い連鎖は戦闘中に「残業」として積み上がる（Game.applyOvertime）。
+  // ここはその数字が軍団の外へ漏れ出す場所。連鎖で壊すほど、盤外が荒れる。
+  {
+    id: "labor_inspection",
+    title: "労基署の抜き打ち",
+    weight: 22,
+    // 軍団全体の残業が一定を超えると来る。一度対応すれば累計はリセットされる
+    check(st) { return (st.overtimeTotal || 0) >= 12 && st.roster.length > 0; },
+    cast(st) {
+      const actor = st.roster.slice()
+        .sort((a, b) => (b.overtimeHours || 0) - (a.overtimeHours || 0))[0];
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      const fine = Math.min(24, Math.ceil((st.overtimeTotal || 0) / 2));
+      return `魔界労働基準監督署のインプが、判子とバインダーを持って玉座の間に立っている。
+`
+        + `「通報がありました。累計残業 ${st.overtimeTotal}時間。とくに ${c.actor.name}さん、`
+        + `${c.actor.overtimeHours || 0}時間。これ、連鎖のたびに働かせてますよね？」
+`
+        + `是正勧告書の下書きには、すでに罰金 ${fine}G と書いてある。`
+        + (st.laborRecordFalsified ? `\n前回の書き換えの控えも、同じバインダーに挟まっている。罰金は倍額だ。` : "");
+    },
+    options: [
+      {
+        label: "罰金を払って是正する",
+        check(st) { return st.gold >= Game.laborFine(); },
+        apply(st) {
+          const fine = Game.laborFine();
+          st.gold -= fine;
+          st.overtimeTotal = 0;
+          st.laborRecordFalsified = false;
+          for (const m of st.roster) {
+            m.overtimeHours = 0;
+            m.loyalty = U.clamp(m.loyalty + 12, 0, 100);
+          }
+          return `罰金${fine}Gを支払い、勤務表を作り直した。累計残業はリセット。全員の忠誠+12。
+`
+            + `インプは「次は倍です」と言い残した。倍の根拠は示されなかった。`;
+        }
+      },
+      {
+        label: "帳簿を書き換える（会計職が必要）",
+        check(st) { return st.roster.some(m => (m.job || "").includes("会計")); },
+        apply(st, c) {
+          st.overtimeTotal = 0;
+          for (const m of st.roster) m.overtimeHours = 0;
+          st.laborRecordFalsified = true;
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 8, 0, 100);
+          return `会計係が一晩で勤務表を書き直した。累計残業は「0時間」になった。
+`
+            + `${c.actor.name}は自分が働いていないことになった書類を読み、忠誠-8。
+`
+            + `罰金はない。書類の控えはインプ側にもある。`;
+        }
+      },
+      {
+        label: "監督官を引き抜いて労務顧問にする（8G）",
+        check(st) { return st.gold >= 8 && !st.laborAdvisor; },
+        apply(st) {
+          st.gold -= 8;
+          st.overtimeTotal = 0;
+          st.laborAdvisor = true;
+          for (const m of st.roster) m.overtimeHours = 0;
+          return `8Gを提示したところ、インプは判子をしまって「有給、あります？」と聞いた。
+`
+            + `**労務顧問を雇い入れた。以後、残業による忠誠低下は半分になる。**
+`
+            + `ただし残業した戦いごとに顧問料${Game.LABOR_ADVISOR_FEE}Gが要る。払えなければ帰る。`;
+        }
+      },
+      {
+        label: "魔王の権威で追い返す",
+        apply(st) {
+          st.overtimeTotal = Math.floor((st.overtimeTotal || 0) / 2);
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty - 10, 0, 100);
+          return `「ここは魔界だ」と言ったら、インプは「魔界の法です」と言った。それでも追い返した。
+`
+            + `全員の忠誠-10。累計残業は半分だけ揉み消せた。
+`
+            + `軍団は、自分たちの側に法がついていたことを知ってしまった。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "karoshi",
+    title: "働きすぎた者",
+    weight: 38,
+    // 個人の残業が積みすぎたとき。連鎖で毎回同じ隊を回しているほど早く来る
+    check(st) { return st.roster.some(m => (m.overtimeHours || 0) >= 15); },
+    cast(st) {
+      const pool = st.roster.filter(m => (m.overtimeHours || 0) >= 15);
+      if (!pool.length) return null;
+      return { actor: pool.sort((a, b) => (b.overtimeHours || 0) - (a.overtimeHours || 0))[0].uid };
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が、朝の点呼で立ったまま動かなくなった。
+`
+        + `累計残業 ${c.actor.overtimeHours}時間。倒れる直前まで、次の連鎖の順番を数えていたという。
+`
+        + `モルモが小さな声で「これ、たぶん、いちばんまずいやつです」と言った。`;
+    },
+    options: [
+      {
+        label: "手厚く弔う（5G）",
+        check(st) { return st.gold >= 5; },
+        apply(st, c) {
+          st.gold -= 5;
+          const name = c.actor.name;
+          st.roster = st.roster.filter(m => m.uid !== c.actor.uid);
+          st.activeUids = st.activeUids.filter(uid => uid !== c.actor.uid);
+          st.pendingVacancies = (st.pendingVacancies || 0) + 1;
+          st.fallenTotal = (st.fallenTotal || 0) + 1;
+          st.lastFallen = [{ name, race: c.actor.race }];
+          st.fallenRoll = (st.fallenRoll || []).concat(st.lastFallen);
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 14, 0, 100);
+          return `5Gで葬儀を出した。${name}は軍を去った。残った全員の忠誠+14。
+`
+            + `魔王が最後まで立ち会ったことは、翌日には全部門へ伝わっていた。`;
+        }
+      },
+      {
+        label: "労災として処理する（保険金6G）",
+        apply(st, c) {
+          st.gold += 6;
+          const name = c.actor.name;
+          st.roster = st.roster.filter(m => m.uid !== c.actor.uid);
+          st.activeUids = st.activeUids.filter(uid => uid !== c.actor.uid);
+          st.pendingVacancies = (st.pendingVacancies || 0) + 1;
+          st.fallenTotal = (st.fallenTotal || 0) + 1;
+          st.lastFallen = [{ name, race: c.actor.race }];
+          st.fallenRoll = (st.fallenRoll || []).concat(st.lastFallen);
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty - 12, 0, 100);
+          return `「勤務中の事故」として申請し、保険金6Gが下りた。${name}は軍を去った。全員の忠誠-12。
+`
+            + `書類の「原因」の欄には、魔王直筆で「不運」と書かれている。`;
+        }
+      },
+      {
+        label: "叩き起こして休ませる（この者は次の戦いに出せない）",
+        apply(st, c) {
+          c.actor.overtimeHours = 0;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 25, 0, 100);
+          c.actor.restingTurns = 1;
+          Game.assignDepartment(c.actor.uid, "life");
+          st.activeUids = st.activeUids.filter(uid => uid !== c.actor.uid);
+          return `水をかけたら起きた。${c.actor.name}を生活部門へ回し、次の戦いは休ませる。
+`
+            + `本人の残業は0に戻り、忠誠+25。
+`
+            + `「休んでいいんすか」と三回聞かれた。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "overtime_bragging",
+    title: "残業自慢",
+    weight: 14,
+    check(st) {
+      return st.roster.length >= 2 && st.roster.some(m => (m.overtimeHours || 0) >= 6);
+    },
+    cast(st) {
+      const pool = st.roster.filter(m => (m.overtimeHours || 0) >= 6);
+      if (!pool.length) return null;
+      const a = pool.sort((x, y) => (y.overtimeHours || 0) - (x.overtimeHours || 0))[0];
+      const b = U.pick(st.roster.filter(m => m.uid !== a.uid));
+      return b ? { actor: a.uid, other: b.uid } : null;
+    },
+    text(st, c) {
+      return `食堂で ${c.actor.name} が「先月${c.actor.overtimeHours}時間」と言い、`
+        + `${c.other.name} が「それ自慢することっすか」と言い、
+`
+        + `${c.actor.name} が「自慢ですけど」と言った。空気が二つに割れている。`;
+    },
+    options: [
+      {
+        label: "表彰する（月間MVPの盾を作る・2G）",
+        check(st) { return st.gold >= 2; },
+        apply(st, c) {
+          st.gold -= 2;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 20, 0, 100);
+          c.other.loyalty = U.clamp(c.other.loyalty - 10, 0, 100);
+          return `2Gで盾を打たせ、${c.actor.name}を表彰した。本人の忠誠+20、${c.other.name}の忠誠-10。
+`
+            + `盾には「よく働いた」とだけ彫らせた。他に書くことがなかった。`;
+        }
+      },
+      {
+        label: "残業を減らすと宣言する",
+        apply(st, c) {
+          st.overtimeTotal = Math.max(0, (st.overtimeTotal || 0) - 6);
+          for (const m of st.roster) {
+            m.overtimeHours = Math.max(0, (m.overtimeHours || 0) - 6);
+            m.loyalty = U.clamp(m.loyalty + 6, 0, 100);
+          }
+          return `魔王が「今後は残業を減らす」と宣言した。全員の残業記録-6時間、忠誠+6。
+`
+            + `${c.actor.name}だけが少し不満そうだった。減らす当てはない。`;
+        }
+      },
+      {
+        label: "二人とも黙らせる",
+        apply(st, c) {
+          for (const m of [c.actor, c.other]) m.loyalty = U.clamp(m.loyalty - 5, 0, 100);
+          st.gold += 1;
+          return `二人を持ち場へ戻した。両者の忠誠-5。
+`
+            + `食堂の回転が上がり、光熱費が1G浮いた。`;
+        }
+      }
+    ]
   }
 ];

@@ -260,11 +260,14 @@ const Game = {
       if (m.tplId === "necromancer" && !m.traits.includes("gravekeeper")) m.traits.push("gravekeeper");
       if ((m.job || "").includes("料理人") && !m.traits.includes("demon_cook")) m.traits.push("demon_cook");
     }
-    const rosterIds = new Set(st.roster.filter(m => m.department === "combat").map(m => m.uid));
+    // 休養中（過労で休ませた者）はこの1戦だけ出撃隊に入らない
+    const rosterIds = new Set(st.roster
+      .filter(m => m.department === "combat" && !(m.restingTurns > 0)).map(m => m.uid));
     st.activeUids = st.activeUids.filter((uid, i, ids) => rosterIds.has(uid) && ids.indexOf(uid) === i)
       .slice(0, this.MAX_DEPLOY);
     if (st.activeUids.length === 0 && st.roster.length) {
-      st.activeUids = st.roster.filter(m => m.department === "combat").slice(0, this.MAX_DEPLOY).map(m => m.uid);
+      st.activeUids = st.roster.filter(m => m.department === "combat" && !(m.restingTurns > 0))
+        .slice(0, this.MAX_DEPLOY).map(m => m.uid);
     }
     st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
     st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
@@ -273,6 +276,8 @@ const Game = {
       m.unpaidStreak = m.unpaidStreak || 0;
       m.merit = Math.max(0, Number(m.merit) || 0);
       m.rankId = m.rankId || this.rankForMerit(m.merit).id;
+      m.overtimeHours = Math.max(0, Number(m.overtimeHours) || 0);   // 旧セーブは0から数え直す
+      m.restingTurns = Math.max(0, Number(m.restingTurns) || 0);
     }
   },
 
@@ -1438,6 +1443,10 @@ const Game = {
       deathChains: result.deathChains || [],
       overtime: st.lastOvertime || { hours: 0, deepest: 0, loyalty: 0, supper: 0 }
     };
+    // 休養は1戦で明ける。出撃しなかった戦いを1回過ごしたら復帰できる
+    for (const m of st.roster) {
+      if (m.restingTurns > 0) m.restingTurns -= 1;
+    }
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
     // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
     if ((st.mercenaries || []).length) {
@@ -1479,6 +1488,16 @@ const Game = {
     }
   },
 
+  // 労務顧問（労基署の抜き打ちで雇い入れた元監督官）の顧問料。残業した戦いだけ発生する。
+  LABOR_ADVISOR_FEE: 3,
+
+  // 労基署の罰金。累計残業の半額で、一度帳簿を書き換えていると倍額になる。
+  laborFine() {
+    const st = this.state;
+    const base = Math.min(24, Math.ceil((st.overtimeTotal || 0) / 2));
+    return st.laborRecordFalsified ? base * 2 : base;
+  },
+
   // 深い連鎖の請求書。連鎖は壊れてよいが、壊れたまま連戦はできない。
   // 4段目以降の味方の行動＝残業1時間として、出撃者の忠誠と備蓄食料（夜食）へ請求する。
   // 「今回の爆発をもう一度起こせるか」を、次の戦いの手前で必ず考えさせるための代償。
@@ -1488,13 +1507,22 @@ const Game = {
     st.lastOvertime = { hours, deepest: (overtime && overtime.deepest) || 0, loyalty: 0, supper: 0 };
     if (hours <= 0) return st.lastOvertime;
 
-    const penalty = Math.min(20, Math.floor(hours / 2));
+    // 労務顧問（労基署の抜き打ちで雇い入れた元監督官）がいると、忠誠への影響が半分になる。
+    // 数値を下げるだけの恒久強化ではなく、「毎戦の給与総額が増える」という別の圧へ振り替える契約。
+    const advisor = !!st.laborAdvisor;
+    const penalty = Math.min(20, Math.floor(hours / (advisor ? 4 : 2)));
     if (penalty > 0) {
       for (const m of st.roster) {
         if (!st.activeUids.includes(m.uid)) continue;   // 残業したのは出撃した者だけ
         m.loyalty = U.clamp(m.loyalty - penalty, 0, 100);
       }
       st.lastOvertime.loyalty = -penalty;
+    }
+    st.lastOvertime.advisor = advisor;
+    // 誰が働かされているかを個人へ積む。労務イベントはこの数字を読んで人を名指しする。
+    for (const m of st.roster) {
+      if (!st.activeUids.includes(m.uid)) continue;
+      m.overtimeHours = (m.overtimeHours || 0) + hours;
     }
     // 夜食。備蓄があれば食われ、無ければ何も出ない（不足判定は生活部門側が行う）
     const supper = Math.min(Math.max(0, st.food || 0), Math.floor(hours / 3));
@@ -1503,8 +1531,20 @@ const Game = {
       st.lastOvertime.supper = supper;
     }
     st.overtimeTotal = (st.overtimeTotal || 0) + hours;
+    // 顧問料は残業した戦いにだけ発生する。払えなければ顧問は去り、次からは全額効く。
+    if (advisor) {
+      if (st.gold >= this.LABOR_ADVISOR_FEE) {
+        st.gold -= this.LABOR_ADVISOR_FEE;
+        notes.push(`労務顧問への顧問料 ${this.LABOR_ADVISOR_FEE}G を支払った（所持金 ${st.gold}G）`);
+      } else {
+        st.laborAdvisor = false;
+        st.lastOvertime.advisorLost = true;
+        notes.push("顧問料を払えず、労務顧問は書類を置いて帰った。次の残業からは全額こちらへ来る");
+      }
+    }
     notes.push(`残業 ${hours}時間（連鎖${st.lastOvertime.deepest}段）`
       + (penalty > 0 ? `：出撃者の忠誠-${penalty}` : "：忠誠への影響なし")
+      + (advisor ? "（労務顧問が半減）" : "")
       + (supper > 0 ? ` / 夜食に食料-${supper}` : ""));
     return st.lastOvertime;
   },
