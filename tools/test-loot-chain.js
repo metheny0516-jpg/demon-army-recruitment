@@ -14,7 +14,8 @@ const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
 } };
 vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
-vm.runInContext('U.chance = () => true; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
+// このテストは略奪の接続を検証する。不祥事の抽選は専用テストで扱う。
+vm.runInContext('U.chance = p => p >= 0.5; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
 const Battle = vm.runInContext('Battle', ctx);
 const Game = vm.runInContext('Game', ctx);
 const assert = (condition, message) => {
