@@ -164,7 +164,37 @@ const Battle = {
     });
 
     // シナジー適用（merge型は出撃時に処理済み）
-    const activeSyn = Synergy.applyAll(playerUnits);
+    // 発火条件は出撃5枠の外まで数える（options.synergyPool＝軍団全体）。
+    // 効果は出撃したユニットにしか乗らないので、控えが戦うわけではない。
+    const activeSyn = Synergy.applyAll(playerUnits, { pool: options.synergyPool || playerUnits });
+    // 揃えた枚数を「画面の出来事」に変える。倍率だけだと数字が増えるだけで爆発に見えない。
+    // 《魔王軍完成》が立っているあいだ、味方のOVERKILL撃破は次の敵へ伝播し、
+    // その深さは同時発動数そのものになる。積むほど連鎖が伸びる。
+    const overloadStacks = activeSyn.some(s => s.id === "overload")
+      ? Math.min(4, activeSyn.filter(s => !s.meta).length) : 0;
+
+    // 戦意：OVERKILLの見返り。これまでOVERKILLは伝播の入口になるだけで、
+    // それ自体には何の得も無かった（だから「明示」しようにも中身が無かった）。
+    // 余剰を出すほど味方全員の与ダメージが上がり、その倍率を画面に出し続ける。
+    // 連鎖が進むほど数字そのものが大きくなるので、「爆発力が上がった」が見える。
+    let momentum = 0;
+    const MOMENTUM_CAP = 1.2;   // 与ダメージ+120%まで。青天井にすると1戦目から壊れる
+    const gainMomentum = (percent, parent, depth) => {
+      if (momentum >= MOMENTUM_CAP) return;
+      // 余剰が大きいほど、そして連鎖が深いほど戦意が乗る
+      const gain = Math.min(.25, .04 + percent / 100 * .05 + Math.max(0, (depth || 1) - 1) * .035);
+      const before = momentum;
+      momentum = Math.min(MOMENTUM_CAP, momentum + gain);
+      if (momentum <= before) return;
+      emitCausal("momentum", {
+        gain: Math.round((momentum - before) * 100),
+        total: Math.round(momentum * 100),
+        mult: Number((1 + momentum).toFixed(2)),
+        emphasis: momentum >= .8 ? 3 : 2,
+        text: `　魔王軍の戦意が上がった！ 与ダメージ ×${(1 + momentum).toFixed(2)}`,
+        cls: "momentum"
+      }, parent);
+    };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;
@@ -303,6 +333,10 @@ const Battle = {
           rankId: rank.id, rank: rank.name, emphasis: rank.emphasis,
           text: `　${rank.name}！ 余剰${excess}ダメージ（${percent}% OVERKILL）`, cls: "overkill"
         }, damageEvent);
+        // 余剰は捨て値にしない。魔王軍の戦意へ変える。
+        if (attacker.side === "player") {
+          gainMomentum(percent, overkillEvent, (opts.propagationDepth || 0) + 1);
+        }
       }
       if (survived) {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
@@ -315,18 +349,36 @@ const Battle = {
         }, damageEvent);
         reactToDeath(target, deathEvent);
         const propagationDepth = opts.propagationDepth || 0;
-        if (overkillEvent && overkillEvent.percent >= 100 && propagationDepth < 3
-          && attacker.traits.includes("chain_massacre")) {
+        // 伝播の入口は2つ。特性《連鎖虐殺》と、シナジーを積んだ《魔王軍完成》。
+        // 後者は魔王軍の編成が起こすものなので味方側だけ。深さは積んだ枚数で伸びる。
+        const byTrait = attacker.traits.includes("chain_massacre");
+        const byOverload = !byTrait && attacker.side === "player" && overloadStacks > 0;
+        const limit = byTrait ? 3 : overloadStacks + 1;
+        // 余剰を出した撃破は、そのまま次へ流れる。以前は「余剰125-25×段数%以上」を
+        // 求めていたが、実プレイでは滅多に満たされず連鎖が始まらなかった。
+        // 《魔王軍完成》が立っている＝すでに札を積んだ状態なので、そこは緩くてよい。
+        const needPercent = byTrait ? 100 : Math.max(15, 60 - 15 * overloadStacks);
+        if (overkillEvent && overkillEvent.percent >= needPercent && propagationDepth < limit
+          && (byTrait || byOverload)) {
           const opponents = attacker.side === "player" ? enemyUnits : playerUnits;
           const next = opponents.find(unit => unit.alive);
           if (next) {
+            const label = byTrait ? "連鎖虐殺" : "魔王軍完成";
+            const step = propagationDepth + 1;
+            // 連鎖は進むほど強くなる。以前は「余剰×0.22」で、余剰は撃破のたびに
+            // 小さくなるため段が進むほど威力が落ちていた。演出は盛り上がるのに
+            // 数字はしぼむので、爆発しているように見えなかった。
+            const ratio = byTrait ? 0.3 + 0.1 * (step - 1) : 0.35 + 0.25 * (step - 1);
             const trigger = emitCausal("trait_trigger", {
-              sourceId: attacker.id, traitId: "chain_massacre", name: "連鎖虐殺",
-              propagationDepth: propagationDepth + 1, emphasis: 2,
-              text: `　${attacker.name}の【連鎖虐殺】 余剰ダメージが${next.name}へ伝播！`, cls: "trait"
+              sourceId: attacker.id, traitId: byTrait ? "chain_massacre" : "overload", name: label,
+              propagationDepth: step, ratio: Math.round(ratio * 100), emphasis: 3,
+              text: byTrait
+                ? `　${attacker.name}の【連鎖虐殺】 余剰ダメージが${next.name}へ伝播！`
+                : `　【魔王軍完成】 連鎖${step}段目！ 余剰の${Math.round(ratio * 100)}%が${next.name}へ流れ込む`,
+              cls: "trait"
             }, overkillEvent);
-            applyDamage(attacker, next, overkillEvent.excess * 0.3, "splash", {
-              label: "連鎖虐殺", parentEvent: trigger, propagationDepth: propagationDepth + 1
+            applyDamage(attacker, next, overkillEvent.excess * ratio, "splash", {
+              label, parentEvent: trigger, propagationDepth: step
             });
           }
         }
@@ -381,6 +433,8 @@ const Battle = {
         ctx.notes.push("恐喝帳簿");
         ledgerBoost = null;
       }
+      // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
+      if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
       const variance = 0.9 + U.rand() * 0.2;
       const raw = unit.atk * ctx.mult * variance * (actionOpts.mult || 1);
       const amount = Math.max(1, Math.round(raw) - Math.floor(target.def / 2));
@@ -419,19 +473,25 @@ const Battle = {
         if (tr && tr.postAttack && target) tr.postAttack(post);
       }
       if (triggeredEvents.length) {
-        const reaction = {
-          attacker: unit, events: triggeredEvents,
-          extraAction: (mult, parentEvent, label) => {
-            const trigger = emitCausal("trait_trigger", {
-              sourceId: unit.id, traitId: "greedy", name: label, emphasis: 2,
-              text: `　${unit.name}の【${label}】 金貨に目がくらみ追加行動！`, cls: "trait"
-            }, parentEvent);
-            act(unit, allies, enemies, round, { mult, parentEvent: trigger, label, isExtra: true });
+        // 金貨は軍団の成果。盗む役と反応する役を別の人材で組める。
+        // 各人の greedyChains が再帰に入る前に使用済みになるため、
+        // 追加攻撃で別の金貨が出ても、同じ鎖で同じ人は二度動かない。
+        for (const reactor of allies) {
+          if (!reactor.alive || !enemies.some(e => e.alive)) continue;
+          const reaction = {
+            attacker: reactor, events: triggeredEvents,
+            extraAction: (mult, parentEvent, label) => {
+              const trigger = emitCausal("trait_trigger", {
+                sourceId: reactor.id, traitId: "greedy", name: label, emphasis: 2,
+                text: `　${reactor.name}の【${label}】 ${unit.name}の金貨獲得に反応、追加行動！`, cls: "trait"
+              }, parentEvent);
+              act(reactor, allies, enemies, round, { mult, parentEvent: trigger, label, isExtra: true });
+            }
+          };
+          for (const tid of reactor.traits) {
+            const tr = TRAITS[tid];
+            if (tr && tr.onTriggeredEvents) tr.onTriggeredEvents(reaction);
           }
-        };
-        for (const tid of unit.traits) {
-          const tr = TRAITS[tid];
-          if (tr && tr.onTriggeredEvents) tr.onTriggeredEvents(reaction);
         }
       }
     };
@@ -671,9 +731,11 @@ const Battle = {
 
     const byId = new Map(events.filter(e => e.eventId).map(e => [e.eventId, e]));
     const sides = new Map();
+    const names = new Map();
     const start = (timeline || []).find(e => e.type === "battle_start");
     for (const unit of [...((start && start.player) || []), ...((start && start.enemy) || [])]) {
       sides.set(unit.id, unit.side);
+      names.set(unit.id, unit.name);
     }
 
     const steps = [];
@@ -685,7 +747,8 @@ const Battle = {
         eventId: current.eventId || null,
         type: current.type,
         depth: current.chainDepth || 1,
-        label: this.chainStepLabel(current, sides)
+        label: this.chainStepLabel(current, sides),
+        actorName: names.get(current.sourceId || current.fromId || current.unitId) || null
       });
       current = current.parentEventId ? byId.get(current.parentEventId) : null;
     }

@@ -22,49 +22,35 @@ const ogre = n => ({ uid: 100 + n, name: 'オーガ' + n, race: 'オーガ', ran
   traits: ['brute'], tags: [] });
 const find = (list, id) => list.find(e => e.id === id);
 
-// ── 1. いまの効き目を実測で出す ─────────────────────────
+// 軍団で数え、出撃者へ適用する。控えを足す予告でも本番と同じ値になる。
 const three = [goblin(1), goblin(2), goblin(3)];
-const horde3 = find(Synergy.preview(three, { slots: 5 }), 'goblin_horde');
-assert(horde3.active && Math.abs(horde3.now.dmgMult - 1.15) < 0.001,
-  'ゴブリン3体の与ダメージ倍率を ×1.15 と実測する');
-assert(horde3.now.affected === 3, '効果の対象人数を数える');
-
-const five = [goblin(1), goblin(2), goblin(3), goblin(4), goblin(5)];
-const horde5 = find(Synergy.preview(five, { slots: 5 }), 'goblin_horde');
-assert(Math.abs(horde5.now.dmgMult - 1.45) < 0.001, 'ゴブリン5体では ×1.45 まで伸びる（3体の3倍）');
-
-// ── 2. あと1体で / 入れ替えると ────────────────────────
-assert(horde3.next && Math.abs(horde3.next.dmgMult - 1.30) < 0.001,
-  '枠が空いていれば「あと1体で ×1.30」を出す');
-assert(horde3.swapOutRace === null, '枠が空いているときは入れ替えを勧めない');
-assert(horde5.next === null, '出撃枠が埋まり、これ以上伸びないなら何も勧めない');
-
-const mixed = [goblin(1), goblin(2), goblin(3), ogre(1), ogre(2)];
-const hordeMixed = find(Synergy.preview(mixed, { slots: 5 }), 'goblin_horde');
-assert(hordeMixed.next && Math.abs(hordeMixed.next.dmgMult - 1.30) < 0.001,
-  '枠が埋まっていれば「入れ替えると ×1.30」を出す');
-assert(hordeMixed.swapOutRace === 'オーガ' && hordeMixed.nextRace === 'ゴブリン',
-  '誰を誰に替えればよいかを名指しする（混ぜると倍率を失うことが見える）');
-
-// ── 3. 未発動でも「あと何体」を実測で出す ────────────────────
+const four = [...three, goblin(4)];
+const five = [...four, goblin(5)];
+const horde3 = find(Synergy.preview(three, {slots:5, pool:four}), 'goblin_horde');
+assert(horde3.active && Math.abs(horde3.now.dmgMult - 1.12) < .001,
+  '軍団4体・出撃3体なら出撃ゴブリンを1.12倍にする');
+assert(horde3.now.affected === 3, '効果対象は出撃3体だけ');
+assert(horde3.viaRecruit && Math.abs(horde3.next.dmgMult - 1.24) < .001,
+  '控えをもう1人採用すれば出撃枠を変えず1.24倍になる');
+const horde5 = find(Synergy.preview(five, {slots:5, pool:five}), 'goblin_horde');
+assert(Math.abs(horde5.now.dmgMult - 1.24) < .001, '軍団5体では1.24倍');
+assert(horde5.viaRecruit && Math.abs(horde5.next.dmgMult - 1.36) < .001,
+  '出撃枠が満員でも軍団への追加採用を予告する');
+const mixed = [...three, ogre(1), ogre(2)];
+const hordeMixed = find(Synergy.preview(mixed, {slots:5, pool:[...mixed, goblin(4)]}), 'goblin_horde');
+assert(hordeMixed.swapOutRace === null && hordeMixed.viaRecruit, '軍団条件のためオーガを外す案内はしない');
 const two = [goblin(1), goblin(2)];
-const horde2 = find(Synergy.preview(two, { slots: 5 }), 'goblin_horde');
-assert(!horde2.active && horde2.need === 1 && horde2.needRace === 'ゴブリン',
-  '未発動なら「あと1体（ゴブリン）」で届くと出す');
-const legion = find(Synergy.preview(two, { slots: 5 }), 'legion_of_dead');
-assert(!legion.active && legion.need === null,
-  '手持ちを増やしても届かないシナジーには「あと何体」を出さない');
-
-// ── 4. 説明文ではなく実際の apply を測っている ─────────────────
-// 定義の効果を変えたら表示も変わること（説明文を写しているだけなら変わらない）
+const horde2 = find(Synergy.preview(two, {slots:5, pool:two}), 'goblin_horde');
+assert(!horde2.active && horde2.need === 2 && horde2.needRace === 'ゴブリン', '2体ならあと2体で発火');
+const legion = find(Synergy.preview(two, {slots:5, pool:two}), 'legion_of_dead');
+assert(!legion.active && legion.need === null, '異なる能力が必要なら同じ人材の追加だけでは届かない');
 const original = SYNERGIES.find(s => s.id === 'goblin_horde').apply;
-SYNERGIES.find(s => s.id === 'goblin_horde').apply = function (units) {
+SYNERGIES.find(s => s.id === 'goblin_horde').apply = function(units) {
   for (const u of units) if (u.race === 'ゴブリン') u.mods.dmgMult *= 3;
 };
-const tripled = find(Synergy.preview(three, { slots: 5 }), 'goblin_horde');
-assert(Math.abs(tripled.now.dmgMult - 3) < 0.001, '効果量は説明文ではなく実際の適用結果から取る');
+const tripled = find(Synergy.preview(three, {slots:5, pool:four}), 'goblin_horde');
+assert(Math.abs(tripled.now.dmgMult - 3) < .001, '説明文でなく実際の適用結果を測る');
 SYNERGIES.find(s => s.id === 'goblin_horde').apply = original;
-
 // ── 5. 予告は編成を書き換えない ────────────────────────
 const squad = [goblin(1), goblin(2), goblin(3), ogre(1)];
 const before = JSON.stringify(squad);

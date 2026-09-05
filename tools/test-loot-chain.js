@@ -54,10 +54,10 @@ result = Battle.simulate([raider, wing1, wing2], [
   make('標的A', 'enemy', { hp:10, atk:1, spd:1 }),
   make('標的B', 'enemy', { hp:10, atk:1, spd:1 }),
   make('標的C', 'enemy', { hp:200, atk:1, spd:1 })
-], { extortionLedger:true });
+], { extortionLedger:true, synergyPool: [raider, wing1, wing2, make('控え', 'player')] });
 const coordinatedLoot = result.timeline.filter(e => e.type === 'resource_gain' && e.label === '略奪者の連携');
 const ledger = result.timeline.find(e => e.type === 'facility_trigger' && e.facilityId === 'extortion_ledger');
-assert(coordinatedLoot.length >= 2, 'ゴブリン3体以上なら敵撃破ごとに略奪者の連携で1Gを予約する');
+assert(coordinatedLoot.length >= 2, '軍団にゴブリン4体なら敵撃破ごとに略奪者の連携で1Gを予約する');
 assert(ledger && ledger.amount === 3, '予約金貨が初めて3Gへ達した瞬間に恐喝帳簿が発火する');
 assert(ledger.parentEventId === result.timeline.filter(e => e.type === 'resource_gain' && e.resource === 'gold')[2].eventId,
   '3G目の金貨獲得を恐喝帳簿の原因にする');
@@ -66,6 +66,29 @@ const boosted = result.timeline.slice(ledgerIndex + 1).find(e => e.type === 'att
 assert(boosted && boosted.dmg >= 70, '恐喝帳簿が次の味方攻撃だけを40%強化する');
 assert(result.timeline.filter(e => e.type === 'facility_trigger' && e.facilityId === 'extortion_ledger').length === 1,
   '恐喝帳簿は1戦闘1回だけ発火する');
+
+// 別人への受け渡し。金貨を出す役には強欲を持たせない。
+const relay = Battle.simulate([
+  make('盗む係', 'player', { spd: 30, traits: ['pickpocket'] }),
+  make('欲張りA', 'player', { spd: 20, traits: ['greedy', 'pickpocket'] }),
+  make('欲張りB', 'player', { spd: 10, traits: ['greedy', 'pickpocket'], race: 'オーガ' })
+], [make('丈夫な標的', 'enemy', { hp: 999, atk: 1, spd: 1 })]);
+const opening = relay.timeline.find(e => e.type === 'attack');
+const relayEvents = relay.timeline.filter(e => e.chainId === opening.chainId);
+const reactors = relayEvents.filter(e => e.type === 'trait_trigger' && e.traitId === 'greedy');
+assert(reactors.length === 2 && new Set(reactors.map(e => e.sourceId)).size === 2,
+  '一人の略奪から異種族を含む二人が反応し、各人1回で終わる');
+for (const trigger of reactors) {
+  const parent = relayEvents.find(e => e.eventId === trigger.parentEventId);
+  assert(parent && parent.type === 'resource_gain', '反応の親は実際に発生した金貨獲得');
+}
+assert(relayEvents.filter(e => e.type === 'resource_gain').length === 3,
+  '追撃者が新しい金貨を出すと次の味方へ再発火する');
+assert(relay.chainSummary.deepest.steps[0].actorName === '盗む係',
+  '戦果の代表経路に、火力役ではなく起点の名前が残る');
+const noFuel = Battle.simulate([make('強欲だけ', 'player', { traits: ['greedy'] })],
+  [make('標的', 'enemy', { hp: 100, spd: 1 })]);
+assert(!noFuel.timeline.some(e => e.traitId === 'greedy'), '金貨が発生しなければ強欲は動かない');
 
 const goblin = (atk, hp) => ({
   uid: 1, tplId: 'goblin', name: 'テスト略奪兵', race: 'ゴブリン', job: '盗賊',

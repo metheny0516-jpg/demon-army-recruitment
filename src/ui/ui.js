@@ -75,6 +75,7 @@ const UI = {
     const sd = Game.stageData();
     const salary = Game.salaryTotal();
     const opening = st.openingPrototype;
+    const fb = Game.foodBalance();
     return `<div class="hud">
       <span>第 <b>${st.generation}</b> 代魔王軍</span>
       ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
@@ -82,7 +83,7 @@ const UI = {
       <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
       <span>警戒度 <b>${st.alert}</b></span>
       <span class="gold">所持金 <b>${st.gold}G</b></span>
-      <span class="food">食料 <b>${st.food}</b></span>
+      <span class="food">食料 <b>${st.food}</b><small class="${fb.delta < 0 ? "food-warn" : "food-ok"}"> 調達${fb.produce} / 消費${fb.need} = ${fb.delta >= 0 ? "+" : ""}${fb.delta}</small></span>
       <span class="materials">建材 <b>${st.materials}</b></span>
       <span>施設 <b>Lv.${st.facilityLevel}${Game.activeFacility() ? ` ${U.esc(Game.activeFacility().name)}` : ""}</b></span>
       <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
@@ -218,12 +219,13 @@ const UI = {
   aptitudeHtml(m) {
     const apt = Aptitude.of(m);
     const chips = [];
-    if (apt.food > 0) chips.push(`<span class="apt apt-food">🍲 食料+${apt.food}</span>`);
+    if (apt.food > 0) chips.push(`<span class="apt apt-food">🍲 調達 食料+${apt.food}</span>`);
     if (apt.material > 0) chips.push(`<span class="apt apt-material">🔨 施工+${apt.material}</span>`);
     if (apt.wage > 0) chips.push(`<span class="apt apt-wage">💰 給与-${apt.wage}%</span>`);
     if (apt.recruit > 0) chips.push(`<span class="apt apt-recruit">📋 応募+${apt.recruit}</span>`);
+    // 調達は食料そのもの、食う量は「口」。3口で食料1を食うので、単位を書かないと読めない。
     chips.push(apt.appetite > 0
-      ? `<span class="apt apt-appetite">🍖 食う量 ${apt.appetite}</span>`
+      ? `<span class="apt apt-appetite">🍖 食う量 ${apt.appetite}口<small>（3口＝食料1）</small></span>`
       : `<span class="apt apt-appetite none">🍖 食事不要</span>`);
     const note = apt.labels.length ? `<span class="apt-note">${U.esc(apt.labels.join("・"))}</span>` : "";
     return `<div class="aptitudes">${chips.join("")}${note}</div>`;
@@ -260,7 +262,7 @@ const UI = {
       <div><b>🔨 ${builders}</b><span>建設所属</span></div>
       <div><b>🍲 ${life}</b><span>生活所属</span></div>
       <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
-      <div class="${balance < 0 ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `不足 ${-balance}！` : `余剰 ${balance}`}</span></div>
+      <div class="${balance < 0 && st.food < -balance ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `赤字 ${-balance}（備蓄 ${st.food} であと${Math.floor(st.food / -balance)}戦）` : `余剰 +${balance}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）`}</span></div>
       <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
       ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>経理部の圧縮</span></div>` : ""}
       ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>人事部の集客</span></div>` : ""}
@@ -293,6 +295,7 @@ const UI = {
     // 数字だけでは「CHAIN」が何を指すのか伝わらない。経路の上に一行置いて、
     // 「この芋づるの段数が最大CHAINだ」と読めるようにする（説明画面は作らない）。
     const steps = (chain && chain.deepest && chain.deepest.steps) || [];
+    const originName = steps[0] && steps[0].actorName;
     const path = steps.length >= 2
       ? `<div class="chain-caption">いちばん長くつながった連鎖（${steps.length}段）</div>
          ${Game.state && Game.state.generation === 1 && Game.state.turn <= 2 ? `<p class="first-guide">モルモ：これがCHAIN、能力の連鎖デス。矢印の順に、誰の働きが次の能力を動かしたかを追ってみてくださいネ。</p>` : ""}
@@ -311,6 +314,7 @@ const UI = {
         <div><b>${maxChain}</b><span>最大CHAIN</span></div>
         <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>
       </div>
+      ${originName ? `<p class="chain-credit">この連鎖の起点は <b>${U.esc(originName)}</b>。${U.esc(steps[steps.length - 1].label)}までつながった。</p>` : ""}
       ${path}
       ${details.length ? `<div class="muted">${details.join("　/　")}</div>` : ""}
     </div>`;
@@ -347,6 +351,39 @@ const UI = {
     return `<div class="panel facility-panel"><h3>🪦 施設と死者の働き</h3>
       ${lines.length ? `<ul class="notes">${lines.map(l => `<li>${l}</li>`).join("")}</ul>` : ""}
       ${chains.length ? `<div class="chain-caption">死者の連鎖（誰が倒れ、誰が戻したか）</div>${chainRows}` : ""}
+    </div>`;
+  },
+
+  // 余った食料の使い道。備蓄が積み上がるだけの資源だったので、判断に変える。
+  feastPanel() {
+    const q = Game.feastQuote();
+    const streak = Game.state.hungerStreak || 0;
+    // 飢餓は損失で終わらない。出口が見えていないと、また「不足＝詰み」に戻る。
+    const hunger = streak > 0
+      ? `<div class="hunger-streak">🥀 飢餓 ${streak}戦目 —
+          あと${Game.HUNGER_ADAPT_TURNS - streak}戦を生き延びた者は<b>飢餓適応</b>（食料を消費しない／最大HP-15%）</div>`
+      : "";
+    if (!q.possible) {
+      return `<div class="panel feast-panel"><h3>🍗 宴</h3>
+        <div class="muted">この軍団は誰も食事を必要としない。宴は開けない。</div>${hunger}</div>`;
+    }
+    const links = [
+      q.bigEaters > 0 ? `大食漢${q.bigEaters}体：食う量2倍・効果2倍` : "",
+      q.cook ? "魔界料理人：必要な食料が半分" : ""
+    ].filter(Boolean);
+    const body = q.held
+      ? `<div class="feast-ready">宴は済んだ。${U.esc(String(Game.state.feastPending.fed))}名が満腹で出撃する（食う者の与ダメージ+${Math.round(Game.state.feastPending.dmgBonus * 100)}%）</div>`
+      : `<button class="wide" data-action="feast" ${q.affordable ? "" : "disabled"}>
+           🍗 宴を開く（食料 ${q.cost} 消費）
+         </button>
+         <div class="muted">${q.affordable
+            ? `食う者${q.eaters}名の忠誠+${q.loyaltyGain}、出撃した食う者の与ダメージ+${Math.round(q.dmgBonus * 100)}%（次の戦闘のみ）。`
+            : `備蓄 ${q.stock}。宴には ${q.cost} と、2戦ぶんの糧食を残す余裕が要る。`}</div>`;
+    return `<div class="panel feast-panel">
+      <h3>🍗 宴 <span class="muted">備蓄 ${q.stock} / 上限 ${Game.foodCapacity()}</span></h3>
+      ${body}
+      ${links.length ? `<div class="synergy-hint">${links.map(U.esc).join(" / ")}</div>` : ""}
+      ${hunger}
     </div>`;
   },
 
@@ -418,7 +455,11 @@ const UI = {
     const gain = entry.next.dmgMult > entry.now.dmgMult
       ? `与ダメージ ×${entry.next.dmgMult.toFixed(2)}`
       : `被ダメージ ×${entry.next.takenMult.toFixed(2)}`;
-    const how = entry.swapOutRace
+    // 発火条件を軍団全体で数えるシナジーは、出撃枠を入れ替えても総数が動かない。
+    // その場合は「枠を空けずに軍団へ1体足せ」と案内するのが正しい。
+    const how = entry.viaRecruit
+      ? `軍団に${U.esc(entry.nextRace || "同じ種族")}をあと1体（出撃枠はそのままで）`
+      : entry.swapOutRace
       ? `${U.esc(entry.swapOutRace)}を${U.esc(entry.nextRace || "同じ種族")}に替えると`
       : `${U.esc(entry.nextRace || "同じ種族")}をあと1体で`;
     return `<div class="syn-next">▲ ${how} <b>${gain}</b></div>`;
@@ -503,7 +544,8 @@ const UI = {
   },
 
   synergyPanel(roster) {
-    const entries = Synergy.preview(roster, { slots: Game.MAX_DEPLOY });
+    // 予告は本番と同じ母集団（軍団全体）で測る。ここがズレると編成画面だけ嘘をつく。
+    const entries = Synergy.preview(roster, { slots: Game.MAX_DEPLOY, pool: Game.synergyPool() });
     const act = entries.filter(e => e.active);
     const activeHtml = act.length
       ? `<div class="syn-list">${act.map(e => {
@@ -577,12 +619,21 @@ const UI = {
     const cards = st.applicants.map((m, i) => this.monsterCard(m, {
       resume: true,
       footer: (() => {
+        // 「採ったら食えるのか」を採用の瞬間に見せる。答えではなく、収支の動きだけを出す。
+        const fq = Game.foodBalanceIfHired(m);
+        const after = fq.before.produce - fq.needAfter;
+        // 赤字そのものは普通の状態なので煽らない。備蓄で吸収できなくなる時だけ警告する。
+        const runsOut = after < 0 && fq.before.stock + after < 0;
+        const foodNote = `<div class="hire-food ${runsOut ? "warn" : ""}">🍖 採ると 消費 ${fq.before.need} → ${fq.needAfter}`
+          + `（収支 ${fq.before.delta >= 0 ? "+" : ""}${fq.before.delta} → ${after >= 0 ? "+" : ""}${after}`
+          + `／備蓄 ${fq.before.stock}）`
+          + `${runsOut ? "　次の戦いで食料が尽きる" : ""}</div>`;
         const cost = Game.hireCost();
         const allowed = Game.canHireApplicant(i);
         const label = full ? "軍団が満員（誰かを解雇せよ）"
           : cost > 0 ? `追加採用（紹介料 ${cost}G・給与 ${m.salary}G）`
           : `無料枠で採用（給与 ${m.salary}G）`;
-        return `<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`;
+        return `${foodNote}<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`;
       })()
     })).join("");
     // 満員でも応募者を逃さず入れ替えられるよう、この画面から解雇できるようにする
@@ -597,6 +648,26 @@ const UI = {
           <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
         </span>`).join("")}</div>
     </div>` : "";
+    // 指名求人：金を払って「こういう奴を寄越せ」と条件を出す。中盤から解禁。
+    // 条件をシナジーの発火条件と同じ語彙にしてあるので、狙って揃える手段になる。
+    const briefPanel = (() => {
+      if (!Game.briefUnlocked()) return "";
+      const cost = Game.briefCost();
+      const active = Game.activeBrief();
+      const buttons = RECRUIT_BRIEFS.map(b => `
+        <button class="brief-option ${active && active.id === b.id ? "selected" : ""}"
+          data-action="brief" data-brief="${b.id}" ${Game.canPostBrief(b.id) ? "" : "disabled"}>
+          <span class="brief-title">${b.icon} ${U.esc(b.name)}</span>
+          <span class="brief-note">${U.esc(b.note)}</span>
+        </button>`).join("");
+      return `<div class="panel brief-panel">
+        <h3>📣 指名求人 <span class="muted">— 求人費 ${cost}G（出すたび倍）</span></h3>
+        <div class="muted">条件を指定して求人を出し直す。合う者が来やすくなり、格上も出やすくなる。
+          ${active ? `いまの指名：<b>${active.icon} ${U.esc(active.name)}</b>` : "確実ではない。来ないこともある。"}</div>
+        <div class="brief-options">${buttons}</div>
+        ${st.gold < cost ? `<div class="payroll-warning">指名には ${cost}G 必要（現在 ${st.gold}G）</div>` : ""}
+      </div>`;
+    })();
     this.set(`${this.hud()}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
@@ -612,6 +683,7 @@ const UI = {
         })()}
       </div>
       <div class="cards">${cards}</div>
+      ${briefPanel}
       <div class="spacer"></div>
       <div class="row">
         <button data-action="reroll" ${Game.canReroll() ? "" : "disabled"}>
@@ -817,6 +889,7 @@ const UI = {
       ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房</b>
         <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍にする。</span>
       </div>` : ""}
+      ${opening ? "" : this.feastPanel()}
       ${this.payrollPanel()}
       ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
@@ -831,7 +904,7 @@ const UI = {
         <div class="muted department-help">勝利後、施工能力のぶんだけ備蓄建材を投入する。能力は種族と前職で決まる（オーガの重量物運搬は桁が違う）。施設効果は次の出撃隊全員に付く。</div>
         <div class="cards">${builderCards || `<div class="department-empty">建材はあっても、働く者がいなければ城は育たない。</div>`}</div></div>
       <div class="army-section department-section department-life-section"><h3>🍲 食料・生活部門 ${lifeWorkers.length}</h3>
-        <div class="muted department-help">勝利後、食料適性のぶんだけ調達する。食う量は種族ごとに違い、アンデッドは何も食べない。足りれば軍団全員の忠誠も少し上がる。</div>
+        <div class="muted department-help">ここに置いた者だけが調達する。食う量は種族ごとに違い（3口＝食料1）、アンデッドは何も食べない。足りれば軍団全員の忠誠も少し上がる。</div>
         <div class="cards">${lifeCards || `<div class="department-empty">現在は自炊。食料が尽きれば全員の忠誠が下がる。</div>`}</div></div>
       </section>
       <aside class="formation-intel">

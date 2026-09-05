@@ -102,8 +102,25 @@ assert(Scene.durationOf({ type: 'result', victory: true, reversal: true }) > Sce
   '逆転勝利の決着は通常より長く見せる');
 assert(Scene.durationOf({ type: 'death', unitId: 'p0', permanent: true }) > Scene.durationOf({ type: 'death', unitId: 'p0' }),
   '永久戦死は通常の死亡より長く見せる');
-assert(Scene.durationOf(attack({ chainDepth: 5 })) > Scene.durationOf(attack({ chainDepth: 1 })),
-  '深いCHAINの一段は長く見せる');
+assert(Scene.durationOf(attack({ chainDepth: 5 })) === Scene.durationOf(attack({ chainDepth: 1 })),
+  '深さだけで一段ずつ延長せず、連鎖全体の緩急を計画する');
+
+// 一つの鎖の起点・初条件・決着は保護し、中間だけを畳み掛ける。
+const relay = [
+  attack({ chainId:'relay', eventId:'r0' }),
+  {type:'resource_gain', resource:'gold', chainId:'relay', chainDepth:2},
+  {type:'trait_trigger', traitId:'greedy', chainId:'relay', chainDepth:3},
+  attack({chainId:'relay', chainDepth:4}),
+  {type:'resource_gain', resource:'gold', chainId:'relay', chainDepth:5},
+  {type:'trait_trigger', traitId:'greedy', chainId:'relay', chainDepth:6},
+  attack({chainId:'relay', chainDepth:7}),
+  {type:'overkill', percent:200, emphasis:2, chainId:'relay', chainDepth:8},
+  {type:'revive', chainId:'relay', chainDepth:9}
+];
+const rhythm = Scene.plan(relay);
+for (const i of [0,1,2,6,7,8]) assert(rhythm.items[i].duration === Scene.durationOf(relay[i]), `連鎖の保護点${i}は読む尺を維持`);
+assert(rhythm.items[3].duration < Scene.durationOf(relay[3]) && rhythm.items[5].duration < Scene.durationOf(relay[5]), '中間追撃と繰り返しの反応は短くつながる');
+assert(rhythm.items.length === relay.length, '中間イベント自体は省略しない');
 
 // 8. core側の印: 実際の戦闘で永久戦死と逆転フラグが付く
 const make = (name, hp, atk, side) => Battle.makeUnit({

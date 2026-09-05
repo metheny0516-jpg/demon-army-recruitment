@@ -239,6 +239,14 @@ const App = {
         Game.hireMercenary(Number(data.index));
         return this.render();
 
+      case "brief":
+        Game.postBrief(data.brief);
+        return this.render();
+
+      case "feast":
+        Game.holdFeast();
+        return this.render();
+
       case "payrollpolicy":
         Game.setPayrollPolicy(data.policy);
         return this.render();

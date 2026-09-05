@@ -513,6 +513,13 @@ button.wide { width: 100%; }
 .scene.fx-overkill .scene-fx {
   background: radial-gradient(circle, rgba(255, 122, 45, .78), rgba(135, 24, 16, .18) 55%, transparent 78%);
 }
+/* 伝播は「事件」ではなく魔王軍の手柄。赤い縞（事件の色）に落とさず、
+   金から橙へ抜ける専用の色にする。 */
+.scene.fx-overload .scene-fx {
+  background:
+    radial-gradient(circle, rgba(255, 209, 102, .72), rgba(200, 69, 31, .2) 52%, transparent 76%),
+    repeating-conic-gradient(from 0deg, rgba(255, 209, 102, .18) 0deg 1.6deg, transparent 1.6deg 7deg);
+}
 @keyframes scenePulse {
   0%, 100% { opacity: 0; transform: scale(.82); }
   35%, 65% { opacity: .8; transform: scale(1.08); }
@@ -1672,29 +1679,80 @@ button.primary::first-letter { color: var(--gold); }
 .battle-streak.to-enemy.show { animation: streakToEnemy .5s ease-out; }
 .battle-streak.to-player.show { animation: streakToPlayer .5s ease-out; }
 
+/* ── CHAIN：点いて消えるのではなく、積み上がって居座る ──
+   一発ごとに光って消えると「伸びている」ことが体感できない。
+   同じ鎖のあいだ数字は残り、段が上がるたびに叩かれ、熱を帯びる。 */
 .chain-flare {
   position: absolute;
-  z-index: 6;
-  top: 50%;
+  z-index: 7;
+  top: 46%;
   right: 4%;
   display: flex;
   align-items: baseline;
   gap: 6px;
-  color: #ffe09a;
+  max-width: 92%;
   opacity: 0;
-  transform: translateY(-50%) translateX(25px) scale(.82);
   pointer-events: none;
-  text-shadow: 0 3px 8px #000, 0 0 20px rgba(232,189,104,.62);
+  color: #fff3d0;
+  text-shadow: 0 3px 10px #000, 0 0 22px rgba(255, 214, 120, .7);
+  transform: translateY(-50%);
+  transition: opacity .12s linear;
 }
-.chain-flare b { font: 900 clamp(36px, 6vw, 72px)/1 Georgia, serif; }
-.chain-flare span { font: 800 12px/1 sans-serif; letter-spacing: .2em; }
-.chain-flare.deep { color: #ff9a5e; text-shadow: 0 3px 8px #000, 0 0 28px rgba(255,81,55,.8); }
-@keyframes chainFlare {
-  0% { opacity: 0; transform: translateY(-50%) translateX(28px) scale(.72); }
-  22%, 72% { opacity: 1; transform: translateY(-50%) translateX(0) scale(1); }
-  100% { opacity: 0; transform: translateY(-58%) translateX(-8px) scale(1.08); }
+.chain-flare .chain-label { font: 800 11px/1 sans-serif; letter-spacing: .28em; opacity: .85; }
+.chain-flare b { position: relative; font: 900 clamp(52px, 9vw, 108px)/1 Georgia, serif; }
+/* 数字の背後に発光の芯。数字だけだと段が上がっても「熱」が出ない。 */
+.chain-flare::before {
+  content: ""; position: absolute; right: -6%; top: 50%;
+  width: 30vmin; height: 30vmin; margin-top: -15vmin;
+  border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, currentColor 0%, transparent 66%);
+  opacity: .22;
 }
-.chain-flare.show { animation: chainFlare .82s ease-out; }
+.chain-flare.t4::before { opacity: .32; }
+.chain-flare.t5::before { opacity: .42; }
+.chain-flare .chain-mult { font: 900 clamp(16px, 3vw, 34px)/1 Georgia, serif; font-style: normal; }
+/* 狭い画面では「!!」が画面外へ出るので、数字ごと内側へ寄せる。 */
+@media (max-width: 560px) {
+  .chain-flare { right: 6%; top: 30%; }
+  .chain-flare b { font-size: clamp(44px, 13vw, 64px); }
+}
+.chain-flare .chain-rungs { position: absolute; top: 100%; right: 0; display: flex; gap: 3px; margin-top: 4px; }
+.chain-flare .chain-rungs i {
+  width: 12px; height: 5px; border-radius: 2px;
+  background: currentColor; box-shadow: 0 0 8px currentColor;
+  animation: chainRung .38s ease-out both;
+}
+@keyframes chainRung { from { opacity: 0; transform: translateY(-6px) scaleX(.2); } to { opacity: .9; transform: none; } }
+
+.chain-flare.live { opacity: 1; }
+/* 段が上がるほど色温度が上がる。白 → 黄 → 橙 → 赤。 */
+.chain-flare.t2 { color: #fff3d0; }
+.chain-flare.t3 { color: #ffd166; text-shadow: 0 3px 10px #000, 0 0 26px rgba(255, 190, 70, .85); }
+.chain-flare.t4 { color: #ff9a4d; text-shadow: 0 3px 12px #000, 0 0 34px rgba(255, 120, 40, .9); }
+.chain-flare.t5 { color: #ff5b47; text-shadow: 0 3px 14px #000, 0 0 44px rgba(255, 60, 40, .95); }
+
+/* 段が増えた瞬間に数字を叩く */
+@keyframes chainBump {
+  0%   { transform: translateY(-50%) scale(1); }
+  28%  { transform: translateY(-50%) scale(1.34); }
+  100% { transform: translateY(-50%) scale(1); }
+}
+.chain-flare.bump { animation: chainBump var(--chain-bump, .42s) cubic-bezier(.2, 1.6, .3, 1); }
+
+/* 鎖が途切れたら「×N」で締める。締めがないと伸びた実感が残らない。 */
+@keyframes chainSettle {
+  0%   { opacity: 1; transform: translateY(-50%) scale(1); }
+  22%  { opacity: 1; transform: translateY(-50%) scale(1.5); }
+  100% { opacity: 0; transform: translateY(-64%) scale(1.62); }
+}
+.chain-flare.settle { opacity: 1; animation: chainSettle var(--chain-settle, .76s) ease-out forwards; }
+.chain-flare.settle .chain-label::after { content: " \00d7"; }
+
+/* 連鎖が深いほど戦場そのものが焼ける */
+.game-scene-battle .scene.heat-1 { box-shadow: inset 0 0 70px rgba(255, 190, 90, .18); }
+.game-scene-battle .scene.heat-2 { box-shadow: inset 0 0 100px rgba(255, 140, 60, .3); }
+.game-scene-battle .scene.heat-3 { box-shadow: inset 0 0 140px rgba(255, 70, 45, .42); }
+.scene.heat-1, .scene.heat-2, .scene.heat-3 { transition: box-shadow .18s linear; }
 .game-scene-battle .scene-band {
   width: 100%;
   min-height: 150px;
@@ -2395,4 +2453,296 @@ button.primary::first-letter { color: var(--gold); }
 .aptitudes .apt-appetite { border-color: rgba(230, 140, 140, 0.4); color: #e9b4b4; }
 .aptitudes .apt-appetite.none { border-color: rgba(180, 180, 200, 0.35); color: #b9b9cc; }
 .aptitudes .apt-note { font-size: 11px; color: #9a94ac; }
+
+/* 食料は在庫より収支が読めないと判断できない。HUDと採用画面で同じ言い方をする。 */
+.hud .food small { font-size: 11px; font-weight: normal; margin-left: 4px; }
+.hud .food .food-ok { color: #8ed9a6; opacity: .85; }
+.hud .food .food-warn { color: #ff9a9a; }
+.aptitudes .apt-appetite small { font-size: 10px; opacity: .75; margin-left: 2px; }
+.hire-food {
+  font-size: 12px; color: #b8e6bf; margin-bottom: 6px;
+  padding: 3px 7px; border-radius: 3px;
+  border: 1px solid rgba(140, 220, 150, .35); background: rgba(140, 220, 150, .07);
+}
+.hire-food.warn {
+  color: #ff9a9a; border-color: rgba(230, 140, 140, .45); background: rgba(230, 140, 140, .08);
+}
+.game-scene-recruit .hire-food { color: #28603b; border-color: #4d815c; background: rgba(77,129,92,.12); }
+.game-scene-recruit .hire-food.warn { color: #853f3f; border-color: #a46161; background: rgba(164,97,97,.12); }
 .department-overview .warn b { color: #ff9a9a; }
+
+/* 宴：余剰食料の使い道。備蓄が積み上がるだけの資源だと判断が生まれない。 */
+.feast-panel .feast-ready {
+  font-size: 12px; color: #f2dc9a;
+  padding: 5px 8px; border-radius: 3px;
+  border: 1px solid rgba(240, 210, 120, .45); background: rgba(240, 210, 120, .08);
+}
+.feast-panel h3 .muted { font-size: 12px; font-weight: normal; }
+
+/* 飢餓の連鎖には出口がある。見えていないと、また「不足＝詰み」に戻る。 */
+.hunger-streak {
+  margin-top: 6px; font-size: 12px; color: #e9b4b4;
+  padding: 4px 8px; border-radius: 3px;
+  border: 1px solid rgba(230, 140, 140, .4); background: rgba(230, 140, 140, .08);
+}
+.hunger-streak b { color: #ffd0d0; }
+
+/* 指名求人：条件を出して求人し直す。給与方針の3択と同じ見え方に揃える。 */
+.brief-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; margin-top: 8px; }
+.brief-option {
+  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
+  padding: 7px 9px; text-align: left; line-height: 1.35;
+}
+.brief-option .brief-title { font-weight: bold; }
+.brief-option .brief-note { font-size: 11px; opacity: .8; white-space: normal; }
+.brief-option.selected { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(232,189,104,.35); }
+
+/* ── 全画面演出（burst）──────────────────────────
+   見せ場だけに使う。《魔王軍完成》と余剰100%以上のOVERKILL。
+   集中線→光輪→巨大な文字→積んだ札、の順に立ち上げる。
+   設計憲法 第3節に従い、段数（.s2〜.s4）が上がるほど濃く・長くなる。 */
+.screen-flash {
+  position: absolute; inset: 0; z-index: 9;
+  background: #fff; opacity: 0; pointer-events: none;
+}
+@keyframes flashSoft { 0% { opacity: 0; } 12% { opacity: .34; } 100% { opacity: 0; } }
+@keyframes flashHard { 0% { opacity: 0; } 8% { opacity: .82; } 100% { opacity: 0; } }
+.screen-flash.show.soft { animation: flashSoft .26s ease-out; }
+.screen-flash.show.hard { animation: flashHard .42s ease-out; }
+
+.burst {
+  position: absolute; inset: 0; z-index: 8;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; overflow: hidden;
+  --burst-a: #b68cff;
+  --burst-b: #6c33c8;
+}
+.burst.fx-overload { --burst-a: #ffd166; --burst-b: #c8451f; }
+.burst.fx-overkill { --burst-a: #ff8a5e; --burst-b: #8c1d10; }
+
+/* 集中線。放射のグラデーションを回して「引き込む」 */
+/* 集中線は白ではなく効果色で。灰色の線だと「煙」に見えて熱が出ない。 */
+.burst-rays {
+  position: absolute; inset: -40%;
+  background: repeating-conic-gradient(from 0deg,
+    var(--burst-a) 0deg 1.1deg,
+    rgba(255,255,255,.5) 1.1deg 1.7deg,
+    rgba(255,255,255,0) 1.7deg 6deg);
+  -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 8%, #000 46%, #000 100%);
+  mask-image: radial-gradient(circle at 50% 50%, transparent 8%, #000 46%, #000 100%);
+  opacity: 0;
+}
+.burst-ring {
+  position: absolute; left: 50%; top: 50%;
+  width: 26vmin; height: 26vmin; margin: -13vmin 0 0 -13vmin;
+  border-radius: 50%;
+  border: 3px solid var(--burst-a);
+  box-shadow: 0 0 40px var(--burst-a), inset 0 0 40px var(--burst-a);
+  opacity: 0;
+}
+/* 遅れて広がる二枚目の衝撃波。1枚だと「輪が出た」で終わり、爆発に見えない。 */
+.burst-ring::after {
+  content: ""; position: absolute; inset: -6px;
+  border-radius: 50%; border: 2px solid rgba(255,255,255,.75);
+  opacity: 0;
+}
+.burst-copy {
+  position: relative; text-align: center; padding: 0 14px;
+  transform: scale(.7); opacity: 0;
+}
+.burst-kicker {
+  display: block; font: 800 clamp(10px, 1.6vw, 13px)/1 sans-serif;
+  letter-spacing: .42em; color: var(--burst-a); margin-bottom: 4px;
+}
+.burst-copy b {
+  display: block;
+  font: 900 clamp(38px, 9vw, 84px)/1.05 Georgia, "Yu Mincho", serif;
+  letter-spacing: .06em; color: #fff;
+  text-shadow: 0 0 6px var(--burst-a), 0 4px 0 var(--burst-b),
+    0 6px 26px rgba(0,0,0,.85), 0 0 60px var(--burst-a);
+}
+.burst-desc {
+  display: block; margin-top: 6px;
+  font: 600 clamp(11px, 1.8vw, 15px)/1.4 sans-serif; color: #ffeccd;
+  text-shadow: 0 2px 8px #000;
+}
+/* 積んだ札を1枚ずつ立てる。何で到達したかが読めると自分の手柄になる。 */
+.burst-stack { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; margin-top: 10px; }
+.burst-stack span {
+  font: 700 clamp(10px, 1.5vw, 13px)/1 sans-serif;
+  padding: 4px 9px; border-radius: 2px; opacity: 0;
+  color: #fff8e6; background: rgba(0,0,0,.5);
+  border: 1px solid var(--burst-a);
+  box-shadow: 0 0 14px rgba(0,0,0,.6), inset 0 0 12px rgba(255,255,255,.08);
+  animation-name: burstChip; animation-fill-mode: both; animation-timing-function: cubic-bezier(.2,1.5,.3,1);
+}
+@keyframes burstChip {
+  0%   { opacity: 0; transform: translateY(10px) scale(.7) rotate(-4deg); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes burstIn {
+  0%   { opacity: 0; }
+  6%   { opacity: 1; }
+  86%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes burstRays {
+  0%   { opacity: 0; transform: rotate(0deg) scale(1.35); }
+  14%  { opacity: .9; }
+  100% { opacity: 0; transform: rotate(26deg) scale(1); }
+}
+@keyframes burstRing {
+  0%   { opacity: 0; transform: scale(.25); }
+  16%  { opacity: 1; }
+  100% { opacity: 0; transform: scale(3.2); }
+}
+@keyframes burstCopy {
+  0%   { opacity: 0; transform: scale(.62) rotate(-2deg); }
+  14%  { opacity: 1; transform: scale(1.14) rotate(0deg); }
+  26%  { transform: scale(1); }
+  84%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.06); }
+}
+.burst.show { animation: burstIn var(--burst-life, 1.2s) linear; }
+.burst.show { background: radial-gradient(circle at 50% 50%, rgba(0,0,0,.42), rgba(0,0,0,.86)); }
+.burst.show .burst-rays { animation: burstRays var(--burst-life, 1.2s) ease-out; }
+.burst.show .burst-ring { animation: burstRing var(--burst-life, 1.2s) ease-out; }
+.burst.show .burst-ring::after { animation: burstRing var(--burst-life, 1.2s) ease-out .12s; }
+.burst.show .burst-copy { animation: burstCopy var(--burst-life, 1.2s) ease-out; }
+/* 段が上がるほど濃く。s4は光輪が二重になる。 */
+.burst.s3 .burst-ring { border-width: 4px; }
+.burst.s4 .burst-ring { border-width: 5px; box-shadow: 0 0 60px var(--burst-a), inset 0 0 60px var(--burst-a), 0 0 0 14px rgba(255,255,255,.06); }
+.burst.s4 .burst-copy b { font-size: clamp(44px, 11vw, 104px); }
+
+/* 重なった帯：2枚目・3枚目は高く・大きく */
+.cutin.stack-2 b { font-size: 22px; }
+.cutin.stack-3 { padding: 14px; }
+.cutin.stack-3 b { font-size: 26px; letter-spacing: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .burst.show, .burst.show .burst-rays, .burst.show .burst-ring, .burst.show .burst-copy,
+  .burst-stack span, .screen-flash.show.soft, .screen-flash.show.hard,
+  .chain-flare.bump, .chain-flare.settle { animation: none; }
+  .burst.show { opacity: 1; }
+  .burst.show .burst-copy { opacity: 1; transform: none; }
+  .burst-stack span { opacity: 1; transform: none; }
+  .chain-flare.settle { opacity: 1; }
+}
+
+/* 伝播の稲妻。撃破の余剰が次の敵へ「走る」ことを見せる。 */
+.chain-bolt {
+  position: absolute;
+  height: 5px;
+  transform-origin: 0 50%;
+  border-radius: 3px;
+  pointer-events: none;
+  z-index: 6;
+  background: linear-gradient(90deg, rgba(255,255,255,0), #fff 12%, #ffd166 46%, #ff7a3c 82%, rgba(255,122,60,0));
+  box-shadow: 0 0 14px #ffb347, 0 0 34px rgba(255,90,45,.85);
+  animation-name: chainBolt; animation-timing-function: cubic-bezier(.15,.9,.25,1); animation-fill-mode: both;
+}
+.chain-bolt.d2 { height: 7px; }
+.chain-bolt.d3 { height: 9px; }
+.chain-bolt.d4 { height: 11px; box-shadow: 0 0 20px #fff2a9, 0 0 52px rgba(255,60,40,.95); }
+@keyframes chainBolt {
+  0%   { opacity: 0; clip-path: inset(0 100% 0 0); }
+  22%  { opacity: 1; clip-path: inset(0 0 0 0); }
+  62%  { opacity: 1; clip-path: inset(0 0 0 0); }
+  100% { opacity: 0; clip-path: inset(0 0 0 82%); }
+}
+@media (prefers-reduced-motion: reduce) { .chain-bolt { display: none; } }
+
+/* 全画面演出のあいだ、戦場ごとわずかに寄る。画面が近づくと圧が出る。 */
+@keyframes sceneZoom {
+  0%   { transform: scale(1); }
+  10%  { transform: scale(1.055); }
+  78%  { transform: scale(1.035); }
+  100% { transform: scale(1); }
+}
+.scene.zoomed { animation: sceneZoom var(--burst-life, 1.2s) ease-out; }
+@media (prefers-reduced-motion: reduce) { .scene.zoomed { animation: none; } }
+
+/* ── 魔王軍の戦意 ──────────────────────────────
+   OVERKILLの見返りを常に画面へ出す。「いま何倍で殴っているか」が読めないと、
+   連鎖しても強くなった実感が出ない（=ふつうの戦闘に見える）。 */
+.morale {
+  position: absolute;
+  z-index: 6;
+  left: 3%;
+  top: 46%;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 6px 10px 7px;
+  border-radius: 3px;
+  pointer-events: none;
+  color: #d8d2e6;
+  background: rgba(12, 8, 18, .62);
+  border: 1px solid rgba(255, 255, 255, .14);
+  transition: color .2s linear, border-color .2s linear, box-shadow .2s linear;
+}
+.morale-label { font: 700 9px/1 sans-serif; letter-spacing: .22em; opacity: .8; }
+.morale b { font: 900 clamp(20px, 2.6vw, 30px)/1 Georgia, serif; }
+.morale-bar { width: clamp(64px, 9vw, 108px); height: 4px; border-radius: 2px; background: rgba(255,255,255,.16); overflow: hidden; }
+.morale-bar i { display: block; height: 100%; width: 100%; background: currentColor; box-shadow: 0 0 10px currentColor; transform: scaleX(0); transform-origin: left; transition: transform .25s ease-out; }
+.morale.lit { color: #ffe6a6; border-color: rgba(255, 209, 102, .5); }
+.morale.m2 { color: #ffb14d; border-color: rgba(255, 150, 60, .6); box-shadow: 0 0 20px rgba(255, 140, 50, .3); }
+.morale.m3 { color: #ff6a45; border-color: rgba(255, 90, 60, .75); box-shadow: 0 0 30px rgba(255, 70, 45, .45); }
+.morale b { text-shadow: 0 2px 8px #000, 0 0 18px currentColor; }
+
+@keyframes moraleBump {
+  0%   { transform: translateY(-50%) scale(1); }
+  30%  { transform: translateY(-50%) scale(1.16); }
+  100% { transform: translateY(-50%) scale(1); }
+}
+.morale.bump { animation: moraleBump var(--morale-bump, .42s) cubic-bezier(.2,1.6,.3,1); }
+
+.morale-gain {
+  position: absolute; left: 100%; top: 4px; margin-left: 6px;
+  font: 900 clamp(13px, 1.8vw, 18px)/1 Georgia, serif; white-space: nowrap;
+  opacity: 0; color: #fff3c4; text-shadow: 0 2px 8px #000;
+}
+@keyframes moraleGain {
+  0%   { opacity: 0; transform: translateY(6px) scale(.8); }
+  22%  { opacity: 1; transform: translateY(-2px) scale(1.15); }
+  70%  { opacity: 1; transform: translateY(-8px) scale(1); }
+  100% { opacity: 0; transform: translateY(-18px) scale(1); }
+}
+.morale-gain.show { animation: moraleGain .9s ease-out; }
+
+@media (max-width: 560px) {
+  .morale { left: 4%; top: 26%; padding: 4px 7px 5px; }
+  .morale b { font-size: 18px; }
+  .morale-bar { width: 62px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .morale.bump, .morale-gain.show { animation: none; }
+  .morale-gain { opacity: 1; }
+}
+
+/* 連鎖が深いほど・戦意が高いほど、ダメージ数字そのものを大きく出す。
+   「爆発力が上がった」を伝えるのに一番直接的な信号は、でかい数字。 */
+.fnum.surge { font-weight: 900; }
+.fnum.surge.s1 { font-size: 1.35em; color: #ffe08a; text-shadow: 0 2px 8px #000, 0 0 16px rgba(255,200,90,.8); }
+.fnum.surge.s2 { font-size: 1.75em; color: #ffab4d; text-shadow: 0 2px 10px #000, 0 0 24px rgba(255,150,60,.9); }
+.fnum.surge.s3 { font-size: 2.2em; color: #ff6a45; text-shadow: 0 3px 12px #000, 0 0 34px rgba(255,80,50,.95); }
+
+/* 因果は戦場の外に固定し、人物・HP・CHAIN数字を覆わない。 */
+.chain-story {
+  min-height: 64px; box-sizing: border-box; padding: 9px 14px;
+  border: 1px solid #75552e; border-bottom: 0;
+  background: linear-gradient(110deg, #2c211c, #17131d);
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+}
+.chain-origin { color: #d5ba87; font-size: 12px; }
+.chain-story b { color: #fff0c5; font-size: 14px; overflow-wrap: anywhere; }
+.chain-bolt.relay { background: #ffe99c; box-shadow: 0 0 14px #ffd46c; height: 4px; }
+.scene.fx-loot .scene-fx {
+  background: radial-gradient(ellipse at 25% 65%, rgba(255,201,80,.32), transparent 65%);
+}
+.chain-credit { padding: 8px 10px; border-left: 3px solid #d6aa60; background: rgba(214,170,96,.08); }
+@media (max-width: 700px) {
+  .chain-story { min-height: 82px; padding: 8px 10px; }
+  .chain-story b { font-size: 12px; line-height: 1.5; }
+}
+@media (prefers-reduced-motion: reduce) { .morale-bar i { transition: none; } }
