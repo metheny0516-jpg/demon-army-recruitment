@@ -1487,6 +1487,12 @@ const BattleScene = {
     this.paused = false;
     this.resultPending = null;
     this.stop();
+    // ファンファーレ（Sound）のあいだ BGM は止めてある。区切りが済んだら決着の場面曲へ切り替える。
+    // 通常再生もスキップもここを通るので、場面名が battle のまま残らない。
+    const result = (this.timeline || []).find(e => e.type === "result");
+    if (result && typeof Music !== "undefined" && typeof Game !== "undefined" && Game.state) {
+      Music.update(Game.state, { scene: result.victory ? "victory" : "defeat" });
+    }
     const pause = document.getElementById("pause-btn");
     if (pause) pause.disabled = true;
     const btn = document.getElementById("next-btn");
