@@ -29,8 +29,8 @@ assert(attack.eventId && attack.chainId === attack.eventId && attack.chainDepth 
   '通常攻撃が因果チェーンの起点になる');
 assert(death.parentEventId === attack.eventId && death.chainId === attack.chainId && death.chainDepth === 2,
   '撃破による死亡が攻撃の子イベントになる');
-assert(result.chainSummary.maxChain === 2 && result.chainSummary.chainCount === 1,
-  '結果から最大CHAINとチェーン数を集計する');
+assert(result.chainSummary.maxChain === 3 && result.chainSummary.chainCount === 1,
+  '攻撃→OVERKILL→戦意まで含めて最大CHAINとチェーン数を集計する');
 
 result = Battle.simulate(
   [make('火球使い', 'player', { atk: 10, spd: 10, traits: ['fireball'] })],

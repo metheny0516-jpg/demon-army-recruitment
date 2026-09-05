@@ -61,7 +61,7 @@ Game.state.roster.forEach(m => { m.loyalty = 90; });
 const starving = Game.prepareBattleRations([]);
 Game.processDepartments({ foodReward: 0, materialReward: 0 }, [], undefined, starving);
 assert(Game.state.lastDepartmentReport.foodShortage === 5, '戦闘前の糧食不足を戦後報告へ引き継ぐ');
-assert(Game.state.roster.every(m => m.loyalty === 66), '戦闘糧食不足にも既存の忠誠低下上限を適用する');
+assert(Game.state.roster.every(m => m.loyalty === 72), '糧食5不足にも改修後の忠誠低下上限18を適用する');
 
 Game.state = { roster: [monster(9, 'ogre', '旧オーガ', ['brute'], 2)], applicants: [], activeUids: [9] };
 Game.migrateState();

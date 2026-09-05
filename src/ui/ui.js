@@ -295,6 +295,7 @@ const UI = {
     // 数字だけでは「CHAIN」が何を指すのか伝わらない。経路の上に一行置いて、
     // 「この芋づるの段数が最大CHAINだ」と読めるようにする（説明画面は作らない）。
     const steps = (chain && chain.deepest && chain.deepest.steps) || [];
+    const originName = steps[0] && steps[0].actorName;
     const path = steps.length >= 2
       ? `<div class="chain-caption">いちばん長くつながった連鎖（${steps.length}段）</div>
          ${Game.state && Game.state.generation === 1 && Game.state.turn <= 2 ? `<p class="first-guide">モルモ：これがCHAIN、能力の連鎖デス。矢印の順に、誰の働きが次の能力を動かしたかを追ってみてくださいネ。</p>` : ""}
@@ -313,6 +314,7 @@ const UI = {
         <div><b>${maxChain}</b><span>最大CHAIN</span></div>
         <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>
       </div>
+      ${originName ? `<p class="chain-credit">この連鎖の起点は <b>${U.esc(originName)}</b>。${U.esc(steps[steps.length - 1].label)}までつながった。</p>` : ""}
       ${path}
       ${details.length ? `<div class="muted">${details.join("　/　")}</div>` : ""}
     </div>`;

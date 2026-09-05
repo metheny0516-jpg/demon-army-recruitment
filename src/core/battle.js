@@ -473,19 +473,25 @@ const Battle = {
         if (tr && tr.postAttack && target) tr.postAttack(post);
       }
       if (triggeredEvents.length) {
-        const reaction = {
-          attacker: unit, events: triggeredEvents,
-          extraAction: (mult, parentEvent, label) => {
-            const trigger = emitCausal("trait_trigger", {
-              sourceId: unit.id, traitId: "greedy", name: label, emphasis: 2,
-              text: `　${unit.name}の【${label}】 金貨に目がくらみ追加行動！`, cls: "trait"
-            }, parentEvent);
-            act(unit, allies, enemies, round, { mult, parentEvent: trigger, label, isExtra: true });
+        // 金貨は軍団の成果。盗む役と反応する役を別の人材で組める。
+        // 各人の greedyChains が再帰に入る前に使用済みになるため、
+        // 追加攻撃で別の金貨が出ても、同じ鎖で同じ人は二度動かない。
+        for (const reactor of allies) {
+          if (!reactor.alive || !enemies.some(e => e.alive)) continue;
+          const reaction = {
+            attacker: reactor, events: triggeredEvents,
+            extraAction: (mult, parentEvent, label) => {
+              const trigger = emitCausal("trait_trigger", {
+                sourceId: reactor.id, traitId: "greedy", name: label, emphasis: 2,
+                text: `　${reactor.name}の【${label}】 ${unit.name}の金貨獲得に反応、追加行動！`, cls: "trait"
+              }, parentEvent);
+              act(reactor, allies, enemies, round, { mult, parentEvent: trigger, label, isExtra: true });
+            }
+          };
+          for (const tid of reactor.traits) {
+            const tr = TRAITS[tid];
+            if (tr && tr.onTriggeredEvents) tr.onTriggeredEvents(reaction);
           }
-        };
-        for (const tid of unit.traits) {
-          const tr = TRAITS[tid];
-          if (tr && tr.onTriggeredEvents) tr.onTriggeredEvents(reaction);
         }
       }
     };
@@ -725,9 +731,11 @@ const Battle = {
 
     const byId = new Map(events.filter(e => e.eventId).map(e => [e.eventId, e]));
     const sides = new Map();
+    const names = new Map();
     const start = (timeline || []).find(e => e.type === "battle_start");
     for (const unit of [...((start && start.player) || []), ...((start && start.enemy) || [])]) {
       sides.set(unit.id, unit.side);
+      names.set(unit.id, unit.name);
     }
 
     const steps = [];
@@ -739,7 +747,8 @@ const Battle = {
         eventId: current.eventId || null,
         type: current.type,
         depth: current.chainDepth || 1,
-        label: this.chainStepLabel(current, sides)
+        label: this.chainStepLabel(current, sides),
+        actorName: names.get(current.sourceId || current.fromId || current.unitId) || null
       });
       current = current.parentEventId ? byId.get(current.parentEventId) : null;
     }

@@ -88,7 +88,8 @@ const undeadA = player(7, '骸骨A', [], 10, 1, 12, ['undead']);
 const undeadB = player(8, '骸骨B', [], 999, 1, 2, ['undead']);
 const lich = player(9, '死霊術師', ['necromancy'], 999, 1, 1, ['caster']);
 lich.race = '死霊術師';
-result = Battle.simulate([undeadA, undeadB, lich], [enemy('雑兵3', 30, 30, 5)]);
+result = Battle.simulate([undeadA, undeadB, lich], [enemy('雑兵3', 30, 30, 5)],
+  { synergyPool: [undeadA, undeadB, lich, player(99, '控えの骨', [], 20, 1, 1, ['undead'])] });
 const fullChain = result.deathChains.find(c => c.name === '骸骨A');
 assert(result.activeSynergies.includes('死の軍勢') && fullChain && fullChain.steps[1] === '死霊術で蘇生（全快）',
   '死の軍勢で全快した蘇生には（全快）を付ける');

@@ -61,8 +61,8 @@ const victims = [make('標的A', 100, 1, 'enemy'), make('標的B', 50, 1, 'enemy
 const chain = Battle.simulate([butcher], victims);
 const spreads = chain.timeline.filter(e => e.type === 'splash' && e.label === '連鎖虐殺');
 assert(spreads.length === 3, '連鎖虐殺の伝播を最大3体で停止する');
-assert(spreads[0].dmg === 270 && spreads[1].dmg === 66 && spreads[2].dmg === 14,
-  '各撃破の余剰ダメージ30%を次の敵へ渡す');
+assert(spreads[0].dmg === 270 && spreads[1].dmg === 88 && spreads[2].dmg === 34,
+  '連鎖虐殺は余剰の30%→40%→50%を次の敵へ渡す');
 assert(chain.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === 'chain_massacre').length === 3,
   'OVERKILLごとに連鎖虐殺の発火理由を記録する');
 assert(chain.chainSummary.maxChain >= 7, '攻撃から複数のOVERKILL伝播が一つの深いCHAINになる');

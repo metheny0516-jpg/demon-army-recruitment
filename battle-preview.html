@@ -12,6 +12,7 @@
   <button id="replay">▶ 1対1を再生</button>
   <button id="crowd">5対5を確認</button>
   <button id="spectacle" style="font-weight:bold">🔥 シナジーと連鎖の演出を確認</button>
+  <button id="loot-relay" style="font-weight:bold">💰 略奪から仲間へ連鎖（実戦計算）</button>
   <button id="ranged">弓と魔法を確認</button>
   <button id="arrival">召喚と復活を確認</button>
   <button id="species">スライム・骸骨兵を確認</button>
@@ -29,6 +30,12 @@
 <div id="app"></div>
 <script src="src/data/portraits.js"></script>
 <script src="src/core/util.js"></script>
+<script src="src/data/traits.js"></script>
+<script src="src/data/synergies.js"></script>
+<script src="src/data/battle_happenings.js"></script>
+<script src="src/core/synergy.js"></script>
+<script src="src/core/battle.js"></script>
+<script src="src/ui/sound.js"></script>
 <script src="src/ui/ui.js"></script>
 <script>const Game = { state: { generation: 1 }, MAX_CONQUEST: 8 };</script>
 <script src="src/ui/battle_scene.js"></script>
@@ -36,7 +43,9 @@
 UI.init(document.getElementById('app'));
 BattleScene.loadSpeed = () => {};
 BattleScene.saveSpeed = () => {};
+let replayCurrent = () => replay();
 function replay(count = 1, ranged = false, species = false) {
+  replayCurrent = () => replay(count, ranged, species);
   const player = Array.from({ length: count }, (_, i) => ({ id: 'p' + i, tplId: 'goblin', side: 'player', name: 'ゴブ太' + (i || ''), icon: '👺', hp: 30, maxHp: 30 }));
   const enemy = Array.from({ length: count }, (_, i) => ({ id: 'e' + i, side: 'enemy', name: '剣士見習い' + (i || ''), icon: '🗡', hp: 24, maxHp: 24 }));
   if (ranged) {
@@ -82,6 +91,7 @@ document.getElementById('orc').onclick = () => replay(1, false, 'orc');
 document.getElementById('swordsman').onclick = () => replay(1, false, 'swordsman');
 for (const id of ['archer', 'cleric', 'sage', 'mage', 'imp', 'necromancer', 'kobold', 'zombie', 'ogre', 'king_slime', 'shield', 'slinger', 'axeman', 'cavalry', 'commander', 'hero']) document.getElementById(id).onclick = () => replay(1, false, id);
 function replayArrival() {
+  replayCurrent = replayArrival;
   UI.set(BattleScene.shell({ stage: 1, army: '演出確認', region: '召喚・復活' }));
   const player = [{ id: 'p0', tplId: 'goblin', side: 'player', name: 'ゴブ太', icon: '👺', hp: 30, maxHp: 30 }];
   const enemy = [{ id: 'e0', side: 'enemy', name: '剣士見習い', icon: '🗡', hp: 24, maxHp: 24 }];
@@ -101,6 +111,7 @@ document.getElementById('arrival').onclick = replayArrival;
 // シナジーの重ねがけ→魔王軍完成→OVERKILL→連鎖伝播、という「見せ場」だけを通しで見る。
 // 実プレイでは揃わないと出ないので、演出の調整はここで行う。
 function replaySpectacle() {
+  replayCurrent = replaySpectacle;
   const player = Array.from({ length: 3 }, (_, i) => ({ id: 'p' + i, tplId: 'goblin', side: 'player', name: 'ゴブ太' + (i || ''), icon: '👺', hp: 40, maxHp: 40 }));
   const enemy = Array.from({ length: 5 }, (_, i) => ({ id: 'e' + i, side: 'enemy', name: '剣士見習い' + (i || ''), icon: '🗡', hp: 20, maxHp: 20 }));
   let n = 0;
@@ -128,8 +139,36 @@ function replaySpectacle() {
   BattleScene.play(events, () => { document.getElementById('next-btn').textContent = 'もう一度見る'; });
 }
 document.getElementById('spectacle').onclick = replaySpectacle;
-UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replay(); });
-replay();
+function replayLootRelay() {
+  replayCurrent = replayLootRelay;
+  BattleScene.stop();
+  Sound.unlock();
+  const make = (name, tplId, traits, atk, spd, race = 'ゴブリン') => Battle.makeUnit({
+    name, tplId, race, traits, atk, spd, hp: 80, def: 0, salary: 2, loyalty: 100, tags: []
+  }, 'player');
+  const player = [make('グルグ', 'goblin', ['pickpocket'], 6, 30),
+    make('欲張りギギ', 'goblin', ['pickpocket', 'greedy'], 18, 20),
+    make('大槌のボル', 'ogre', ['greedy', 'chain_massacre'], 90, 8, 'オーガ')];
+  const pool = [...player, make('会計係', 'goblin', [], 1, 1), make('炊事係', 'goblin', [], 1, 1)];
+  const enemy = Array.from({length: 4}, (_, i) => Battle.makeUnit({
+    name: ['斥候', '衛兵', '後衛', '隊長'][i], icon: '🗡', hp: [12, 25, 18, 45][i],
+    atk: 3, def: 0, spd: 1, traits: [], tags: [], loyalty: 100
+  }, 'enemy'));
+  const old = { rand: U.rand, chance: U.chance, pick: U.pick };
+  let result;
+  try {
+    U.rand = () => .5; U.chance = p => p >= .5; U.pick = a => a[0];
+    result = Battle.simulate(player, enemy, { synergyPool: pool, extortionLedger: true });
+  } finally { Object.assign(U, old); }
+  UI.set(BattleScene.shell({stage: 4, army: '王国巡回隊', region: '略奪の連鎖・実戦計算'}));
+  BattleScene.play(result.timeline, () => { document.getElementById('next-btn').textContent = 'もう一度見る'; });
+  document.getElementById('scene').scrollIntoView({block: 'center'});
+  return result;
+}
+document.getElementById('loot-relay').onclick = replayLootRelay;
+UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'pausebattle') BattleScene.togglePause(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replayCurrent(); });
+Sound.load();
+if (location.hash === '#loot') replayLootRelay(); else replay();
 </script>
 </body>
 </html>

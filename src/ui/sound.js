@@ -331,9 +331,12 @@ const Sound = {
         this.chord([82, 123, 165], .72 * pace, { type: "sawtooth", gain: .045, stagger: .05 });
         break;
       case "win":
-        [392, 523, 659, 784].forEach((freq, i) => this.tone(freq, .28 * pace, {
-          type: "triangle", gain: .05, delay: i * .105 * pace
-        }));
+        // 約3.2秒のオリジナル凱旋句。戦闘速度で音程や曲の長さを変えない。
+        [[392,0,.16],[392,.21,.16],[392,.42,.16],[523,.68,.42],
+          [494,1.16,.20],[440,1.42,.20],[494,1.68,.24],[523,2.02,1.1]]
+          .forEach(([freq,delay,duration]) => this.tone(freq,duration,{type:"triangle",gain:.065,delay}));
+        this.chord([196,247,294], .7, {type:"triangle",gain:.018,delay:1.25});
+        this.chord([131,262,330,392], 1.12, {type:"triangle",gain:.022,delay:2.02});
         break;
       case "lose":
         [294, 233, 175, 117].forEach((freq, i) => this.tone(freq, .3 * pace, {

@@ -81,7 +81,7 @@ const TRAITS = {
   },
   greedy: {
     name: "強欲",
-    desc: "戦闘中に金貨を得た連鎖で1回、威力70%の追加攻撃",
+    desc: "味方が金貨獲得：威力70%で追撃（各人、同じ連鎖で1回）",
     links: { reacts: ["金貨獲得"], emits: ["追加攻撃"] },
     onTriggeredEvents(ctx) {
       const gold = ctx.events.find(e => e.type === "resource_gain" && e.resource === "gold");
@@ -209,7 +209,7 @@ const TRAITS = {
   },
   chain_massacre: {
     name: "連鎖虐殺",
-    desc: "100%以上OVERKILLした余剰ダメージの30%を次の敵へ伝播（最大3体）",
+    desc: "100%以上OVERKILL：余剰の30%→40%→50%を次の敵へ伝播（最大3体）",
     links: { reacts: ["OVERKILL"], emits: ["伝播攻撃"] }
   },
   mischief: {

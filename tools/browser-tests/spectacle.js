@@ -63,7 +63,7 @@ const watch = async (page, ms, step) => {
     page.on('pageerror', e => errors.push(e.message));
     await page.goto('file://' + process.env.GAME + '/battle-preview.html');
     await page.evaluate(s => { BattleScene.speed = 1; BattleScene.play(s, () => {}); }, scenario());
-    const seen = await watch(page, 26000, 320);
+    const seen = await watch(page, await page.evaluate(() => BattleScene.pacing.plannedMs + 2000), 320);
 
     assert.ok(seen.cutins.has('ゴブリン軍団') && seen.cutins.has('魔法結社'),
       `通常のシナジーは帯で流れる: ${[...seen.cutins]}`);
@@ -89,7 +89,7 @@ const watch = async (page, ms, step) => {
 
     // 倍速でも同じ見せ場が出る（尺だけ縮む）
     await page.evaluate(s => { BattleScene.speed = 4; BattleScene.play(s, () => {}); }, scenario());
-    const fast = await watch(page, 9000, 200);
+    const fast = await watch(page, await page.evaluate(() => BattleScene.pacing.plannedMs / 4 + 5000), 200);
     assert.ok(fast.burst.includes('魔王軍完成'), 'x4でも魔王軍完成は出る');
     assert.ok(Math.max(0, ...fast.chain) >= 4, `x4でもCHAINは伸びる（最大 ${Math.max(0, ...fast.chain)}）`);
 
@@ -110,7 +110,7 @@ const watch = async (page, ms, step) => {
     const reduced = await browser.newPage({ viewport: { width: 390, height: 760 }, reducedMotion: 'reduce' });
     await reduced.goto('file://' + process.env.GAME + '/battle-preview.html');
     await reduced.evaluate(s => { BattleScene.speed = 1; BattleScene.play(s, () => {}); }, scenario());
-    const calm = await watch(reduced, 22000, 320);
+    const calm = await watch(reduced, await reduced.evaluate(() => BattleScene.pacing.plannedMs + 2000), 320);
     assert.equal(calm.bolts, 0, '低モーションでは稲妻を出さない');
     assert.ok(calm.burst.includes('魔王軍完成'), '低モーションでも何が起きたかは読める');
     await reduced.close();

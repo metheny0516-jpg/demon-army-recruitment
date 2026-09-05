@@ -138,6 +138,19 @@ if (samplePlays < 2) throw new Error(`WAV攻撃音が再生されない: ${sampl
   Sound.playSample = realPlay;
 }
 
+// 勝利曲は倍速にしても最後の和音まで同じ長さで鳴る。
+{
+  const original = Sound.tone;
+  const notes = [];
+  Sound.tone = (freq, duration, options = {}) => notes.push({ freq, duration, delay: options.delay || 0 });
+  Sound.cue('win', {speed: 1});
+  const normal = JSON.stringify(notes);
+  const end = Math.max(...notes.map(n => n.duration + n.delay));
+  notes.length = 0;
+  Sound.cue('win', {speed: 4});
+  if (JSON.stringify(notes) !== normal || end < 3 || end > 3.5) throw new Error('勝利曲の長さが不正');
+  Sound.tone = original;
+}
 Sound.setVolume(0.35);
 if (store.maou_volume !== '0.35') throw new Error('音量を保存できない');
 const beforeMute = started;
