@@ -42,7 +42,27 @@ Game.awardMerit(contribution, notes);
 assert(veteran.merit === 24 && veteran.rankId === 'general', '戦功22で将軍へ昇進');
 assert(Game.state.generalsMade[0].name === veteran.name, '輩出した将軍を魔界史用に記録');
 
-const units = [Battle.makeUnit(veteran, 'player'), Battle.makeUnit({ ...veteran, uid: 100, name: '部下', rankId: 'soldier', salary: 1 }, 'player')];
+// ここから先は「将軍の号令」単体の検査。他のシナジーが混ざると、
+// 1.15 という期待値が何の効果なのか分からなくなる（低賃金大量採用や
+// ゴブリン軍団が乗れば倍率は簡単に変わる）。そこで、
+//   1) 将軍がいない同じ編成では何も発動しないこと
+//   2) 将軍を入れると発動するのが general_command **だけ** であること
+// を先に固定してから倍率を見る。無関係なシナジーが増えたら 2) で落ちる。
+const squadOf = general => [
+  Battle.makeUnit({ ...veteran, rankId: general ? 'general' : 'soldier' }, 'player'),
+  Battle.makeUnit({ ...veteran, uid: 100, name: '部下', rankId: 'soldier', salary: 1 }, 'player')
+];
+
+const plainSquad = squadOf(false);
+const plainActive = Synergy.applyAll(plainSquad);
+assert(plainActive.length === 0,
+  `将軍がいなければ何も発動しない（実際: ${plainActive.map(s => s.id).join(',') || 'なし'}）`);
+assert(plainSquad.every(unit => Math.abs(unit.mods.dmgMult - 1) < 0.001), '号令なしの与ダメージは等倍');
+
+const units = squadOf(true);
 const active = Synergy.applyAll(units);
-assert(active.some(s => s.id === 'general_command'), '将軍の号令が発動');
+assert(active.length === 1 && active[0].id === 'general_command',
+  `将軍の号令だけが発動（実際: ${active.map(s => s.id).join(',') || 'なし'}）`);
 assert(units.every(unit => Math.abs(unit.mods.dmgMult - 1.15) < 0.001), '号令で出撃隊全員の与ダメージ+15%');
+assert(units.length === 2 && units.filter(u => u.rankId === 'general').length === 1,
+  '将軍本人だけでなく部下にも乗る');
