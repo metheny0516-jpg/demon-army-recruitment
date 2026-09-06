@@ -26,7 +26,7 @@ const get = n => { try { return vm.runInContext(n, ctx); } catch (e) { return nu
 const TRAITS = get('TRAITS') || {}, SYNERGIES = get('SYNERGIES') || [], EVENTS = get('EVENTS') || [];
 const HAPPENINGS = get('BATTLE_HAPPENINGS') || [], MISSION_TYPES = get('MISSION_TYPES') || [];
 const DEMON_KINGS = get('DEMON_KINGS') || [], ACHIEVEMENTS = get('ACHIEVEMENTS') || [];
-const PROMOTIONS = get('PROMOTIONS') || get('RANKS') || [], MONSTERS = get('MONSTER_TEMPLATES') || [];
+const PROMOTIONS = get('PROMOTION_RANKS') || [], MONSTERS = get('MONSTER_TEMPLATES') || [];
 const FACILITY_LEVELS = get('FACILITY_LEVELS') || [], BIG_FACILITIES = get('BIG_FACILITIES') || get('FACILITIES') || [];
 
 const RUNS = Number(process.argv[2] || 40);
@@ -119,8 +119,9 @@ for (let run = 0; run < RUNS; run++) {
       for (const m of st.roster) if (m.rankId) bump(count.rank, m.rankId);
     }
     if (st.phase === 'facility') {
-      const opts = (Game.facilityChoices && Game.facilityChoices()) || [];
-      if (opts.length) { bump(count.facility, '(選択)' + opts[run % opts.length].id); Game.chooseFacility(opts[run % opts.length].id); }
+      const opts = get('FACILITIES') || [];
+      const pick = opts[run % Math.max(1, opts.length)];
+      if (pick) { bump(count.facility, '(選択)' + pick.id); Game.chooseFacility(pick.id); }
       else break;
     }
     if (st.phase === 'result') Game.afterResult ? Game.afterResult() : Game.nextRecruit();
@@ -132,7 +133,12 @@ for (let run = 0; run < RUNS; run++) {
     }
     if (st.phase === 'defeat') { if (Game.canRetry && Game.canRetry()) Game.retry(); else break; }
   }
-  for (const a of (st.record && st.record.achievements) || []) bump(count.achievement, a.id || a);
+  // 実績は魔界史（履歴）から後計算する。ラン終了後の履歴で判定し直す。
+  try {
+    const Storage = get('Storage');
+    const history = (Storage && Storage.loadHistory && Storage.loadHistory()) || [];
+    for (const a of ACHIEVEMENTS) { if (a.check(history)) bump(count.achievement, a.id); }
+  } catch (e) {}
 };
 
 const report = (title, all, bag, describe) => {
@@ -145,8 +151,19 @@ const report = (title, all, bag, describe) => {
 };
 
 console.log(`=== ${RUNS}ラン（4戦略×3魔王を巡回）で数えた発火回数 ===`);
+// 効いていても画面に何も出さない特性がある（modTaken/onLethal は自分でイベントを出さない）。
+// 「死んでいる」と「見えない」は別の問題なので、区別できるように印を付ける。
+const hookNames = t => ['modDealt', 'modTaken', 'postAttack', 'onTriggeredEvents', 'onRoundEnd', 'onLethal']
+  .filter(h => typeof (t || {})[h] === 'function');
+const invisible = id => {
+  const hooks = hookNames(TRAITS[id]);
+  if (!hooks.length) return false;                              // フックなし＝battle.jsが構造で発火
+  return hooks.every(h => h === 'modTaken' || h === 'onLethal');  // 発火してもログに出ない
+};
 report('特性（戦闘で実際に効いた回数）', Object.keys(TRAITS), count.trait,
-  id => `${TRAITS[id].name}（採用時に所持 ${count.traitOwned[id] || 0}）`);
+  id => `${TRAITS[id].name}（所持 ${count.traitOwned[id] || 0}）`
+    + (invisible(id) ? '  ※効いても画面に出ない種類' : '')
+    + (hookNames(TRAITS[id]).length === 0 ? '  ※フックなし（battle.js側で発火）' : ''));
 report('シナジー', SYNERGIES.map(s => s.id),
   Object.fromEntries(SYNERGIES.map(s => [s.id, (count.synergy[s.id] || 0) + (count.synergy['(name)' + s.name] || 0)])),
   id => (SYNERGIES.find(s => s.id === id) || {}).name);

@@ -1,0 +1,114 @@
+=== 24ラン（4戦略×3魔王を巡回）で数えた発火回数 ===
+
+■ 特性（戦闘で実際に効いた回数）
+  ☠ 死     0  loyal_dog  忠犬（所持 4）
+  ☠ 死     0  starved  飢餓適応（所持 0）  ※フックなし（battle.js側で発火）
+  ☠ 死     0  tough_skin  硬皮（所持 16）  ※効いても画面に出ない種類
+  ☠ 死     0  slime_body  粘体（所持 25）  ※効いても画面に出ない種類
+  ☠ 死     0  necromancy  死霊術（所持 5）
+  ☠ 死     0  gravekeeper  墓守（所持 5）  ※フックなし（battle.js側で発火）
+  ☠ 死     0  soul_harvest  魂の徴収（所持 5）  ※フックなし（battle.js側で発火）
+  ☠ 死     0  chain_massacre  連鎖虐殺（所持 4）  ※フックなし（battle.js側で発火）
+  ☠ 死     0  guardian_prayer  回復の祈り（所持 0）
+  ☠ 死     0  hero_awaken  覚醒（所持 0）
+  ☠ 死     0  escalate  深追い（所持 7）
+  ☠ 死     0  deep_dread  深淵の恐怖（所持 17）
+  △ 希少     2  hunger_demon  飢餓の悪魔（所持 1）  ※フックなし（battle.js側で発火）
+         8  pack  群れの本能（所持 8）
+        11  bone  白骨（所持 30）  ※効いても画面に出ない種類
+        12  tenacity  執念（所持 44）
+        14  rage_unpaid  血の気（所持 8）
+        26  fireball  火球（所持 10）
+        28  big_eater  大食漢（所持 10）  ※フックなし（battle.js側で発火）
+        34  demon_cook  魔界料理人（所持 6）  ※フックなし（battle.js側で発火）
+        56  brute  怪力（所持 46）
+        64  regen  再生（所持 13）
+        74  chain_toll  歩合（所持 10）  ※フックなし（battle.js側で発火）
+        87  mischief  悪戯（所持 15）
+       120  greedy  強欲（所持 7）
+       180  relay_kick  押し出し（所持 18）  ※フックなし（battle.js側で発火）
+       196  coward  卑怯者（所持 41）
+       244  first_strike  先制（所持 34）
+       268  pickpocket  追い剥ぎ（所持 36）
+
+■ シナジー
+  ☠ 死     0  goblin_horde  ゴブリン軍団
+  △ 希少     2  king_slime  キングスライム
+        10  arcane_circle  魔法結社
+        10  cheap_labor  低賃金大量採用
+        10  elite_few  精鋭主義
+        14  martyr_allowance  殉職手当
+        22  overload  魔王軍完成
+        38  legion_of_dead  死の軍勢
+        42  general_command  将軍の号令
+
+■ ハプニング（城内事件）
+  ☠ 死     0  wage_protest  給与抗議
+  ☠ 死     0  strike_march  ストライキ行進
+  ☠ 死     0  facility_credit  施設完成の功績争い
+  ☠ 死     0  seasoning_disaster  まかないの味付け大失敗
+  ☠ 死     0  iron_ants  鉄アリ発生
+  △ 希少     1  orc_duel  決闘
+  △ 希少     1  surplus_rations  余った食料の行方
+  △ 希少     1  cleaning_dispute  掃除当番論争
+  △ 希少     2  headhunted  勇者軍からの引き抜き
+  △ 希少     2  necro_incident  無断実験
+  △ 希少     2  labor_inspection  労基署の抜き打ち
+  △ 希少     2  overtime_bragging  残業自慢
+  △ 希少     3  kitchen_takeover  食堂占拠
+  △ 希少     3  karoshi  働きすぎた者
+         6  wage_demand  賃上げ要求
+         7  infighting  仲間割れ
+         9  rats  金庫のネズミ
+        10  gambling  深夜の賭博
+        12  welfare  福利厚生の提案
+
+■ 戦場の不祥事
+  △ 希少     3  mutiny  今ここで下剋上
+        10  loaf  露骨なサボり
+        59  strike  戦場ストライキ
+
+■ 魔王命令
+         6  rally  檄を飛ばす
+         6  charge  総員突撃
+        11  advance_pay  その場で支払う
+
+■ 作戦
+        56  raid
+        60  suppress
+        61  invade
+
+■ 給与方針
+        48  withhold
+        53  advance
+        76  regular
+
+■ 階級
+        33  general
+       195  demon_lord
+       275  squad_leader
+       558  soldier
+
+■ 実績
+  ☠ 死     0  conquer_world  魔王らしい仕事
+  ☠ 死     0  castle_complete  城は現場が建てた
+  ☠ 死     0  true_general  伝説の人事記録
+  ☠ 死     0  all_synergies  組織を壊した者
+  △ 希少     2  all_species  魔族雇用に差別なし
+        13  black_employer  魔界労基重点監視
+        22  first_history  歴史の第一頁
+
+■ 種族（採用された回数）
+         5  necromancer  necromancer
+        10  mage  mage
+        10  ogre  ogre
+        13  imp  imp
+        25  slime  slime
+        30  skeleton  skeleton
+        34  kobold  kobold
+        36  goblin  goblin
+        36  orc  orc
+        44  zombie  zombie
+
+■ 施設の発火/選択
+      3  (選択)extortion_ledger
