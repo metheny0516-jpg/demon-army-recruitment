@@ -29,4 +29,5 @@ const EVENT_EXPRESSIONS = {
   goblin: ["surprise", "smirk", "tears"],
   slime: ["surprise", "smirk", "tears"],
   king_slime: ["surprise", "smirk", "tears"],
+  kobold: ["surprise", "smirk", "tears"],
 };
