@@ -33,4 +33,5 @@ const EVENT_EXPRESSIONS = {
   orc: ["surprise", "smirk", "tears"],
   skeleton: ["surprise", "smirk", "tears"],
   zombie: ["surprise", "smirk", "tears"],
+  imp: ["surprise", "smirk", "tears"],
 };
