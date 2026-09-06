@@ -119,26 +119,53 @@ const FORMATIONS = [
             {tpl:'orc', traits:['brute','tough_skin'], deploy:true} ] },
 
   // ── 死霊 ───────────────────────────────
-  { id:'death-entry', line:'死霊', stage:'入口', conquest:2, food:8, facility:null, facilityLevel:0,
-    note:'出撃死霊術師＋前衛。倒れる→蘇る→もう一度働く',
+  { id:'death-entry', line:'死霊', stage:'入口(術師が先頭＝最も狙われる配置)', conquest:2, food:8, facility:null, facilityLevel:0,
+    note:'配置の影響を見るための対照。術師を先頭に置いた場合',
     units:[ {tpl:'necromancer', traits:['necromancy','gravekeeper'], deploy:true},
             {tpl:'zombie', traits:['tenacity'], deploy:true},
             {tpl:'skeleton', traits:['bone'], deploy:true} ] },
-  { id:'death-mid', line:'死霊', stage:'中盤', conquest:4, food:10, facility:null, facilityLevel:0,
-    note:'墓守＋魂の徴収。死亡が魂になり、復帰がアンデッド強化へ',
+  { id:'death-mid', line:'死霊', stage:'中盤(術師が先頭)', conquest:4, food:10, facility:null, facilityLevel:0,
+    note:'配置の対照。術師を先頭に置いた場合',
     units:[ {tpl:'necromancer', traits:['necromancy','gravekeeper'], deploy:true},
             {tpl:'zombie', traits:['tenacity'], deploy:true},
             {tpl:'skeleton', traits:['bone','soul_harvest'], deploy:true},
             {tpl:'skeleton', traits:['bone','tough_skin'], deploy:true} ] },
-  { id:'death-full', line:'死霊', stage:'完成', conquest:6, food:12, facility:'graveyard', facilityLevel:2,
-    note:'戦場の蘇生（出撃死霊術師）＋墓地の召喚（建設部門の死霊術師）。殉職手当で略奪へ橋渡し',
+  { id:'death-full', line:'死霊', stage:'完成(術師が先頭)', conquest:6, food:12, facility:'graveyard', facilityLevel:2,
+    note:'配置の対照。術師を先頭に置いた場合',
     units:[ {tpl:'necromancer', traits:['necromancy','gravekeeper'], deploy:true},
             {tpl:'zombie', traits:['tenacity'], deploy:true},
             {tpl:'skeleton', traits:['bone','soul_harvest'], deploy:true},
             {tpl:'skeleton', traits:['bone','tough_skin'], deploy:true},
             {tpl:'goblin', traits:['coward','greedy'], deploy:true},
             {tpl:'necromancer', traits:['necromancy','gravekeeper'], dept:'construction', deploy:false} ] },
-  { id:'death-full-CTRL', line:'死霊', stage:'対照(出撃死霊術師なし)', conquest:6, food:12, facility:'graveyard', facilityLevel:2,
+  { id:'death-entry-rear', line:'死霊', stage:'入口', conquest:2, food:8, facility:null, facilityLevel:0,
+    note:'出撃死霊術師を後衛へ。前衛が倒れ、蘇生し、その後もう一度働く',
+    units:[ {tpl:'zombie', traits:['tenacity'], deploy:true},
+            {tpl:'skeleton', traits:['bone'], deploy:true},
+            {tpl:'necromancer', traits:['necromancy','gravekeeper'], deploy:true} ] },
+  { id:'death-mid-rear', line:'死霊', stage:'中盤', conquest:4, food:10, facility:null, facilityLevel:0,
+    note:'墓守＋魂の徴収。死亡が魂になり、復帰がアンデッド強化へ（術師は後衛）',
+    units:[ {tpl:'zombie', traits:['tenacity'], deploy:true},
+            {tpl:'skeleton', traits:['bone','tough_skin'], deploy:true},
+            {tpl:'skeleton', traits:['bone','soul_harvest'], deploy:true},
+            {tpl:'necromancer', traits:['necromancy','gravekeeper'], deploy:true} ] },
+  { id:'death-full-rear', line:'死霊', stage:'完成', conquest:6, food:12, facility:'graveyard', facilityLevel:2,
+    note:'戦場の蘇生（出撃術師・後衛）＋墓地の召喚（建設部門の術師）。殉職手当で略奪へ橋渡し',
+    units:[ {tpl:'zombie', traits:['tenacity'], deploy:true},
+            {tpl:'skeleton', traits:['bone','tough_skin'], deploy:true},
+            {tpl:'skeleton', traits:['bone','soul_harvest'], deploy:true},
+            {tpl:'goblin', traits:['coward','greedy'], deploy:true},
+            {tpl:'necromancer', traits:['necromancy','gravekeeper'], deploy:true},
+            {tpl:'necromancer', traits:['necromancy','gravekeeper'], dept:'construction', deploy:false} ] },
+  { id:'death-full-rear-CTRL', line:'死霊', stage:'対照(後衛配置のまま術師だけ差し替え)', conquest:6, food:12, facility:'graveyard', facilityLevel:2,
+    note:'完成(後衛)の術師をオークへ差し替える。配置は同じで、変わるのは1人の中身だけ',
+    units:[ {tpl:'zombie', traits:['tenacity'], deploy:true},
+            {tpl:'skeleton', traits:['bone','tough_skin'], deploy:true},
+            {tpl:'skeleton', traits:['bone','soul_harvest'], deploy:true},
+            {tpl:'goblin', traits:['coward','greedy'], deploy:true},
+            {tpl:'orc', traits:['brute','tough_skin'], deploy:true},
+            {tpl:'necromancer', traits:['necromancy','gravekeeper'], dept:'construction', deploy:false} ] },
+  { id:'death-full-CTRL', line:'死霊', stage:'対照(先頭配置・術師なし)', conquest:6, food:12, facility:'graveyard', facilityLevel:2,
     note:'完成から戦場の死霊術師を抜く。墓地の召喚だけが残ることの確認',
     units:[ {tpl:'orc', traits:['brute','tough_skin'], deploy:true},
             {tpl:'zombie', traits:['tenacity'], deploy:true},
@@ -149,6 +176,7 @@ const FORMATIONS = [
 ];
 
 function setupState(f) {
+  for (const k of Object.keys(store)) delete store[k];   // 試行間で保存状態を独立させる
   Game.newRun();
   const st = Game.state;
   st.conquest = f.conquest;
@@ -175,16 +203,37 @@ function analyze(out, st) {
   const at = pred => tl.findIndex(pred);
   const count = pred => tl.filter(pred).length;
   const goldGain = e => e.type === 'resource_gain' && e.resource === 'gold';
+  const byId = new Map(tl.map(e => [e.eventId, e]));
+  // 親イベントをたどって「この追撃の起点になった金貨イベント」を特定する。
+  // 同じ戦闘に複数の金貨があるとき、名前の集合だけで見ると別人の金貨に反応したことにできてしまう。
+  const originGold = ev => {
+    let cur = ev, guard = 0;
+    while (cur && guard++ < 40) {
+      if (goldGain(cur)) return cur;
+      cur = cur.parentEventId ? byId.get(cur.parentEventId) : null;
+    }
+    return null;
+  };
+  const greedyFires = tl.filter(e => e.type === 'trait_trigger' && e.traitId === 'greedy');
+  // 「金貨を取った人 ≠ 追撃した人」が親子関係で確認できた回数
+  const crossPersonFires = greedyFires.filter(e => {
+    const gold = originGold(e);
+    return gold && gold.sourceId && gold.sourceId !== e.sourceId;
+  }).length;
+
+  // 蘇生を種別へ分ける（設計書 3.3「一度耐える／自己蘇生／他者蘇生／召喚」）
   const revives = tl.filter(e => e.type === 'revive');
-  // 蘇生した者が、そのあと実際に行動したか
-  let postReviveActs = 0;
-  for (const r of revives) {
-    const i = tl.indexOf(r);
-    if (tl.slice(i + 1).some(e => (e.type === 'attack' || e.type === 'splash') && e.fromId === r.unitId)) postReviveActs++;
-  }
-  const goldActors = new Set(tl.filter(goldGain).map(e => e.sourceId));
-  const greedyActors = new Set(tl.filter(e => e.type === 'trait_trigger' && e.traitId === 'greedy').map(e => e.sourceId));
-  const crossPerson = [...greedyActors].some(id => !goldActors.has(id)) && goldActors.size > 0;
+  const selfRevives = revives.filter(e => e.traitId === 'tenacity');
+  const necroRevives = revives.filter(e => e.traitId === 'necromancy');
+  const summonEvents = tl.filter(e => e.type === 'summon');
+  const actedAfter = (index, unitId) =>
+    tl.slice(index + 1).some(e => (e.type === 'attack' || e.type === 'splash') && e.fromId === unitId);
+  const countActed = list => list.filter(r => actedAfter(tl.indexOf(r), r.unitId)).length;
+  const postReviveActs = countActed(revives);
+  const postSelfReviveActs = countActed(selfRevives);
+  const postNecroReviveActs = countActed(necroRevives);
+  const summonActs = summonEvents.filter(e => actedAfter(tl.indexOf(e), e.unit && e.unit.id)).length;
+  const crossPerson = crossPersonFires > 0;
   const rations = st.lastBattle.battleRations || {};
   const chain = out.result.chainSummary || {};
   const ok = out.result.overkillSummary || {};
@@ -198,7 +247,8 @@ function analyze(out, st) {
     goldEvents: count(goldGain),
     goldAmount: tl.filter(goldGain).reduce((s, e) => s + e.amount, 0),
     pairBoost: count(e => e.type === 'synergy_trigger' && e.synergyId === 'goblin_pair'),
-    greedyExtra: count(e => e.type === 'trait_trigger' && e.traitId === 'greedy'),
+    greedyExtra: greedyFires.length,
+    crossPersonFires,
     ledger: count(e => e.type === 'facility_trigger' && e.facilityId === 'extortion_ledger'),
     crossPersonLoot: crossPerson ? 1 : 0,
     firstGoldIndex: at(goldGain),
@@ -214,7 +264,12 @@ function analyze(out, st) {
     playerDeaths: count(e => e.type === 'death' && String(e.unitId).startsWith('p')),
     permanentDeaths: count(e => e.type === 'death' && e.permanent),
     revives: revives.length,
+    selfRevives: selfRevives.length,
+    necroRevives: necroRevives.length,
     postReviveActs,
+    postSelfReviveActs,
+    postNecroReviveActs,
+    summonActs,
     summons: count(e => e.type === 'summon'),
     soulFire: count(e => e.type === 'trait_trigger' && e.traitId === 'soul_harvest'),
     martyr: count(e => e.type === 'resource_gain' && e.label === '殉職手当'),
@@ -228,7 +283,8 @@ const dump = { version: 1, trials: N, baseCommit: 'c8a9f1c', formations: [] };
 
 const AVG = ['maxChain','maxOverkill','goldEvents','goldAmount','pairBoost','greedyExtra','ledger',
   'foodConsumed','foodShortage','cookFire','bigEaterFire','hungerFire','feastFire','kitchenFire',
-  'playerDeaths','permanentDeaths','revives','postReviveActs','summons','soulFire','martyr','boneSurvive','rounds'];
+  'playerDeaths','permanentDeaths','revives','selfRevives','necroRevives','postReviveActs',
+  'postSelfReviveActs','postNecroReviveActs','summons','summonActs','soulFire','martyr','boneSurvive','rounds','crossPersonFires'];
 
 for (const f of FORMATIONS) {
   const rows = [];
@@ -249,12 +305,16 @@ for (const f of FORMATIONS) {
   console.log(`\n■ ${f.line} / ${f.stage}  [${f.id}]  ${f.note}`);
   console.log(`  勝率 ${win.toFixed(0)}%　平均ラウンド ${mean('rounds').toFixed(1)}　最大CHAIN ${mean('maxChain').toFixed(2)}　最大OVERKILL ${mean('maxOverkill').toFixed(0)}%`);
   console.log(`  シナジー: ${Object.entries(synCount).map(([k,v])=>`${k}:${v}`).join(' ') || 'なし'}`);
-  console.log(`  略奪: 金貨イベント ${mean('goldEvents').toFixed(2)}回/${mean('goldAmount').toFixed(2)}G　コンビ+25% ${mean('pairBoost').toFixed(2)}　強欲追撃 ${mean('greedyExtra').toFixed(2)}（発生率 ${rate('greedyExtra').toFixed(0)}%）　恐喝帳簿 ${mean('ledger').toFixed(2)}　別人材への受け渡し ${(rows.filter(r=>r.crossPersonLoot).length/rows.length*100).toFixed(0)}%`);
+  console.log(`  略奪: 金貨イベント ${mean('goldEvents').toFixed(2)}回/${mean('goldAmount').toFixed(2)}G　コンビ+25% ${mean('pairBoost').toFixed(2)}　強欲追撃 ${mean('greedyExtra').toFixed(2)}（発生率 ${rate('greedyExtra').toFixed(0)}%）　うち別人材の金貨に反応（親子関係で確認） ${mean('crossPersonFires').toFixed(2)}　恐喝帳簿 ${mean('ledger').toFixed(2)}　受け渡しが起きた戦闘 ${(rows.filter(r=>r.crossPersonLoot).length/rows.length*100).toFixed(0)}%`);
   console.log(`  食料: 消費 ${mean('foodConsumed').toFixed(1)}（不足 ${mean('foodShortage').toFixed(1)}）　料理人 ${rate('cookFire').toFixed(0)}%　大食漢 ${rate('bigEaterFire').toFixed(0)}%　宴 ${rate('feastFire').toFixed(0)}%　厨房 ${rate('kitchenFire').toFixed(0)}%　飢餓の悪魔 ${rate('hungerFire').toFixed(0)}%`);
-  console.log(`  死霊: 味方戦死 ${mean('playerDeaths').toFixed(2)}（永久 ${mean('permanentDeaths').toFixed(2)}）　蘇生 ${mean('revives').toFixed(2)}（発生率 ${rate('revives').toFixed(0)}%）　復帰後に行動 ${mean('postReviveActs').toFixed(2)}（${rate('postReviveActs').toFixed(0)}%）　召喚 ${mean('summons').toFixed(2)}（${rate('summons').toFixed(0)}%）　魂の徴収 ${rate('soulFire').toFixed(0)}%　殉職手当 ${rate('martyr').toFixed(0)}%　白骨 ${mean('boneSurvive').toFixed(2)}`);
+  console.log(`  死霊: 味方戦死 ${mean('playerDeaths').toFixed(2)}（永久 ${mean('permanentDeaths').toFixed(2)}）　白骨で耐える ${mean('boneSurvive').toFixed(2)}　魂の徴収 ${rate('soulFire').toFixed(0)}%　殉職手当 ${rate('martyr').toFixed(0)}%`);
+  console.log(`    自己蘇生（執念） ${mean('selfRevives').toFixed(2)}（${rate('selfRevives').toFixed(0)}%）→ 復帰後に行動 ${rate('postSelfReviveActs').toFixed(0)}%`);
+  console.log(`    他者蘇生（死霊術） ${mean('necroRevives').toFixed(2)}（${rate('necroRevives').toFixed(0)}%）→ 復帰後に行動 ${rate('postNecroReviveActs').toFixed(0)}%`);
+  console.log(`    召喚（墓地） ${mean('summons').toFixed(2)}（${rate('summons').toFixed(0)}%）→ 召喚後に行動 ${rate('summonActs').toFixed(0)}%`);
   const rec = { id:f.id, line:f.line, stage:f.stage, note:f.note, winRate:win, synergies:synCount };
   for (const k of AVG) rec[k] = Number(mean(k).toFixed(3));
-  for (const k of ['greedyExtra','revives','postReviveActs','summons','soulFire','martyr','cookFire','feastFire','hungerFire']) rec[k + 'Rate'] = Number(rate(k).toFixed(1));
+  for (const k of ['greedyExtra','crossPersonFires','revives','selfRevives','necroRevives','postReviveActs',
+    'postSelfReviveActs','postNecroReviveActs','summons','summonActs','soulFire','martyr','cookFire','feastFire','hungerFire']) rec[k + 'Rate'] = Number(rate(k).toFixed(1));
   dump.formations.push(rec);
 }
 
