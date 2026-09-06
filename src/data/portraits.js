@@ -27,4 +27,5 @@ const PORTRAITS = [
 // 未制作・読込失敗時は通常の履歴書絵（さらに失敗すれば絵文字）へ戻す。
 const EVENT_EXPRESSIONS = {
   goblin: ["surprise", "smirk", "tears"],
+  slime: ["surprise", "smirk", "tears"],
 };

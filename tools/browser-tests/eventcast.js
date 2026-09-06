@@ -63,11 +63,13 @@ const assert = require('node:assert/strict');
     tears: UI.eventExpressionFor('ごめん、もう辞めたい。'),
     plain: UI.eventExpressionFor('了解した。'),
     goblin: UI.eventFaceHtml({ tplId: 'goblin', race: 'ゴブリン' }, 'surprise'),
+    slime: UI.eventFaceHtml({ tplId: 'slime', race: 'スライム' }, 'tears'),
     fallback: UI.eventFaceHtml({ tplId: 'orc', race: 'オーク' }, 'surprise')
   }));
   assert.deepEqual([expressions.surprise, expressions.smirk, expressions.tears, expressions.plain],
     ['surprise', 'smirk', 'tears', null], '台詞の感情語から表情を選ぶ');
   assert.match(expressions.goblin, /events\/goblin\/surprise\.webp/, '制作済み差分を使う');
+  assert.match(expressions.slime, /events\/slime\/tears\.webp/, '顔のないスライムにも制作済み差分を使う');
   assert.doesNotMatch(expressions.fallback, /event-expression/, '未制作種族は通常絵へ戻す');
   const loaded = await page.evaluate(async () => {
     const host = document.createElement('div');
