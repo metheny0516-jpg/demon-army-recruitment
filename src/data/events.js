@@ -157,7 +157,7 @@ const EVENTS = [
       {
         label: "代表を生活部門の労務担当にする（給与+1G）",
         apply(st, c) {
-          Game.assignDepartment(c.actor.uid, "life");
+          Game.assignDepartment(c.actor.uid, "support");
           c.actor.salary += 1;
           c.actor.unpaid = false;
           c.actor.unpaidStreak = 0;
@@ -462,7 +462,7 @@ const EVENTS = [
       {
         label: "占拠犯を生活部門の炊事責任者にする（給与+1G）",
         apply(st, c) {
-          Game.assignDepartment(c.actor.uid, "life");
+          Game.assignDepartment(c.actor.uid, "support");
           const food = Math.max(1, Aptitude.of(c.actor).food);
           c.actor.salary += 1;
           c.actor.loyalty = U.clamp(c.actor.loyalty + 15, 0, 100);
@@ -493,10 +493,10 @@ const EVENTS = [
       const report = st.lastDepartmentReport;
       return !!report && report.foodProduced > 0 && report.foodShortage === 0
         && st.food >= Math.max(3, Game.foodNeed() + 2)
-        && Game.departmentRoster("life").length > 0;
+        && Game.departmentRoster("support").length > 0;
     },
     cast(st) {
-      const workers = Game.departmentRoster("life");
+      const workers = Game.departmentRoster("support");
       if (!workers.length) return null;
       const best = Math.max(...workers.map(m => Aptitude.of(m).food));
       return { actor: U.pick(workers.filter(m => Aptitude.of(m).food === best)).uid };
@@ -544,10 +544,10 @@ const EVENTS = [
     check(st) {
       const report = st.lastDepartmentReport;
       return !!report && report.facilityAfter > report.facilityBefore
-        && Game.departmentRoster("construction").length > 0;
+        && Game.departmentRoster("support").length > 0;
     },
     cast(st) {
-      const builders = Game.departmentRoster("construction");
+      const builders = Game.departmentRoster("support");
       if (!builders.length) return null;
       const best = Math.max(...builders.map(m => Aptitude.of(m).material));
       return { actor: U.pick(builders.filter(m => Aptitude.of(m).material === best)).uid };
@@ -574,7 +574,7 @@ const EVENTS = [
         apply(st, c) {
           c.actor.salary += 1;
           c.actor.loyalty = U.clamp(c.actor.loyalty + 18, 0, 100);
-          for (const m of Game.departmentRoster("construction")) {
+          for (const m of Game.departmentRoster("support")) {
             if (m.uid !== c.actor.uid) m.loyalty = U.clamp(m.loyalty + 5, 0, 100);
           }
           return `施設は「${c.actor.name}記念」と命名された。給与+1G、忠誠+18。\n`
@@ -599,10 +599,10 @@ const EVENTS = [
     weight: 3,
     check(st) {
       const report = st.lastDepartmentReport;
-      return !!report && report.foodProduced > 0 && Game.departmentRoster("life").length > 0;
+      return !!report && report.foodProduced > 0 && Game.departmentRoster("support").length > 0;
     },
     cast(st) {
-      const workers = Game.departmentRoster("life");
+      const workers = Game.departmentRoster("support");
       if (!workers.length) return null;
       const best = Math.max(...workers.map(m => Aptitude.of(m).food));
       return { actor: U.pick(workers.filter(m => Aptitude.of(m).food === best)).uid };
@@ -658,11 +658,11 @@ const EVENTS = [
     title: "掃除当番論争",
     weight: 3,
     check(st) {
-      const workers = Game.departmentRoster("life");
+      const workers = Game.departmentRoster("support");
       return workers.length >= 1 && st.roster.length >= 2;
     },
     cast(st) {
-      const workers = Game.departmentRoster("life");
+      const workers = Game.departmentRoster("support");
       const cleaners = workers.filter(m => (m.job || "").includes("掃除"));
       const actor = U.pick(cleaners.length ? cleaners : workers);
       const others = st.roster.filter(m => m.uid !== actor.uid);
@@ -706,7 +706,7 @@ const EVENTS = [
         label: "片方を建設部門へ異動する",
         apply(st, c) {
           const moved = Aptitude.of(c.actor).material >= Aptitude.of(c.other).material ? c.actor : c.other;
-          Game.assignDepartment(moved.uid, "construction");
+          Game.assignDepartment(moved.uid, "support");
           moved.loyalty = U.clamp(moved.loyalty - 5, 0, 100);
           const stayed = moved.uid === c.actor.uid ? c.other : c.actor;
           stayed.loyalty = U.clamp(stayed.loyalty + 8, 0, 100);
@@ -721,9 +721,9 @@ const EVENTS = [
     id: "iron_ants",
     title: "鉄アリ発生",
     weight: 3,
-    check(st) { return st.materials >= 1 && Game.departmentRoster("construction").length > 0; },
+    check(st) { return st.materials >= 1 && Game.departmentRoster("support").length > 0; },
     cast(st) {
-      const builders = Game.departmentRoster("construction");
+      const builders = Game.departmentRoster("support");
       if (!builders.length) return null;
       const best = Math.max(...builders.map(m => Aptitude.of(m).material));
       return { actor: U.pick(builders.filter(m => Aptitude.of(m).material === best)).uid };
@@ -916,7 +916,7 @@ const EVENTS = [
           c.actor.overtimeHours = 0;
           c.actor.loyalty = U.clamp(c.actor.loyalty + 25, 0, 100);
           c.actor.restingTurns = 1;
-          Game.assignDepartment(c.actor.uid, "life");
+          Game.assignDepartment(c.actor.uid, "support");
           st.activeUids = st.activeUids.filter(uid => uid !== c.actor.uid);
           return `水をかけたら起きた。${c.actor.name}を生活部門へ回し、次の戦いは休ませる。
 `

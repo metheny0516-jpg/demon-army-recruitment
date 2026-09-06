@@ -66,7 +66,7 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
 {
   const st = reset([
     unit({ uid: 1, tplId: 'skeleton', name: '骨休め', race: 'スケルトン', department: 'combat', loyalty: 60 }),
-    unit({ uid: 2, tplId: 'kobold', name: '猟犬番', race: 'コボルト', job: '猟犬係', department: 'life', loyalty: 60 })
+    unit({ uid: 2, tplId: 'kobold', name: '猟犬番', race: 'コボルト', job: '猟犬係', department: 'support', loyalty: 60 })
   ]);
   st.lastDepartmentReport = { foodShortage: 0, foodProduced: 5, facilityBefore: 0, facilityAfter: 0 };
   assert(event('seasoning_disaster').check(st), '食料を作った勤務の後に味付け失敗が候補になる');
@@ -77,8 +77,8 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
 
 {
   const st = reset([
-    unit({ uid: 1, tplId: 'slime', name: '清掃史', race: 'スライム', job: '井戸の掃除係', department: 'life' }),
-    unit({ uid: 2, tplId: 'kobold', name: '毛玉', race: 'コボルト', job: '猟犬係', department: 'life' })
+    unit({ uid: 1, tplId: 'slime', name: '清掃史', race: 'スライム', job: '井戸の掃除係', department: 'support' }),
+    unit({ uid: 2, tplId: 'kobold', name: '毛玉', race: 'コボルト', job: '猟犬係', department: 'support' })
   ]);
   const ev = event('cleaning_dispute');
   assert(ev.check(st), '生活担当と同僚がいると掃除論争が候補になる');
@@ -90,7 +90,7 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
 {
   const st = reset([
     unit({ uid: 1 }),
-    unit({ uid: 2, tplId: 'ogre', name: '解体王', race: 'オーガ', job: '重量物運搬', department: 'construction', hp: 30 })
+    unit({ uid: 2, tplId: 'ogre', name: '解体王', race: 'オーガ', job: '重量物運搬', department: 'support', hp: 30 })
   ]);
   st.materials = 3;
   const ev = event('iron_ants');
@@ -104,7 +104,7 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
 {
   const st = reset([
     unit({ uid: 1, tplId: 'ogre', name: '腹太', race: 'オーガ', job: '重量物運搬', salary: 6 }),
-    unit({ uid: 2, name: '小腹', department: 'life' })
+    unit({ uid: 2, name: '小腹', department: 'support' })
   ]);
   const ev = event('kitchen_takeover');
   assert(!ev.check(st), '勤務報告に食料不足がなければ食堂占拠は起きない');
@@ -112,8 +112,8 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
   assert(ev.check(st), '食料不足から食堂占拠が候補になる');
   assert(ev.cast(st).actor === 1, '最も大食いの戦闘要員が食堂を占拠する');
   resolve('kitchen_takeover', 1);
-  assert(st.roster[0].department === 'life' && !st.activeUids.includes(1),
-    '占拠犯を生活部門へ異動すると出撃隊から外れる');
+  assert(Game.departmentOf(st.roster[0]).id === 'support' && !st.activeUids.includes(1),
+    '占拠犯を控えへ回すと出撃隊から外れる');
   assert(st.roster[0].salary === 7 && st.food > 0, '炊事責任者への異動は給与と食料に返る');
 }
 
@@ -121,15 +121,15 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
 {
   const st = reset([
     unit({ uid: 1 }),
-    unit({ uid: 2, tplId: 'kobold', name: 'まかない', race: 'コボルト', job: '猟犬係', department: 'life' })
+    unit({ uid: 2, tplId: 'kobold', name: 'まかない', race: 'コボルト', job: '猟犬係', department: 'support' })
   ]);
   st.food = 6;
   st.lastDepartmentReport = { foodShortage: 0, foodProduced: 5, facilityBefore: 0, facilityAfter: 0 };
   const ev = event('surplus_rations');
-  assert(ev.check(st), '生活部門が余剰食料を作ると活用事件が候補になる');
-  st.roster[1].department = 'combat';
-  assert(!ev.check(st), '生活部門が空なら余剰食料事件は起きない');
-  st.roster[1].department = 'life';
+  assert(ev.check(st), '控えが余剰食料を作ると活用事件が候補になる');
+  st.activeUids = st.roster.map(m => m.uid);          // 全員出撃＝控えが空
+  assert(!ev.check(st), '控えが空なら余剰食料事件は起きない');
+  st.activeUids = [1];
   const beforeGold = st.gold, beforeLoyalty = st.roster[1].loyalty;
   resolve('surplus_rations', 1);
   assert(st.food === 4 && st.gold === beforeGold + 5, '余剰食料をGへ変換できる');
@@ -140,7 +140,7 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
 {
   const st = reset([
     unit({ uid: 1 }),
-    unit({ uid: 2, tplId: 'ogre', name: '棟梁', race: 'オーガ', job: '重量物運搬', department: 'construction' })
+    unit({ uid: 2, tplId: 'ogre', name: '棟梁', race: 'オーガ', job: '重量物運搬', department: 'support' })
   ]);
   st.facilityLevel = 1;
   st.lastDepartmentReport = { foodShortage: 0, foodProduced: 0, facilityBefore: 0, facilityAfter: 1 };

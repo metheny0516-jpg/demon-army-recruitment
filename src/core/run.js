@@ -321,8 +321,11 @@ const Game = {
     return true;
   },
 
+  // 所属は「出撃隊に入っているか」だけで決まる。保存された department は見ない。
+  // 配属という別操作を持たないので、出撃隊を触れば後方の数字がそのまま動く。
   departmentOf(monster) {
-    return DEPARTMENTS[monster && monster.department] || DEPARTMENTS.combat;
+    if (!monster) return DEPARTMENTS.combat;
+    return this.state.activeUids.includes(monster.uid) ? DEPARTMENTS.combat : DEPARTMENTS.support;
   },
 
   departmentRoster(id) {
@@ -1191,7 +1194,7 @@ const Game = {
   toggleDeploy(uid) {
     const st = this.state;
     const monster = st.roster.find(m => m.uid === uid);
-    if (!monster || this.departmentOf(monster).id !== "combat") return false;
+    if (!monster) return false;
     const index = st.activeUids.indexOf(uid);
     if (index >= 0) {
       st.activeUids.splice(index, 1);
@@ -1204,14 +1207,18 @@ const Game = {
     return true;
   },
 
+  // 旧セーブ・旧テスト互換。配属という操作は無くなったので、
+  // 「戦闘部門へ」＝出撃隊へ入れる、「それ以外へ」＝出撃隊から外す、へ読み替える。
   assignDepartment(uid, departmentId) {
     const st = this.state;
     const monster = st.roster.find(m => m.uid === uid);
     if (!monster || !DEPARTMENTS[departmentId]) return false;
-    monster.department = departmentId;
-    if (departmentId === "combat") {
-      if (!st.activeUids.includes(uid) && st.activeUids.length < this.MAX_DEPLOY) st.activeUids.push(uid);
-    } else {
+    const wantCombat = departmentId === "combat";
+    const inSquad = st.activeUids.includes(uid);
+    if (wantCombat && !inSquad) {
+      if (st.activeUids.length >= this.MAX_DEPLOY) return false;
+      st.activeUids.push(uid);
+    } else if (!wantCombat && inSquad) {
       st.activeUids = st.activeUids.filter(id => id !== uid);
     }
     this.save();
@@ -1298,7 +1305,7 @@ const Game = {
     const extortionLedger = st.activeFacilityId === "extortion_ledger"
       && this.activeRoster().some(m => (m.job || "").includes("会計"));
     const graveyard = st.activeFacilityId === "graveyard"
-      && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
+      && this.departmentRoster("support").some(m => m.tplId === "necromancer");
     const battleOptions = { rations: rationContext, extortionLedger, graveyard,
       facilityWorks: this.facilityWorks(), synergyPool: this.synergyPool() };
     // 魔王は戦わない。報告を受けて一度だけ命令を出す。そのため戦闘を区切りで止める。
@@ -1635,8 +1642,9 @@ const Game = {
   // 生活は食料を生み、建設は備蓄建材を施設進捗へ変換する。
   processDepartments(mission, notes, dailyDay, battleRations) {
     const st = this.state;
-    const lifeWorkers = this.departmentRoster("life");
-    const builders = this.departmentRoster("construction");
+    const supporters = this.departmentRoster("support");
+    const lifeWorkers = supporters;
+    const builders = supporters;
     const output = this.departmentOutput();
     const foodReward = Math.max(0, mission.foodReward || 0);
     const materialReward = Math.max(0, mission.materialReward || 0);

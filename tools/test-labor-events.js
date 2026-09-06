@@ -64,7 +64,8 @@ for (const id of ['wage_protest', 'strike_march']) {
   const salary = st.roster[0].salary;
   resolve('strike_march', 1);
   assert(st.laborDispute === null, '行進を解決するとチェーン状態を消す');
-  assert(st.roster[0].department === 'life' && !st.activeUids.includes(1), '代表を生活部門へ異動できる');
+  assert(Game.departmentOf(st.roster[0]).id === 'support' && !st.activeUids.includes(1),
+    '代表を控えへ回せる');
   assert(st.roster[0].salary === salary + 1 && st.roster[0].loyalty === 80,
     '労務担当への任命は将来給与と忠誠へ返る');
 }

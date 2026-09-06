@@ -1,34 +1,35 @@
 // 3部門の最小循環。数値はここに集め、進行ロジックやUIへ散らさない。
+// 軍団は「出撃隊」と「控え」の2層だけ。配属という判断は 2026-09-06 に撤去した。
+//
+// もとは戦闘／建設・施設／食料・生活の3部門へ毎戦配属していたが、切除計測
+// （docs/WEIGHT_AUDIT.txt）で、配属をやめると最大CHAIN +0.15・発火種類 +0.7 と
+// どちらもノイズ床を超えて改善した。戦力を戦場の外へ吸い出していたということ。
+// 編成画面のパネル3枚と毎戦2回の判断を取りながら、連鎖を薄くしていた。
+//
+// いまは出撃隊に入らなかった者が、そのまま控えとして食料と建材の両方を調達する。
+// 「誰を外して将来へ回すか」は出撃隊の選定そのものに畳んであり、別の操作を持たない。
 const DEPARTMENTS = {
   combat: {
     id: "combat",
     icon: "⚔",
-    name: "戦闘部門",
-    shortName: "戦闘",
+    name: "出撃隊",
+    shortName: "出撃",
     wageRate: 1,
-    description: "勇者迎撃と遠征を担当。出撃隊だけが満額給与を受け取る。"
+    description: "戦場に出る最大5体。満額の給与を受け取る。"
   },
-  construction: {
-    id: "construction",
-    icon: "🔨",
-    name: "建設・施設部門",
-    shortName: "建設",
+  support: {
+    id: "support",
+    icon: "🏕",
+    name: "控え",
+    shortName: "控え",
     wageRate: 0.5,
     materialUse: 1,
-    description: "建材を施設進捗へ変える。部門手当は希望給与の半額。"
-  },
-  life: {
-    id: "life",
-    icon: "🍲",
-    name: "食料・生活部門",
-    shortName: "生活",
-    wageRate: 0.5,
     foodProduction: 2,
-    description: "食料を調達し、軍団の生活を支える。部門手当は希望給与の半額。"
+    description: "出撃隊に入らなかった者。勝利後に食料と建材を調達する。手当は希望給与の半額。"
   }
 };
 
-const DEPARTMENT_ORDER = ["combat", "construction", "life"];
+const DEPARTMENT_ORDER = ["combat", "support"];
 
 // buildThreshold は累計建材投入数。施設効果は保存中の個体値を変えず、出撃時だけ加える。
 // レベルは「全員の数値」ではなく「大型Jokerが1戦闘に働ける回数」を表す。
@@ -170,13 +171,18 @@ const Aptitude = {
 
   // 配属先で実際に効く値だけを取り出す。戦闘部門に居る会計士は給与を下げない
   // （現場に出ている者は経理をしていない）ため、配置の判断がここで生まれる。
+  // 控えは食料と建材の両方を調達するが、片方に専念していた頃の効率は出ない（各半分）。
+  // 「食料か建材か」を選ぶ操作を無くしたぶん、1人あたりの総量は旧3部門とほぼ同じに保つ。
+  // 出撃隊は戦うだけで、後方の数字を持たない。
   contribution(monster, departmentId) {
     const apt = this.of(monster);
+    const support = departmentId !== "combat";
+    const half = value => (value > 0 ? Math.max(1, Math.round(value / 2)) : 0);
     return {
-      food: departmentId === "life" ? apt.food : 0,
-      material: departmentId === "construction" ? apt.material : 0,
-      wage: departmentId === "combat" ? 0 : apt.wage,
-      recruit: departmentId === "combat" ? 0 : apt.recruit,
+      food: support ? half(apt.food) : 0,
+      material: support ? half(apt.material) : 0,
+      wage: support ? apt.wage : 0,
+      recruit: support ? apt.recruit : 0,
       appetite: apt.appetite
     };
   }

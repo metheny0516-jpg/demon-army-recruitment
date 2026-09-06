@@ -235,19 +235,11 @@ const UI = {
     return `<span class="department-tag department-${department.id}">${department.icon} ${U.esc(department.shortName)}</span>`;
   },
 
-  departmentButtons(m, current) {
-    return DEPARTMENT_ORDER.filter(id => id !== current).map(id => {
-      const department = DEPARTMENTS[id];
-      return `<button class="small department-button" data-action="assigndepartment"
-        data-uid="${m.uid}" data-department="${id}">${department.icon} ${U.esc(department.shortName)}へ</button>`;
-    }).join("");
-  },
 
   departmentSummary() {
     const st = Game.state;
     const combat = Game.departmentRoster("combat").length;
-    const builders = Game.departmentRoster("construction").length;
-    const life = Game.departmentRoster("life").length;
+    const supporters = Game.departmentRoster("support").length;
     const facility = Game.facilityInfo();
     const next = FACILITY_LEVELS[st.facilityLevel + 1];
     const buildText = next
@@ -257,9 +249,8 @@ const UI = {
     const foodNeed = Game.foodNeed();
     const balance = output.food - foodNeed;
     return `<div class="department-overview">
-      <div><b>⚔ ${combat}</b><span>戦闘所属</span></div>
-      <div><b>🔨 ${builders}</b><span>建設所属</span></div>
-      <div><b>🍲 ${life}</b><span>生活所属</span></div>
+      <div><b>⚔ ${combat}</b><span>出撃隊</span></div>
+      <div><b>🏕 ${supporters}</b><span>控え（調達）</span></div>
       <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
       <div class="${balance < 0 && st.food < -balance ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `赤字 ${-balance}（備蓄 ${st.food} であと${Math.floor(st.food / -balance)}戦）` : `余剰 +${balance}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）`}</span></div>
       <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
@@ -734,7 +725,7 @@ const UI = {
       <div class="panel mission-briefing">
         <h2>🗺 作戦会議</h2>
         <div class="muted">略奪と鎮圧は軍団を整える寄り道、王国侵攻は最終決戦を近づける。
-          建設担当がいれば、どの作戦でも勝利後に備蓄建材を施設へ投入する。</div>
+          控えがいれば、どの作戦でも勝利後に備蓄建材を施設へ投入する。</div>
       </div>
       <div class="panel mission-assets"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
       </header>
@@ -749,7 +740,7 @@ const UI = {
     const st = Game.state;
     const current = Game.activeFacility();
     const active = Game.activeRoster();
-    const builders = Game.departmentRoster("construction");
+    const builders = Game.departmentRoster("support");
     const statusOf = f => {
       if (f.id === "extortion_ledger") {
         const n = active.filter(m => (m.job || "").includes("会計")).length;
@@ -763,7 +754,7 @@ const UI = {
           : "不足：大食漢か魔界料理人を出撃隊へ配置";
       }
       const n = builders.filter(m => m.tplId === "necromancer").length;
-      return n ? `発火可能：建設部門の死霊術師 ${n}名` : "不足：死霊術師を建設部門へ配置";
+      return n ? `発火可能：控えの死霊術師 ${n}名` : "不足：死霊術師を控えに置く（出撃させない）";
     };
     const cards = FACILITIES.map((f, i) => `<div class="mission-card facility-blueprint" data-plan="${i + 1}">
       <div class="blueprint-stamp">設計案 ${i + 1}</div>
@@ -812,10 +803,9 @@ const UI = {
     const preparation = opening && st.phase === "preparation";
     const active = Game.activeRoster();
     const activeIds = new Set(st.activeUids);
-    const combatMembers = Game.departmentRoster("combat");
-    const reserves = combatMembers.filter(m => !activeIds.has(m.uid));
-    const builders = Game.departmentRoster("construction");
-    const lifeWorkers = Game.departmentRoster("life");
+    const reserves = st.roster.filter(m => !activeIds.has(m.uid));
+    const builders = reserves;
+    const lifeWorkers = reserves;
     const activeCards = active.map((m, i) => this.monsterCard(m, {
       badge: i === 0 ? "最前列（狙われやすい）" : `${i + 1}番目`,
       footer: `<div class="card-actions">
@@ -825,29 +815,17 @@ const UI = {
           <button class="small" data-action="down" data-uid="${m.uid}" ${i === active.length - 1 ? "disabled" : ""}>▼ 後ろへ</button>
           <button class="small" data-action="toggledeploy" data-uid="${m.uid}">控えへ</button>
         </div>
-        <div class="row tight">${this.departmentButtons(m, "combat")}</div>
       </div>`
     })).join("");
     const reserveCards = reserves.map(m => this.monsterCard(m, {
-      badge: "控え（給与0G）",
+      badge: `控え（手当 ${Math.max(1, Math.ceil(m.salary * DEPARTMENTS.support.wageRate))}G・調達）`,
       footer: `<div class="card-actions">
         <div class="row tight">
           <button class="small primary" data-action="toggledeploy" data-uid="${m.uid}"
             ${active.length >= Game.MAX_DEPLOY ? "disabled" : ""}>出撃隊へ</button>
-          ${this.departmentButtons(m, "combat")}
         </div>
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
       </div>`
-    })).join("");
-    const builderCards = builders.map(m => this.monsterCard(m, {
-      badge: `建設手当 ${Math.max(1, Math.ceil(m.salary * DEPARTMENTS.construction.wageRate))}G`,
-      footer: `<div class="card-actions"><div class="row tight">${this.departmentButtons(m, "construction")}</div>
-        <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
-    })).join("");
-    const lifeCards = lifeWorkers.map(m => this.monsterCard(m, {
-      badge: `生活手当 ${Math.max(1, Math.ceil(m.salary * DEPARTMENTS.life.wageRate))}G`,
-      footer: `<div class="card-actions"><div class="row tight">${this.departmentButtons(m, "life")}</div>
-        <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
     })).join("");
     const empty = active.length === 0;
     const payroll = Game.payrollPolicy();
@@ -904,16 +882,12 @@ const UI = {
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
       </aside>
       <section class="formation-board" aria-label="魔王軍の配置盤">
-      <div class="formation-board-title"><span>魔王軍配置盤</span><small>札を動かし、今日の働き場所を決める</small></div>
-      <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
-      <div class="army-section reserve-section"><h3>⚔ 戦闘部門・控え ${reserves.length}</h3>
-        <div class="cards">${reserveCards || `<div class="muted">戦闘部門の控えはいない</div>`}</div></div>
-      <div class="army-section department-section department-construction-section"><h3>🔨 建設・施設部門 ${builders.length}</h3>
-        <div class="muted department-help">勝利後、施工能力のぶんだけ備蓄建材を投入する。能力は種族と前職で決まる（オーガの重量物運搬は桁が違う）。施設効果は次の出撃隊全員に付く。</div>
-        <div class="cards">${builderCards || `<div class="department-empty">建材はあっても、働く者がいなければ城は育たない。</div>`}</div></div>
-      <div class="army-section department-section department-life-section"><h3>🍲 食料・生活部門 ${lifeWorkers.length}</h3>
-        <div class="muted department-help">ここに置いた者だけが調達する。食う量は種族ごとに違い（3口＝食料1）、アンデッドは何も食べない。足りれば軍団全員の忠誠も少し上がる。</div>
-        <div class="cards">${lifeCards || `<div class="department-empty">現在は自炊。食料が尽きれば全員の忠誠が下がる。</div>`}</div></div>
+      <div class="formation-board-title"><span>魔王軍配置盤</span><small>誰を戦場へ出すか。残りは控えで調達に回る</small></div>
+      <div class="army-section department-section department-combat-section"><h3>⚔ 出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
+      <div class="army-section reserve-section"><h3>🏕 控え ${reserves.length}</h3>
+        <div class="muted department-help">出撃隊に入らなかった者は、勝利後に食料と建材の両方を調達する。
+          調達量は種族と前職で決まる（オーガの重量物運搬は桁が違う）。手当は希望給与の半額。</div>
+        <div class="cards">${reserveCards || `<div class="department-empty">控えがいない。食料も建材も入ってこない。</div>`}</div></div>
       </section>
       <aside class="formation-intel">
       <div class="formation-intel-title"><span>参謀卓</span><small>発火予測・敵情</small></div>
@@ -985,7 +959,7 @@ const UI = {
         const q = Game.seizeQuote();
         return `<div class="panel seize-panel">
         <h3>🏴 この拠点を接収するか</h3>
-        <div class="muted">建設担当がいなくても、勝ち取った拠点をそのまま城へ組み込める。
+        <div class="muted">控えがいなくても、勝ち取った拠点をそのまま城へ組み込める。
           <b>このランで1度きり</b>だ。<br>
           代償：建材 <b>${q.need}</b>（備蓄 ${q.have}）を消費し、王国警戒度 <b>+${q.alertCost}</b>。
           奪った拠点は目立つ。以後の敵は少し強くなる。</div>

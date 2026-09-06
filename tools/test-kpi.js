@@ -101,8 +101,8 @@ const changesBefore = KPI.current.formationChanges;
 Game.toggleDeploy(now.roster[0].uid);
 Game.toggleDeploy(now.roster[0].uid);
 assert(KPI.current.formationChanges === changesBefore + 2, '出撃隊の入れ替えを編成変更として数える');
-Game.assignDepartment(now.roster[0].uid, 'life');
-assert(KPI.current.formationChanges === changesBefore + 3, '部門配属の変更も編成変更として数える');
+Game.assignDepartment(now.roster[0].uid, 'support');
+assert(KPI.current.formationChanges === changesBefore + 3, '控えへ回す操作も編成変更として数える');
 
 // 金貨の出口が使われたかも残す
 KPI.mergeRefused();

@@ -93,12 +93,7 @@ function runOnce(strat, stats){
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') {
-      if (strat.departments === 'balanced' && st.roster.length >= 3) {
-        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
-        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
-        Game.assignDepartment(support[0].uid, 'life');
-        Game.assignDepartment(support[1].uid, 'construction');
-      }
+      // 配属は無くなった。控えは「出撃隊に選ばなかった者」なので操作は要らない。
       const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);
       st.activeUids = best.map(m => m.uid);
@@ -119,12 +114,7 @@ function runOnce(strat, stats){
       Game.selectMission(index >= 0 ? index : 2);
     }
     if (st.phase === 'formation') {
-      if (strat.departments === 'balanced' && st.roster.length >= 3) {
-        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
-        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
-        Game.assignDepartment(support[0].uid, 'life');
-        Game.assignDepartment(support[1].uid, 'construction');
-      }
+      // 配属は無くなった。控えは「出撃隊に選ばなかった者」なので操作は要らない。
       const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);                // 強い5体を選び、HP高い順に前へ
       st.activeUids = best.map(m => m.uid);

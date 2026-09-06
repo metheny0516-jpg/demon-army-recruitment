@@ -231,10 +231,6 @@ const App = {
         Game.toggleDeploy(Number(data.uid));
         return this.render();
 
-      case "assigndepartment":
-        Game.assignDepartment(Number(data.uid), data.department);
-        return this.render();
-
       case "kingmerge":
         Game.setKingSlimeMerge(data.on === "1");
         return this.render();

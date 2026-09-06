@@ -33,11 +33,13 @@ assert(Game.moveDeployedToFront(4) && Game.state.activeUids.join(',') === '4,1,2
 assert(Game.moveDeployedToFront(4) === false && Game.state.activeUids.join(',') === '4,1,2,3,5',
   'すでに最前列なら並びを変えない');
 Game.state.activeUids = [1, 2, 3, 4, 5];
-assert(Game.salaryTotal() === 15, '給与は出撃5体分だけで控えは0G');
+// 出撃隊は満額、控えは半額（控えは調達に回るため 2026-09-06 から手当が付く）
+assert(Game.salaryTotal() === 15 + 5 * Math.ceil(3 * 0.5),
+  '給与は出撃5体が満額、控え5体が半額');
 st.gold = 100;
 Game.paySalaries([]);
-assert(st.roster.find(m => m.uid === 1).loyalty === 72 && st.roster.find(m => m.uid === 6).loyalty === 70,
-  '給与支払いと忠誠上昇は出撃隊だけが対象');
+assert(st.roster.find(m => m.uid === 1).loyalty === 72 && st.roster.find(m => m.uid === 6).loyalty === 72,
+  '給与支払いと忠誠上昇は出撃隊と控えの両方が対象');
 assert(!Game.toggleDeploy(6), '満員の出撃隊へ6体目を追加できない');
 Game.toggleDeploy(5);
 assert(Game.toggleDeploy(6) && Game.activeRoster().map(m => m.uid).join(',') === '1,2,3,4,6', '控えとの入れ替え');

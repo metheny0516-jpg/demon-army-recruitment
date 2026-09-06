@@ -56,14 +56,18 @@ const { silenceMormoFromNow, enterMissionPhase, passCommandPhase } = require('./
     if (restored !== before) throw new Error('最前列へ一発で戻せない');
   });
 
-  await step('生活部門へ配属', async () => {
-    await page.locator('.department-combat-section [data-action="assigndepartment"][data-department="life"]').first().click();
-    if (await page.locator('.department-life-section .card').count() !== 1) throw new Error('生活部門へ移動できない');
-    if (await page.locator('.department-combat-section .card').count() < 1) throw new Error('出撃隊が空になった');
+  await step('控えへ回す（配属という操作は無い）', async () => {
+    const before = await page.locator('.department-combat-section .card').count();
+    await page.locator('.department-combat-section [data-action="toggledeploy"]').first().click();
+    if (await page.locator('.reserve-section .card').count() < 1) throw new Error('控えへ回せない');
+    if (await page.locator('.department-combat-section .card').count() !== before - 1) {
+      throw new Error('出撃隊から抜けていない');
+    }
+    await page.locator('.reserve-section [data-action="toggledeploy"]').first().click();
   });
 
   await step('給与方針を意図的未払いへ変更', async () => {
-    if (await page.locator('[data-action="payrollpolicy"]').count() !== 3) throw new Error('給与方針が3択でない');
+    if (await page.locator('[data-action="payrollpolicy"]').count() !== 2) throw new Error('給与方針が2択でない');
     await page.locator('[data-action="payrollpolicy"][data-policy="withhold"]').click();
     if (!(await page.locator('.payroll-option.selected').innerText()).includes('今回は未払い')) {
       throw new Error('未払い方針を選択できない');
