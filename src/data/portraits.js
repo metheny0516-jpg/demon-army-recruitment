@@ -36,4 +36,5 @@ const EVENT_EXPRESSIONS = {
   imp: ["surprise", "smirk", "tears"],
   mage: ["surprise", "smirk", "tears"],
   necromancer: ["surprise", "smirk", "tears"],
+  ogre: ["surprise", "smirk", "tears"],
 };

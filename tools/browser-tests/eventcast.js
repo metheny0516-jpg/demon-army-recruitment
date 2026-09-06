@@ -67,7 +67,7 @@ const assert = require('node:assert/strict');
     kingSlime: UI.eventFaceHtml({ tplId: 'king_slime', race: 'キングスライム' }, 'smirk'),
     kobold: UI.eventFaceHtml({ tplId: 'kobold', race: 'コボルト' }, 'surprise'),
     orc: UI.eventFaceHtml({ tplId: 'orc', race: 'オーク' }, 'tears'),
-    fallback: UI.eventFaceHtml({ tplId: 'ogre', race: 'オーガ' }, 'surprise')
+    fallback: UI.eventFaceHtml({ tplId: 'unpainted_test', race: '未制作テスト種族' }, 'surprise')
   }));
   assert.deepEqual([expressions.surprise, expressions.smirk, expressions.tears, expressions.plain],
     ['surprise', 'smirk', 'tears', null], '台詞の感情語から表情を選ぶ');
