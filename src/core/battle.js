@@ -200,10 +200,12 @@ const Battle = {
       }, parent);
     };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
+    const goblinPair = activeSyn.some(s => s.id === "goblin_pair");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;
     let ledgerFires = 0;
     let ledgerBoost = null;
+    let lootPairBoost = null;
     const gainBattleResource = (unit, resource, value, label, parent) => {
       const resourceName = resource === "gold" ? "G" : resource;
       const verb = label === "殉職手当" ? "支給予約" : "略奪予約";
@@ -214,6 +216,12 @@ const Battle = {
       if (resource === "gold") {
         const before = reservedGold;
         reservedGold += value;
+        if (goblinPair) {
+          lootPairBoost = emitCausal("synergy_trigger", {
+            synergyId: "goblin_pair", name: "追い剥ぎコンビ", amount: 25, emphasis: 2,
+            text: "　【追い剥ぎコンビ】盗んだ勢いで、次の味方攻撃+25%！", cls: "synergy"
+          }, event);
+        }
         const nextLedgerMark = (ledgerFires + 1) * 3;
         if (options.extortionLedger && ledgerFires < facilityWorks
           && before < nextLedgerMark && reservedGold >= nextLedgerMark) {
@@ -442,6 +450,18 @@ const Battle = {
         ctx.mult *= 1.4;
         ctx.notes.push("恐喝帳簿");
         ledgerBoost = null;
+      }
+      if (unit.side === "player" && lootPairBoost) {
+        ctx.mult *= 1.25;
+        ctx.notes.push("追い剥ぎコンビ");
+        lootPairBoost = null;
+      }
+      // 深い連鎖は記録だけで終わらせず、その場の攻撃を大きくする。
+      // 強欲の最初の追撃（通常はCHAIN 4）から目に見えて通常火力を超える。
+      if (unit.side === "player" && unit.chainDepth >= 4) {
+        const chainMult = Math.min(2.5, 1.75 + (unit.chainDepth - 4) * .25);
+        ctx.mult *= chainMult;
+        ctx.notes.push(`CHAIN ${unit.chainDepth} ×${chainMult.toFixed(2)}`);
       }
       // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
       if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;

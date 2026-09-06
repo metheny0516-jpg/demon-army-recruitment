@@ -43,7 +43,7 @@ const BattleScene = {
   // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
   // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
-    battle_start: 500, round_start: 1150, synergy: 1650, facility_trigger: 1250,
+    battle_start: 500, round_start: 1150, synergy: 1650, synergy_trigger: 1050, facility_trigger: 1250,
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
     heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
     resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200
@@ -63,7 +63,7 @@ const BattleScene = {
 
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
-    "battle_start", "dialogue", "synergy", "facility_trigger", "trait_trigger",
+    "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
     "resource_gain", "resource_forfeit", "resource_consume", "momentum",
     "overkill", "revive", "summon", "survive", "incident", "result"
   ]),
@@ -599,6 +599,10 @@ const BattleScene = {
       case "facility_trigger":
         this.pulse("overkill");
         this.cutin(ev.name, ev.desc || "次の味方攻撃+40%", "facility");
+        break;
+      case "synergy_trigger":
+        this.pulse("overkill");
+        this.cutin(ev.name, `連鎖の着地：次の味方攻撃+${ev.amount || 0}%`, "synergy");
         break;
       case "resource_gain": {
         const u = this.units[ev.sourceId];

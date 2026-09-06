@@ -3,7 +3,7 @@ const ctx = {console, Math};
 vm.createContext(ctx);
 for (const f of ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/synergies.js','src/core/util.js','src/core/synergy.js','src/core/battle.js']) vm.runInContext(fs.readFileSync(f,'utf8'),ctx);
 const {Battle, Synergy, SYNERGIES} = vm.runInContext('({Battle,Synergy,SYNERGIES})',ctx);
-assert.equal(SYNERGIES.length,16);
+assert.equal(SYNERGIES.length,17);
 const make = (race, traits=[], tags=[]) => Battle.makeUnit({name:race,race,hp:100,atk:8,def:0,spd:8,salary:3,loyalty:80,traits,tags},'player');
 const cases = [
   ['slime_collection',[make('ゴブリン'),make('ゴブリン'),make('スライム'),make('スライム')],2,'pickpocket'],
