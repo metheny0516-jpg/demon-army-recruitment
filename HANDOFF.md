@@ -49,9 +49,14 @@
   起点・対象・効果量を1か所で決めて、予告・本番の倍率・戦闘入力・戦果が同じ伝票を読むようにした。
   契約は第2節「食事強化の伝票 `mealPlan`」。**戦闘式・蘇生タイミング・共通CHAIN倍率は未変更**で、
   seed固定300件のA/B比較で倍率の差分0件（挙動は完全に同じ）。battle.js は触っていない。
-- 次は **V2b（battle.js 側で食事の因果イベントと着地を検証し、不足だけ修正）** → V3（追認）。
-  V2bでは `rations.meal` を読んで「誰の料理が誰を強化したか」を因果イベントにできる。
-  `targetEatsNothing`（食欲0の者に料理が乗る現行挙動）の可否もV2bで判断する。
+- **V2bは完了（2026-09-06）**。battle.js が `rations.meal` を読み、
+  料理人イベントへ対象と効果量、強化された者の最初の有効打へ `mealBoost` を書き添えるようにした。
+  新しいイベントは増やさず、**ダメージ・発火順・回数・chainDepth は不変**
+  （実戦200件のA/Bで差分0件）。契約は第2節「食事強化の因果イベント」。
+  実例: 「ザグの【魔界料理人】ゲンコへ+24%」→ ゲンコの最初の有効打が65ダメージで大盾傭兵を撃破。
+  **食欲0への強化は現行維持**（`targetEatsNothing` は印だけ）。
+- 次は **V3（死霊＝後衛配置での成立を追認）**。U1/U2はSol。
+  U2の戦果1文は `result.mealSummary` / `st.lastBattle.mealPlan` を根拠に書ける。
 - **到達性（レポート第2節）は暫定。** 食料の正確な帰属判定は V2a/V2b 後の別タスクで補正する。
   R1の要否は **U1後の短い試遊**で判断し、**最終P1を待って後続作業を止めない**。
 - その後、採用表示・必要時の初回応募補助・根拠付き戦果・モルモと魔界史へ進む。
@@ -1018,6 +1023,31 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
 - `rations.meal` は battle.js がまだ読まない追加フィールドである。
   **説明用のフィールド追加で発火順・回数・chainDepth を変えないこと**（`tools/test-food-attribution.js` が検証）。
 - 古い戦果には `mealPlan` が無い。表示側は**その表示だけを省略**する。
+
+### 食事強化の因果イベント（2026-09-06・V2b で追加した契約）
+
+**新しいイベント種別は増やしていない。既存イベントへの情報追加だけである。**
+伝票（`rations.meal`）が無い戦闘・古いセーブでは何も足さないので、表示側はその表示だけを省く。
+
+1. **`trait_trigger`（`traitId: "demon_cook"`）＝ 起点・対象・効果量**
+   追加フィールド: `targetId` / `targetName`（強化された者。効果量0なら `null`）、
+   `amount`（0.24 など）/ `amountPercent`（24）、`consumed`、`kitchenMult`、
+   `tiedIds`（食欲が同値で並んだ者の戦闘ID。「なぜこの人が受けたか」の説明用）、
+   `targetEatsNothing`。`text` も対象と％を含む文言になった。
+2. **強化された者の「最初の有効打」＝ 既存の `attack` / `splash` に `mealBoost` が付く**
+   `{ first: true, sourceId, sourceName, targetId, targetName, amount, amountPercent }`。
+   **1戦闘に1件だけ**。ダメージが出た最初の一撃にしか付かない。
+   一度も有効打が無ければどこにも付かない（嘘の着地を作らない）。
+3. **`result.mealSummary`** … タイムラインから導出するだけの要約。
+   `{ sourceId, targetId, targetName, amount, amountPercent, consumed, kitchenMult,
+   tiedIds, targetEatsNothing, triggerEventId, firstHit: { eventId, type, toId, dmg, dead } | null }`。
+   伝票が無い戦闘では `null`。
+
+**壊してはいけない約束**: ここで足したのは説明用フィールドだけで、
+**ダメージ・発火順・回数・chainDepth は1つも変えていない**
+（`tools/test-meal-attribution-battle.js` が指紋比較で検証。`BATTLE_BEFORE=<旧battle.js>` を
+渡すと変更前の実装と直接つき合わせる）。今後ここへ手を入れるときも同じ検証を通すこと。
+**食欲0の者へ強化が乗る現行挙動は維持**しており、`targetEatsNothing` は印にすぎない。
 
 イベントチェーンの最小契約は `state.laborDispute`（通常 `null`）。現在は
 `{ stage: "march", actorUid, startedTurn }` だけを持ち、給与抗議を無視したときに作成、

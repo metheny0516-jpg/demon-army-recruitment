@@ -242,6 +242,12 @@ const Battle = {
     });
     let feastTrigger = null;
     const rations = options.rations;
+    // V2a の伝票（run.js の Game.mealPlan）。ここでは**倍率を計算し直さない**。
+    // 起点・対象・効果量を既存イベントへ書き添えるためだけに読む。
+    const meal = (rations && rations.meal) || null;
+    let mealTarget = null;       // 食事強化を受けた戦闘ユニット
+    let mealSource = null;       // 料理人の戦闘ユニット
+    let mealFirstHitSeen = false;   // 対象者の「最初の有効打」を1回だけ印にする
     for (const u of playerUnits) {
       u.starved = u.starved || !!(rations && rations.shortage > 0 && !u.tags.includes("undead"));
       u.feast = !!(rations && rations.feastUid != null && rations.consumed >= 4);
@@ -264,9 +270,29 @@ const Battle = {
           text: `　${u.name}の【大食漢】 腹いっぱいで与ダメージ上昇`, cls: "trait" }, rationEvent);
       }
       const cook = byUid(rations.cookUid);
+      mealSource = cook || null;
+      mealTarget = meal && meal.targetUid != null ? byUid(meal.targetUid) : null;
       if (cook && rations.consumed > 0) {
-        emitCausal("trait_trigger", { sourceId: cook.id, traitId: "demon_cook", name: "魔界料理人", emphasis: 1,
-          text: `　${cook.name}の【魔界料理人】 食事を火力へ変換`, cls: "trait" }, rationEvent);
+        // 既存イベントに起点・対象・効果量を書き添える（新しいイベントは足さない）。
+        // 伝票が無い古い呼び出しでは、従来どおり対象も量も持たない1行のまま。
+        const targetName = mealTarget ? mealTarget.name : null;
+        const percent = meal ? meal.boostPercent : 0;
+        emitCausal("trait_trigger", {
+          sourceId: cook.id, traitId: "demon_cook", name: "魔界料理人", emphasis: 1,
+          targetId: mealTarget ? mealTarget.id : null,
+          targetName,
+          amount: meal ? meal.boost : 0,
+          amountPercent: percent,
+          consumed: rations.consumed,
+          kitchenMult: meal ? meal.kitchenMult : 1,
+          // 食欲が同値で並んだ者。「なぜこの人が受けたか」を表示側が説明できる
+          tiedIds: meal ? (meal.tiedUids || []).map(uid => (byUid(uid) || {}).id).filter(Boolean) : [],
+          targetEatsNothing: meal ? !!meal.targetEatsNothing : false,
+          text: targetName
+            ? `　${cook.name}の【魔界料理人】 ${targetName}へ食事を火力へ変換（与ダメージ+${percent}%）`
+            : `　${cook.name}の【魔界料理人】 食事を火力へ変換`,
+          cls: "trait"
+        }, rationEvent);
       }
       const hunger = byUid(rations.hungerUid);
       if (hunger && rations.emptied) {
@@ -345,6 +371,20 @@ const Battle = {
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
+      // 食事強化を受けた者の「最初の有効打」。新しいイベントは足さず、
+      // すでに出したダメージイベントへ印を書き添えるだけ（順序・回数・深度は動かない）。
+      if (mealTarget && attacker === mealTarget && dmg > 0 && !mealFirstHitSeen && meal && meal.boost > 0) {
+        mealFirstHitSeen = true;
+        damageEvent.mealBoost = {
+          first: true,
+          sourceId: mealSource ? mealSource.id : null,
+          sourceName: mealSource ? mealSource.name : null,
+          targetId: mealTarget.id,
+          targetName: mealTarget.name,
+          amount: meal.boost,
+          amountPercent: meal.boostPercent
+        };
+      }
       let overkillEvent = null;
       const excessDamage = dead ? Math.max(0, dmg - hpBefore) : 0;
       const excessPercent = excessDamage > 0 ? Math.round(excessDamage / target.maxHp * 100) : 0;
@@ -693,8 +733,30 @@ const Battle = {
       overkillSummary: this.summarizeOverkill(timeline),
       summonCount: timeline.filter(e => e.type === "summon").length,
       facilitySummary: this.summarizeFacility(timeline),
+      mealSummary: this.summarizeMeal(timeline),
       deathChains: this.summarizeDeathChains(timeline),
       resourceChanges: this.summarizeResourceChanges(timeline)
+    };
+  },
+
+  // 食事強化が「誰から誰へ、どれだけ」効き、その人の最初の有効打がどれだったか。
+  // 戦闘中に別状態を持ち回らず、確定したタイムラインから導出するだけ。
+  // 伝票（rations.meal）が無い戦闘・古い戦果では null を返す。表示側はその表示だけを省く。
+  summarizeMeal(timeline) {
+    const events = timeline || [];
+    const cook = events.find(e => e.type === "trait_trigger" && e.traitId === "demon_cook");
+    if (!cook || !cook.targetId) return null;
+    const hit = events.find(e => e.mealBoost && e.mealBoost.first);
+    return {
+      sourceId: cook.sourceId, targetId: cook.targetId, targetName: cook.targetName || null,
+      amount: cook.amount || 0, amountPercent: cook.amountPercent || 0,
+      consumed: cook.consumed || 0, kitchenMult: cook.kitchenMult || 1,
+      tiedIds: cook.tiedIds || [], targetEatsNothing: !!cook.targetEatsNothing,
+      triggerEventId: cook.eventId,
+      // 強化された者の最初の有効打。無ければ null（一度も攻撃せずに終わった）
+      firstHit: hit ? {
+        eventId: hit.eventId, type: hit.type, toId: hit.toId, dmg: hit.dmg, dead: !!hit.dead
+      } : null
     };
   },
 
