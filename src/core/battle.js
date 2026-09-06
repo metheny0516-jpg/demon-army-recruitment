@@ -373,7 +373,15 @@ const Battle = {
       }, opts.parentEvent || null);
       // 食事強化を受けた者の「最初の有効打」。新しいイベントは足さず、
       // すでに出したダメージイベントへ印を書き添えるだけ（順序・回数・深度は動かない）。
-      if (mealTarget && attacker === mealTarget && dmg > 0 && !mealFirstHitSeen && meal && meal.boost > 0) {
+      //
+      // 印を付けるのは **食事強化が実際に乗った、敵への一撃**だけ。
+      // 仲間割れ（incident）の同士討ちは unit.atk * 0.7 の生ダメージで、
+      // mods.dmgMult を通らない＝食事強化が反映されていない。味方を殴った回を
+      // 「料理の着地」と呼ぶと、戦果が嘘になる。対象外の回では印の権利も消費しない
+      // （フラグは下の if の中でしか立てない）ので、後の本当の初撃にちゃんと付く。
+      const mealEligible = target.side === "enemy" && !opts.incident;
+      if (mealEligible && mealTarget && attacker === mealTarget && dmg > 0
+        && !mealFirstHitSeen && meal && meal.boost > 0) {
         mealFirstHitSeen = true;
         damageEvent.mealBoost = {
           first: true,

@@ -1036,7 +1036,10 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
    `targetEatsNothing`。`text` も対象と％を含む文言になった。
 2. **強化された者の「最初の有効打」＝ 既存の `attack` / `splash` に `mealBoost` が付く**
    `{ first: true, sourceId, sourceName, targetId, targetName, amount, amountPercent }`。
-   **1戦闘に1件だけ**。ダメージが出た最初の一撃にしか付かない。
+   **1戦闘に1件だけ**。付く条件は **敵へのダメージ** かつ **仲間割れ（incident）でない**こと。
+   仲間割れの同士討ちは `unit.atk * 0.7` の生ダメージで `mods.dmgMult` を通らない＝
+   食事強化が反映されていないので、印を付けない。**対象外の回では印の権利も消費しない**
+   （仲間割れの後に出た本当の初撃へちゃんと付く）。
    一度も有効打が無ければどこにも付かない（嘘の着地を作らない）。
 3. **`result.mealSummary`** … タイムラインから導出するだけの要約。
    `{ sourceId, targetId, targetName, amount, amountPercent, consumed, kitchenMult,

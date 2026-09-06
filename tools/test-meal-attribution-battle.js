@@ -59,11 +59,11 @@ const MEAL = {
 const RATIONS = { consumed: 3, need: 3, shortage: 0, emptied: false, kitchen: false,
   cookUid: 1, bigEaterUids: [2], hungerUid: null, feastUid: null };
 
-function run(ctx, rations, overrideRoster) {
+function run(ctx, rations, overrideRoster, overrideEnemies) {
   vm.runInContext(SEED_SRC, ctx);
   const Battle = vm.runInContext('Battle', ctx);
   const player = (overrideRoster || roster()).map(m => Battle.makeUnit(m, 'player'));
-  const foes = enemies().map(e => Battle.makeUnit(e, 'enemy'));
+  const foes = (overrideEnemies || enemies()).map(e => Battle.makeUnit(e, 'enemy'));
   return Battle.simulate(player, foes, { rations });
 }
 // 比較用の指紋: 種別・当事者・ダメージ・生死・連鎖の親と深さ。
@@ -141,7 +141,56 @@ if (!idleHits.length) {
   assert(idleHits.length === 1 && idleHits[0].dmg > 0, '有効打があれば1件だけ印が付く');
 }
 
-// ── 6. 食欲0への強化は現行維持。印だけ残す ──────────────────
+// ── 6. 仲間割れ（同士討ち）には印を付けない ───────────────────
+// 仲間割れのダメージは unit.atk * 0.7 の生ダメージで mods.dmgMult を通らない＝
+// 食事強化が反映されていない。ここへ印を付けると戦果が嘘になる。
+// 決定的に仲間割れさせるため、ハプニング表を1件だけに差し替える。
+function ctxWithForcedIncident(targetName) {
+  const c = makeCtx();
+  vm.runInContext(`BATTLE_HAPPENINGS.length = 0;
+    BATTLE_HAPPENINGS.push({ id: 'test_brawl', name: '試験用の仲間割れ', kind: 'friendly_fire',
+      chance: 1, check: u => u.name === ${JSON.stringify(targetName)},
+      text: (u, t) => u.name + 'が' + t.name + 'に殴りかかった' });`, c);
+  return c;
+}
+const brawlCtx = ctxWithForcedIncident('大食いドン');
+const brawl = run(brawlCtx, { ...RATIONS, meal: MEAL });
+const brawlIncident = brawl.timeline.find(e => e.type === 'incident');
+assert(!!brawlIncident && brawlIncident.unitId === 'p1', '前提: 強化された本人が仲間割れを起こした');
+const friendlyHit = brawl.timeline.find(e => e.type === 'splash' && e.fromId === 'p1'
+  && e.label === '仲間割れ');
+assert(!!friendlyHit && friendlyHit.dmg > 0, '前提: 仲間割れで味方へダメージが出ている');
+assert(!friendlyHit.mealBoost, '仲間割れで味方を殴った一撃には印を付けない');
+const brawlMarks = brawl.timeline.filter(e => e.mealBoost);
+assert(brawlMarks.length === 1, '「仲間割れ→通常攻撃」でも印は1件だけ');
+const brawlMark = brawlMarks[0];
+assert(brawlMark.fromId === 'p1' && brawlMark.toId.startsWith('e') && brawlMark.dmg > 0,
+  '印が付くのは仲間割れの後に出た、敵への通常攻撃');
+assert(brawl.timeline.indexOf(brawlMark) > brawl.timeline.indexOf(friendlyHit),
+  '仲間割れが先に起きても、印の権利は消費されず後の初撃に付く');
+assert(brawl.mealSummary.firstHit && brawl.mealSummary.firstHit.eventId === brawlMark.eventId,
+  'mealSummary も敵への初撃を指す');
+
+// 仲間割れしか起きず、敵を一度も殴らなければ着地は無い
+const onlyBrawlCtx = ctxWithForcedIncident('大食いドン');
+const slowRoster = roster().map(m => m.uid === 2
+  ? { ...m, spd: 30 }                    // 先に動いて仲間割れだけして終わる
+  : m.uid === 3 ? { ...m, spd: 20, atk: 400 } : { ...m, spd: 10 });
+const loneEnemy = [{ name: '見習いテト', hp: 14, atk: 5, def: 2, spd: 6 }];
+const onlyBrawl = run(onlyBrawlCtx, { ...RATIONS, meal: MEAL }, slowRoster, loneEnemy);
+const enemyLeft = onlyBrawl.timeline.some(e => e.type === 'attack' && e.fromId === 'p1');
+assert(!enemyLeft, '前提: 強化された者は敵を一度も攻撃せずに戦闘が終わった');
+assert(!onlyBrawl.timeline.some(e => e.mealBoost),
+  '仲間割れしか起きなければ、どこにも印を付けない');
+assert(onlyBrawl.mealSummary && onlyBrawl.mealSummary.firstHit === null,
+  '仲間割れしか起きなければ firstHit は null');
+
+// 戦闘結果・CHAIN深度は仲間割れの有無にかかわらず維持される
+const brawlPlain = run(ctxWithForcedIncident('大食いドン'), RATIONS);
+assert(fingerprint(brawl) === fingerprint(brawlPlain),
+  '仲間割れを含む戦闘でも、伝票あり／なしで結果とCHAIN深度が完全に一致する');
+
+// ── 7. 食欲0への強化は現行維持。印だけ残す ──────────────────
 const zeroMeal = { ...MEAL, targetAppetite: 0, targetEatsNothing: true };
 const zero = run(now, { ...RATIONS, meal: zeroMeal });
 const zeroCook = zero.timeline.find(e => e.type === 'trait_trigger' && e.traitId === 'demon_cook');
