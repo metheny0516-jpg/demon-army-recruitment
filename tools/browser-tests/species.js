@@ -27,16 +27,35 @@ const orc = species !== true;
       await page.waitForTimeout(500);
       if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `${orc ? 'orc' : 'species'}-${width}.png`) });
     }
+    // 攻撃動作の尺は BattleScene が決める。ここへ数式を写すと演出を調整するたびに
+    // このテストが落ちる（61c89e3 の等速見直しで実際に落ちた）。見るのは契約:
+    //   ・倍速はちょうど反比例で縮む（x2で半分、x4で1/4）
+    //   ・読む尺を延ばしても攻撃動作自体は伸ばさない（等速・scale1で1秒以内）
+    const swing = (speed, id) => page.evaluate(({speed, id}) => {
+      BattleScene.stop(); BattleScene.speed = speed; BattleScene.eventScale = .45;
+      const toId = id.startsWith('p') ? 'e0' : 'p0';
+      BattleScene.setHp(BattleScene.units[toId], 30, 30);
+      BattleScene.render({ type: 'attack', fromId: id, toId, dmg: 12, hp: 18, maxHp: 30, emphasis: 1 });
+      return { toId, duration: BattleScene.units[id].actor.getAnimations()[0].effect.getTiming().duration };
+    }, {speed, id});
+    const baseSwing = {};
     for (const speed of [1, 2, 4]) {
       for (const id of ['p0', 'p1', 'e0', 'e1']) {
-        const result = await page.evaluate(({speed, id}) => {
-          BattleScene.stop(); BattleScene.speed = speed; BattleScene.eventScale = .45;
-          const toId = id.startsWith('p') ? 'e0' : 'p0';
-          BattleScene.setHp(BattleScene.units[toId], 30, 30);
-          BattleScene.render({ type: 'attack', fromId: id, toId, dmg: 12, hp: 18, maxHp: 30, emphasis: 1 });
-          return { toId, duration: BattleScene.units[id].actor.getAnimations()[0].effect.getTiming().duration };
-        }, {speed, id});
-        assert.ok(Math.abs(result.duration - 620 * .88 * .45 / speed) < .01);
+        const result = await swing(speed, id);
+        if (speed === 1) {
+          baseSwing[id] = result.duration;
+          const full = await page.evaluate(id => {
+            BattleScene.stop(); BattleScene.speed = 1; BattleScene.eventScale = 1;
+            const toId = id.startsWith('p') ? 'e0' : 'p0';
+            BattleScene.render({ type: 'attack', fromId: id, toId, dmg: 12, hp: 18, maxHp: 30, emphasis: 1 });
+            return BattleScene.units[id].actor.getAnimations()[0].effect.getTiming().duration;
+          }, id);
+          assert.ok(full <= 1000, `攻撃動作が長すぎる: ${full}ms`);
+          await page.waitForFunction(() => BattleScene.motions.size === 0);
+          await swing(speed, id);
+        }
+        assert.ok(Math.abs(result.duration - baseSwing[id] / speed) < .01,
+          `x${speed}で尺が反比例しない: ${baseSwing[id]} → ${result.duration}`);
         await page.waitForFunction(() => BattleScene.motions.size === 0);
         assert.equal(await page.evaluate(id => BattleScene.units[id].fill.style.transform, result.toId), 'scaleX(0.6)');
         assert.equal(await page.evaluate(id => BattleScene.units[id].sprite.dataset.pose, id), 'idle');

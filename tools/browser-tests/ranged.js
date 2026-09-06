@@ -23,18 +23,38 @@ const path = require('node:path');
       const projectile = document.querySelector('.battle-projectile');
       const animation = projectile?.getAnimations()[0];
       const frames = animation?.effect.getKeyframes();
+      const bodyMotion = BattleScene.units.a.actor.getAnimations()[0];
       const snapshot = { kind: BattleScene.attackKind(BattleScene.units.a), duration: animation?.effect.getTiming().duration,
+        motion: bodyMotion?.effect.getTiming().duration,
         frames: frames?.map(f => f.transform), hp: document.getElementById('hp-b').style.transform,
         body: BattleScene.units.a.actor.getAnimations().map(a => a.effect.getKeyframes().map(f => f.transform)),
         text: document.getElementById('action-caption').textContent };
       if (skip) { BattleScene.timeline = [{ type: 'result', victory: true }]; BattleScene.index = 0; BattleScene.finished = false; BattleScene.skip(); }
       return snapshot;
     }, {kind, speed, scale, reverse, skip});
+    // 弾の尺は BattleScene が決める（攻撃動作の尺 × 接触の割合）。ここへ数式を写すと、
+    // 演出の尺を変えるたびに無関係なテストが落ちる（実際 61c89e3 の等速見直しで落ちた）。
+    // 見るのは契約のほう:
+    //   ・弾は攻撃動作の途中で当たる（0 < 弾 < 動作。melee より遅い接触になる）
+    //   ・倍速はちょうど反比例で縮む（x2で半分、x4で1/4）
+    //   ・読む尺を延ばしても攻撃動作自体は伸ばさない（等速・scale1で1秒以内）
+    const CONTACT_MIN = .5, CONTACT_MAX = .75;    // 遠隔の接触は動作の後半
+    const base = {};
     for (const kind of ['arrow', 'stone', 'magic']) {
       for (const speed of [1, 2, 4]) {
         const info = await fire(kind, speed, .45, true);
         assert.equal(info.kind, kind);
-        assert.ok(Math.abs(info.duration - 620 * .88 * .62 * .45 / speed) < .01);
+        if (speed === 1) {
+          base[kind] = info.motion;
+          const full = await fire(kind, 1, 1, true);
+          assert.ok(full.motion <= 1000, `攻撃動作が長すぎる: ${full.motion}ms`);
+          await fire(kind, speed, .45, true);
+        }
+        assert.ok(Math.abs(info.motion - base[kind] / speed) < .01,
+          `x${speed}で尺が反比例しない: ${base[kind]} → ${info.motion}`);
+        const ratio = info.duration / info.motion;
+        assert.ok(ratio > CONTACT_MIN && ratio < CONTACT_MAX,
+          `弾が動作の途中で当たっていない（弾${info.duration} / 動作${info.motion}）`);
         assert.equal(info.hp, 'scaleX(1)');
         assert.ok(info.body.flat().every(t => !t.includes('translate(')), '遠隔役が接近している');
         const x = t => Number(t.match(/translate\(([-\d.]+)px/)[1]);
