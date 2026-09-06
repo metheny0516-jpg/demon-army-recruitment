@@ -25,7 +25,7 @@ const orc = species !== true;
       }
       await page.evaluate(() => BattleScene.stop());
       await page.waitForTimeout(500);
-      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `${orc ? 'orc' : 'species'}-${width}.png`) });
+      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', `${orc ? 'orc' : 'species'}-${width}.png`) });
     }
     for (const speed of [1, 2, 4]) {
       for (const id of ['p0', 'p1', 'e0', 'e1']) {

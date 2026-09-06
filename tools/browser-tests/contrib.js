@@ -38,7 +38,7 @@ const { autoDismissMormo, passCommandPhase } = require('./helpers.js');
     Array.from(document.querySelectorAll('.contrib-fill')).map(e => getComputedStyle(e).transform));
   console.log('バーのtransform:', widths);
 
-  await page.screenshot({ path: process.env.SP + '/contrib-result.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/contrib-result.png', fullPage: true });
   console.log(errors.length ? '✗ ' + errors.join(', ') : '✓ JSエラーなし');
   await browser.close();
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

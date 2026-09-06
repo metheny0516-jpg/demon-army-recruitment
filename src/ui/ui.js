@@ -295,6 +295,22 @@ const UI = {
           `<span class="chain-step">${U.esc(step.label)}</span>`).join(`<span class="chain-arrow">→</span>`)}</div>`
       : `<div class="muted">連鎖は起きなかった（ひと突きで終わっている）</div>`;
 
+    // 「その戦闘で何を揃えて、どこまで壊れたか」を1行に畳む（作業表 B）。
+    // CHAIN・シナジー名・戦意倍率は今までバラバラの場所にあり、達成感が戦果に残らなかった。
+    // 数える対象は既にある戦果データだけで、新しい計算も戦闘式の変更もしていない。
+    const synergyNames = (battle.synergies || []).filter(Boolean);
+    const synergyLabel = synergyNames.length
+      ? (synergyNames.length > 3
+        ? `${synergyNames.slice(0, 3).map(n => `《${n}》`).join("")}ほか${synergyNames.length - 3}種`
+        : synergyNames.map(n => `《${n}》`).join(""))
+      : "";
+    const momentum = Math.max(1, Number(battle.momentumPeak) || 1);
+    const headline = [
+      maxChain ? `⛓ CHAIN ${maxChain}` : "",
+      synergyLabel ? `⚡ ${synergyLabel}` : "",
+      momentum > 1 ? `🔥 戦意 ×${momentum.toFixed(2)}` : ""
+    ].filter(Boolean);
+
     const details = [];
     if (overkill && overkill.count) details.push(`${U.esc(overkill.rank || "OVERKILL")} ほか ${overkill.count}回・総余剰 ${overkill.totalExcess}`);
     const revives = (battle.contribution || []).reduce((sum, c) => sum + (c.revivesGiven || 0) + (c.selfRevives || 0), 0);
@@ -302,6 +318,8 @@ const UI = {
     if (battle.summonCount) details.push(`召喚 ${battle.summonCount}体`);
 
     return `<div class="panel breakthrough-panel"><h3>💥 今回の大暴れ</h3>
+      ${headline.length ? `<div class="breakthrough-headline">${headline.map(part =>
+        `<span>${U.esc(part)}</span>`).join(`<span class="sep">・</span>`)}</div>` : ""}
       <div class="breakthrough-records">
         <div><b>${maxChain}</b><span>最大CHAIN</span></div>
         <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>
@@ -351,6 +369,21 @@ const UI = {
     return `<div class="panel facility-panel"><h3>🪦 施設と死者の働き</h3>
       ${lines.length ? `<ul class="notes">${lines.map(l => `<li>${l}</li>`).join("")}</ul>` : ""}
       ${chains.length ? `<div class="chain-caption">死者の連鎖（誰が倒れ、誰が戻したか）</div>${chainRows}` : ""}
+    </div>`;
+  },
+
+  // ツケ（後で祟る選択の伝票）。**隠さない**のが要点。
+  // 数戦あとに理由の分からない不幸が降ってくると、それは事件ではなく理不尽になる。
+  // 「自分がいつ何と引き換えにしたか」が見えているから、支払いの日が事件になる。
+  debtPanel() {
+    const debts = Game.pendingDebts();
+    if (!debts.length) return "";
+    return `<div class="panel debt-panel"><h3>🧾 ツケ <span class="muted">${debts.length}件</span></h3>
+      ${debts.map(d => `<div class="debt-row">
+        <span class="debt-due">あと${d.battlesLeft}戦</span>
+        <span>${U.esc(d.text || "取り立てが来る")}</span>
+      </div>`).join("")}
+      <div class="muted">戦闘が終わるたびに期限が縮む。負けても取り立ては来る。</div>
     </div>`;
   },
 
@@ -876,6 +909,7 @@ const UI = {
       ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房</b>
         <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍にする。</span>
       </div>` : ""}
+      ${opening ? "" : this.debtPanel()}
       ${opening ? "" : this.feastPanel()}
       ${this.payrollPanel()}
       ${this.kingSlimePanel()}
@@ -974,6 +1008,7 @@ const UI = {
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
       ${this.breakthroughPanel(b)}
+      ${this.debtPanel()}
       ${this.facilityPanel(b)}
       ${this.contributionPanel(b.contribution)}
       ${(b.incidents && b.incidents.length) ? `<div class="panel incident-panel"><h3>💥 この戦いの不祥事</h3>
@@ -1027,17 +1062,113 @@ const UI = {
   },
 
   // ハプニング画面。選択肢を出し、選んだ後は結果を見せてから採用へ進む。
+  // ── イベントの本文を「地の文」と「台詞」に割る ────────────────
+  // events.js の契約（text は1本の文字列）は変えない。本文中の 「…」 を台詞とみなし、
+  // その直前に名前が出ている登場人物へ割り当てる。名前が無ければ直前の話者が続けて話す。
+  // 誰にも割り当てられない台詞は地の文のまま残す。**嘘の話者を作らない**のが唯一の約束。
+  // これで、台本側（E・H）は本文に「」を書くだけで立ち絵と吹き出しになる。
+  eventCastList(cast) {
+    return Object.keys(cast || {}).map(k => cast[k]).filter(m => m && m.name);
+  },
+
+  // before の中で「いちばん後ろに名前が出ている」者が話者。同じ行に2人いても取り違えない。
+  eventSpeakerIn(before, speakers, previous) {
+    let found = null, at = -1;
+    for (const m of speakers) {
+      const i = before.lastIndexOf(m.name);
+      if (i > at) { at = i; found = m; }
+    }
+    const mormoAt = before.lastIndexOf("モルモ");
+    if (mormoAt > at) return { name: "モルモ", mormo: true };
+    if (found) return found;
+    if (previous) return previous;
+    // 登場人物が1人しかいない場面なら、名乗らなくても本人の台詞と分かる
+    return speakers.length === 1 ? speakers[0] : null;
+  },
+
+  eventScript(text, cast) {
+    const speakers = this.eventCastList(cast);
+    const blocks = [];
+    let previous = null;
+    // 話者の付かない台詞は、前後の地の文と切り離さずに1つの段落へ戻す。
+    // 「食堂に『払え』の張り紙があった。」を3つに割ると、かえって読みにくい。
+    let pending = "";
+    const flush = () => { if (pending.trim()) blocks.push({ say: null, body: pending.trim() }); pending = ""; };
+    for (const line of String(text || "").split("\n")) {
+      const quote = /「([^」]*)」/g;
+      let cursor = 0, m;
+      while ((m = quote.exec(line))) {
+        const before = line.slice(cursor, m.index);
+        const who = this.eventSpeakerIn(before, speakers, previous);
+        cursor = m.index + m[0].length;
+        if (!who) { pending += before + m[0]; continue; }
+        pending += before;
+        flush();
+        previous = who.mormo ? previous : who;
+        blocks.push({ say: who, body: m[1] });
+      }
+      pending += line.slice(cursor);
+      flush();
+    }
+    return blocks;
+  },
+
+  eventExpressionFor(body) {
+    const text = String(body || "");
+    if (/泣|涙|悲|寂|すまな|ごめん|辞め|退職|死|葬|弔|つら|辛/.test(text)) return "tears";
+    if (/得|儲|金|報酬|成功|勝|任せ|計画通り|いただ|へへ|ふふ|ニヤ|にや/.test(text)) return "smirk";
+    if (/[！？!?]|まさか|なんだと|えっ|うわ|驚/.test(text)) return "surprise";
+    return null;
+  },
+
+  eventFaceHtml(who, expression) {
+    if (who.mormo) return `<span class="avatar mormo-face"><img src="assets/mormo/report.webp" alt=""></span>`;
+    const id = who.tplId;
+    if (expression && EVENT_EXPRESSIONS[id] && EVENT_EXPRESSIONS[id].includes(expression)) {
+      const fallback = this.avatarHtml(who);
+      return `<span class="avatar event-expression" data-fallback-html="${U.esc(fallback)}"><img
+        src="assets/monsters/events/${U.esc(id)}/${U.esc(expression)}.webp" alt=""
+        onerror="UI.eventExpressionError(this)"></span>`;
+    }
+    return this.avatarHtml(who);
+  },
+
+  eventExpressionError(img) {
+    const holder = img && img.parentElement;
+    if (!holder) return;
+    holder.outerHTML = holder.dataset.fallbackHtml || "";
+  },
+
+  eventScriptHtml(text, cast) {
+    return this.eventScript(text, cast).map(b => b.say
+      ? `<div class="event-say${b.say.mormo ? " mormo" : ""}">${this.eventFaceHtml(b.say, this.eventExpressionFor(b.body))}
+          <p class="event-bubble"><b>${U.esc(b.say.name)}</b>「${U.esc(b.body)}」</p></div>`
+      : `<p class="event-line">${U.esc(b.body)}</p>`).join("");
+  },
+
+  // 登場人物の並び。誰の話か・いま忠誠がいくつかを見てから選ばせる。
+  eventCastHtml(cast) {
+    const list = this.eventCastList(cast);
+    if (!list.length) return "";
+    return `<div class="event-cast">${list.map(m => `<div class="event-cast-card">
+      ${this.avatarHtml(m)}
+      <div><b>${U.esc(m.name)}</b><small>${U.esc(m.race)}・忠誠${Math.round(m.loyalty)}</small></div>
+    </div>`).join("")}</div>`;
+  },
+
   event() {
     const st = Game.state;
     const ev = Game.currentEvent();
 
     // 選択済み → 結果を見せる
     if (!ev || st.eventOutcome) {
+      const done = Game.resolveCast(st.eventCast || {});
       return this.set(`${this.hud()}
         <div class="event-desk resolved"><div class="event-seal">処理済</div>
         <div class="panel event-panel">
           <div class="event-kicker">魔王城・案件報告</div><h2>⚡ その後</h2>
-          <div class="event-text">${U.esc(st.eventOutcome || "")}</div>
+          ${this.eventCastHtml(done)}
+          <div class="event-text">${this.eventScriptHtml(st.eventOutcome || "", done)}</div>
         </div>
         <button class="primary wide" data-action="eventdone">次の応募者を面接する</button></div>`, "event");
     }
@@ -1051,7 +1182,8 @@ const UI = {
       <div class="event-desk"><div class="event-seal">至急</div>
       <div class="panel event-panel">
         <div class="event-kicker">モルモ提出・緊急案件</div><h2>⚡ ${U.esc(ev.title)}</h2>
-        <div class="event-text">${U.esc(st.pendingEvent.text)}</div>
+        ${this.eventCastHtml(Game.resolveCast(st.pendingEvent.cast))}
+        <div class="event-text">${this.eventScriptHtml(st.pendingEvent.text, Game.resolveCast(st.pendingEvent.cast))}</div>
       </div>
       <div class="event-options">${opts}</div></div>`, "event");
   },

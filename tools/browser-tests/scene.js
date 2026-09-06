@@ -29,7 +29,7 @@ const { autoDismissMormo, passCommandPhase } = require('./helpers.js');
   const shots = [];
   for (const t of [400, 1200, 2600, 5000]) {
     await page.waitForTimeout(t - (shots.length ? [400,1200,2600,5000][shots.length-1] : 0));
-    const f = `${process.env.SP}/scene-${t}.png`;
+    const f = `${process.env.SP || ".screenshots"}/scene-${t}.png`;
     await page.screenshot({ path: f });
     shots.push(f);
   }
@@ -55,7 +55,7 @@ const { autoDismissMormo, passCommandPhase } = require('./helpers.js');
   const dead = await page.locator('.bu.dead').count();
   const res = await page.locator('.scene-result').count();
   console.log(`スキップ後: 結果ボタン=${nextVisible} 死亡表示=${dead}体 決着バナー=${res}`);
-  await page.screenshot({ path: process.env.SP + '/scene-end.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/scene-end.png' });
 
   await passCommandPhase(page);
 

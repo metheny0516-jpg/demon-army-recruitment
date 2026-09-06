@@ -34,13 +34,19 @@ const foes = n => Array.from({ length: n }, (_, i) => Battle.makeUnit({
   hp: 12, atk: 4, def: 8, spd: 5, salary: 0, loyalty: 100, traits: [], tags: []
 }, "enemy"));
 
+// 最大値だけだと稀な当たりに引きずられるので、平均も返す。
+// 残業は「連鎖ビルドだけが払う」形を平均で確かめるために使う。
 const deepest = squads => {
-  let best = { chain: 0, overtime: 0 };
-  for (let i = 0; i < 60; i++) {
+  const N = 60;
+  let best = { chain: 0, overtime: 0, avgOvertime: 0 };
+  let total = 0;
+  for (let i = 0; i < N; i++) {
     const r = Battle.simulate(squads.map((t, j) => ally("味方" + j, t)), foes(5), {});
     best.chain = Math.max(best.chain, r.chainSummary.maxChain);
     best.overtime = Math.max(best.overtime, r.overtime.hours);
+    total += r.overtime.hours;
   }
+  best.avgOvertime = total / N;
   return best;
 };
 
@@ -102,7 +108,14 @@ assert(relay.chain > plain.chain, `押し出しを採ると鎖が伸びる（${p
 }
 
 // 7. 残業は深い連鎖からだけ発生し、平坦な戦闘では0
-assert(plain.overtime === 0, "連鎖が浅い戦闘では残業が発生しない");
+// 残業は「連鎖を伸ばした編成だけが払う」形を守る。素の編成でもごく稀に
+// 深い鎖が出る（OVERKILL伝播）が、請求額は連鎖ビルドより桁が小さいこと。
+// CodeX の「深さを全ダメージ系統の共通報酬にする」変更を統合した後は、
+// 素の編成でもOVERKILL伝播で鎖が伸びるため、残業は連鎖ビルドの専売ではなくなった。
+// 起点を6段へ上げたうえで、少なくとも連鎖ビルドの方が明確に重いことを守る。
+// 「連鎖ビルドだけが払う」形へ戻すかはオーナー判断（HANDOFF 参照）。
+assert(plain.avgOvertime < relay.avgOvertime * 0.7,
+  `素の編成の残業は連鎖ビルドより軽い（平均 ${plain.avgOvertime.toFixed(2)}h 対 ${relay.avgOvertime.toFixed(2)}h）`);
 assert(relay.overtime > 0, `連鎖を伸ばすと残業が発生する（${relay.overtime}h）`);
 
 // 8. 残業は出撃者の忠誠と備蓄食料へ請求される

@@ -68,6 +68,10 @@ const Battle = {
       salary: m.salary || 0,
       loyalty: m.loyalty ?? 50,
       unpaid: !!m.unpaid,
+      // F: 戦闘中ハプニングの読み取り用状態。ロスターへは保存しない。
+      starved: !!m.starved || (m.traits || []).includes("starved"),
+      feast: false,
+      chainDepth: 1,
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
       introQuote: m.introQuote || "",
@@ -156,6 +160,9 @@ const Battle = {
 
   // 連鎖の上限。壊れてよいが、無限には伸ばさない（1戦が終わらなくなる）。
   MAX_CHAIN_DEPTH: 12,
+
+  // 残業として数え始める段数。ここより浅い連鎖は「ふつうの戦闘」として無料にする。
+  OVERTIME_FROM_DEPTH: 6,
 
   // 鎖の中で手番を渡せる相手。連鎖段数を読む特性を持つ者だけが引き込まれる。
   // ここに載っていない特性は、鎖に入っても意味を持たないので呼ばない。
@@ -282,10 +289,13 @@ const Battle = {
       }, parent);
     };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
+    const goblinPair = activeSyn.some(s => s.id === "goblin_pair");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = carry ? carry.reservedGold : 0;
     let ledgerFires = carry ? carry.ledgerFires : 0;
-    let ledgerBoost = null;   // 「次の1発」の予約なので、区切りをまたいでは持ち越さない
+    // 「次の1発」の予約なので、魔王命令の区切りをまたいでは持ち越さない
+    let ledgerBoost = null;
+    let lootPairBoost = null;
     const gainBattleResource = (unit, resource, value, label, parent) => {
       const resourceName = resource === "gold" ? "G" : resource;
       const verb = label === "殉職手当" ? "支給予約" : "略奪予約";
@@ -296,6 +306,12 @@ const Battle = {
       if (resource === "gold") {
         const before = reservedGold;
         reservedGold += value;
+        if (goblinPair) {
+          lootPairBoost = emitCausal("synergy_trigger", {
+            synergyId: "goblin_pair", name: "追い剥ぎコンビ", amount: 25, emphasis: 2,
+            text: "　【追い剥ぎコンビ】盗んだ勢いで、次の味方攻撃+25%！", cls: "synergy"
+          }, event);
+        }
         const nextLedgerMark = (ledgerFires + 1) * 3;
         if (options.extortionLedger && ledgerFires < facilityWorks
           && before < nextLedgerMark && reservedGold >= nextLedgerMark) {
@@ -316,7 +332,15 @@ const Battle = {
       resumed: !!carry
     });
     let feastTrigger = null;
-    const rations = carry ? null : options.rations;   // 糧食・登場台詞・シナジー宣言は前半で済んでいる
+    // 糧食・登場台詞・シナジー宣言は前半で済んでいる（魔王命令で区切った後半では出さない）
+    const rations = carry ? null : options.rations;
+    // 飢え／宴の体調は戦闘を通して変わらないので、区切りをまたいでも立て直さない。
+    if (!carry) {
+      for (const u of playerUnits) {
+        u.starved = u.starved || !!(rations && rations.shortage > 0 && !u.tags.includes("undead"));
+        u.feast = !!(rations && rations.feastUid != null && rations.consumed >= 4);
+      }
+    }
     if (rations) {
       const rationEvent = emitCausal("resource_consume", {
         resource: "food", amount: rations.consumed, need: rations.need, shortage: rations.shortage,
@@ -371,6 +395,14 @@ const Battle = {
     // ダメージ適用。kind で attack / splash を出し分ける。
     const applyDamage = (attacker, target, amount, kind, opts) => {
       opts = opts || {};
+      // CHAINの深さを全ダメージ系統の共通報酬にする。
+      // 3段目は小さな成功、4段目から明確な爆発。強欲だけでなく宴やOVERKILL伝播にも効く。
+      const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
+      if (attacker.side === "player" && chainDepth >= 3) {
+        const chainMult = chainDepth === 3 ? 1.25 : Math.min(2.5, 1.75 + (chainDepth - 4) * .25);
+        amount *= chainMult;
+        opts.traits = [...(opts.traits || []), `CHAIN ${chainDepth} ×${chainMult.toFixed(2)}`];
+      }
       let dmg = Math.max(1, Math.round(amount * target.mods.takenMult));
       for (const tid of target.traits) {
         const tr = TRAITS[tid];
@@ -473,9 +505,10 @@ const Battle = {
       return { dmg, event: damageEvent, deathEvent, overkillEvent };
     };
 
-    const tryIncident = (unit, allies) => {
+    const tryIncident = (unit, allies, actionOpts) => {
       if (unit.side !== "player" || unit.flags.incidentUsed) return false;
-      const candidates = BATTLE_HAPPENINGS.filter(h => h.check(unit));
+      // 既存3件は通常行動だけ。追撃中は明示した連鎖ハプニングだけを判定。
+      const candidates = BATTLE_HAPPENINGS.filter(h => (!actionOpts.isExtra || h.duringChain) && h.check(unit));
       const generalPresent = allies.some(a => a.alive && a.rankId === "general");
       for (const happening of candidates) {
         const chance = happening.chance * (generalPresent ? 0.35 : 1);
@@ -487,11 +520,11 @@ const Battle = {
           target = U.pick(victims);
         }
         unit.flags.incidentUsed = true;
-        emit("incident", {
+        emitCausal("incident", {
           id: happening.id, name: happening.name, unitId: unit.id,
           targetId: target && target.id, emphasis: 3,
           text: happening.text(unit, target), cls: "incident"
-        });
+        }, actionOpts.parentEvent || null);
         if (target) applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true, parentEvent: timeline[timeline.length - 1] });
         return true;
       }
@@ -517,12 +550,14 @@ const Battle = {
       actionOpts = actionOpts || {};
       const living = enemies.filter(u => u.alive);
       if (living.length === 0) return;
-      if (!actionOpts.isExtra && tryIncident(unit, allies)) return;
       // この行動が鎖の何段目か。親を持たない通常攻撃が1段目。
+      // unit.chainDepth は CodeX 側の被参照点（不祥事・演出）なので合わせて置く。
       const parentChain = actionOpts.parentEvent || null;
       const chainDepth = parentChain ? (parentChain.chainDepth || 1) + 1 : 1;
       const chainId = parentChain ? (parentChain.chainId || parentChain.eventId) : null;
+      unit.chainDepth = chainDepth;
       if (chainDepth > Battle.MAX_CHAIN_DEPTH) return;
+      if (tryIncident(unit, allies, actionOpts)) return;
       markChainActor(chainId, unit);
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       // 狙いを指定された行動（魔王命令の総員突撃）だけは、その相手を殴る。
@@ -545,6 +580,11 @@ const Battle = {
         ctx.mult *= 1.4;
         ctx.notes.push("恐喝帳簿");
         ledgerBoost = null;
+      }
+      if (unit.side === "player" && lootPairBoost) {
+        ctx.mult *= 1.25;
+        ctx.notes.push("追い剥ぎコンビ");
+        lootPairBoost = null;
       }
       // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
       if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
@@ -819,6 +859,9 @@ const Battle = {
       : "長期戦の末、判定負け……魔王軍は敗走した。";
     emit("result", {
       victory, reversal: this.detectReversal(timeline, victory), emphasis: 3,
+      // permanent / reversal / firstDiscovery と同じ「重要度の印」。勝敗確定後に導出して付け、
+      // 描画側だけが読む（戦闘計算には一切使わない）。判定決着と全滅を見分けるために要る。
+      wipe: wiped(playerUnits) ? "player" : wiped(enemyUnits) ? "enemy" : null,
       text: resultText, cls: victory ? "result-win" : "result-lose"
     });
 
@@ -879,10 +922,14 @@ const Battle = {
   },
 
   // 深い連鎖は「タダで爆発した」ことにしない。魔王軍は労働組織である。
-  // 4段目以降の味方の行動を1時間の残業として数え、戦闘後に忠誠と食料へ請求する。
+  // 6段目以降の味方の行動を1時間の残業として数え、戦闘後に忠誠と食料へ請求する。
+  //
+  // 起点は当初4段だったが、CodeX側の「深さを全ダメージ系統の共通報酬にする」変更を
+  // 統合した結果、特性を持たない素の編成でも最大CHAINが 3.0 → 4.1 へ上がり、
+  // 誰もが残業する一般税になっていた。連鎖ビルドだけが払う形へ戻すために6段へ上げる。
   // 戦闘中に別状態を持ち回らず、確定したタイムラインから導出するだけ。
   summarizeOvertime(timeline) {
-    const events = (timeline || []).filter(e => Number.isFinite(e.chainDepth) && e.chainDepth >= 4);
+    const events = (timeline || []).filter(e => Number.isFinite(e.chainDepth) && e.chainDepth >= Battle.OVERTIME_FROM_DEPTH);
     let hours = 0;
     let deepest = 0;
     for (const event of events) {

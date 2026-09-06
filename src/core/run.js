@@ -85,7 +85,11 @@ const Game = {
       briefsThisPhase: 0,
       pendingEvent: null,
       eventOutcome: null,
+      // 結果画面でも立ち絵と吹き出しを出すため、当事者の uid だけ残す（表示専用）
+      eventCast: null,
       laborDispute: null,
+      // 「得だが後で祟る」選択のツケ（伝票の配列。契約は下の oweDebt() 節）
+      debts: [],
       legacyReturn,
       legacyOffered: false,
       lessonId: this.lessonById(lessonId) ? lessonId : null,
@@ -183,7 +187,7 @@ const Game = {
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, extraHiresThisPhase: 0, maxPower: 0, maxArmySize: 0,
       maxChain: 0, maxOverkill: 0, kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
-      rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
+      rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
       generalsMade: [],
@@ -199,7 +203,8 @@ const Game = {
       payrollChoices: { regular: 0, withhold: 0 },
       lastPayrollReport: null,
       legacyReturn: null, legacyOffered: false, lessonId: null,
-      feastPending: null, hungerStreak: 0
+      feastPending: null, hungerStreak: 0,
+      debts: []
     };
     for (const [key, value] of Object.entries(defaults)) {
       if (st[key] === undefined || st[key] === null) st[key] = Array.isArray(value) ? [] : value;
@@ -207,6 +212,7 @@ const Game = {
     if (!Array.isArray(st.roster)) st.roster = [];
     if (!Array.isArray(st.activeUids)) st.activeUids = st.roster.slice(0, this.MAX_DEPLOY).map(m => m.uid);
     if (!Array.isArray(st.applicants)) st.applicants = [];
+    if (!Array.isArray(st.debts)) st.debts = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
     if (!FACILITIES.some(f => f.id === st.activeFacilityId)) st.activeFacilityId = null;
     if (st.pendingFacilityChoiceLevel !== null) {
@@ -1493,6 +1499,10 @@ const Game = {
       st.phase = "defeat";
     }
 
+    // ツケの取り立ては勝敗を問わない。負ければ踏み倒せるなら、
+    // ツケは「判断」ではなく「わざと負ければ消える抜け道」になる。
+    this.settleDebts(notes);
+
     st.lastBattle = {
       victory: result.victory,
       missionKind: stageData.missionKind,
@@ -1511,6 +1521,11 @@ const Game = {
       nearMiss: result.nearMiss,
       chainSummary: result.chainSummary,
       overkillSummary: result.overkillSummary,
+      // 戦意（momentum）の到達倍率。戦闘中は帯に出続けるが、終わると消えてしまい
+      // 「今日はどれだけ乗ったのか」が戦果に残らなかった。タイムラインから導出するだけで、
+      // 戦闘式・数値は変えていない。古いセーブには無いので表示側で 1 として扱う。
+      momentumPeak: (result.timeline || []).reduce((max, e) =>
+        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
       // 施設は「誰の手柄か」を個人へ付けない代わりに、戦果へ短い要約として残す。
       // 共通補正（Lv）と稼働施設（Joker）を分けて書き、どちらを体感したか読めるようにする。
@@ -2157,6 +2172,133 @@ const Game = {
     this.kpi("runEnded", st, record);
   },
 
+  // ── ツケ（後で祟る選択の預かり） ──────────────────
+  //
+  // 戦間イベントの「得だが後で祟る」選択肢は、その場で得をして**数戦あとに**跳ね返る。
+  // apply() の中で即座に効かせると「後で祟る」が成立せず、ただの割の悪い取引になる。
+  // かといって関数を state に置くとセーブできない（core は JSON で保存する）。
+  // そこで **種別と数値だけを持つ伝票** を積み、戦闘のたびに満期のものを支払う。
+  //
+  // 契約: st.debts = [{ id, battlesLeft, kind, uid?, dept?, amount?, text }]
+  //   - `kind` は settleDebt() が知っているものだけ。**イベント側に関数を書かない**
+  //   - `text` は満期に戦果へ出す一行。伝票を見た時点で何が来るか読めるようにする
+  //   - 新しい祟りを足すときは、ここへ 1 ケース足す（データ側では増やせない）
+  //
+  // 敗北しても支払う。負ければ踏み倒せるなら、ツケは判断ではなく抜け道になる。
+  DEBT_KINDS: ["gold", "food", "materials", "alert", "facilityLevel",
+    "loyalty_all", "loyalty_dept", "loyalty_one", "maxhp_all", "maxhp_one",
+    "unpaid_one", "dispute", "desert"],
+
+  // イベントの apply() から呼ぶ。battlesLeft 戦後に効く伝票を積む。
+  oweDebt(spec) {
+    const st = this.state;
+    if (!Array.isArray(st.debts)) st.debts = [];
+    if (!spec || !this.DEBT_KINDS.includes(spec.kind)) return null;
+    const debt = {
+      id: `debt${st.debts.length + 1}-${spec.kind}`,
+      battlesLeft: Math.max(1, Math.round(Number(spec.battlesLeft) || 1)),
+      kind: spec.kind,
+      uid: spec.uid === undefined ? null : spec.uid,
+      dept: spec.dept || null,
+      amount: Number(spec.amount) || 0,
+      text: String(spec.text || "")
+    };
+    st.debts.push(debt);
+    return debt;
+  },
+
+  // まだ効いていない伝票（表示用）。何が何戦後に来るかを player に隠さない。
+  pendingDebts() {
+    return (this.state.debts || []).slice().sort((a, b) => a.battlesLeft - b.battlesLeft);
+  },
+
+  // 戦闘が1つ終わるたびに呼ぶ。満期のものだけ支払い、notes へ結果を書く。
+  settleDebts(notes) {
+    const st = this.state;
+    if (!Array.isArray(st.debts) || !st.debts.length) return;
+    const remaining = [];
+    for (const debt of st.debts) {
+      debt.battlesLeft -= 1;
+      if (debt.battlesLeft > 0) { remaining.push(debt); continue; }
+      const line = this.settleDebt(debt);
+      if (line && notes) notes.push(`🧾 ツケの取り立て：${line}`);
+    }
+    st.debts = remaining;
+  },
+
+  // 伝票1枚の支払い。効果を適用して、戦果に出す一行を返す。
+  settleDebt(debt) {
+    const st = this.state;
+    const one = debt.uid === null ? null : st.roster.find(m => m.uid === debt.uid);
+    const head = debt.text ? `${debt.text} — ` : "";
+    const loyalty = (m, delta) => { m.loyalty = U.clamp((m.loyalty || 0) + delta, 0, 100); };
+    const shave = (m, percent) => {
+      const before = m.hp;
+      m.hp = Math.max(1, Math.round(m.hp * (1 - percent / 100)));
+      return before - m.hp;
+    };
+    switch (debt.kind) {
+      case "gold":
+        st.gold = Math.max(0, st.gold + debt.amount);
+        return `${head}所持金 ${debt.amount > 0 ? "+" : ""}${debt.amount}G（現在 ${st.gold}G）`;
+      case "food":
+        st.food = Math.max(0, st.food + debt.amount);
+        return `${head}食料 ${debt.amount > 0 ? "+" : ""}${debt.amount}（備蓄 ${st.food}）`;
+      case "materials":
+        st.materials = Math.max(0, st.materials + debt.amount);
+        return `${head}建材 ${debt.amount > 0 ? "+" : ""}${debt.amount}（備蓄 ${st.materials}）`;
+      case "alert":
+        st.alert = Math.max(0, st.alert + debt.amount);
+        return `${head}王国警戒度 +${debt.amount}（現在 ${st.alert}）`;
+      case "facilityLevel": {
+        // 稼働中の施設を 0 まで落とすと、選んだ施設が宙に浮く。最低 Lv.1 は残す。
+        const floor = st.activeFacilityId ? 1 : 0;
+        const before = st.facilityLevel || 0;
+        st.facilityLevel = Math.max(floor, before + debt.amount);
+        if (st.facilityLevel === before) return `${head}施設は無傷で済んだ（Lv.${before}）`;
+        return `${head}施設Lv.${before} → Lv.${st.facilityLevel}`;
+      }
+      case "loyalty_all":
+        for (const m of st.roster) loyalty(m, debt.amount);
+        return `${head}全員の忠誠 ${debt.amount > 0 ? "+" : ""}${debt.amount}`;
+      case "loyalty_dept": {
+        const members = this.departmentRoster(debt.dept);
+        for (const m of members) loyalty(m, debt.amount);
+        const name = (DEPARTMENTS[debt.dept] || {}).name || debt.dept;
+        return `${head}${name}${members.length}名の忠誠 ${debt.amount > 0 ? "+" : ""}${debt.amount}`;
+      }
+      case "loyalty_one":
+        if (!one) return `${head}当人はもう軍にいない`;
+        loyalty(one, debt.amount);
+        return `${head}${one.name}の忠誠 ${debt.amount > 0 ? "+" : ""}${debt.amount}`;
+      case "maxhp_all": {
+        let total = 0;
+        for (const m of st.roster) total += shave(m, debt.amount);
+        return `${head}全員の最大HP -${debt.amount}%（合計 ${total}）`;
+      }
+      case "maxhp_one":
+        if (!one) return `${head}当人はもう軍にいない`;
+        return `${head}${one.name}の最大HP -${shave(one, debt.amount)}`;
+      case "unpaid_one":
+        if (!one) return `${head}当人はもう軍にいない`;
+        one.unpaidStreak = Math.max(0, (one.unpaidStreak || 0) + debt.amount);
+        return `${head}${one.name}の未払い ${one.unpaidStreak}回目`;
+      case "dispute":
+        if (st.laborDispute) return `${head}すでに争議の最中だった`;
+        st.laborDispute = { stage: "march", actorUid: one ? one.uid : null, startedTurn: st.turn };
+        return `${head}労働争議へ発展した`;
+      case "desert": {
+        if (!one) return `${head}当人はもう軍にいない`;
+        st.roster = st.roster.filter(m => m.uid !== one.uid);
+        st.activeUids = st.activeUids.filter(uid => uid !== one.uid);
+        st.materials = Math.max(0, st.materials + debt.amount);
+        return `${head}${one.name}が出奔した（建材 ${debt.amount}／備蓄 ${st.materials}）`;
+      }
+      default:
+        return "";
+    }
+  },
+
   // ── ハプニング ────────────────────────────
   EVENT_CHANCE: 0.45,
 
@@ -2165,6 +2307,7 @@ const Game = {
     const st = this.state;
     st.pendingEvent = null;
     st.eventOutcome = null;
+    st.eventCast = null;
     if (st.roster.length === 0) return false;
     if (!U.chance(this.EVENT_CHANCE)) return false;
 
@@ -2219,11 +2362,13 @@ const Game = {
     // 登場人物が既に居ない場合は何も起こさない
     for (const k of Object.keys(cast)) if (cast[k] === null && st.pendingEvent.cast[k] !== undefined) {
       st.eventOutcome = "……当人はもう軍にいなかった。話は流れた。";
+      st.eventCast = null;
       st.pendingEvent = null;
       this.save();
       return true;
     }
     const notes = [];
+    st.eventCast = st.pendingEvent.cast;
     st.eventOutcome = ev.options[index].apply(st, cast) || "";
     this.processDepartures(notes);
     if (notes.length) st.eventOutcome += "\n" + notes.join("\n");
@@ -2265,6 +2410,7 @@ const Game = {
     st.briefId = null;
     st.pendingEvent = null;
     st.eventOutcome = null;
+    st.eventCast = null;
     st.selectedMission = null;
     st.missionOffers = [];
     this.saveCheckpoint();   // ここが「一戦手前」の戻り先になる

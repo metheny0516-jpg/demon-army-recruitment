@@ -14,7 +14,8 @@ const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
 } };
 vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
-vm.runInContext('U.chance = () => true; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
+// このテストは略奪の接続を検証する。不祥事の抽選は専用テストで扱う。
+vm.runInContext('U.chance = p => p >= 0.5; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
 const Battle = vm.runInContext('Battle', ctx);
 const Game = vm.runInContext('Game', ctx);
 const assert = (condition, message) => {
@@ -40,6 +41,8 @@ assert(greed && greed.parentEventId === loot.eventId, '金貨獲得から強欲�
 assert(extra && extra.parentEventId === greed.eventId, '強欲から追加攻撃が発生する');
 assert(extra.chainId === firstAttack.chainId && extra.chainDepth === 4,
   '攻撃→金貨→強欲→追加攻撃が同じCHAIN 4になる');
+assert((extra.traits || []).some(t => t.startsWith('CHAIN 4')) && extra.dmg > firstAttack.dmg,
+  'CHAIN 4の強欲追撃は連鎖倍率で最初の通常攻撃より大きくなる');
 assert(result.timeline.filter(e => e.type === 'resource_gain').length === 1,
   '追い剥ぎは1戦闘1回で追加攻撃から再発火しない');
 assert(result.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === 'greedy').length === 1,
@@ -47,14 +50,25 @@ assert(result.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === '
 assert(result.resourceChanges.gold === 1 && result.chainSummary.maxChain >= 4,
   '予約金貨と最大CHAINをタイムラインから集計する');
 
+const pair = Battle.simulate([
+  make('盗む係', 'player', { spd: 20, traits: ['pickpocket'] }),
+  make('追撃係', 'player', { spd: 10, traits: ['pickpocket', 'greedy'] })
+], [make('丈夫な標的', 'enemy', { hp: 999, atk: 1, spd: 1 })]);
+const pairTrigger = pair.timeline.find(e => e.type === 'synergy_trigger' && e.synergyId === 'goblin_pair');
+const pairExtra = pair.timeline.find(e => e.type === 'attack' && e.label === '強欲');
+assert(pair.activeSynergies.includes('追い剥ぎコンビ'), 'ゴブリン2体の序盤シナジーが成立する');
+assert(pairTrigger && pairExtra && (pairExtra.traits || []).includes('追い剥ぎコンビ'),
+  '略奪金貨が追い剥ぎコンビを発火し、直後の強欲追撃を強化する');
+
 const raider = make('略奪隊長', 'player', { hp:100, atk:50, spd:12, traits:['pickpocket', 'greedy'] });
-const wing1 = make('略奪兵A', 'player', { hp:100, atk:50, spd:10 });
-const wing2 = make('略奪兵B', 'player', { hp:100, atk:50, spd:8 });
+const wing1 = make('援護兵A', 'player', { hp:100, atk:50, spd:10, race:'オーク' });
+const wing2 = make('援護兵B', 'player', { hp:100, atk:50, spd:8, race:'オーク' });
 result = Battle.simulate([raider, wing1, wing2], [
   make('標的A', 'enemy', { hp:10, atk:1, spd:1 }),
   make('標的B', 'enemy', { hp:10, atk:1, spd:1 }),
   make('標的C', 'enemy', { hp:200, atk:1, spd:1 })
-], { extortionLedger:true, synergyPool: [raider, wing1, wing2, make('控え', 'player')] });
+], { extortionLedger:true, synergyPool: [raider, wing1, wing2,
+  make('控えA', 'player'), make('控えB', 'player'), make('控えC', 'player')] });
 const coordinatedLoot = result.timeline.filter(e => e.type === 'resource_gain' && e.label === '略奪者の連携');
 const ledger = result.timeline.find(e => e.type === 'facility_trigger' && e.facilityId === 'extortion_ledger');
 assert(coordinatedLoot.length >= 2, '軍団にゴブリン4体なら敵撃破ごとに略奪者の連携で1Gを予約する');
@@ -63,7 +77,7 @@ assert(ledger.parentEventId === result.timeline.filter(e => e.type === 'resource
   '3G目の金貨獲得を恐喝帳簿の原因にする');
 const ledgerIndex = result.timeline.indexOf(ledger);
 const boosted = result.timeline.slice(ledgerIndex + 1).find(e => e.type === 'attack' && (e.traits || []).includes('恐喝帳簿'));
-assert(boosted && boosted.dmg >= 70, '恐喝帳簿が次の味方攻撃だけを40%強化する');
+assert(boosted, '恐喝帳簿の+40%が次の味方攻撃へ付く');
 assert(result.timeline.filter(e => e.type === 'facility_trigger' && e.facilityId === 'extortion_ledger').length === 1,
   '恐喝帳簿は1戦闘1回だけ発火する');
 

@@ -38,27 +38,32 @@ const BattleScene = {
   motions: new Set(),
   pendingHits: new Set(),
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
-  DURATION: { 0: 1000, 1: 1200, 2: 1500, 3: 1800 },
+  DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
   // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
   // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
-    battle_start: 900, round_start: 1600, synergy: 3000, facility_trigger: 3000,
-    note: 1200, dialogue: 3200, incident: 3200, death: 2200, revive: 3000, survive: 2600,
-    heal: 2200, summon: 3000, trait_trigger: 3000, resource_gain: 3000,
-    resource_forfeit: 3000, resource_consume: 2800, overkill: 3000, momentum: 3000, result: 4400
+    battle_start: 500, round_start: 1150, synergy: 1650, synergy_trigger: 1050, facility_trigger: 1250,
+    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
+    heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
+    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200
   },
   VICTORY_PAUSE_MS: 900,
   VICTORY_HOLD_MS: 3500,
 
-  // 2026-09-05試遊：読むのが遅めの人を基準にし、自動圧縮は行わない。
-  // 急ぐときはプレイヤーがx2/x4を選ぶ。長い戦闘でも等速の意味を変えない。
-  BUDGET_MS: 45000, // 過去比較用の目安。尺を縮める判定には使わない
-  MIN_COMPRESS: 1,
+  // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
+  // 長期戦がだらけても一律には速めない。x1の目標総尺を「予算」として置き、
+  // 超えたぶんは通常攻撃と何も反応しなかった区間からだけ削る。
+  // 連鎖の中間は緩急を付ける。起点・初条件・最大余剰・蘇生・召喚・永久戦死を保護する。
+  // 2026-09-05 試遊: 全段を等速3秒にした版はオーナーが否定。「強弱を付ける」へ戻し、
+  // ただし連鎖の各段は CHAIN_STEP_FLOOR より短くしない（一瞬で流れて読めなかったため）。
+  BUDGET_MS: 45000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
+  MIN_COMPRESS: 0.45,   // 圧縮対象イベントの最小倍率（退屈な区間なので深く縮めてよい）
+  CHAIN_STEP_FLOOR: { hit: 560, overkill: 800, other: 520 },
 
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
-    "battle_start", "dialogue", "synergy", "facility_trigger", "trait_trigger",
+    "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
     "resource_gain", "resource_forfeit", "resource_consume", "momentum",
     "overkill", "revive", "summon", "survive", "incident", "result"
   ]),
@@ -140,7 +145,7 @@ const BattleScene = {
     this.timers = [];
     const scene = document.getElementById("scene");
     if (scene) {
-      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt").forEach(el => el.remove());
+      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt, .mormo-aside").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
       scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
       const morale = document.getElementById("morale");
@@ -167,6 +172,7 @@ const BattleScene = {
         <span class="muted">${U.esc(stageData.region)}</span>
       </div>
       <div class="chain-story" id="chain-story">
+        <span class="chain-forecast" id="chain-forecast" hidden></span>
         <span class="chain-origin" id="chain-origin">能力がつながる瞬間を見届けよう</span>
         <b id="chain-reason"></b>
         <details class="chain-history" id="chain-history">
@@ -353,7 +359,12 @@ const BattleScene = {
     this.activeBeat = null;
     const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
     if (origin) origin.textContent = "能力がつながる瞬間を見届けよう";
-    if (reason) reason.textContent = "";
+    if (reason) { reason.textContent = ""; delete reason.dataset.depth; }
+    // 予告はタイムライン全体が答えを持っている。名前は伏せ、数だけ先に約束する。
+    this.synergyPlanned = timeline.filter(e => e.type === "synergy").length;
+    this.synergyFired = 0;
+    this.showForecast();
+    this.mormoAside = this.pickMormoAside(timeline);
     document.getElementById("scene").querySelectorAll(".scene-result").forEach(e => e.remove());
     document.getElementById("scene").classList.remove("decided");
     this.eventScale = 1;
@@ -446,23 +457,44 @@ const BattleScene = {
       if (!hits.length) continue;
       const overkills = indices.filter(i => events[i].type === "overkill");
       const peak = overkills.reduce((best, i) => best === null || events[i].percent > events[best].percent ? i : best, null);
+      const seen = new Set();
+      let hitCount = 0;
       for (const i of indices) {
         const ev = events[i], item = items[i];
+        const hit = hits.includes(i);
+        if (hit) hitCount++;
+        const key = `${ev.type}:${ev.traitId || ev.facilityId || ev.resource || ""}`;
+        const firstAbility = ["trait_trigger", "facility_trigger", "resource_gain", "resource_consume"].includes(ev.type) && !seen.has(key);
+        seen.add(key);
         item.beat = "relay";
         item.showBurst = ev.type !== "overkill" || i === peak;
         if (i === hits[0]) item.beat = "origin";
         else if (i === peak || (i === hits[hits.length - 1] && hits.length > 1)) item.beat = "payoff";
-        // 遅めに読む人を基準にする。中間・同じ能力の再発火も同じだけ読ませる。
-        const letters = Array.from(ev.text || ev.desc || ev.name || ev.label || "").length;
-        item.duration = Math.max(item.duration, Math.min(6500, Math.max(3000, 1600 + letters * 65)));
-        item.protected = true;
+        const preserve = item.beat !== "relay" || firstAbility || ev.firstDiscovery || ev.permanent
+          || ["revive", "summon", "survive", "result", "synergy", "incident", "dialogue"].includes(ev.type);
+        if (preserve) {
+          item.protected = true;
+          continue;
+        }
+        // 初めての条件は読ませる。続く反応は順序を保って畳み掛ける。
+        // ただし各段に「止まって見える」下限を置く。段が進むほど短くはするが、一瞬にはしない。
+        const floor = this.CHAIN_STEP_FLOOR[hit ? "hit" : ev.type === "overkill" ? "overkill" : "other"];
+        const rhythm = Math.max(.36, .68 - Math.max(0, hitCount - 1) * .08);
+        item.duration = Math.min(item.duration, Math.max(floor, Math.round(item.duration * rhythm)));
+        item.protected = true; // 総尺予算による二重の圧縮はしない
       }
     }
     const sum = (list, fn) => list.reduce((total, item) => total + fn(item), 0);
     const protectedMs = sum(items.filter(i => i.protected), i => i.duration);
     const compressibleMs = sum(items.filter(i => !i.protected), i => i.duration);
     const rawMs = protectedMs + compressibleMs;
-    const compressScale = 1;
+    let compressScale = 1;
+    if (rawMs > this.BUDGET_MS && compressibleMs > 0) {
+      // 保護区間だけで予算を超える戦闘は、圧縮対象を最小まで縮めたうえで予算超過を許す
+      const room = (this.BUDGET_MS - protectedMs) / compressibleMs;
+      compressScale = Math.min(1, Math.max(this.MIN_COMPRESS, room));
+    }
+    for (const item of items) if (!item.protected) item.scale = compressScale;
     return {
       items, rawMs, protectedMs, compressibleMs, compressScale,
       plannedMs: sum(items, i => i.duration * i.scale)
@@ -472,6 +504,8 @@ const BattleScene = {
   // 1イベントを描画し、次までの尺(ms)を返す
   render(ev) {
     if (ev.text) this.appendLog(ev.text, ev.cls);
+    // 全滅の一言だけは決着表示と一緒に出す（banner 側）。ここは戦闘中の2場面。
+    if (this.mormoAside && this.mormoAside.at === ev && this.mormoAside.scene !== "wipe") this.sayMormo();
     this.chainFlare(ev);
     this.tellChain(ev);
     if (typeof Sound !== "undefined" && !["attack", "splash", "result"].includes(ev.type)) {
@@ -483,6 +517,7 @@ const BattleScene = {
       case "battle_start":
         this.synergyNames = [];
         this.setMorale(1, 0);
+        this.showForecast(true);
         if (this.isFinalBattle) this.battleIntro();
         break;
       case "round_start":
@@ -559,10 +594,15 @@ const BattleScene = {
           this.flash(1);
           this.cutin(ev.name, ev.desc, ev.id, this.synergyNames.length);
         }
+        this.countSynergy();
         break;
       case "facility_trigger":
         this.pulse("overkill");
         this.cutin(ev.name, ev.desc || "次の味方攻撃+40%", "facility");
+        break;
+      case "synergy_trigger":
+        this.pulse("overkill");
+        this.cutin(ev.name, `連鎖の着地：次の味方攻撃+${ev.amount || 0}%`, "synergy");
         break;
       case "resource_gain": {
         const u = this.units[ev.sourceId];
@@ -671,12 +711,45 @@ const BattleScene = {
   },
 
   // 表示済みの因果だけを使う。未来の撃破や報酬を先に見せない。
+  // 連鎖の1行は「誰が・何で・誰に・いくら」の順で固定する。
+  // 段ごとに文章の形が変わると、初見の人は毎回読み方を作り直すことになる。
+  // 語順を固定し、段の色だけを変えることで「同じ形の行が積み上がっていく」ように見せる。
+  CHAIN_SLOTS: [["who", "cs-who"], ["by", "cs-by"], ["to", "cs-to"], ["amount", "cs-amt"]],
+  CHAIN_DEPTH_TIERS: 6,
+
+  chainDepthTier(depth) {
+    return Math.min(this.CHAIN_DEPTH_TIERS, Math.max(1, depth || 1));
+  },
+
+  chainLineText(depth, slots) {
+    return [`第${depth || 1}段`, ...this.CHAIN_SLOTS.map(([k]) => slots[k]).filter(Boolean)].join(" ");
+  },
+
+  chainLineHtml(depth, slots) {
+    const cells = this.CHAIN_SLOTS
+      .filter(([k]) => slots[k])
+      .map(([k, cls]) => `<i class="${cls}">${U.esc(slots[k])}</i>`);
+    return `<i class="cs-step">第${depth || 1}段</i>${cells.join('<i class="cs-sep">›</i>')}`;
+  },
+
+  // 因果を固定帯へ書き込む。表示はHTML、テストや読み上げ向けにtextContentも同じ語順になる。
+  showChainLine(reason, depth, slots) {
+    reason.dataset.depth = this.chainDepthTier(depth);
+    reason.innerHTML = this.chainLineHtml(depth, slots);
+  },
+
   tellChain(ev, animate = true) {
     if (ev.chainId && !ev.parentEventId && ["attack", "splash"].includes(ev.type)) {
       const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
       const from = this.units[ev.fromId], to = this.units[ev.toId];
       if (origin) origin.textContent = from ? `${from.name}が動く` : "次の攻撃";
-      if (reason) reason.textContent = from && to ? `${from.name} → ${to.name}` : "";
+      if (reason) {
+        if (from && to) this.showChainLine(reason, 1, {
+          who: from.name, by: `自分の${ev.label || "攻撃"}で`,
+          to: `${to.name}へ`, amount: ev.dmg != null ? `${ev.dmg}ダメージ` : ""
+        });
+        else reason.textContent = "";
+      }
       return;
     }
     if (!ev.chainId || !ev.parentEventId || !this.eventById) return;
@@ -705,25 +778,38 @@ const BattleScene = {
     };
     origin.textContent = starter ? `起点：${starter.name}` : "能力がつながった";
     const who = actor(ev)?.name || "味方";
-    let explanation;
-    if (ev.type === "trait_trigger" && ev.traitId === "greedy") {
-      explanation = `${label(parent)}を得たので、${who}の「強欲」が発動。追加でもう一度攻撃する。`;
+    const cause = label(parent);
+    const means = ev.name || ev.label || "反応";
+    // 何が起きても同じ4つの枠に収める。空いた枠だけ落ちる。
+    let slots;
+    if (ev.type === "trait_trigger") {
+      slots = { who, by: `${cause}で《${means}》`, to: "",
+        amount: ev.traitId === "greedy" ? "もう一度攻撃" : "発動" };
     } else if (ev.type === "attack" || ev.type === "splash") {
-      explanation = `${label(parent)}がきっかけで、${who}が${this.units[ev.toId]?.name || "敵"}へ追撃。${ev.dmg}ダメージ。`;
+      slots = { who, by: `${cause}で${ev.label || "追撃"}`,
+        to: `${this.units[ev.toId]?.name || "敵"}へ`, amount: `${ev.dmg}ダメージ` };
     } else if (ev.type === "resource_gain") {
-      explanation = `${label(parent)}がきっかけで、${label(ev)}を獲得。`;
+      const unit = ev.resource === "gold" ? "G" : ev.resource === "soul" ? "魂" : ev.resource;
+      slots = { who, by: `${cause}で${ev.label || "獲得"}`, to: "", amount: `+${ev.amount}${unit}` };
     } else if (ev.type === "momentum") {
-      explanation = `${label(parent)}の余剰ダメージで味方全員の戦意が上昇。与えるダメージが${Number(ev.mult).toFixed(2)}倍に。`;
+      slots = { who: "味方全員", by: `${cause}の余剰ダメージで戦意上昇`, to: "",
+        amount: `与ダメージ ×${Number(ev.mult).toFixed(2)}` };
     } else if (ev.type === "overkill") {
-      explanation = `${label(parent)}が敵の残りHPを超えた！ 余剰${ev.excess}ダメージ（${ev.percent}% OVERKILL）。`;
-    } else explanation = `${label(parent)}がきっかけで、${label(ev)}。`;
-    reason.textContent = `第${ev.chainDepth}段：${explanation}`;
+      slots = { who: actor(parent)?.name || who, by: `${cause}が残りHPを超えた`,
+        to: `${this.units[parent.toId]?.name || this.units[ev.toId]?.name || "敵"}に`,
+        amount: `余剰${ev.excess}（${ev.percent}% ${ev.rank || "OVERKILL"}）` };
+    } else {
+      slots = { who, by: `${cause}で${means}`, to: "", amount: "" };
+    }
+    const explanation = this.chainLineText(ev.chainDepth, slots);
+    this.showChainLine(reason, ev.chainDepth, slots);
     this.historySeen ||= new Set();
     const list = document.getElementById("chain-history-list");
     for (const entry of [root, parent, ev]) {
       if (!list || !entry.eventId || this.historySeen.has(entry.eventId)) continue;
       this.historySeen.add(entry.eventId);
       const row = document.createElement("li");
+      row.dataset.depth = this.chainDepthTier(entry.chainDepth);
       row.innerHTML = `<b>第${entry.chainDepth || 1}段</b> ${U.esc(label(entry))}${entry === ev ? `<small>${U.esc(explanation)}</small>` : ""}`;
       list.appendChild(row);
     }
@@ -1152,6 +1238,73 @@ const BattleScene = {
     // 次の説明で置き換えるまで残す。読む途中でフェードアウトしない。
   },
 
+  // モルモは1戦闘に一度だけ顔を出す。「連発しない」を後追いの判定で守ろうとすると、
+  // 先に来た場面が必ず勝ってしまい、いちばん面白い瞬間を取り逃がす。
+  // タイムライン全体を先に見て、出る場面を1つだけ決めてしまう。
+  // 優先度は 全滅 ＞ 初めて見るシナジー ＞ 5段以上の連鎖（珍しい順）。
+  MORMO_ASIDE_MS: 3600,
+
+  pickMormoAside(timeline) {
+    if (typeof MORMO_BATTLE_LINES === "undefined" || typeof MormoScene === "undefined") return null;
+    const pick = (scene, at) => at ? { scene, at } : null;
+    return pick("wipe", timeline.find(e => e.type === "result" && e.wipe === "player"))
+      || pick("discovery", timeline.find(e => e.type === "synergy" && e.firstDiscovery))
+      || pick("chain", timeline.find(e => (e.chainDepth || 0) >= 5));
+  },
+
+  sayMormo() {
+    const plan = this.mormoAside;
+    if (!plan) return;
+    this.mormoAside = null; // 1戦闘1回。撃ったら予約を消す
+    const set = MORMO_BATTLE_LINES[plan.scene];
+    if (!set || !set.lines.length) return;
+    // 直前に出た1本は避ける。同じ場面が続いても同じ声にはならない。
+    this.lastMormoLine ||= {};
+    const pool = set.lines.filter(line => line !== this.lastMormoLine[plan.scene]);
+    const text = (pool.length ? pool : set.lines)[Math.floor(Math.random() * (pool.length || set.lines.length))];
+    this.lastMormoLine[plan.scene] = text;
+    const box = MormoScene.aside({ expression: set.expression, text, host: document.getElementById("scene") });
+    if (!box) return;
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+    // 決着の一言は結果画面まで残す。戦闘中の一言だけ自動で引く。
+    if (plan.scene === "wipe") return;
+    this.timers.push(setTimeout(() => box.remove(), this.MORMO_ASIDE_MS / this.speed));
+  },
+
+  // 戦闘開始の時点で「今日いくつ発動するか」だけ先に約束する。
+  // 名前は伏せる。何が起きるかは伏せたまま、何回起きるかだけ渡すのが期待になる。
+  // 数が減っていく（0/3 → 3/3）のを見せることで、予告が回収されたと分かる。
+  showForecast(announce = false) {
+    const band = document.getElementById("chain-forecast");
+    if (!band) return;
+    const planned = this.synergyPlanned || 0;
+    if (!planned) {
+      band.hidden = true;
+      band.textContent = "";
+      band.removeAttribute("data-state");
+      return;
+    }
+    const fired = Math.min(this.synergyFired || 0, planned);
+    band.hidden = false;
+    band.dataset.state = fired === 0 ? "wait" : fired >= planned ? "done" : "live";
+    band.innerHTML = `<i class="cf-label">今日の発動</i>`
+      + `<i class="cf-count">${fired}<small>/${planned}</small></i>`
+      + `<i class="cf-pips">${'<b></b>'.repeat(planned > 12 ? 0 : planned)}</i>`
+      + `<i class="cf-note">${fired >= planned ? "すべて発動した" : "シナジーが揃うのを待て"}</i>`;
+    const pips = band.querySelectorAll(".cf-pips b");
+    pips.forEach((pip, i) => { if (i < fired) pip.className = "lit"; });
+    if (announce) {
+      band.classList.remove("announce");
+      void band.offsetWidth;
+      band.classList.add("announce");
+    }
+  },
+
+  countSynergy() {
+    this.synergyFired = (this.synergyFired || 0) + 1;
+    this.showForecast();
+  },
+
   battleIntro() {
     const intro = document.getElementById("scene-intro");
     if (!intro) return;
@@ -1387,6 +1540,7 @@ const BattleScene = {
       if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
       if (ev.type === "revive" && u) this.setLife(u, false);
       if (ev.type === "momentum") this.setMorale(ev.mult, 0);
+      if (ev.type === "synergy") this.countSynergy();
       this.tellChain(ev, false);
     }
     const result = this.timeline.find(e => e.type === "result");
@@ -1415,6 +1569,14 @@ const BattleScene = {
     this.paused = false;
     this.resultPending = null;
     this.stop();
+    // 全滅の一言は決着表示のあと、片付けが済んでから。stop() より前に出すと自分で消してしまう。
+    if (this.mormoAside && this.mormoAside.scene === "wipe") this.sayMormo();
+    // ファンファーレ（Sound）のあいだ BGM は止めてある。区切りが済んだら決着の場面曲へ切り替える。
+    // 通常再生もスキップもここを通るので、場面名が battle のまま残らない。
+    const result = (this.timeline || []).find(e => e.type === "result");
+    if (result && typeof Music !== "undefined" && typeof Game !== "undefined" && Game.state) {
+      Music.update(Game.state, { scene: result.victory ? "victory" : "defeat" });
+    }
     const pause = document.getElementById("pause-btn");
     if (pause) pause.disabled = true;
     const btn = document.getElementById("next-btn");

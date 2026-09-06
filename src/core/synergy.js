@@ -18,7 +18,9 @@ const Synergy = {
     const base = { ...(ctx || {}) };
     base.pool = this.pool(units, ctx);
     const plain = SYNERGIES.filter(s => !s.meta && s.check(units, base));
-    const metaCtx = { ...base, activeIds: plain.map(s => s.id), activeCount: plain.length };
+    // grant 型（特性を貸すだけ）は meta の段数に数えない。接続は増やすが倍率の段は増やさない
+    const counted = plain.filter(s => !s.grant);
+    const metaCtx = { ...base, activeIds: counted.map(s => s.id), activeCount: counted.length };
     const metas = SYNERGIES.filter(s => s.meta && s.check(units, metaCtx));
     return plain.concat(metas);
   },
@@ -29,7 +31,7 @@ const Synergy = {
     const base = { ...(ctx || {}) };
     base.pool = this.pool(units, ctx);
     const act = this.active(units, base);
-    const plain = act.filter(s => !s.meta);
+    const plain = act.filter(s => !s.meta && !s.grant);
     const applyCtx = { ...base, activeIds: plain.map(s => s.id), activeCount: plain.length };
     for (const s of act) {
       if (s.type !== "merge") s.apply(units, applyCtx);
@@ -64,7 +66,7 @@ const Synergy = {
     const base = { ...(ctx || {}) };
     base.pool = (ctx && Array.isArray(ctx.pool)) ? this.sandbox(ctx.pool) : box;
     if (synergy.meta) {
-      const plain = SYNERGIES.filter(s => !s.meta && s.check(box, base));
+      const plain = SYNERGIES.filter(s => !s.meta && !s.grant && s.check(box, base));
       base.activeIds = plain.map(s => s.id);
       base.activeCount = plain.length;
     }

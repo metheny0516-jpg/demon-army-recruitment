@@ -27,7 +27,8 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
 
   // 結果画面 →「次へ」でイベントへ（確率なので、出るまで戦闘を繰り返す）
   let fired=false;
-  for (let i=0;i<12 && !fired;i++){
+  // 出現は確率。12戦では3回に1回ほど出ずに落ちたので30戦まで粘る。
+  for (let i=0;i<30 && !fired;i++){
     if (await page.locator('[data-action="afterresult"]').count()) {
       await page.click('[data-action="afterresult"]'); await page.waitForTimeout(120);
     }
@@ -55,7 +56,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
     console.log(`    「${title}」 選択肢${nOpts}個`);
     console.log('    ' + text.split('\n').join('\n    '));
     ok(nOpts >= 1, '選択肢が表示されている');
-    await page.screenshot({ path: process.env.SP+'/event-choice.png', fullPage:true });
+    await page.screenshot({ path: (process.env.SP || '.screenshots') + '/event-choice.png', fullPage:true });
 
     await page.locator('[data-action="eventpick"]').first().click();
     await page.waitForTimeout(150);
@@ -63,7 +64,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
     console.log('    → ' + outcome.split('\n').join('\n      '));
     ok(outcome.length > 0, '結果テキストが出た');
     ok(await page.locator('[data-action="eventdone"]').count()===1, '「次の応募者を面接する」で先へ進める');
-    await page.screenshot({ path: process.env.SP+'/event-outcome.png', fullPage:true });
+    await page.screenshot({ path: (process.env.SP || '.screenshots') + '/event-outcome.png', fullPage:true });
     await page.click('[data-action="eventdone"]'); await page.waitForTimeout(150);
     ok(await page.evaluate(()=>Game.state.phase)==='recruit', '採用フェーズへ遷移した');
   }

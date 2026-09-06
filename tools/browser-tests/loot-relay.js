@@ -28,7 +28,7 @@ const path = require('node:path');
           raw: result.timeline.reduce((n, e) => n + BattleScene.durationOf(e), 0) };
       }, speed);
       assert.ok(result.chain >= 6, '実戦エンジンから複数人の連鎖が生まれる');
-      assert.ok(result.planned >= result.raw, '中間も省略・圧縮せず読む間を確保する');
+      assert.ok(result.planned < result.raw, '同じイベント数のまま中間の待ち時間を削る');
       await page.waitForFunction(() => relaySeen.some(e => e.type === 'trait_trigger' && e.sourceId === 'p2'), null, {timeout: 90000});
       if (!reduced) {
         const dir = process.env.SP || '.screenshots';

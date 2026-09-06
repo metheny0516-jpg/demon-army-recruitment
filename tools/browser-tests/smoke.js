@@ -18,7 +18,7 @@ const { silenceMormoFromNow, enterMissionPhase, passCommandPhase } = require('./
   await step('タイトル表示', async () => {
     if (!(await page.locator('h1').innerText()).includes('魔王')) throw new Error('title missing');
   });
-  await page.screenshot({ path: process.env.SP + '/shot-title.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-title.png' });
 
   await step('新規ゲーム → 応募者3名', async () => {
     await page.click('[data-action="new"]');
@@ -32,7 +32,7 @@ const { silenceMormoFromNow, enterMissionPhase, passCommandPhase } = require('./
   // 報告が全画面で出ること自体はここまでで確認した。
   // この先は下の画面を操作するので、報告は即送りにする（実プレイでは人が送る）
   await silenceMormoFromNow(page);
-  await page.screenshot({ path: process.env.SP + '/shot-recruit.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-recruit.png', fullPage: true });
 
   await step('1人目採用（設立枠が残り再面接）', async () => {
     await page.click('[data-action="hire"]');
@@ -44,7 +44,7 @@ const { silenceMormoFromNow, enterMissionPhase, passCommandPhase } = require('./
     await page.locator('[data-action="missionpick"]').last().click();
     await page.waitForSelector('[data-action="deploy"]');
   });
-  await page.screenshot({ path: process.env.SP + '/shot-formation.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-formation.png', fullPage: true });
 
   await step('並び替え（前へ/後ろへ）', async () => {
     const before = await page.locator('.card-name').first().innerText();
@@ -87,7 +87,7 @@ const { silenceMormoFromNow, enterMissionPhase, passCommandPhase } = require('./
     if (lines < 5) throw new Error('ログ行数=' + lines);
     console.log(`    ログ${lines}行`);
   });
-  await page.screenshot({ path: process.env.SP + '/shot-battle.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-battle.png' });
 
   await step('結果画面へ', async () => {
     await passCommandPhase(page);
@@ -95,7 +95,7 @@ const { silenceMormoFromNow, enterMissionPhase, passCommandPhase } = require('./
   });
   const won = await page.locator('.banner.win').count() > 0;
   console.log(`    → ${won ? '勝利' : '敗北'}`);
-  await page.screenshot({ path: process.env.SP + '/shot-result.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-result.png', fullPage: true });
 
   // 勝利していれば数戦回してセーブ復元も見る
   if (won) {
@@ -140,12 +140,12 @@ const { silenceMormoFromNow, enterMissionPhase, passCommandPhase } = require('./
   await page.click('[data-action="history"]');
   await page.waitForTimeout(120);
   console.log(`  ✓ 魔界史画面（記録 ${await page.locator('.history-item').count()} 件）`);
-  await page.screenshot({ path: process.env.SP + '/shot-history.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-history.png', fullPage: true });
 
   // PC幅でも崩れないか
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(100);
-  await page.screenshot({ path: process.env.SP + '/shot-pc.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-pc.png', fullPage: true });
   console.log('  ✓ PC幅レンダリング');
 
   console.log(errors.length ? '\n✗ JSエラー:\n' + errors.join('\n') : '\n✓ JSエラーなし');

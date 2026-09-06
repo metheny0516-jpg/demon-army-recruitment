@@ -15,6 +15,14 @@
 //
 // 効果の書き方: st.gold / m.loyalty / m.salary / m.hp などを直接いじる。
 // 離脱判定（忠誠0以下）はイベント適用後に run.js がまとめて行う。
+// 登場人物選び。指定の種族を優先し、居なければ同じ部門の誰かで代用する。
+// 種族で固く絞ると、その種族を採っていないランでイベントが一生出ない。
+const EV_PICK = (pool, tplId) => {
+  if (!pool || !pool.length) return null;
+  const liked = tplId ? pool.filter(m => m.tplId === tplId) : [];
+  return U.pick(liked.length ? liked : pool);
+};
+
 const EVENTS = [
   {
     id: "infighting",
@@ -764,6 +772,594 @@ const EVENTS = [
           c.actor.loyalty = U.clamp(c.actor.loyalty - 6, 0, 100);
           return `巣を建材1ごと売り払い、4Gを得た。${c.actor.name}の忠誠-6。\n`
             + `鍛冶屋は返品不可の札を見落とした。`;
+        }
+      }
+    ]
+  },
+
+  // ── ここから14本は 2026-09-05 追加（作業表 E）。
+  // すべて「得だが後で祟る」選択肢を1つ持ち、祟りは Game.oweDebt() で数戦後へ預ける。
+  // 即座に効かせると「後で祟る」が成立せず、ただの割の悪い取引になる。
+
+  {
+    id: "paid_leave",
+    title: "有休の申請",
+    weight: 4,
+    check(st) {
+      return Game.departmentRoster("combat").some(m => (m.unpaidStreak || 0) === 0);
+    },
+    cast(st) {
+      const pool = Game.departmentRoster("combat").filter(m => (m.unpaidStreak || 0) === 0);
+      const actor = EV_PICK(pool, "goblin");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が控えめに手を挙げている。\n`
+        + `「あの、有給消化で次の戦いは休みたいっす」\n`
+        + `「危険手当も出ましたし、実家に顔を出したいっすね」`;
+    },
+    options: [
+      {
+        label: "有給を認める（12G）",
+        check(st) { return st.gold >= 12; },
+        apply(st, c) {
+          st.gold -= 12;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 15, 0, 100);
+          return `12Gの休暇手当を渡した。${c.actor.name}の忠誠+15。\n`
+            + `荷物をまとめる速さだけは、軍で一番だった。`;
+        }
+      },
+      {
+        label: "手当は後払いだと言って出勤させる",
+        apply(st, c) {
+          Game.oweDebt({ kind: "loyalty_one", uid: c.actor.uid, amount: -30, battlesLeft: 3,
+            text: `${c.actor.name}の後払いの手当` });
+          Game.oweDebt({ kind: "unpaid_one", uid: c.actor.uid, amount: 1, battlesLeft: 3,
+            text: "約束の手当が出ないまま" });
+          return `${c.actor.name}は納得しないまま持ち場へ戻った。いま払うものは無い。\n`
+            + `「うう……3戦したら、ちゃんとくださいっすよ……」`;
+        }
+      },
+      {
+        label: "却下する",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 20, 0, 100);
+          return `申請書は却下印とともに返された。${c.actor.name}の忠誠-20。\n`
+            + `魔界の有給消化率は、今年も0%である。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "black_market",
+    title: "人間の商人",
+    weight: 3,
+    check(st) { return st.gold >= 50 && Game.departmentRoster("support").length > 0; },
+    cast(st) {
+      const actor = EV_PICK(Game.departmentRoster("support"), "kobold");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が、目深にフードをかぶった人間を連れてきた。\n`
+        + `「ワン！　……失礼。王国の闇商人が、建材を安く卸すと」\n`
+        + `商人は帳面を叩いて笑った。「代わりに、城の図面をちょっとね」`;
+    },
+    options: [
+      {
+        label: "裏取引に応じる（30G）",
+        check(st) { return st.gold >= 30; },
+        apply(st, c) {
+          st.gold -= 30;
+          st.materials += 15;
+          Game.oweDebt({ kind: "alert", amount: 2, battlesLeft: 2, text: "城の図面が王国へ渡り" });
+          return `30Gで建材15を仕入れた。（備蓄 ${st.materials}）\n`
+            + `商人は上機嫌で去った。図面の写しを、二部も抱えて。`;
+        }
+      },
+      {
+        label: "正規の価格で買い取る（50G）",
+        check(st) { return st.gold >= 50; },
+        apply(st) {
+          st.gold -= 50;
+          st.materials += 10;
+          return `50Gを払い、後ろ暗いところのない建材10を得た。（備蓄 ${st.materials}）\n`
+            + `商人は「魔王のくせに真面目ですね」と失礼な感想を残した。`;
+        }
+      },
+      {
+        label: "追い返す",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 3, 0, 100);
+          return `商人は舌打ちをして帰った。${c.actor.name}の忠誠-3。\n`
+            + `手柄になると思って連れてきた分、しっぽが下がっている。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "weed_soup",
+    title: "雑草のスープ",
+    weight: 5,
+    check(st) { return st.food < 3 && Game.departmentRoster("support").length > 0; },
+    cast(st) {
+      const actor = EV_PICK(Game.departmentRoster("support"), "slime");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が、ぐらぐら煮え立つ鍋を指している。\n`
+        + `「どくそう、煮た。たべられる、たぶん」\n`
+        + `鍋からは、見たことのない色の湯気が立っていた。`;
+    },
+    options: [
+      {
+        label: "配給して腹を満たさせる",
+        apply(st, c) {
+          st.food += 10;
+          Game.oweDebt({ kind: "maxhp_all", amount: 8, battlesLeft: 1, text: "例のスープが効いてきて" });
+          return `食料10を確保した。（備蓄 ${st.food}）\n`
+            + `${c.actor.name}は満足そうに震えている。効き目が出るのは、たぶん明日だ。`;
+        }
+      },
+      {
+        label: "捨てさせる",
+        apply(st, c) {
+          for (const m of Game.departmentRoster("support")) m.loyalty = U.clamp(m.loyalty - 5, 0, 100);
+          return `鍋は裏庭に空けられた。生活部門の忠誠-5。\n`
+            + `「せっかく、だいたのに……」と${c.actor.name}が縮んだ。土が煙を上げている。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "keepsake",
+    title: "忘れた私物",
+    weight: 3,
+    check(st) { return (st.lastFallen || []).length > 0 && st.roster.length > 0; },
+    cast(st) {
+      const actor = EV_PICK(st.roster, "zombie");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      const gone = (st.lastFallen || [])[0];
+      return `${c.actor.name}（${c.actor.race}）が、古ぼけた袋を大事そうに抱えている。\n`
+        + `「ううぅ……${gone ? gone.name : "あいつ"}の遺品です（重いです）」\n`
+        + `袋の口からは、使いこまれた道具と、貯めこんだ給料袋が覗いていた。`;
+    },
+    options: [
+      {
+        label: "売却して軍資金にする",
+        apply(st) {
+          st.gold += 40;
+          Game.oweDebt({ kind: "loyalty_all", amount: -15, battlesLeft: 3,
+            text: "遺品を売った話が広まり" });
+          return `遺品は40Gに換わった。（所持金 ${st.gold}G）\n`
+            + `帳簿には「雑収入」とだけ記された。誰も何も言わなかった。今は。`;
+        }
+      },
+      {
+        label: "遺族に送ってやる（10G）",
+        check(st) { return st.gold >= 10; },
+        apply(st, c) {
+          st.gold -= 10;
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 10, 0, 100);
+          return `送料10Gを払い、袋は遺族のもとへ送られた。全員の忠誠+10。\n`
+            + `${c.actor.name}が深々と頭を下げた。「……感謝（します）」`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "rumor",
+    title: "不穏な噂話",
+    weight: 4,
+    check(st) { return !st.laborDispute && st.roster.filter(m => m.loyalty < 65).length >= 2; },
+    cast(st) {
+      const actor = EV_PICK(st.roster.filter(m => m.loyalty < 65), "orc");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が、柱の影で腕を組んでいる。\n`
+        + `「この魔王、本当に勝算はあるのか」\n`
+        + `「手当も薄い。王国に降ったほうがマシかもしれん」`;
+    },
+    options: [
+      {
+        label: "特別手当を配る（40G）",
+        check(st) { return st.gold >= 40; },
+        apply(st) {
+          st.gold -= 40;
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 15, 0, 100);
+          return `40Gを袋に分けて配った。全員の忠誠+15。\n`
+            + `噂は止んだ。金で買えるものだったので、また買い直す日が来る。`;
+        }
+      },
+      {
+        label: "見せしめに減給する",
+        apply(st, c) {
+          const cut = Math.min(10, Math.max(1, c.actor.salary));
+          c.actor.salary = Math.max(0, c.actor.salary - cut);
+          Game.oweDebt({ kind: "dispute", uid: c.actor.uid, battlesLeft: 2,
+            text: `減給された${c.actor.name}が仲間を集め` });
+          return `${c.actor.name}の給料を${cut}下げた。人件費はその分だけ軽くなる。\n`
+            + `オークは何も言わずに去った。何も言わないほうが、たいてい怖い。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "kitchen_blaze",
+    title: "厨房の大暴走",
+    weight: 3,
+    check(st) { return st.activeFacilityId === "grand_kitchen" && (st.facilityLevel || 0) >= 1; },
+    cast(st) {
+      const actor = EV_PICK(Game.departmentRoster("support").concat(st.roster), "ogre");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `巨大厨房から、猛烈な煙と火柱が上がっている。\n`
+        + `「メシ、焦げた！　釜、爆発するぞ！」\n`
+        + `${c.actor.name}（${c.actor.race}）が煤だらけで鍋つかみを振り回していた。`;
+    },
+    options: [
+      {
+        label: "建材を投じて緊急補修する（建材10）",
+        check(st) { return st.materials >= 10; },
+        apply(st) {
+          st.materials -= 10;
+          return `建材10で釜を締め直した。（備蓄 ${st.materials}）\n`
+            + `厨房は無事。焦げた匂いだけが三日ほど残った。`;
+        }
+      },
+      {
+        label: "そのまま稼働を続けさせる",
+        apply(st) {
+          st.food += 20;
+          Game.oweDebt({ kind: "facilityLevel", amount: -1, battlesLeft: 1,
+            text: "釜の亀裂が広がり" });
+          return `火を落とさずに炊き切った。食料20を確保。（備蓄 ${st.food}）\n`
+            + `釜の腹に、指が入るほどの亀裂が走っている。まだ持つ。たぶん一戦は。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "transfer_demand",
+    title: "配属換えの直訴",
+    weight: 4,
+    check(st) { return Game.departmentRoster("support").length >= 2; },
+    cast(st) {
+      const actor = EV_PICK(Game.departmentRoster("support"), "imp");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）がニヤニヤしながら飛んできた。\n`
+        + `「ヒヒッ！　土掘りはもう飽きたよ！」\n`
+        + `「前線に出してくれなきゃ、現場をちょっと荒らしちゃうぞ」`;
+    },
+    options: [
+      {
+        label: "戦闘部門へ配属換えする",
+        apply(st, c) {
+          c.actor.department = "combat";
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 10, 0, 100);
+          return `${c.actor.name}を戦闘部門へ移した。忠誠+10。\n`
+            + `建材が減る分、前線の嫌がらせは増える。`;
+        }
+      },
+      {
+        label: "ボーナスで引き留める（20G）",
+        check(st) { return st.gold >= 20; },
+        apply(st, c) {
+          st.gold -= 20;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 5, 0, 100);
+          return `20Gを握らせた。${c.actor.name}の忠誠+5。\n`
+            + `小銭を数えながら、ぶつぶつ言いつつ資材置き場へ戻っていった。`;
+        }
+      },
+      {
+        label: "無視して作業を続けさせる",
+        apply(st, c) {
+          st.materials += 10;
+          Game.oweDebt({ kind: "materials", amount: -15, battlesLeft: 2,
+            text: `${c.actor.name}が資材置き場で「ちょっと」やって` });
+          return `直訴は握りつぶした。今期の建材は10増えた。（備蓄 ${st.materials}）\n`
+            + `インプは笑顔で戻っていった。笑顔で戻るときが、いちばん良くない。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "surrender_letter",
+    title: "降伏勧告状",
+    weight: 3,
+    check(st) { return (st.alert || 0) >= 5 && st.roster.length > 0; },
+    cast(st) {
+      const actor = EV_PICK(st.roster, "skeleton");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `モルモが青い顔で封筒を持ってきた。「魔王様、王国から降伏勧告デス」\n`
+        + `${c.actor.name}（${c.actor.race}）が中身をあらためる。\n`
+        + `「カタカタ……『今なら命だけは助ける』と。あと、贈答品が添えてあります」`;
+    },
+    options: [
+      {
+        label: "贈答品だけ奪って破り捨てる",
+        apply(st) {
+          st.food += 15;
+          st.gold += 20;
+          Game.oweDebt({ kind: "alert", amount: 3, battlesLeft: 2,
+            text: "使者が半泣きで帰ったせいで" });
+          return `勧告状は暖炉へ、贈答品は食堂へ。食料+15、20G。（備蓄 ${st.food}／${st.gold}G）\n`
+            + `高級肉は大変おいしくいただいた。使者は手ぶらで帰された。`;
+        }
+      },
+      {
+        label: "正式に拒絶の返書を送る",
+        apply(st) {
+          st.alert = Math.max(0, st.alert + 1);
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 5, 0, 100);
+          return `礼を尽くした断りの手紙を送った。王国警戒度+1（現在 ${st.alert}）、全員の忠誠+5。\n`
+            + `「うちの魔王、字がうまい」——士気が上がる理由はいつも小さい。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "feast_hangover",
+    title: "宴の翌日",
+    weight: 4,
+    check(st) { return !!st.feastPending && st.roster.length > 0; },
+    cast(st) {
+      const actor = EV_PICK(st.roster, "skeleton");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が頭を抱えて揺れている。\n`
+        + `「カタカタ……飲みすぎました……」\n`
+        + `「関節がどれも他人の物のようで、立てません……」`;
+    },
+    options: [
+      {
+        label: "薬湯を買って与える（15G）",
+        check(st) { return st.gold >= 15; },
+        apply(st, c) {
+          st.gold -= 15;
+          const heal = Math.max(1, Math.round(c.actor.hp * 0.05));
+          c.actor.hp += heal;
+          return `15Gの薬湯を飲ませた。${c.actor.name}の最大HP+${heal}。\n`
+            + `骨にしみたらしい。「……生前より効きます」`;
+        }
+      },
+      {
+        label: "酔い覚ましにしごく",
+        apply(st, c) {
+          Game.oweDebt({ kind: "maxhp_one", uid: c.actor.uid, amount: 20, battlesLeft: 1,
+            text: `無理に動かした${c.actor.name}の関節が` });
+          return `${c.actor.name}を叩き起こして走らせた。金はかからない。\n`
+            + `「カタカタ、カタ……ご容赦を……」乾いた音が、どこか外れて聞こえる。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "soul_advance",
+    title: "禁断の契約",
+    weight: 3,
+    check(st) {
+      return st.activeFacilityId === "graveyard" && st.roster.some(m => m.tplId === "necromancer");
+    },
+    cast(st) {
+      const actor = EV_PICK(st.roster.filter(m => m.tplId === "necromancer"), "necromancer");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が、儀式陣の前で穏やかに微笑んでいる。\n`
+        + `「墓地の霊力を前借りすれば、いますぐ資金に換えられます」\n`
+        + `「死者は文句を言いません。……しばらくは」`;
+    },
+    options: [
+      {
+        label: "霊力の前借りを許可する",
+        apply(st, c) {
+          st.gold += 55;
+          Game.oweDebt({ kind: "facilityLevel", amount: -1, battlesLeft: 3,
+            text: "前借りした霊力の穴が空いて" });
+          Game.oweDebt({ kind: "loyalty_all", amount: -10, battlesLeft: 3,
+            text: "夜ごとの悲鳴で誰も眠れず" });
+          return `陣から金貨が湧いた。55G。（所持金 ${st.gold}G）\n`
+            + `${c.actor.name}が几帳面に帳面をつけている。返済期限の欄がある。`;
+        }
+      },
+      {
+        label: "儀式をやめさせる",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 5, 0, 100);
+          return `陣は消された。${c.actor.name}の忠誠+5。\n`
+            + `「ふむ、賢明です。前借りは、労務管理でいちばん揉めますので」`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "resignation",
+    title: "退職の相談",
+    weight: 3,
+    check(st) { return st.roster.length >= 3 && st.roster.some(m => m.loyalty < 65); },
+    cast(st) {
+      const actor = EV_PICK(st.roster.filter(m => m.loyalty < 65), "mage");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が、折り目のついた紙を差し出した。\n`
+        + `「前職をクビになって以来、ここで働いてきましたが」\n`
+        + `「そろそろ田舎へ帰って、研究に専念したいのです」`;
+    },
+    options: [
+      {
+        label: "退職金を払って見送る（40G）",
+        check(st) { return st.gold >= 40; },
+        apply(st, c) {
+          st.gold -= 40;
+          st.roster = st.roster.filter(m => m.uid !== c.actor.uid);
+          st.activeUids = st.activeUids.filter(uid => uid !== c.actor.uid);
+          return `退職金40Gを渡した。${c.actor.name}は軍を去った。（所持金 ${st.gold}G）\n`
+            + `別れ際、researchのメモを一枚だけ置いていった。読めない字だった。`;
+        }
+      },
+      {
+        label: "給与を増額して引き留める",
+        apply(st, c) {
+          c.actor.salary += 10;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 30, 0, 100);
+          return `${c.actor.name}の給料を+10した。忠誠+30。\n`
+            + `「それだけの研究費が出るなら、残りましょう」——退職願は灰皿へ。`;
+        }
+      },
+      {
+        label: "退職金は出せないと突っぱねる",
+        apply(st, c) {
+          Game.oweDebt({ kind: "desert", uid: c.actor.uid, amount: -20, battlesLeft: 2,
+            text: `${c.actor.name}が夜のうちに` });
+          return `退職願は突き返された。いま出ていく金は一枚もない。\n`
+            + `${c.actor.name}は苦い顔で紙を畳んだ。畳み方が、やけに丁寧だった。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "veteran_rookie",
+    title: "古参と新入り",
+    weight: 4,
+    check(st) { return st.roster.length >= 5; },
+    cast(st) {
+      if (st.roster.length < 2) return null;
+      const sorted = st.roster.slice().sort((a, b) => Game.power(b) - Game.power(a));
+      const actor = sorted[0], other = sorted[sorted.length - 1];
+      if (!actor || !other || actor.uid === other.uid) return null;
+      return { actor: actor.uid, other: other.uid };
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が ${c.other.name}（${c.other.race}）を睨みつけている。\n`
+        + `「おい新入り、おれの取り分を勝手に食ったな」\n`
+        + `${c.other.name}「たべた。みんなの、おなじ、だとおもった」`;
+    },
+    options: [
+      {
+        label: "古参に特別手当を出す（15G）",
+        check(st) { return st.gold >= 15; },
+        apply(st, c) {
+          st.gold -= 15;
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 5, 0, 100);
+          return `15Gで手を打った。${c.actor.name}の忠誠+5。\n`
+            + `古参は黙った。新入りは、まだ何が起きたか分かっていない。`;
+        }
+      },
+      {
+        label: "新入りを叱って古参の取り分を増やす",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 10, 0, 100);
+          c.other.loyalty = U.clamp(c.other.loyalty - 20, 0, 100);
+          Game.oweDebt({ kind: "loyalty_dept", dept: "support", amount: -15, battlesLeft: 3,
+            text: "新入りいびりの噂が厨房まで届き" });
+          return `${c.actor.name}の忠誠+10、${c.other.name}の忠誠-20。金はかからない。\n`
+            + `新入りは縮こまった。それを見ていた者が、食堂に何人かいた。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "ledger_fraud",
+    title: "帳簿の不正",
+    weight: 3,
+    check(st) { return st.activeFacilityId === "extortion_ledger" && st.roster.length > 0; },
+    cast(st) {
+      const actor = EV_PICK(st.roster.filter(m => (m.job || "").includes("会計")).length
+        ? st.roster.filter(m => (m.job || "").includes("会計")) : st.roster, "imp");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `モルモが帳簿を叩いている。「魔王様、取り立て額が合いませんデス！」\n`
+        + `${c.actor.name}（${c.actor.race}）が横から覗き込み、口笛を吹いた。\n`
+        + `「ヒヒッ、誰かが数字をいじって、差額をこっちに回してるね」`;
+    },
+    options: [
+      {
+        label: "裏金をそのまま軍資金に組み込む",
+        apply(st) {
+          st.gold += 40;
+          Game.oweDebt({ kind: "facilityLevel", amount: -1, battlesLeft: 2,
+            text: "不正が露見して取り立て網が破れ" });
+          return `差額40Gを金庫へ入れた。（所持金 ${st.gold}G）\n`
+            + `モルモが「これ、計算し直さなくていいんデスか」と三度たずねた。`;
+        }
+      },
+      {
+        label: "厳密に調査して正す（10G）",
+        check(st) { return st.gold >= 10; },
+        apply(st) {
+          st.gold -= 10;
+          st.facilityLevel = (st.facilityLevel || 0) + 1;
+          return `調査費10Gを投じ、帳簿を締め直した。施設Lv.${st.facilityLevel}。\n`
+            + `恐喝は、信用商売である。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "tapestry",
+    title: "魔王様の織物",
+    weight: 4,
+    check(st) { return st.gold >= 30 && Game.departmentRoster("support").length > 0; },
+    cast(st) {
+      const actor = EV_PICK(Game.departmentRoster("support"), "goblin");
+      return actor ? { actor: actor.uid } : null;
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が、巨大な布をばさりと広げた。\n`
+        + `「魔王様の特大タペストリー、作ったっす！」\n`
+        + `「広場に飾れば士気は爆上がりっすよ。買い取ってほしいっす！」`;
+    },
+    options: [
+      {
+        label: "買い取って広場に飾る（30G）",
+        check(st) { return st.gold >= 30; },
+        apply(st) {
+          st.gold -= 30;
+          for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 10, 0, 100);
+          return `30Gで買い上げ、広場に掲げた。全員の忠誠+10。\n`
+            + `顔は似ていない。だが、でかい。魔界ではそれが正義である。`;
+        }
+      },
+      {
+        label: "切り売りして材料費を回収する",
+        apply(st) {
+          st.gold += 20;
+          Game.oweDebt({ kind: "loyalty_dept", dept: "support", amount: -15, battlesLeft: 3,
+            text: "織物を切り売りされた件が尾を引き" });
+          return `布は端から売られ、20Gになった。（所持金 ${st.gold}G）\n`
+            + `作業場の壁に、下絵だけが貼られたまま残っている。`;
+        }
+      },
+      {
+        label: "飾るのを断る",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 5, 0, 100);
+          return `丁重に断った。${c.actor.name}の忠誠-5。\n`
+            + `巨大な布は、たたまれて資材置き場のいちばん下になった。`;
         }
       }
     ]

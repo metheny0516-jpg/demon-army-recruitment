@@ -34,7 +34,7 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
   ok((await page.evaluate(()=>JSON.parse(localStorage.getItem('maou_history')||'[]').length))===0, '再起可能な間は魔界史に記録されない');
   const saveAlive = await page.evaluate(()=>!!localStorage.getItem('maou_save'));
   ok(saveAlive, '再起可能な状態はセーブに残る（途中で閉じても復帰できる）');
-  await page.screenshot({ path: process.env.SP + '/retry-defeat.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retry-defeat.png', fullPage: true });
 
   // --- 2. リロードして復帰できるか ---
   await page.reload(); await page.waitForTimeout(150);
@@ -76,7 +76,7 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
   ok(saveGone===null, 'セーブが正しく消える');
   await page.reload(); await page.waitForTimeout(150);
   ok(await page.locator('[data-action="continue"]').count()===0, 'リロードしても「続きから」は出ない');
-  await page.screenshot({ path: process.env.SP + '/retry-final.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retry-final.png', fullPage: true });
 
   console.log(errs.length ? '\n✗ JSエラー: '+errs.join(', ') : '\n✓ JSエラーなし');
   await b.close(); process.exit(errs.length || process.exitCode ? 1 : 0);

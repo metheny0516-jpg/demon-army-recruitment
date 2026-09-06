@@ -42,4 +42,10 @@ assert(Game.state.generalsMade[0].name === veteran.name, '輩出した将軍を�
 const units = [Battle.makeUnit(veteran, 'player'), Battle.makeUnit({ ...veteran, uid: 100, name: '部下', rankId: 'soldier', salary: 1 }, 'player')];
 const active = Synergy.applyAll(units);
 assert(active.some(s => s.id === 'general_command'), '将軍の号令が発動');
-assert(units.every(unit => Math.abs(unit.mods.dmgMult - 1.15) < 0.001), '号令で出撃隊全員の与ダメージ+15%');
+// 他のシナジー（種族ペア・魔王軍完成）も同時に乗るので、号令そのものを単体で確かめる
+const SYNERGIES = vm.runInContext('SYNERGIES', ctx);
+const solo = [Battle.makeUnit(veteran, 'player'),
+  Battle.makeUnit({ ...veteran, uid: 100, name: '部下', rankId: 'soldier', salary: 1 }, 'player')];
+SYNERGIES.find(s => s.id === 'general_command').apply(solo);
+assert(solo.every(unit => Math.abs(unit.mods.dmgMult - 1.15) < 0.001),
+  '号令で出撃隊全員の与ダメージ+15%');
