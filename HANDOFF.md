@@ -45,14 +45,22 @@
   `Synergy.preview()` の need/needRace と併用すること（U1の前提）。
 - **V1は「検証で充足」として完了（2026-09-06）。実装は行っていない。**
   略奪は入口〜完成が現行コードで成立しており、対照で強欲追撃が 3.65→0.00 に消える。
-- 次は **V2a（食事の起点・対象・効果量を戦闘入力へ渡す）** → V2b → V3（後衛配置での成立を追認）。
-  共通CHAIN倍率・戦闘式・蘇生タイミングは変更しない。
+- **V2aは完了（2026-09-06）**。`Game.mealPlan()` を run.js へ追加し、食事強化の
+  起点・対象・効果量を1か所で決めて、予告・本番の倍率・戦闘入力・戦果が同じ伝票を読むようにした。
+  契約は第2節「食事強化の伝票 `mealPlan`」。**戦闘式・蘇生タイミング・共通CHAIN倍率は未変更**で、
+  seed固定300件のA/B比較で倍率の差分0件（挙動は完全に同じ）。battle.js は触っていない。
+- 次は **V2b（battle.js 側で食事の因果イベントと着地を検証し、不足だけ修正）** → V3（追認）。
+  V2bでは `rations.meal` を読んで「誰の料理が誰を強化したか」を因果イベントにできる。
+  `targetEatsNothing`（食欲0の者に料理が乗る現行挙動）の可否もV2bで判断する。
 - **到達性（レポート第2節）は暫定。** 食料の正確な帰属判定は V2a/V2b 後の別タスクで補正する。
   R1の要否は **U1後の短い試遊**で判断し、**最終P1を待って後続作業を止めない**。
 - その後、採用表示・必要時の初回応募補助・根拠付き戦果・モルモと魔界史へ進む。
 - 第9節に担当層・依存関係・AI向け依頼文、第10節に自動検証と初見試遊の条件がある。
 - 既存機能を再実装せず、不足だけ埋める。run.jsとbattle.jsは同時に触らない。
 - 過去のA〜J表は完了履歴。今回の順序は上記設計書が優先。継承・長編化・新種族量産は後段。
+- **既知の失敗テスト（V0/V2aで発見・未修正・いずれも基準コミット由来）**:
+  `sh tools/browser-tests/run-all.sh` の **synergy-pool**（「1つだけでは魔王軍完成にならない」）も
+  c8a9f1c で既に落ちる。V2aの変更前後どちらでも同じように落ちることを確認済み。
 - **既知の失敗テスト（V0で発見・未修正）**: `node tools/test-promotions.js` が c8a9f1c で既に落ちる。
   最後の assert が 1.15 を期待しているが実測 1.38。見本がゴブリン2体なので《追い剥ぎコンビ》と
   《魔王軍完成》も立つのが原因で、**ゲームは設計どおり・テストの期待値が古い**。
@@ -991,6 +999,25 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
 | 立ち絵 | `assets/monsters/{id}.png` ＋ `src/data/portraits.js` |
 
 ロジック側を触らずに済む形を保つこと。
+
+### 食事強化の伝票 `mealPlan`（2026-09-06・V2a で追加した契約）
+
+`Game.mealPlan(rations)` が **食事強化の起点・対象・効果量を決める唯一の場所**である。
+
+- `Game.preparedRoster(rations, plan?)`（本番の倍率）、編成画面の予告、
+  `Battle.simulate` へ渡す `rations.meal`、`st.lastBattle.mealPlan` は**すべてこの戻り値を読む**。
+  **どこかで倍率を再計算しないこと。** 表示だけが古くなる事故はここから始まる。
+- 主なフィールド: `cookUid/cookName`（起点）、`targetUid/targetName/targetAppetite`（対象）、
+  `tiedUids`（食欲が同値で並んだ者）、`boost/boostPercent`（効果量）、`kitchenMult`、
+  `bigEaters[]`、`hungerUid`、`feast`、`targetEatsNothing`。
+- **対象の決定規則: 食欲が最大の1体。同値なら出撃順（`activeUids`）の先頭。**
+  `sort` が安定なので並び順だけで決まる。この規則を変えると予告と本番がずれる。
+- 効果量が0のときは `targetUid` を `null` にする（0%の強化を誰かに帰属させない）。
+- `targetEatsNothing` は「食欲0の者に料理が乗っている」現行挙動の**印**であって修正ではない。
+  可否の判断は V2b。ここを直すと数値が動く。
+- `rations.meal` は battle.js がまだ読まない追加フィールドである。
+  **説明用のフィールド追加で発火順・回数・chainDepth を変えないこと**（`tools/test-food-attribution.js` が検証）。
+- 古い戦果には `mealPlan` が無い。表示側は**その表示だけを省略**する。
 
 イベントチェーンの最小契約は `state.laborDispute`（通常 `null`）。現在は
 `{ stage: "march", actorUid, startedTurn }` だけを持ち、給与抗議を無視したときに作成、

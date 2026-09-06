@@ -608,19 +608,68 @@ const Game = {
     }));
   },
 
-  preparedRoster(rations) {
+  // ── 食事強化の伝票（V2a・2026-09-06）────────────────
+  // 「誰の料理が、誰を、どれだけ強くしたか」を1か所で決める。
+  // preparedRoster()（本番の倍率）も、編成画面の予告も、戦闘入力へ渡す根拠も
+  // **すべてこの関数の戻り値を読む**。二重に計算しないので、表示だけが古くなることが起きない。
+  //
+  // 対象は食欲（appetite）が最大の1体。同値なら **出撃順（activeUids）の先頭**が受ける。
+  // sort は安定なので、この規則は並び順だけで決まり、再描画や予告で入れ替わらない。
+  // 数値・発火条件は従来のまま。ここで変えているのは「根拠を持ち回るかどうか」だけである。
+  mealPlan(rations) {
     const active = this.activeRoster();
     const feast = this.state.feastPending;
-    const cook = active.find(m => (m.traits || []).includes("demon_cook"));
-    const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
-    const foodTarget = active.slice().sort((a, b) => Aptitude.of(b).appetite - Aptitude.of(a).appetite)[0];
+    const cook = active.find(m => (m.traits || []).includes("demon_cook")) || null;
+    const hunger = active.find(m => (m.traits || []).includes("hunger_demon")) || null;
+    const consumed = rations ? Math.max(0, Number(rations.consumed) || 0) : 0;
+    const ranked = active.slice().sort((a, b) => Aptitude.of(b).appetite - Aptitude.of(a).appetite);
+    const target = ranked[0] || null;
+    const topAppetite = target ? Aptitude.of(target).appetite : 0;
     // 巨大厨房は Lv.+1 倍。Lv.1で従来どおりの2倍、Lv.3で4倍まで濃くなる。
     const kitchenMult = rations && rations.kitchen ? 1 + this.facilityWorks() : 1;
-    const foodBoost = cook && rations ? Math.min(0.8, rations.consumed * 0.08 * kitchenMult) : 0;
+    const boost = cook && rations ? Math.min(0.8, consumed * 0.08 * kitchenMult) : 0;
+    const bigEaterMult = 1 + 0.25 * kitchenMult;
+    return {
+      consumed,
+      need: rations ? rations.need || 0 : 0,
+      shortage: rations ? rations.shortage || 0 : 0,
+      emptied: !!(rations && rations.emptied),
+      kitchen: !!(rations && rations.kitchen),
+      kitchenMult,
+      // 起点（誰の仕事か）
+      cookUid: cook ? cook.uid : null,
+      cookName: cook ? cook.name : null,
+      // 対象（誰が受けるか）と、その根拠
+      targetUid: target && boost > 0 ? target.uid : null,
+      targetName: target && boost > 0 ? target.name : null,
+      targetAppetite: topAppetite,
+      // 同じ食欲で並んだ者。先頭が受けるという規則を表示側が説明できるようにする
+      tiedUids: active.filter(m => Aptitude.of(m).appetite === topAppetite).map(m => m.uid),
+      // 効果量（文言から推測させない）
+      boost, boostPercent: Math.round(boost * 100),
+      // 対象の食欲が0＝「食べない者に料理が乗っている」状態。現行の挙動をそのまま報告する。
+      // ここを変えると数値が動くので、可否の判断は V2b へ回す（V2aは根拠を渡すだけ）。
+      targetEatsNothing: !!(boost > 0 && topAppetite === 0),
+      bigEaterMult,
+      bigEaters: consumed > 0
+        ? active.filter(m => (m.traits || []).includes("big_eater"))
+            .map(m => ({ uid: m.uid, name: m.name, mult: bigEaterMult }))
+        : [],
+      hungerUid: hunger && rations && rations.emptied ? hunger.uid : null,
+      hungerName: hunger && rations && rations.emptied ? hunger.name : null,
+      feast: feast ? { dmgBonus: feast.dmgBonus, fed: feast.fed } : null
+    };
+  },
+
+  preparedRoster(rations, plan) {
+    const active = this.activeRoster();
+    const feast = this.state.feastPending;
+    const meal = plan || this.mealPlan(rations);
+    const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
     return active.map(m => {
       let dmgMult = 1, takenMult = 1;
-      if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= 1 + 0.25 * kitchenMult;
-      if (foodTarget && m.uid === foodTarget.uid) dmgMult *= 1 + foodBoost;
+      if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= meal.bigEaterMult;
+      if (meal.targetUid !== null && m.uid === meal.targetUid) dmgMult *= 1 + meal.boost;
       if (rations && rations.emptied && hungering) { dmgMult *= 2; takenMult *= 1.3; }
       // 宴を食えた者だけが強くなる。食事不要の軍団に宴の効果はない。
       if (feast && Aptitude.of(m).appetite > 0) dmgMult *= 1 + feast.dmgBonus;
@@ -1316,7 +1365,9 @@ const Game = {
 
     const battleRations = openingBattle ? null : this.prepareBattleRations(notes);
     const feastUsed = st.feastPending;
-    const playerUnits = this.preparedRoster(battleRations).map(m => Battle.makeUnit(m, "player"));
+    // 食事の伝票は倍率を掛ける前に一度だけ作り、戦闘入力・戦果・予告で同じものを読む（V2a）
+    const mealPlan = battleRations ? this.mealPlan(battleRations) : null;
+    const playerUnits = this.preparedRoster(battleRations, mealPlan).map(m => Battle.makeUnit(m, "player"));
     if (feastUsed) {
       notes.push(`宴の余韻：${feastUsed.fed}名が満腹のまま戦場へ出た（与ダメージ+${Math.round(feastUsed.dmgBonus * 100)}%）`);
       st.feastPending = null;
@@ -1338,7 +1389,14 @@ const Game = {
       bigEaterUids: playerUnits.filter(u => u.traits.includes("big_eater")).map(u => u.uid),
       hungerUid: playerUnits.find(u => u.traits.includes("hunger_demon"))?.uid || null,
       feastUid: battleRations.consumed >= 4
-        ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null
+        ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null,
+      // V2a: 食事強化の起点・対象・効果量。battle.js はまだ読んでいないが、
+      // 追加フィールドは無視されるだけで発火順・回数・chainDepth を変えない。
+      // 因果イベントとして出すのは V2b（battle.js 側）の仕事。
+      meal: mealPlan,
+      boostSourceUid: mealPlan ? mealPlan.cookUid : null,
+      boostTargetUid: mealPlan ? mealPlan.targetUid : null,
+      boostAmount: mealPlan ? mealPlan.boost : 0
     } : null;
     const extortionLedger = st.activeFacilityId === "extortion_ledger"
       && this.activeRoster().some(m => (m.job || "").includes("会計"));
@@ -1422,6 +1480,9 @@ const Game = {
       reward: result.victory ? stageData.reward : 0,
       lootGold: result.victory ? lootGold : 0,
       battleRations,
+      // 食事強化の根拠。戦果・モルモ・魔界史が「誰の料理が誰を強化したか」を
+      // 文言から推測せずに書けるようにする（V2a）。古い戦果には無いので表示側は省略する。
+      mealPlan,
       goldBefore,
       synergies: result.activeSynergies,
       incidents: result.incidents || [],
