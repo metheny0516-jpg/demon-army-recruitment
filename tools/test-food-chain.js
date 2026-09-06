@@ -50,7 +50,10 @@ assert(result.timeline.some(e => e.type === 'resource_consume' && e.resource ===
 assert(result.timeline.some(e => e.traitId === 'big_eater'), '大食漢の発火を表示する');
 assert(result.timeline.some(e => e.traitId === 'demon_cook'), '魔界料理人の発火を表示する');
 assert(result.timeline.some(e => e.traitId === 'hunger_demon'), '食料が0へ遷移した時だけ飢餓が発火する');
-assert(result.timeline.some(e => e.type === 'attack' && e.label === '暴食の宴'), '食料4以上で最も遅い味方が追加行動する');
+const feastAttack = result.timeline.find(e => e.type === 'attack' && e.label === '暴食の宴');
+assert(feastAttack, '食料4以上で最も遅い味方が追加行動する');
+assert(feastAttack.chainDepth === 3 && (feastAttack.traits || []).includes('CHAIN 3 ×1.25'),
+  '暴食の宴はCHAIN 3の共通倍率で増幅する');
 
 Game.state.food = 0;
 const alreadyEmpty = Game.battleRationQuote();

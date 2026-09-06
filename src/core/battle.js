@@ -300,6 +300,14 @@ const Battle = {
     // ダメージ適用。kind で attack / splash を出し分ける。
     const applyDamage = (attacker, target, amount, kind, opts) => {
       opts = opts || {};
+      // CHAINの深さを全ダメージ系統の共通報酬にする。
+      // 3段目は小さな成功、4段目から明確な爆発。強欲だけでなく宴やOVERKILL伝播にも効く。
+      const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
+      if (attacker.side === "player" && chainDepth >= 3) {
+        const chainMult = chainDepth === 3 ? 1.25 : Math.min(2.5, 1.75 + (chainDepth - 4) * .25);
+        amount *= chainMult;
+        opts.traits = [...(opts.traits || []), `CHAIN ${chainDepth} ×${chainMult.toFixed(2)}`];
+      }
       let dmg = Math.max(1, Math.round(amount * target.mods.takenMult));
       for (const tid of target.traits) {
         const tr = TRAITS[tid];
@@ -455,13 +463,6 @@ const Battle = {
         ctx.mult *= 1.25;
         ctx.notes.push("追い剥ぎコンビ");
         lootPairBoost = null;
-      }
-      // 深い連鎖は記録だけで終わらせず、その場の攻撃を大きくする。
-      // 強欲の最初の追撃（通常はCHAIN 4）から目に見えて通常火力を超える。
-      if (unit.side === "player" && unit.chainDepth >= 4) {
-        const chainMult = Math.min(2.5, 1.75 + (unit.chainDepth - 4) * .25);
-        ctx.mult *= chainMult;
-        ctx.notes.push(`CHAIN ${unit.chainDepth} ×${chainMult.toFixed(2)}`);
       }
       // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
       if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
