@@ -649,14 +649,10 @@ const Game = {
     const squad = roster || this.activeRoster();
     if (!enemies.length || !squad.length) return null;
 
-    const info = this.facilityInfo();
-    const hpMult = info.hpMult || 1;
-    const defBonus = info.defBonus || 0;
-
     const enemyHp = enemies.reduce((sum, e) => sum + (e.hp || 0), 0);
     const enemyDef = enemies.reduce((sum, e) => sum + (e.def || 0), 0) / enemies.length;
-    const playerHp = squad.reduce((sum, m) => sum + Math.round((m.hp || 0) * hpMult), 0);
-    const playerDef = squad.reduce((sum, m) => sum + (m.def || 0) + defBonus, 0) / squad.length;
+    const playerHp = squad.reduce((sum, m) => sum + (m.hp || 0), 0);
+    const playerDef = squad.reduce((sum, m) => sum + (m.def || 0), 0) / squad.length;
 
     // battle.js の素の1発と同じ形：max(1, atk) - floor(相手def / 2)
     const hit = (atk, def) => Math.max(1, Math.max(1, Math.round(atk || 0)) - Math.floor(def / 2));
@@ -1247,13 +1243,6 @@ const Game = {
     return true;
   },
 
-  moveUnit(index, dir) {
-    const r = this.state.roster;
-    const j = index + dir;
-    if (j < 0 || j >= r.length) return;
-    [r[index], r[j]] = [r[j], r[index]];
-    this.save();
-  },
 
   // ── 出撃と戦闘処理 ────────────────────────
   deploy() {
@@ -1530,7 +1519,6 @@ const Game = {
         const active = this.activeFacility();
         return {
           level: st.facilityLevel || 0, name: info.name, works: this.facilityWorks(),
-          hpMult: info.hpMult, defBonus: info.defBonus,
           activeId: active ? active.id : null, activeName: active ? active.name : null
         };
       })(),

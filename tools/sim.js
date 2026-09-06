@@ -216,7 +216,6 @@ const kpiOut = (() => {
   return at >= 0 ? process.argv[at + 1] : null;
 })();
 // 旧仕様（施設Lv.＝全員のHP・防御補正）は2026-09-03に撤去した。
-// 比較フラグは run.js が hpMult を読まなくなり復元できないため削除した。
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 for (const s of strategies) {

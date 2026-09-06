@@ -40,9 +40,13 @@ const TRAITS = {
   },
   loyal_dog: {
     name: "忠犬",
-    desc: "忠誠80以上ならダメージ+30%",
+    // 消さずに閾値を下げた。忠誠80は給与・食料・残業で削られて実プレイでは届かず、
+    // 24ランの計測で所持4回に対して発火0だった。ただしこれは**忠誠を戦闘火力へ
+    // 変える唯一の接続**で、消すと「払う・食わせる」判断が戦場から切れてしまう。
+    // 孤児として削除する代わりに、届く距離（70）へ寄せてある。
+    desc: "忠誠70以上ならダメージ+30%",
     modDealt(ctx) {
-      if ((ctx.attacker.loyalty ?? 0) >= 80) {
+      if ((ctx.attacker.loyalty ?? 0) >= 70) {
         ctx.mult *= 1.3;
         ctx.notes.push("忠犬");
       }
@@ -220,22 +224,6 @@ const TRAITS = {
         ctx.target.atk -= 1;
         ctx.log(`　${ctx.attacker.name}の【悪戯】 ${ctx.target.name}の攻撃力が下がった`, "trait");
       }
-    }
-  },
-  guardian_prayer: {
-    name: "回復の祈り",
-    desc: "ラウンド終了時、最もHP割合の低い味方をHPの15%回復",
-    onRoundEnd(ctx) {
-      const u = ctx.unit;
-      if (!u.alive) return;
-      const target = ctx.allies
-        .filter(a => a.alive && a.hp < a.maxHp)
-        .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
-      if (!target) return;
-      const heal = Math.min(target.maxHp - target.hp, Math.ceil(target.maxHp * 0.15));
-      if (heal <= 0) return;
-      target.hp += heal;
-      ctx.log(`　${u.name}の【回復の祈り】 ${target.name}のHPが${heal}回復`, "trait");
     }
   },
   hero_awaken: {

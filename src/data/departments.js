@@ -35,12 +35,11 @@ const DEPARTMENT_ORDER = ["combat", "support"];
 // レベルは「全員の数値」ではなく「大型Jokerが1戦闘に働ける回数」を表す。
 // 設計憲法 第9節：恒久成長を攻撃力+1%のような数値上昇にしない。増やすのは
 // 選択肢・組み合わせ・発見であって、伸びるのは軍団の平均値ではなく壊れ方の濃さである。
-// hpMult / defBonus は 2026-09-03 に撤去した（旧セーブ互換のため 1 / 0 として残す）。
 const FACILITY_LEVELS = [
-  { level: 0, name: "空き部屋", buildThreshold: 0, works: 0, hpMult: 1, defBonus: 0 },
-  { level: 1, name: "仮設兵舎", buildThreshold: 3, works: 1, hpMult: 1, defBonus: 0 },
-  { level: 2, name: "整備工房", buildThreshold: 7, works: 2, hpMult: 1, defBonus: 0 },
-  { level: 3, name: "魔王城作業区", buildThreshold: 12, works: 3, hpMult: 1, defBonus: 0 }
+  { level: 0, name: "空き部屋", buildThreshold: 0, works: 0 },
+  { level: 1, name: "仮設兵舎", buildThreshold: 3, works: 1 },
+  { level: 2, name: "整備工房", buildThreshold: 7, works: 2 },
+  { level: 3, name: "魔王城作業区", buildThreshold: 12, works: 3 }
 ];
 
 const FACILITIES = [
