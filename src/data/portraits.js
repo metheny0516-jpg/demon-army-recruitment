@@ -35,4 +35,5 @@ const EVENT_EXPRESSIONS = {
   zombie: ["surprise", "smirk", "tears"],
   imp: ["surprise", "smirk", "tears"],
   mage: ["surprise", "smirk", "tears"],
+  necromancer: ["surprise", "smirk", "tears"],
 };
