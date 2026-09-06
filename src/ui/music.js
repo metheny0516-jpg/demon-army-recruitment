@@ -59,7 +59,6 @@ const Music = {
     const caster = active.filter(m => has(m, "caster")).length;
     const slime = active.filter(m => typeof m.race === "string" && m.race.includes("スライム")).length;
     const generals = active.filter(m => m.rankId === "general").length;
-    const majors = active.filter(m => m.rankId === "demon_lord").length;
 
     // 不満。未払いは「サボって演奏しない」、低忠誠は「ピッチと拍がよれる」。
     const unpaid = active.filter(m => m.unpaid).length;
@@ -78,11 +77,11 @@ const Music = {
       bpm: Math.round(preset.bpm * (1 + alert * .12) * (1 - unrest * .08)),
       root: preset.root,
       alert, unrest,
-      head, undead, caster, slime, generals, majors, unpaid,
+      head, undead, caster, slime, generals, unpaid,
       layers: {
         drum:  { gain: broken ? .35 : .55 + alert * .25, hats: alert > .35 || scene === "battle" || scene === "final" },
         bass:  { gain: broken ? .3 : .5 + drive * .3, density: head / 5 },
-        brass: { gain: this.clamp(generals * .55 + majors * .18, 0, 1) * drive },
+        brass: { gain: this.clamp(generals * .55, 0, 1) * drive },
         choir: { gain: this.clamp(undead / 3, 0, 1) * (.45 + drive * .35) },
         bells: { gain: this.clamp(caster / 3, 0, 1) * (.35 + drive * .35) },
         slime: { gain: slime ? this.clamp(.3 + (slime - 1) * .2, 0, .8) : 0 }

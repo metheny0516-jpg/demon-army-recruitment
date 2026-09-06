@@ -113,8 +113,7 @@ function assert(cond, message) { if (!cond) throw new Error(message); }
 {
   const g = s => Music.describe(army([unit({ rankId: s })]), { scene: 'battle' }).layers.brass.gain;
   assert(g('soldier') === 0, '兵卒だけで号令ラッパが鳴っている');
-  assert(g('demon_lord') > 0, '魔将で号令ラッパが鳴らない');
-  assert(g('general') > g('demon_lord'), '将軍が魔将より目立たない');
+  assert(g('general') > g('soldier'), '将軍がいると号令ラッパが鳴る');
 }
 
 // 4. 種族タグがそれぞれのレイヤーへ接続している

@@ -1104,8 +1104,6 @@ button.wide { width: 100%; }
   font-size: .68rem;
   vertical-align: middle;
 }
-.rank-squad_leader { color: #b7d8aa; border-color: #597653; }
-.rank-demon_lord { color: #d5a5f0; border-color: #794b91; }
 .rank-general {
   color: #ffe09a;
   border-color: var(--gold);
@@ -1398,8 +1396,6 @@ button.primary::first-letter { color: var(--gold); }
   background: rgba(255,250,232,.48);
   font-weight: 700;
 }
-.game-scene-recruit .rank-squad_leader { color: #2f552d; border-color: #58724e; background: rgba(103,137,83,.12); }
-.game-scene-recruit .rank-demon_lord { color: #5d2c70; border-color: #724487; background: rgba(122,72,142,.12); }
 .game-scene-recruit .rank-general { color: #70430b; border-color: #9a681b; background: rgba(190,137,36,.14); }
 .game-scene-recruit .merit { color: #6d561d; font-weight: 700; }
 .game-scene-recruit .department-tag {

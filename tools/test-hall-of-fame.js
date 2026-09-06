@@ -26,7 +26,7 @@ const member = (over) => Object.assign({
   hp: 30, atk: 8, def: 3, spd: 8, salary: 2, loyalty: 60,
   traits: [], tags: [], quote: 'また雇ってくださいよ。',
   prevJob: '前魔王軍の斥候', motive: '魔界史にもう一度名を残したい', flaw: '昔話が長い',
-  unpaid: false, department: 'combat', merit: 18, rankId: 'demon_lord'
+  unpaid: false, department: 'combat', merit: 18, rankId: 'general'
 }, over || {});
 
 Game.newRun();

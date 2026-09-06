@@ -1,19 +1,17 @@
-// 戦功による昇進。threshold は累計戦功、boost は昇進時に一度だけ適用する。
-// 最上位の将軍は synergies.js の「将軍の号令」へ接続される。
+// 戦功による昇進。段階は「兵卒 → 将軍」の1段だけ。
+//
+// もとは小隊長(戦功4)・魔将(10)・将軍(22)の3段だったが、下2つは hp×1.05 のような
+// 数値微増でしかなく、設計原則 第9節が禁じている「攻撃力+1%」そのものだった。
+// 24ランの計測でも下位2階級は延べ470回発生しているのに、何が変わったのかは画面にも
+// 数字にも出ていない。プレイヤーは階級章を3種類覚えさせられて、得るものが無かった。
+//
+// 残した将軍だけは意味がある。synergies.js の《将軍の号令》の発火条件そのものであり、
+// 「戦功を1人に集めるか、散らすか」という編成の判断につながる。
+// 下2段を消したぶん到達点を 22 → 16 へ下げ、1ランに一度は届く距離にしてある。
 const PROMOTION_RANKS = [
   { id: "soldier", name: "兵卒", threshold: 0, boost: null },
   {
-    id: "squad_leader", name: "小隊長", threshold: 4,
-    boost: { hp: 1.05, atk: 1.05, def: 0, loyalty: 5, salary: 0 },
-    message: "現場を知る者として、小隊を任された"
-  },
-  {
-    id: "demon_lord", name: "魔将", threshold: 10,
-    boost: { hp: 1.08, atk: 1.08, def: 1, loyalty: 8, salary: 1 },
-    message: "魔王軍の幹部席と、責任と、わずかな昇給を与えられた"
-  },
-  {
-    id: "general", name: "将軍", threshold: 22,
+    id: "general", name: "将軍", threshold: 16,
     boost: { hp: 1.20, atk: 1.20, def: 2, loyalty: 12, salary: 2 },
     message: "魔王から濃密な魔力を授かり、軍を率いる存在へ進化した"
   }
