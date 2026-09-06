@@ -72,22 +72,30 @@ function twoPersonHits(result, rations) {
     }
     return null;
   };
-  // 略奪: 追撃の起点をたどり、金貨を取った人と追撃した人が別人であること
-  const loot = tl.some(e => {
+  // 略奪はどちらも2人の接続として数える（設計書 3.1 は《追い剥ぎコンビ》を入口と定義している）。
+  //  入口 = ゴブリン2体で成立するコンビ（金貨→次の味方攻撃+25%）
+  //  中盤以降 = 追撃の起点をたどり、金貨を取った人と追撃した人が別人であること
+  const lootPair = tl.some(e => e.type === 'synergy_trigger' && e.synergyId === 'goblin_pair');
+  const lootCross = tl.some(e => {
     if (!(e.type === 'trait_trigger' && e.traitId === 'greedy')) return false;
     const gold = originGold(e);
     return !!(gold && gold.sourceId && gold.sourceId !== e.sourceId);
   });
+  const loot = lootPair || lootCross;
   // 食料: 糧食を消費し、料理人が発火し、強化される側が料理人以外にいること
   const cookFire = tl.find(e => e.type === 'trait_trigger' && e.traitId === 'demon_cook');
   const otherEater = tl.some(e => e.type === 'trait_trigger'
     && (e.traitId === 'big_eater' || e.traitId === 'glutton_feast')
     && (!cookFire || e.sourceId !== cookFire.sourceId));
   const food = !!(rations && rations.consumed > 0 && cookFire && otherEater);
-  // 死霊: 他者蘇生（術師 ≠ 蘇生された者）か、墓地の召喚
-  const death = tl.some(e => e.type === 'revive' && e.traitId === 'necromancy' && e.sourceId && e.sourceId !== e.unitId)
-    || tl.some(e => e.type === 'summon');
-  return { loot, food, death };
+  // 死霊: 蘇生や召喚が起きただけでは数えない。**復帰・召喚された者がその後に行動した**ことまで求める
+  // （設計書 3.3「倒れ、蘇生し、その後もう一度働く」）。
+  const actedAfter = (index, unitId) =>
+    tl.slice(index + 1).some(e => (e.type === 'attack' || e.type === 'splash') && e.fromId === unitId);
+  const death = tl.some((e, i) => e.type === 'revive' && e.traitId === 'necromancy'
+      && e.sourceId && e.sourceId !== e.unitId && actedAfter(i, e.unitId))
+    || tl.some((e, i) => e.type === 'summon' && e.unit && actedAfter(i, e.unit.id));
+  return { loot, lootPair, lootCross, food, death };
 }
 
 // ── 配置 ────────────────────────────────────
@@ -131,7 +139,7 @@ function runOnce(strat, acc) {
   for (const k of Object.keys(store)) delete store[k];   // 試行間で保存状態を独立させる
   Game.newRun();
   const st = Game.state;
-  let guard = 0, interviews = 0, battles = 0, sawOffer = false;
+  let guard = 0, interviews = 0, battles = 0, sawOffer = false, wantedOffer = false, hiredOfferThisRun = false;
   const first = { loot: 0, food: 0, death: 0, any: 0 };
   while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
     if (st.phase === 'recruit' && st.applicants.length) {
@@ -155,7 +163,7 @@ function runOnce(strat, acc) {
         const scored = st.applicants.map((m, i) => ({ i, o: offerOf(m, st), p: power(m) }));
         const linked = scored.filter(x => x.o.any);
         idx = (linked.length ? linked.reduce((b,x)=> x.p > b.p ? x : b) : scored.reduce((b,x)=> x.p > b.p ? x : b)).i;
-        if (linked.length && interviews <= 3) acc.hiredWithOffer++;
+        wantedOffer = linked.some(x => x.i === idx);
       } else {
         idx = st.applicants.reduce((b,m,i)=> power(m) > power(st.applicants[b]) ? i : b, 0);
       }
@@ -164,7 +172,16 @@ function runOnce(strat, acc) {
         if (power(st.applicants[idx]) > power(weakest) * 1.1) Game.fire(weakest.uid);
         else { Game.skipHire(); break; }
       }
+      const rosterBefore = st.roster.length;
+      const picked = st.applicants[idx];
       Game.hire(idx);
+      // 採ろうとしただけでなく、実際に軍団へ入ったところまでを「採用成功」と数える
+      if (wantedOffer && interviews <= 3
+        && st.roster.length > rosterBefore && st.roster.some(m => m.uid === picked.uid)) {
+        acc.hiredWithOffer++;
+        hiredOfferThisRun = true;
+      }
+      wantedOffer = false;
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') { formUp(st, strat); Game.prepareOpeningBattle('invade'); }
@@ -198,6 +215,7 @@ function runOnce(strat, acc) {
     if (first[k]) { acc.first[k].push(first[k]); if (first[k] <= 3) acc.within3[k]++; }
   }
   if (sawOffer) acc.runsWithOffer++;
+  if (hiredOfferThisRun) acc.runsWithHire++;
   acc.runs++;
   KPI.reset();
 }
@@ -209,7 +227,7 @@ const strategies = [
   { name: '接続狙い（繋がる候補を採り、支援役を後衛へ置く）', kind: 'connect', facility: 'graveyard' }
 ];
 for (const s of strategies) {
-  const acc = { runs: 0, runsWithOffer: 0, battles: [], hiredWithOffer: 0,
+  const acc = { runs: 0, runsWithOffer: 0, runsWithHire: 0, battles: [], hiredWithOffer: 0,
     first: { loot: [], food: [], death: [], any: [] },
     within3: { loot: 0, food: 0, death: 0, any: 0 },
     interview: [0,1,2].map(() => ({ total: 0, links: 0, syn: 0, food: 0, any: 0, withOffer: 0 })) };
@@ -217,7 +235,7 @@ for (const s of strategies) {
   const mean = a => a.length ? (a.reduce((x,y)=>x+y,0)/a.length).toFixed(2) : '—';
   console.log(`\n■ ${s.name}（${acc.runs}ラン・平均 ${mean(acc.battles)}戦）`);
   console.log(`  【発火】いずれかの系統で2人の接続が成立: 到達 ${(acc.first.any.length/acc.runs*100).toFixed(0)}%のラン　初回 平均 ${mean(acc.first.any)}戦目　**最初の3戦以内 ${(acc.within3.any/acc.runs*100).toFixed(0)}%**`);
-  for (const [k, label] of [['loot','略奪（別人の金貨に追撃）'],['food','食料（料理人＋別の食べ手）'],['death','死霊（他者蘇生 or 召喚）']]) {
+  for (const [k, label] of [['loot','略奪（コンビ成立 or 別人の金貨に追撃）'],['food','食料（料理人＋別の食べ手・暫定判定）'],['death','死霊（他者蘇生/召喚された者が行動）']]) {
     console.log(`    ${label}: 到達 ${(acc.first[k].length/acc.runs*100).toFixed(0)}%　初回 平均 ${mean(acc.first[k])}戦目　3戦以内 ${(acc.within3[k]/acc.runs*100).toFixed(0)}%`);
   }
   console.log(`  【提示】最初の3面接のどこかに合法な接続候補が1人以上いたラン: ${(acc.runsWithOffer/acc.runs*100).toFixed(0)}%`);
@@ -225,5 +243,5 @@ for (const s of strategies) {
     if (!iv.total) return;
     console.log(`  【提示】${i+1}回目の面接: 合法な接続候補 平均 ${(iv.any/iv.total).toFixed(2)}人（links ${(iv.links/iv.total).toFixed(2)} / 種族等 ${(iv.syn/iv.total).toFixed(2)} / 食料 ${(iv.food/iv.total).toFixed(2)}）　1人以上いた面接 ${(iv.withOffer/iv.total*100).toFixed(0)}%`);
   });
-  if (s.kind === 'connect') console.log(`  【採用】最初の3面接で接続候補を実際に採った回数 合計 ${acc.hiredWithOffer}回（${acc.runs}ラン）`);
+  if (s.kind === 'connect') console.log(`  【採用】最初の3面接で接続候補を実際に採用できた: ${acc.runsWithHire}%のラン（採用回数 合計 ${acc.hiredWithOffer}回／${acc.runs}ラン）`);
 }
