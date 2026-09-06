@@ -2,7 +2,7 @@
 
 ## 最初に読む短い指示
 
-このメモを読み、**残件J（味方11種×驚き・にやり・涙）を進める**。2026-09-06にインプまで8種の各3差分を制作・接続した。次は魔法使いから再開する。
+このメモを読み、**残件J（味方11種×驚き・にやり・涙）を進める**。2026-09-06に魔法使いまで9種の各3差分を制作・接続した。次は死霊術師から再開する。
 
 正のブランチは `claude/owner-playtest-tuning-3vr0tt`。メモ作成時の基準HEADは `316f372a921355230db01941412d27264120cd9e`。着手前に `git pull origin claude/owner-playtest-tuning-3vr0tt`、`git status` を確認する。
 
@@ -17,7 +17,7 @@
 | F | 3→10件と最小限のbattle.js接続を取り込み済み。既存3件の判定は維持。追加確率0.3〜0.4%、1体1戦1回、将軍で抑制 |
 | E | `316f372`で戦間イベント30件・ツケを実装済み。Gemini台本を再投入しない |
 | H | 台詞の流し込み済み。ただし `hungry/feast/chain` と `MORMO_LINES` の呼び出しは旧HANDOFFで未接続と記載。Jとは別の残件として現在の参照を確認する。Iの戦闘野次は別の `MORMO_BATTLE_LINES` を使用 |
-| J | **8種（ゴブリン〜インプ）の各3差分は本番接続済み**。`assets/monsters/events/{id}/` と `EVENT_EXPRESSIONS` へ追加する契約。残り3種×3差分 |
+| J | **9種（ゴブリン〜魔法使い）の各3差分は本番接続済み**。`assets/monsters/events/{id}/` と `EVENT_EXPRESSIONS` へ追加する契約。残り2種×3差分 |
 
 同日中にClaudeの取り込みが進んだ。**stash内の旧READMEにある「C未採用・E未着手・すべて未push」は古い**。本メモと現在のコードを優先する。旧作業は `7d39498`（`origin/codex/f-wip`）へ保管され、その後正のブランチへ調整して取り込まれた。旧コミットを再cherry-pickしない。
 
@@ -61,7 +61,7 @@ git restore --source='be625ddf091eb32a966f439df73e170fa7d373f4^3' --worktree -- 
 | king_slime 涙 | exec-73614f34-5727-4fe6-825d-697e07c2bbcf.png | RGBA、alpha 0〜255 |
 | kobold 驚き | exec-812199d4-d4a3-46aa-99c4-b4b1bdea2249.png | RGBA、alpha 0〜255。記号追加と拡大率を要QA |
 
-ゴブリンからインプまで8種は2026-09-06に完了。残り3種9枚はすべて新規生成が必要。対象は `mage, necromancer, ogre`。
+ゴブリンから魔法使いまで9種は2026-09-06に完了。残り2種6枚はすべて新規生成が必要。対象は `necromancer, ogre`。
 
 オークの原画は同じ生成フォルダの `exec-16868708-9e7f-450f-b00d-b11976af86ae.png`（驚き）、`exec-b7d090c1-fc7a-4fc4-8012-c70daa26a45b.png`（にやり）、`exec-fd49ba28-adf9-475f-8b06-8a107a5c936d.png`（涙）。
 
