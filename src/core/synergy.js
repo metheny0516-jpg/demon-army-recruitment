@@ -127,8 +127,16 @@ const Synergy = {
   connections(candidate, roster, facilities, options) {
     options = options || {};
     const activeIds = new Set(options.activeUids || []);
-    const active = (roster || []).filter(unit => activeIds.has(unit.uid));
+    const rosterByUid = new Map((roster || []).map(unit => [unit.uid, unit]));
+    // 本番の activeRoster() と同じく、ロスター配列ではなく activeUids の順で組む。
+    // 料理人選択と食欲同値時の対象はこの順序で決まる。
+    const active = (options.activeUids || []).map(uid => rosterByUid.get(uid)).filter(Boolean);
     const maxDeploy = Number(options.maxDeploy) || Infinity;
+    const legalDeployments = active.length < maxDeploy
+      ? [{ units: active.concat(candidate), swapOut: null }]
+      : active.map((swapOut, index) => ({
+          units: active.map((unit, i) => i === index ? candidate : unit), swapOut
+        }));
     const traitsOf = unit => (unit && unit.traits || []).map(id => ({ id, trait: TRAITS[id] }))
       .filter(entry => entry.trait && entry.trait.links);
     const candidateTraits = traitsOf(candidate);
@@ -148,6 +156,11 @@ const Synergy = {
       return needs;
     };
     const add = (origin, signal, responder, extraNeeds) => {
+      const requiredExisting = [origin, responder]
+        .filter(entry => entry.type !== "facility" && !entry.candidate)
+        .map(entry => entry.unit.uid);
+      if (requiredExisting.length && !legalDeployments.some(deployment =>
+        requiredExisting.every(uid => deployment.units.some(unit => unit.uid === uid)))) return;
       const key = `${origin.id}|${signal}|${responder.id}|${origin.unit.name}|${responder.unit.name}`;
       if (seen.has(key)) return;
       seen.add(key);
@@ -187,37 +200,61 @@ const Synergy = {
     }
 
     // 食事系は links の語彙一致だけでは「誰が食べるか」を決められない。
-    // 本番と同じく出撃順を保ったまま食欲最大の対象を選び、食料がある場合だけ接続として扱う。
+    // 本番と同じく出撃順の最初の料理人、食欲最大（同値なら出撃順先頭）を選ぶ。
+    // 応募者が起点にも対象にもならず、採用前後で変わらない既存接続は候補にしない。
     const appetite = unit => Number((options.appetiteByUid || {})[unit.uid]) || 0;
-    const trialActive = active.concat(candidate);
-    const foodTarget = trialActive.slice().sort((a, b) => appetite(b) - appetite(a))[0];
-    const candidateCook = candidateTraits.find(entry => entry.id === "demon_cook");
-    const activeCook = armyTraits.find(entry => entry.id === "demon_cook" && activeIds.has(entry.unit.uid));
-    if (options.foodAvailable && foodTarget && (candidateCook || activeCook)) {
-      const cook = candidateCook
-        ? { ...candidateCook, unit: candidate, type: "unit", candidate: true }
-        : activeCook;
-      const targetTrait = traitsOf(foodTarget).find(entry => entry.id === "big_eater")
-        || { id: "meal_target", trait: { name: "食事強化" } };
-      add(cook, "食事強化", {
-        ...targetTrait, unit: foodTarget, type: "unit", candidate: foodTarget === candidate
-      });
+    const hasFood = units => typeof options.foodAvailableFor === "function"
+      ? !!options.foodAvailableFor(units) : !!options.foodAvailable;
+    const mealOf = units => {
+      if (!hasFood(units)) return null;
+      const cook = units.find(unit => (unit.traits || []).includes("demon_cook")) || null;
+      if (!cook) return null;
+      const target = units.slice().sort((a, b) => appetite(b) - appetite(a))[0] || null;
+      return target ? { cook, target } : null;
+    };
+    const mealTrials = legalDeployments.map(deployment => ({ ...deployment, meal: mealOf(deployment.units) }));
+    const involved = mealTrials.filter(trial => trial.meal
+      && (trial.meal.cook.uid === candidate.uid || trial.meal.target.uid === candidate.uid));
+    if (involved.length) {
+      const signatures = new Set(involved.map(trial => `${trial.meal.cook.uid}|${trial.meal.target.uid}`));
+      const everyLegalChoiceInvolvesApplicant = involved.length === mealTrials.length;
+      if (signatures.size === 1 && everyLegalChoiceInvolvesApplicant) {
+        const { cook, target } = involved[0].meal;
+        const cookTrait = traitsOf(cook).find(entry => entry.id === "demon_cook");
+        const targetTrait = traitsOf(target).find(entry => entry.id === "big_eater")
+          || { id: "meal_target", trait: { name: "食事強化" } };
+        add({ ...cookTrait, unit: cook, type: "unit", candidate: cook.uid === candidate.uid }, "食事強化", {
+          ...targetTrait, unit: target, type: "unit", candidate: target.uid === candidate.uid
+        });
+      } else {
+        const key = `meal-uncertain|${candidate.uid || candidate.tplId || candidate.name}`;
+        rows.push({
+          origin: { type: "unit", name: candidate.name, ability: "食事接続候補" },
+          responder: { type: "pending", name: "対象未確定", ability: "料理人・食欲最大対象" },
+          signal: "入れ替え相手と出撃順で変化",
+          needs: ["採用", "出撃", "入れ替え相手と配置を確定"], readyRank: 2, sortKey: key
+        });
+      }
     }
 
     // 種族・人数条件は links に現れない。実際の check を、現在編成と採用後の編成へ適用し、
     // 応募者によって初めて成立するものだけを候補にする。説明文の文字列から推測しない。
     const poolNow = roster || [];
     const poolAfter = poolNow.concat(candidate);
-    const deployAfter = active.concat(candidate);
     for (const synergy of SYNERGIES.filter(s => !s.meta)) {
       const now = synergy.check(this.sandbox(active), { pool: this.sandbox(poolNow) });
       const byHire = synergy.check(this.sandbox(active), { pool: this.sandbox(poolAfter) });
-      const byDeploy = synergy.check(this.sandbox(deployAfter), { pool: this.sandbox(poolAfter) });
+      const legalMatches = legalDeployments.filter(deployment =>
+        synergy.check(this.sandbox(deployment.units), { pool: this.sandbox(poolAfter) }));
+      const byDeploy = legalMatches.length > 0;
       if (now || (!byHire && !byDeploy)) continue;
       const needs = ["採用"];
       if (!byHire) {
         needs.push("出撃");
-        if (active.length >= maxDeploy) needs.push("入れ替え");
+        if (active.length >= maxDeploy) {
+          const matchesEverySwap = legalMatches.length === legalDeployments.length;
+          needs.push(matchesEverySwap ? "入れ替え" : "条件を保てる相手と入れ替え");
+        }
       }
       const key = `synergy|${synergy.id}|${candidate.uid || candidate.tplId || candidate.name}`;
       rows.push({

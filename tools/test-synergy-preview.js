@@ -143,4 +143,40 @@ const mealLinks = Synergy.connections(cook, [eater], [], {
 assert(mealLinks.some(link => link.origin.name === '料理人' && link.responder.name === '大食漢'),
   '食料と実際の食欲最大対象を確認して料理人の接続を示す');
 
+// ── 9. 食事予告は本番の activeUids 順・最初の料理人・同値規則に従う ──
+const cookA = { uid: 401, name: '既存料理人', race: 'ゴブリン', traits: ['demon_cook'], tags: [], salary: 2 };
+const tiedA = { uid: 402, name: '同値・前', race: 'オーガ', traits: [], tags: [], salary: 7 };
+const tiedB = { uid: 403, name: '同値・後', race: 'オーガ', traits: [], tags: [], salary: 7 };
+const irrelevant = { uid: 404, name: '応募兵', race: 'オーク', traits: ['brute'], tags: [], salary: 5 };
+const ordered = Synergy.connections(irrelevant, [tiedB, cookA, tiedA], [], {
+  activeUids: [401, 402, 403], maxDeploy: 5, foodAvailable: true,
+  appetiteByUid: { 401: 1, 402: 3, 403: 3, 404: 1 }
+});
+assert(!ordered.some(link => link.signal === '食事強化'),
+  '応募者が関与せず採用前後で変わらない既存食事接続を表示しない');
+
+const tiedApplicant = { ...tiedB, uid: 405, name: '同値応募者' };
+const tieOrder = Synergy.connections(tiedApplicant, [tiedB, cookA, tiedA], [], {
+  activeUids: [401, 402, 403], maxDeploy: 5, foodAvailable: true,
+  appetiteByUid: { 401: 1, 402: 3, 403: 3, 405: 3 }
+});
+assert(!tieOrder.some(link => link.signal === '食事強化'),
+  '食欲同値の応募者は末尾出撃なら既存の先頭対象を奪わない');
+
+const secondCook = { uid: 406, name: '応募料理人', race: 'インプ', traits: ['demon_cook'], tags: [], salary: 3 };
+const cookOrder = Synergy.connections(secondCook, [cookA, eater], [], {
+  activeUids: [401, 302], maxDeploy: 5, foodAvailable: true,
+  appetiteByUid: { 401: 1, 302: 3, 406: 1 }
+});
+assert(!cookOrder.some(link => link.signal === '食事強化'),
+  '応募料理人を無条件で出撃順先頭の既存料理人より優先しない');
+
+const fullMeal = Synergy.connections(secondCook, [cookA, eater], [], {
+  activeUids: [401, 302], maxDeploy: 2, foodAvailable: true,
+  appetiteByUid: { 401: 1, 302: 3, 406: 1 }
+});
+const uncertainMeal = fullMeal.find(link => link.responder.type === 'pending');
+assert(uncertainMeal && uncertainMeal.needs.includes('入れ替え相手と配置を確定'),
+  '満員時に入れ替え相手で料理人・対象が変わるなら成立や対象を断定しない');
+
 console.log('シナジー予告テスト完了');

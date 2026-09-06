@@ -69,6 +69,10 @@
   《死霊術》保持者本人の生存条件と、最前列時だけの注意を追加した。戦闘式・応募補助・保存構造は未変更。
   検証: `node tools/test-synergy-preview.js`、`node tools/test-recruitment.js`、
   `node tools/test-death-vertical.js`、ブラウザ回帰40件通過。`synergy-pool` だけは下記既知失敗のまま。
+  **同日予告精度修正**: 出撃者を `activeUids` 順に構築し、本番同様に最初の料理人・食欲同値時の
+  出撃順先頭を採用する。応募者が関与しない既存食事接続は除外し、応募料理人を既存料理人より
+  優先しない。満員時は各1名を入れ替えた合法編成だけを判定し、相手や配置で結果が割れる場合は
+  対象・成立を断定せず「入れ替え相手と配置を確定」と出す。戦闘式・食事倍率は未変更。
 - 次は **R1（Claude）→ R2/B1 → U2（Sol）**。U2の戦果1文は `result.mealSummary` / `st.lastBattle.mealPlan` を根拠に書ける。
   死霊の1文は `revive` の `traitId`/`sourceId` と `summon` から書ける（既に区別できる）。
 - **V系統（V0〜V3）はすべて完了。** 3系統とも現行コードで入口〜完成が成立しており、

@@ -118,9 +118,6 @@ const UI = {
     const facility = Game.activeFacility();
     const active = Game.activeRoster();
     const builders = Game.departmentRoster("construction");
-    const kitchenExtra = facility && facility.id === "grand_kitchen" ? 1 : 0;
-    const foodNeededAfterDeploy = Game.foodNeedFor(active.concat(m)) + kitchenExtra;
-    const foodAvailable = Math.min(Math.max(0, Game.state.food || 0), foodNeededAfterDeploy) > 0;
     const appetiteByUid = {};
     for (const unit of active.concat(m)) appetiteByUid[unit.uid] = Aptitude.of(unit).appetite;
     const activeAccountant = active.some(unit => (unit.job || "").includes("会計"));
@@ -130,11 +127,15 @@ const UI = {
     const rows = Synergy.connections(m, Game.state.roster, facility ? [facility] : [], {
       activeUids: Game.state.activeUids,
       maxDeploy: Game.MAX_DEPLOY,
-      foodAvailable,
+      foodAvailableFor: units => {
+        const kitchenExtra = facility && facility.id === "grand_kitchen" ? 1 : 0;
+        const need = Game.foodNeedFor(units) + kitchenExtra;
+        return Math.min(Math.max(0, Game.state.food || 0), need) > 0;
+      },
       appetiteByUid,
       facilityNeeds: facility ? {
         extortion_ledger: activeAccountant ? [] : [candidateAccountant ? "応募者を会計職として出撃" : "会計職を出撃"],
-        grand_kitchen: foodAvailable ? [] : ["戦闘糧食が必要"],
+        grand_kitchen: Math.max(0, Game.state.food || 0) > 0 ? [] : ["戦闘糧食が必要"],
         graveyard: graveyardWorker ? [] : [candidateNecromancer ? "応募者を建設部門へ配属" : "死霊術師を建設部門へ配属"]
       } : {}
     });
