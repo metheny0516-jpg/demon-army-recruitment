@@ -56,12 +56,16 @@ const { autoDismissMormo } = require('./helpers.js');
     assert.ok(stack.ids.includes('arcane_circle'), '同じ編成で魔法結社も立つ（枠を奪い合わない）');
     assert.ok(stack.ids.includes('overload'), '2つ以上で魔王軍完成が重なる');
 
-    // 4) 魔王軍完成は単独では立たない
+    // 4) 魔王軍完成は「2つ以上そろったとき」だけ立つ。
+    // 種族ペアなど別のシナジーが同時に立つ編成では判定できないので、
+    // 立っている非メタのシナジー数そのもので確かめる。
     const single = await page.evaluate(() => {
-      const army = [1, 2, 3, 4].map(i => mk('goblin', i));
-      return Synergy.active(box(army.slice(0, 2)), { pool: box(army) }).map(s => s.id);
+      const army = [mk('goblin', 1)];
+      const ids = Synergy.active(box(army), { pool: box(army) });
+      return { ids: ids.map(s => s.id), plain: ids.filter(s => !s.meta).length };
     });
-    assert.ok(!single.includes('overload'), '1つだけでは魔王軍完成にならない');
+    assert.ok(single.plain < 2, '検証用の編成では非メタのシナジーが2つ未満');
+    assert.ok(!single.ids.includes('overload'), '2つそろわなければ魔王軍完成にならない');
 
     // 5) 編成画面の予告が本番と同じ答えを返す
     const preview = await page.evaluate(() => {
