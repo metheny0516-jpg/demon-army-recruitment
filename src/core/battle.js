@@ -157,6 +157,10 @@ const Battle = {
   // 連鎖の上限。壊れてよいが、無限には伸ばさない（1戦が終わらなくなる）。
   MAX_CHAIN_DEPTH: 12,
 
+  // 鎖の中で手番を渡せる相手。連鎖段数を読む特性を持つ者だけが引き込まれる。
+  // ここに載っていない特性は、鎖に入っても意味を持たないので呼ばない。
+  CHAIN_REACTORS: ["relay_kick", "escalate", "deep_dread"],
+
   simulate(playerUnits, enemyUnits, options) {
     options = options || {};
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
@@ -626,8 +630,13 @@ const Battle = {
       const relayDepth = applied.deathEvent ? (applied.deathEvent.chainDepth || 1) + 1 : 0;
       if (applied.deathEvent && relayChainId && target.side !== unit.side
         && relayDepth < Battle.MAX_CHAIN_DEPTH && enemies.some(e => e.alive)) {
+        // 鎖へ引き込む相手は「連鎖に反応する特性を持つ者」全員から選ぶ。
+        // 押し出し持ちだけに絞っていたため、深追い・深淵の恐怖の持ち主は
+        // 押し出しを同時に持たない限り一生 chainDepth>=2 で行動できず、
+        // 発火0のまま死んでいた（24ランの計測で所持7回・17回に対して発火0）。
         const runner = allies.find(a => a.alive && a !== unit
-          && a.traits.includes("relay_kick") && !actedInChain(relayChainId, a));
+          && a.traits.some(t => Battle.CHAIN_REACTORS.includes(t))
+          && !actedInChain(relayChainId, a));
         if (runner) {
           markChainActor(relayChainId, runner);
           const trigger = emitCausal("trait_trigger", {
