@@ -31,14 +31,19 @@ const { autoDismissMormo } = require('./helpers.js');
     assert.ok(!pool.withoutPool.includes('goblin_horde'), '出撃2体だけでは軍団は立たない');
     assert.ok(pool.withPool.includes('goblin_horde'), '控えを数えれば軍団が立つ');
 
-    // 2) 効果が乗るのは出撃した者だけ。控えは戦わない
+    // 2) 効果が乗るのは出撃した者だけ。控えは条件を数えるだけで戦わない。
+    //    出撃側が強くなることだけを見ていると、「控えにも乗ってしまう」不具合を
+    //    素通しする。控えの倍率が等倍のままであることも同じ検査で押さえる。
     const effect = await page.evaluate(() => {
       const army = [1, 2, 3, 4].map(i => mk('goblin', i));
-      const squad = box(army.slice(0, 2));
-      Synergy.applyAll(squad, { pool: box(army) });
-      return squad.map(u => u.mods.dmgMult);
+      const all = box(army);                        // 軍団全体（発火条件を数える母集団）
+      const squad = all.slice(0, 2);                // そのうち出撃するのは2体
+      Synergy.applyAll(squad, { pool: all });
+      return { squad: squad.map(u => u.mods.dmgMult), bench: all.slice(2).map(u => u.mods.dmgMult) };
     });
-    assert.ok(effect.every(m => m > 1), '出撃したゴブリンだけが強化される');
+    assert.ok(effect.squad.every(m => m > 1), '出撃したゴブリンだけが強化される');
+    assert.ok(effect.bench.every(m => m === 1),
+      `控えには効果が乗らない（実際: ${effect.bench.join(',')}）`);
 
     // 3) 枠を奪い合わずに2種類が同時発動し、魔王軍完成が重なる
     const stack = await page.evaluate(() => {
@@ -77,6 +82,11 @@ const { autoDismissMormo } = require('./helpers.js');
     assert.deepEqual(preview.rows, preview.real, '予告と本番の発動シナジーが一致する');
 
     // 6) 積んだシナジーが「画面の出来事」になる：OVERKILL撃破が次の敵へ伝播する
+    //    ここだけは実戦のBattle.simulateを回すので乱数が入る。乱数のままだと
+    //    「積んだほうが深い」が偶然で揺れ、後から入った不具合と区別できない。
+    //    そこで戦闘の間だけ Math.random を種つきの数列へ差し替え、
+    //    積まない側と積んだ側へ **同じ乱数列** を与えて対にして比べる。
+    //    （U.rand/pick/chance はすべて Math.random を通るので、これで全部が決まる）
     const chain = await page.evaluate(() => {
       const stage = ENEMY_STAGES[2];
       const squad = () => ['goblin', 'ogre', 'goblin'].map((id, j) => {
@@ -93,24 +103,34 @@ const { autoDismissMormo } = require('./helpers.js');
         return { uid: j + 1, tplId: id, race: t.race, name: t.race + j, traits: [], tags: (t.tags || []).slice(),
           hp: t.base.hp, atk: t.base.atk, def: t.base.def, spd: t.base.spd, salary: t.salary[0] };
       }));
+      const ROUNDS = 60;
+      const real = Math.random;
+      const seeded = seed => { let s = seed >>> 0; return () => {
+        s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296;
+      }; };
       const measure = pool => {
         let deep = 0, fired = 0;
-        for (let i = 0; i < 60; i++) {
+        for (let i = 0; i < ROUNDS; i++) {
+          Math.random = seeded(0x5eed + i * 7919);   // 何度走らせても同じ60戦
           const r = Battle.simulate(squad(), foes(), { synergyPool: pool });
           if (((r.chainSummary && r.chainSummary.maxChain) || 0) >= 4) deep++;
           if ((r.timeline || []).some(e => e.traitId === 'overload')) fired++;
         }
         return { deep, fired };
       };
-      const flat = measure(army(['goblin', 'ogre']));
-      const stacked = measure(army(['goblin', 'goblin', 'goblin', 'goblin',
-        'mage', 'mage', 'mage', 'mage', 'ogre']));
-      return { flat, stacked };
+      try {
+        const flat = measure(army(['goblin', 'ogre']));
+        const stacked = measure(army(['goblin', 'goblin', 'goblin', 'goblin',
+          'mage', 'mage', 'mage', 'mage', 'ogre']));
+        return { flat, stacked, rounds: ROUNDS };
+      } finally {
+        Math.random = real;
+      }
     });
     assert.equal(chain.flat.fired, 0, 'シナジーを積んでいなければ伝播しない');
     assert.ok(chain.stacked.fired > 0, '魔王軍完成が立つと余剰が次の敵へ伝播する');
     assert.ok(chain.stacked.deep > chain.flat.deep,
-      `積んだほうが連鎖が深い（積まない ${chain.flat.deep}/60 → 積んだ ${chain.stacked.deep}/60）`);
+      `積んだほうが連鎖が深い（同じ乱数列で 積まない ${chain.flat.deep}/${chain.rounds} → 積んだ ${chain.stacked.deep}/${chain.rounds}）`);
 
     console.log('✓ シナジー: 枠外の発火条件・出撃者だけへの効果・重ねがけ・積むほど伸びる連鎖・予告の一致');
   } finally {
