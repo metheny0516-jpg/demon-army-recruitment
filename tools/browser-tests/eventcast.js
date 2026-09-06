@@ -66,7 +66,8 @@ const assert = require('node:assert/strict');
     slime: UI.eventFaceHtml({ tplId: 'slime', race: 'スライム' }, 'tears'),
     kingSlime: UI.eventFaceHtml({ tplId: 'king_slime', race: 'キングスライム' }, 'smirk'),
     kobold: UI.eventFaceHtml({ tplId: 'kobold', race: 'コボルト' }, 'surprise'),
-    fallback: UI.eventFaceHtml({ tplId: 'orc', race: 'オーク' }, 'surprise')
+    orc: UI.eventFaceHtml({ tplId: 'orc', race: 'オーク' }, 'tears'),
+    fallback: UI.eventFaceHtml({ tplId: 'ogre', race: 'オーガ' }, 'surprise')
   }));
   assert.deepEqual([expressions.surprise, expressions.smirk, expressions.tears, expressions.plain],
     ['surprise', 'smirk', 'tears', null], '台詞の感情語から表情を選ぶ');
@@ -74,6 +75,7 @@ const assert = require('node:assert/strict');
   assert.match(expressions.slime, /events\/slime\/tears\.webp/, '顔のないスライムにも制作済み差分を使う');
   assert.match(expressions.kingSlime, /events\/king_slime\/smirk\.webp/, '合体後のIDでも制作済み差分を使う');
   assert.match(expressions.kobold, /events\/kobold\/surprise\.webp/, 'コボルトの制作済み差分を使う');
+  assert.match(expressions.orc, /events\/orc\/tears\.webp/, 'オークの制作済み差分を使う');
   assert.doesNotMatch(expressions.fallback, /event-expression/, '未制作種族は通常絵へ戻す');
   const loaded = await page.evaluate(async () => {
     const host = document.createElement('div');
