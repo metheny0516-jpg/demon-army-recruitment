@@ -1333,6 +1333,11 @@ button.wide { width: 100%; }
 .applicant-links > div { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
 .applicant-links i { color: #9ef0b8; font-style: normal; }
 .applicant-links small { color: var(--muted); }
+.applicant-links .applicant-link-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.applicant-link-row span small { display: block; font-size: 9px; line-height: 1; }
+.applicant-link-row strong { flex-basis: 100%; color: var(--gold); font-size: 10px; }
+.applicant-links details { margin-top: 5px; }
+.applicant-links summary { cursor: pointer; color: var(--muted); }
 
 /* ── 2026-09 UI再設計・第一段階 ─────────────────────────
    ブラウザのカード一覧ではなく「魔王城の執務卓」を共通舞台にする。

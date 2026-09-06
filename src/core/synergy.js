@@ -124,27 +124,53 @@ const Synergy = {
   // 採用画面の「この人材を今の軍団へ入れたら何が起きるか」。
   // links は戦闘計算ではなく公開情報の接続語彙であり、効果量を二重管理しない。
   // 応募者が作る事件を既存人材が受ける経路と、その逆だけを短く返す。
-  connections(candidate, roster, facilities) {
+  connections(candidate, roster, facilities, options) {
+    options = options || {};
+    const activeIds = new Set(options.activeUids || []);
+    const active = (roster || []).filter(unit => activeIds.has(unit.uid));
+    const maxDeploy = Number(options.maxDeploy) || Infinity;
     const traitsOf = unit => (unit && unit.traits || []).map(id => ({ id, trait: TRAITS[id] }))
       .filter(entry => entry.trait && entry.trait.links);
     const candidateTraits = traitsOf(candidate);
-    const armyTraits = (roster || []).flatMap(unit => traitsOf(unit).map(entry => ({ ...entry, unit })));
+    const armyTraits = (roster || []).flatMap(unit => traitsOf(unit).map(entry => ({ ...entry, unit, type: "unit" })));
     for (const facility of facilities || []) {
-      if (facility && facility.links) armyTraits.push({ id: facility.id, trait: facility, unit: { name: facility.name } });
+      if (facility && facility.links) armyTraits.push({ id: facility.id, trait: facility, unit: { name: facility.name }, type: "facility" });
     }
     const rows = [];
     const seen = new Set();
-    const add = (fromName, signal, toName, unitName) => {
-      const key = `${fromName}|${signal}|${toName}|${unitName || ""}`;
+    const placementNeeds = entries => {
+      const needs = ["採用"];
+      const units = entries.filter(entry => entry.type !== "facility");
+      if (units.some(entry => entry.candidate) || units.some(entry => !activeIds.has(entry.unit.uid))) {
+        needs.push("出撃");
+        if (active.length >= maxDeploy) needs.push("入れ替え");
+      }
+      return needs;
+    };
+    const add = (origin, signal, responder, extraNeeds) => {
+      const key = `${origin.id}|${signal}|${responder.id}|${origin.unit.name}|${responder.unit.name}`;
       if (seen.has(key)) return;
       seen.add(key);
-      rows.push({ from: fromName, signal, to: toName, unitName: unitName || null });
+      const facilityNeeds = [];
+      for (const entry of [origin, responder]) {
+        if (entry.type === "facility") facilityNeeds.push(...((options.facilityNeeds || {})[entry.id] || []));
+      }
+      const needs = placementNeeds([origin, responder]).concat(facilityNeeds, extraNeeds || []);
+      const uniqueNeeds = [...new Set(needs)];
+      rows.push({
+        origin: { type: origin.type || "unit", name: origin.unit.name, ability: origin.trait.name },
+        responder: { type: responder.type || "unit", name: responder.unit.name, ability: responder.trait.name },
+        signal, needs: uniqueNeeds,
+        readyRank: uniqueNeeds.some(need => !["採用", "出撃"].includes(need)) ? 2 : uniqueNeeds.includes("出撃") ? 1 : 0,
+        sortKey: key
+      });
     };
     for (const source of candidateTraits) {
       for (const signal of source.trait.links.emits || []) {
         for (const receiver of armyTraits) {
           if ((receiver.trait.links.reacts || []).includes(signal)) {
-            add(source.trait.name, signal, receiver.trait.name, receiver.unit.name);
+            add({ ...source, unit: candidate, type: "unit", candidate: true }, signal, receiver,
+              signal === "食料消費" && !options.foodAvailable ? ["食料が必要"] : []);
           }
         }
       }
@@ -153,12 +179,55 @@ const Synergy = {
       for (const signal of source.trait.links.emits || []) {
         for (const receiver of candidateTraits) {
           if ((receiver.trait.links.reacts || []).includes(signal)) {
-            add(source.trait.name, signal, receiver.trait.name, source.unit.name);
+            add(source, signal, { ...receiver, unit: candidate, type: "unit", candidate: true },
+              signal === "食料消費" && !options.foodAvailable ? ["食料が必要"] : []);
           }
         }
       }
     }
-    return rows;
+
+    // 食事系は links の語彙一致だけでは「誰が食べるか」を決められない。
+    // 本番と同じく出撃順を保ったまま食欲最大の対象を選び、食料がある場合だけ接続として扱う。
+    const appetite = unit => Number((options.appetiteByUid || {})[unit.uid]) || 0;
+    const trialActive = active.concat(candidate);
+    const foodTarget = trialActive.slice().sort((a, b) => appetite(b) - appetite(a))[0];
+    const candidateCook = candidateTraits.find(entry => entry.id === "demon_cook");
+    const activeCook = armyTraits.find(entry => entry.id === "demon_cook" && activeIds.has(entry.unit.uid));
+    if (options.foodAvailable && foodTarget && (candidateCook || activeCook)) {
+      const cook = candidateCook
+        ? { ...candidateCook, unit: candidate, type: "unit", candidate: true }
+        : activeCook;
+      const targetTrait = traitsOf(foodTarget).find(entry => entry.id === "big_eater")
+        || { id: "meal_target", trait: { name: "食事強化" } };
+      add(cook, "食事強化", {
+        ...targetTrait, unit: foodTarget, type: "unit", candidate: foodTarget === candidate
+      });
+    }
+
+    // 種族・人数条件は links に現れない。実際の check を、現在編成と採用後の編成へ適用し、
+    // 応募者によって初めて成立するものだけを候補にする。説明文の文字列から推測しない。
+    const poolNow = roster || [];
+    const poolAfter = poolNow.concat(candidate);
+    const deployAfter = active.concat(candidate);
+    for (const synergy of SYNERGIES.filter(s => !s.meta)) {
+      const now = synergy.check(this.sandbox(active), { pool: this.sandbox(poolNow) });
+      const byHire = synergy.check(this.sandbox(active), { pool: this.sandbox(poolAfter) });
+      const byDeploy = synergy.check(this.sandbox(deployAfter), { pool: this.sandbox(poolAfter) });
+      if (now || (!byHire && !byDeploy)) continue;
+      const needs = ["採用"];
+      if (!byHire) {
+        needs.push("出撃");
+        if (active.length >= maxDeploy) needs.push("入れ替え");
+      }
+      const key = `synergy|${synergy.id}|${candidate.uid || candidate.tplId || candidate.name}`;
+      rows.push({
+        origin: { type: "unit", name: candidate.name, ability: candidate.race },
+        responder: { type: "synergy", name: `《${synergy.name}》`, ability: synergy.desc },
+        signal: synergy.condition, needs, readyRank: byHire ? 0 : (needs.includes("入れ替え") ? 2 : 1), sortKey: key
+      });
+    }
+
+    return rows.sort((a, b) => a.readyRank - b.readyRank || a.sortKey.localeCompare(b.sortKey));
   },
 
   // 発動中なら「いまの効き目」と「もう1体増やしたとき／1体入れ替えたときの効き目」、

@@ -116,11 +116,43 @@ const UI = {
 
   applicantConnections(m) {
     const facility = Game.activeFacility();
-    const rows = Synergy.connections(m, Game.state.roster, facility ? [facility] : []).slice(0, 3);
+    const active = Game.activeRoster();
+    const builders = Game.departmentRoster("construction");
+    const kitchenExtra = facility && facility.id === "grand_kitchen" ? 1 : 0;
+    const foodNeededAfterDeploy = Game.foodNeedFor(active.concat(m)) + kitchenExtra;
+    const foodAvailable = Math.min(Math.max(0, Game.state.food || 0), foodNeededAfterDeploy) > 0;
+    const appetiteByUid = {};
+    for (const unit of active.concat(m)) appetiteByUid[unit.uid] = Aptitude.of(unit).appetite;
+    const activeAccountant = active.some(unit => (unit.job || "").includes("会計"));
+    const candidateAccountant = (m.job || "").includes("会計");
+    const graveyardWorker = builders.some(unit => unit.tplId === "necromancer");
+    const candidateNecromancer = m.tplId === "necromancer";
+    const rows = Synergy.connections(m, Game.state.roster, facility ? [facility] : [], {
+      activeUids: Game.state.activeUids,
+      maxDeploy: Game.MAX_DEPLOY,
+      foodAvailable,
+      appetiteByUid,
+      facilityNeeds: facility ? {
+        extortion_ledger: activeAccountant ? [] : [candidateAccountant ? "応募者を会計職として出撃" : "会計職を出撃"],
+        grand_kitchen: foodAvailable ? [] : ["戦闘糧食が必要"],
+        graveyard: graveyardWorker ? [] : [candidateNecromancer ? "応募者を建設部門へ配属" : "死霊術師を建設部門へ配属"]
+      } : {}
+    });
     if (!rows.length) return `<div class="applicant-links muted">現在の軍団との直接接続はまだない</div>`;
-    return `<div class="applicant-links"><b>🔗 今の軍団との接続</b>${rows.map(row =>
-      `<div><span>${U.esc(row.from)}</span><i>→ ${U.esc(row.signal)} →</i><span>${U.esc(row.to)}</span>${
-        row.unitName ? `<small>（${U.esc(row.unitName)}）</small>` : ""}</div>`).join("")}</div>`;
+    const rowHtml = row => {
+      const signal = row.origin.ability === "追い剥ぎ" && row.signal === "金貨獲得"
+        ? "1Gを略奪予約" : row.signal;
+      return `<div class="applicant-link-row">
+      <span><small>起点</small>${U.esc(row.origin.name)}の《${U.esc(row.origin.ability)}》</span>
+      <i>→ ${U.esc(signal)} →</i>
+      <span><small>反応</small>${U.esc(row.responder.name)}の${row.responder.type === "synergy" ? "" : "《"}${U.esc(row.responder.ability)}${row.responder.type === "synergy" ? "" : "》"}</span>
+      <strong>必要：${row.needs.map(U.esc).join("・")}</strong>
+    </div>`;
+    };
+    return `<div class="applicant-links"><b>🔗 今の軍団との接続</b>
+      ${rowHtml(rows[0])}
+      ${rows.length > 1 ? `<details><summary>ほか${rows.length - 1}件の接続候補</summary>${rows.slice(1).map(rowHtml).join("")}</details>` : ""}
+    </div>`;
   },
 
   monsterCard(m, opts) {
@@ -143,7 +175,10 @@ const UI = {
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
       </div>
       ${legacy}
-      ${opts.resume ? this.resumeHtml(m) : ""}
+      ${opts.resume ? `<div class="traits">${this.traitHtml(m.traits)}</div>
+        ${this.applicantConnections(m)}
+        ${opts.footer || ""}
+        ${this.resumeHtml(m)}` : ""}
       <div class="stats">
         <div class="stat"><span class="k">HP</span><span class="v">${m.hp}</span></div>
         <div class="stat"><span class="k">攻撃</span><span class="v">${m.atk}</span></div>
@@ -158,11 +193,10 @@ const UI = {
         ${unpaid}
       </div>
       ${this.aptitudeHtml(m)}
-      <div class="traits">${this.traitHtml(m.traits)}</div>
-      ${opts.resume ? this.applicantConnections(m) : ""}
+      ${opts.resume ? "" : `<div class="traits">${this.traitHtml(m.traits)}</div>`}
       ${rank.id === "general" ? `<div class="general-ability">⚔ 将軍の号令：出撃中、味方全員の与ダメージ+15%</div>` : ""}
       ${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}
-      ${opts.footer || ""}
+      ${opts.resume ? "" : (opts.footer || "")}
     </div>`;
   },
 
@@ -886,11 +920,15 @@ const UI = {
       active.some(m => (m.traits || []).includes("hunger_demon")) && rations.emptied ? "飢餓の悪魔" : "",
       rations.consumed >= 4 ? "暴食の宴" : ""
     ].filter(Boolean);
+    const necromancer = active.find(m => (m.traits || []).includes("necromancy"));
     const deathHints = [
       active.some(m => (m.traits || []).includes("gravekeeper")) ? "死亡→魂獲得" : "",
-      active.some(m => (m.traits || []).includes("necromancy")) ? "死亡者1名を蘇生" : "",
+      necromancer ? "《死霊術》：本人が生存してラウンド終了 → 倒れている味方1名を蘇生" : "",
       active.some(m => (m.traits || []).includes("soul_harvest")) ? "蘇生→魂消費→アンデッド強化" : ""
     ].filter(Boolean);
+    const necromancerFrontWarning = necromancer && active[0] && active[0].uid === necromancer.uid
+      ? `配置注意：${necromancer.name}は最前列。本人が倒れると《死霊術》は使えません。`
+      : "";
     const ledgerReady = st.activeFacilityId === "extortion_ledger" && active.some(m => (m.job || "").includes("会計"));
     const graveyardReady = st.activeFacilityId === "graveyard" && builders.some(m => m.tplId === "necromancer");
     const kitchenReady = st.activeFacilityId === "grand_kitchen";
@@ -914,7 +952,8 @@ const UI = {
         ${rations.shortage ? `<div class="warn">不足 ${rations.shortage}</div>` : ""}
         ${rationHints.length ? `<div class="synergy-hint">発火見込み：${rationHints.map(U.esc).join(" → ")}</div>` : ""}</div>`}
       ${!opening && deathHints.length ? `<div class="panel"><b>💀 死亡反応</b>
-        <div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div></div>` : ""}
+        <div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div>
+        ${necromancerFrontWarning ? `<div class="warn">${U.esc(necromancerFrontWarning)}</div>` : ""}</div>` : ""}
       ${!opening && ledgerReady ? `<div class="panel"><b>📒 恐喝帳簿</b>
         <div class="synergy-hint">予約金貨3G到達 → 次の味方攻撃+40%</div></div>` : ""}
       ${!opening && graveyardReady ? `<div class="panel"><b>🪦 墓地</b>

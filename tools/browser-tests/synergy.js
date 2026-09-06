@@ -34,9 +34,10 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     return document.body.innerText;
   });
   if (!recruitText.includes('今の軍団との接続')) errors.push('応募者カードに接続見出しが出ない');
-  if (!/追い剥ぎ.*金貨獲得.*強欲/s.test(recruitText)) {
-    errors.push('採用前に「追い剥ぎ → 金貨獲得 → 強欲」が読めない');
+  if (!/起点.*追い剥ぎ.*1Gを略奪予約.*反応.*強欲/s.test(recruitText)) {
+    errors.push('採用前に「起点：追い剥ぎ → 1Gを略奪予約 → 反応：強欲」が読めない');
   }
+  if (!/必要：採用・出撃/.test(recruitText)) errors.push('採用と出撃の必要条件が読めない');
 
   await enterMissionPhase(page);
   await page.locator('[data-action="missionpick"]').first().click();
