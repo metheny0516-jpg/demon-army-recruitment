@@ -179,7 +179,6 @@ const UI = {
       if (topTanker && c.id === topTanker.id && (!topDealer || c.id !== topDealer.id)) {
         badges.push(`<span class="contrib-badge tank">🛡盾役</span>`);
       }
-      if (c.mercenary) badges.push(`<span class="contrib-badge merc">🗡傭兵</span>`);
       const fell = c.survived === false;
       if (fell) badges.push(`<span class="contrib-badge dead">💀戦死</span>`);
       else if (c.died) badges.push(`<span class="contrib-badge revived">✨生還</span>`);
@@ -403,8 +402,7 @@ const UI = {
     const options = PAYROLL_POLICY_ORDER.map(id => {
       const quote = Game.payrollQuote(id);
       const policy = quote.policy;
-      const costText = id === "withhold" ? "支払 0G"
-        : id === "advance" ? `今すぐ ${quote.cost}G` : `勝利後 ${quote.cost}G`;
+      const costText = id === "withhold" ? "支払 0G" : `勝利後 ${quote.cost}G`;
       return `<button class="payroll-option ${selected.id === id ? "selected" : ""}"
         data-action="payrollpolicy" data-policy="${id}" ${!quote.affordable ? "disabled" : ""}>
         <span class="payroll-title">${policy.icon} ${U.esc(policy.name)}</span>
@@ -412,12 +410,10 @@ const UI = {
         <span class="payroll-desc">${U.esc(policy.description)}</span>
       </button>`;
     }).join("");
-    const advance = Game.payrollQuote("advance");
     return `<div class="panel payroll-panel">
       <h3>💰 今回の給与方針</h3>
       <div class="muted">出撃前に決める。未払いはこの戦闘から特性・ストライキ・行進曲へ反映される。</div>
       <div class="payroll-options">${options}</div>
-      ${!advance.affordable ? `<div class="payroll-warning">厚遇には ${advance.cost}G 必要（現在 ${st.gold}G）</div>` : ""}
     </div>`;
   },
 
@@ -498,39 +494,6 @@ const UI = {
 
   // 稼いだ金貨の出口。出撃5枠を壊さず「その戦闘だけの6体目」を買う。
   // 同族を雇えば種族シナジーの頭数も増えるので、硬い者と噛み合う者のどちらを取るかが判断になる。
-  mercenaryPanel() {
-    const st = Game.state;
-    const hired = st.mercenaries || [];
-    const offers = Game.mercenaryOffers();
-    const base = Game.mercenaryBaseCost();
-    const full = hired.length >= Game.MERCENARY_COSTS.length;
-    const hiredHtml = hired.length
-      ? `<div class="merc-hired">雇用中：${hired.map(m =>
-          `<span class="merc-chip">${this.icon(m.race)} ${U.esc(m.name)}（${U.esc(m.race)}）${m.hiredFor}G</span>`).join("")}</div>`
-      : "";
-    const cards = full ? "" : offers.map((m, i) => {
-      const cost = Game.mercenaryCost(i);
-      const kin = Game.mercenaryKinCount(m.race);
-      const afford = st.gold >= cost;
-      return `<div class="merc-card">
-        <div class="merc-name">${this.icon(m.race)} <b>${U.esc(m.name)}</b>
-          <span class="muted">${U.esc(m.race)}／${U.esc(m.job)}</span></div>
-        <div class="merc-stats">HP ${m.hp}・攻 ${m.atk}・防 ${m.def}・速 ${m.spd}</div>
-        <div class="merc-traits">${this.traitHtml(m.traits)}</div>
-        ${cost < base ? `<div class="merc-kin">🤝 顔なじみ価格 ${base}G → <b>${cost}G</b>
-          <span class="muted">（出撃隊に${U.esc(m.race)}が${kin}体）</span></div>` : ""}
-        <button class="small primary" data-action="hiremerc" data-index="${i}" ${afford ? "" : "disabled"}>
-          ${afford ? `${cost}G で雇う` : `${cost}G 必要（所持 ${st.gold}G）`}</button>
-      </div>`;
-    }).join("");
-    return `<div class="panel merc-panel">
-      <h3>🗡 傭兵市場 <span class="muted">— この戦闘だけの助っ人</span></h3>
-      <div class="muted">出撃5枠の外から加わる。給与も戦功も持たず、戦闘が終われば去る。
-        ${full ? "これ以上は雇えない。" : `次の1名は ${base}G（出撃隊に同じ種族がいるほど安くなる）。`}</div>
-      ${hiredHtml}
-      ${cards ? `<div class="merc-list">${cards}</div>` : ""}
-    </div>`;
-  },
 
   // シナジーだけ見せても「混ぜると倍率を二重に失う」の片方しか見えない。
   // 《群れの本能》のように編成で決まる特性も、実際に測った倍率で出す。
@@ -937,7 +900,6 @@ const UI = {
       </div>` : ""}
       ${opening ? "" : this.feastPanel()}
       ${this.payrollPanel()}
-      ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
       </aside>

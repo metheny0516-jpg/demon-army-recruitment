@@ -17,6 +17,8 @@ vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 const Game = vm.runInContext('Game', ctx);
 const Battle = vm.runInContext('Battle', ctx);
+const PAYROLL_POLICIES = vm.runInContext('PAYROLL_POLICIES', ctx);
+const PAYROLL_POLICY_ORDER = vm.runInContext('PAYROLL_POLICY_ORDER', ctx);
 const assert = (condition, message) => {
   if (!condition) throw new Error(message);
   console.log(`✓ ${message}`);
@@ -34,28 +36,19 @@ function setup() {
   ];
   st.activeUids = [1];
   st.payrollPolicy = 'regular';
-  st.payrollChoices = { regular: 0, withhold: 0, advance: 0 };
+  st.payrollChoices = { regular: 0, withhold: 0 };
   return st;
 }
 
 let st = setup();
 assert(Game.salaryTotal() === 6, '通常給与4G＋生活手当2Gを集計');
-assert(Game.payrollQuote('advance').cost === 9, '厚遇費は通常額の1.5倍を切り上げ');
-assert(!Game.setPayrollPolicy('invalid') && Game.setPayrollPolicy('advance'), '編成中だけ有効な給与方針を選べる');
-
-st.gold = 8;
-const before = JSON.stringify(st.roster);
-assert(!Game.preparePayrollForBattle([]), '資金不足では厚遇出撃を拒否');
-assert(st.gold === 8 && JSON.stringify(st.roster) === before && st.payrollChoices.advance === 0,
-  '拒否された厚遇は資金・人材・選択回数を汚さない');
-
-st.gold = 20;
-const advanceNotes = [];
-assert(Game.preparePayrollForBattle(advanceNotes), '資金があれば厚遇を確定できる');
-assert(st.gold === 11 && st.roster.every(m => !m.unpaid && m.unpaidStreak === 0 && m.loyalty === 68),
-  '厚遇は出撃前に9G払い、未払い解消・忠誠+8');
-Game.paySalaries(advanceNotes);
-assert(st.gold === 11, '厚遇は勝利後に二重払いしない');
+// 給与方針は「通常支給／今回は未払い」の2択（前払い・厚遇は 2026-09-06 に撤去）
+assert(PAYROLL_POLICY_ORDER.length === 2 && !PAYROLL_POLICIES.advance,
+  '給与方針は2択で、厚遇は残っていない');
+assert(!Game.setPayrollPolicy('advance'), '撤去した方針は選べない');
+assert(!Game.setPayrollPolicy('invalid') && Game.setPayrollPolicy('regular'), '編成中だけ有効な給与方針を選べる');
+assert(Game.payrollQuote('regular').cost === 6 && Game.payrollQuote('regular').affordable,
+  '通常支給は勝利後に通常額を払う');
 
 st = setup();
 st.gold = 20;

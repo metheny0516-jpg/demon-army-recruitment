@@ -239,10 +239,6 @@ const App = {
         Game.setKingSlimeMerge(data.on === "1");
         return this.render();
 
-      case "hiremerc":
-        Game.hireMercenary(Number(data.index));
-        return this.render();
-
       case "brief":
         Game.postBrief(data.brief);
         return this.render();

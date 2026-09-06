@@ -53,14 +53,7 @@ if (moved.length >= 2) {
   st.activeUids = [moved[1], moved[0], ...moved.slice(2)];
   assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '並び順が変われば新しい試行');
 }
-// 金で雇った傭兵と、合体するかどうかも「今回の仮説」に含める
-st.mercenaries = [{ tplId: 'ogre', race: 'オーガ', name: '傭兵A' }];
-assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '雇った傭兵が変われば新しい試行');
-st.mercenaries = [{ tplId: 'goblin', race: 'ゴブリン', name: '傭兵B' }];
-assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '誰を雇ったかの違いも試行として数える');
-assert(KPI.battleStarted(st, { missionKind: 'raid' }) === false, '同じ傭兵のままなら試行に数えない');
-st.mercenaries = [];
-assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '傭兵を雇わない選択も試行');
+// 合体するかどうかも「今回の仮説」に含める
 st.kingSlimeMerge = false;
 assert(KPI.battleStarted(st, { missionKind: 'raid' }) === true, '合体するかどうかの判断も試行');
 
@@ -112,12 +105,7 @@ Game.assignDepartment(now.roster[0].uid, 'life');
 assert(KPI.current.formationChanges === changesBefore + 3, '部門配属の変更も編成変更として数える');
 
 // 金貨の出口が使われたかも残す
-KPI.mercenaryHired({ race: 'ゴブリン' }, 10, true);
-KPI.mercenaryHired({ race: '異邦人' }, 20, false);
 KPI.mergeRefused();
-assert(KPI.current.mercenariesHired === 2 && KPI.current.mercenaryGold === 30,
-  '雇った傭兵の数と払った金貨を数える');
-assert(KPI.current.kinHires === 1, '同族を雇った回数だけを別に数える（ビルドを濃くした買い物か）');
 KPI.paidHire(4); KPI.paidHire(8);
 assert(KPI.current.paidHires === 2 && KPI.current.paidHireGold === 12,
   '有料追加採用の人数と紹介料を記録する');

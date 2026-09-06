@@ -60,7 +60,7 @@ const Game = {
       seizeUsed: false,
       lastDepartmentReport: null,
       payrollPolicy: "regular",
-      payrollChoices: { regular: 0, withhold: 0, advance: 0 },
+      payrollChoices: { regular: 0, withhold: 0 },
       lastPayrollReport: null,
       roster: [],
       activeUids: [],
@@ -70,8 +70,6 @@ const Game = {
       extraHiresThisPhase: 0,
       maxPower: 0,
       maxArmySize: 0,
-      mercenaryOffers: [],
-      mercenaries: [],
       kingSlimeMerge: true,   // 出撃時に合体するか（既定は合体。編成画面で断れる）
       maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
       maxOverkill: 0,     // 同その2。%で持つ
@@ -183,7 +181,7 @@ const Game = {
     const defaults = {
       demonKingId: "standard",
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, extraHiresThisPhase: 0, maxPower: 0, maxArmySize: 0,
-      maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
+      maxChain: 0, maxOverkill: 0, kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
@@ -198,7 +196,7 @@ const Game = {
       buildProgress: 0, facilityLevel: 0, activeFacilityId: null, pendingFacilityChoiceLevel: null,
       seizeUsed: false, lastDepartmentReport: null,
       payrollPolicy: "regular",
-      payrollChoices: { regular: 0, withhold: 0, advance: 0 },
+      payrollChoices: { regular: 0, withhold: 0 },
       lastPayrollReport: null,
       legacyReturn: null, legacyOffered: false, lessonId: null,
       feastPending: null, hungerStreak: 0
@@ -256,7 +254,7 @@ const Game = {
     if (!PAYROLL_POLICIES[st.payrollPolicy]) st.payrollPolicy = "regular";
     if (!DEMON_KINGS.some(k => k.id === st.demonKingId)) st.demonKingId = "standard";
     if (typeof st.payrollChoices !== "object" || Array.isArray(st.payrollChoices)) {
-      st.payrollChoices = { regular: 0, withhold: 0, advance: 0 };
+      st.payrollChoices = { regular: 0, withhold: 0 };
     }
     for (const id of PAYROLL_POLICY_ORDER) st.payrollChoices[id] = Number(st.payrollChoices[id]) || 0;
     for (const m of [...st.roster, ...st.applicants]) {
@@ -311,8 +309,8 @@ const Game = {
     const base = daily
       ? this.salaryAssignments().reduce((sum, entry) => sum + this.dailyShare(entry.amount, this.state.day), 0)
       : this.salaryTotal();
-    const cost = policy.id === "advance" ? Math.ceil(base * policy.costRate) : base * policy.costRate;
-    return { policy, base, cost, affordable: policy.id !== "advance" || this.state.gold >= cost };
+    const cost = base * policy.costRate;
+    return { policy, base, cost, affordable: true };
   },
 
   setPayrollPolicy(policyId) {
@@ -1035,84 +1033,6 @@ const Game = {
   FREE_REROLLS: 1,
   REROLL_BASE_COST: 2,
 
-  // ── 傭兵市場 ──────────────────────────────
-  // 稼いだ金貨の出口。中盤で略奪した金が終盤の戦闘に対して何もしないのが、
-  // 略奪ビルドが「中盤は無双、終盤で詰む」原因だった（実測：ゴブリン5体は
-  // 第6戦100%→第7戦8%、そして5体そろえたランのクリア率は12%で最低）。
-  // 出撃5枠は壊さず、金貨で**その戦闘だけの6体目**を買えるようにする
-  // （設計憲法 第3節「6体目以降は高コストな特殊解禁として扱う」）。
-  // 同族を雇えば種族シナジーの頭数も増えるので、「硬い者を雇うか、噛み合う者を雇うか」
-  // という判断になる（実測：ゴブリン5＋オーガ傭兵61% vs ＋ゴブリン傭兵91%）。
-  MERCENARY_COSTS: [10, 20],
-  MERCENARY_OFFERS: 2,
-  // 顔なじみ価格。出撃隊に同じ種族がいるほど安く来る（1体につき10%、最大40%引き）。
-  // 傭兵市場だけだと「誰でも雇えば強くなる」に寄り、稼ぐビルドが報われない
-  // （実測：略奪ビルド +20点に対し、稼がないビルドも +17点）。
-  // 種族を統一したコミットに対して「雇いやすさ」で報いる。倍率は増やさない。
-  MERCENARY_KIN_DISCOUNT: 0.1,
-  MERCENARY_MAX_DISCOUNT: 0.4,
-
-  // 出撃隊にいる同じ種族の数（傭兵は数えない＝雇うほど安くなる連鎖は作らない）
-  mercenaryKinCount(race) {
-    return this.activeRoster().filter(m => m.race === race).length;
-  },
-
-  mercenaryBaseCost() {
-    const hired = (this.state.mercenaries || []).length;
-    return this.MERCENARY_COSTS[hired] !== undefined
-      ? this.MERCENARY_COSTS[hired]
-      : Infinity;   // 上限に達したら雇えない
-  },
-
-  // index を渡すとその候補の顔なじみ価格。省略時は割引前の値段
-  mercenaryCost(index) {
-    const base = this.mercenaryBaseCost();
-    if (!Number.isFinite(base) || index === undefined) return base;
-    const offer = this.mercenaryOffers()[index];
-    if (!offer) return base;
-    const discount = Math.min(this.MERCENARY_MAX_DISCOUNT,
-      this.MERCENARY_KIN_DISCOUNT * this.mercenaryKinCount(offer.race));
-    return Math.max(1, Math.round(base * (1 - discount)));
-  },
-
-  // 候補は作戦ごとに固定する。編成をいじるたびに引き直せると、
-  // 「今いる候補で決める」という判断が消えるため。
-  mercenaryOffers() {
-    const st = this.state;
-    if (!Array.isArray(st.mercenaryOffers)) st.mercenaryOffers = [];
-    if (!st.mercenaryOffers.length && (this.state.mercenaries || []).length < this.MERCENARY_COSTS.length) {
-      st.mercenaryOffers = Array.from({ length: this.MERCENARY_OFFERS }, () => {
-        const merc = this.rollApplicant();
-        merc.mercenary = true;
-        return merc;
-      });
-      this.save();
-    }
-    return st.mercenaryOffers;
-  },
-
-  canHireMercenary(index) {
-    const st = this.state;
-    if (!st || !["formation", "preparation"].includes(st.phase)) return false;
-    if ((st.mercenaries || []).length >= this.MERCENARY_COSTS.length) return false;
-    if (!this.mercenaryOffers()[index]) return false;
-    return st.gold >= this.mercenaryCost(index);
-  },
-
-  hireMercenary(index) {
-    if (!this.canHireMercenary(index)) return false;
-    const st = this.state;
-    const cost = this.mercenaryCost(index);
-    const merc = st.mercenaryOffers[index];
-    st.gold -= cost;
-    st.mercenaries = (st.mercenaries || []).concat([{ ...merc, hiredFor: cost }]);
-    st.mercenaryOffers = st.mercenaryOffers.filter((_, i) => i !== index);
-    this.kpi("formationChanged");   // 傭兵も編成の判断
-    this.kpi("mercenaryHired", merc, cost, this.mercenaryKinCount(merc.race) > 0);
-    this.save();
-    return true;
-  },
-
   // 合体の可否と、合体したらどうなるかの見込み。編成画面が判断材料に使う。
   kingSlimePreview() {
     const slimes = this.activeRoster().filter(m => m.race === "スライム").slice(0, 3);
@@ -1146,15 +1066,6 @@ const Game = {
     this.save();
     return true;
   },
-
-  // 戦闘へ出す形にする。給与も戦功も持たない。
-  // 施設の一律補正は撤去したので、自軍と同じく素の値で出る。
-  preparedMercenaries() {
-    return (this.state.mercenaries || []).map(m => ({
-      ...m, battleDmgMult: 1, battleTakenMult: 1
-    }));
-  },
-
 
   // ── 指名求人 ────────────────────────────
   // 「こういう奴を寄越せ」と条件を指定して出す有料の求人。
@@ -1370,12 +1281,6 @@ const Game = {
     if (feastUsed) {
       notes.push(`宴の余韻：${feastUsed.fed}名が満腹のまま戦場へ出た（与ダメージ+${Math.round(feastUsed.dmgBonus * 100)}%）`);
       st.feastPending = null;
-    }
-    // 雇った傭兵は出撃5枠の外から加わる。戦闘が終われば去る（次の戦闘には残らない）
-    for (const merc of this.preparedMercenaries()) {
-      const unit = Battle.makeUnit(merc, "player");
-      unit.flags.mercenary = true;
-      playerUnits.push(unit);
     }
     const stageData = this.stageData();
     // ビルド試行の判定は戦闘前に取る（戦死・合体で編成が変わる前の「何を試したか」を見るため）
@@ -1631,12 +1536,6 @@ const Game = {
       if (m.restingTurns > 0) m.restingTurns -= 1;
     }
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
-    // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
-    if ((st.mercenaries || []).length) {
-      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
-    }
-    st.mercenaries = [];
-    st.mercenaryOffers = [];
 
     // 記録の確定とセーブの後始末は必ず最後に行う。先に endRun してから
     // save すると、消したはずのセーブが書き戻ってしまう。
@@ -1965,7 +1864,6 @@ const Game = {
     const paidRoster = assignments.map(entry => entry.monster);
     if (total === 0) return;
     const policy = this.payrollPolicy();
-    if (policy.id === "advance" && dailyDay === undefined) return; // 従来進行では出撃前に支払い済み
     if (policy.id === "withhold") {
       if (dailyDay !== undefined) {
         const penalty = this.dailyShare(15, dailyDay);
@@ -1983,12 +1881,12 @@ const Game = {
       notes.push(`魔王命令により給与・部門手当${total}Gを意図的に未払い。勤務者の忠誠が最大 ${worst} 下がった`);
       return;
     }
-    const payable = policy.id === "advance" ? Math.ceil(total * policy.costRate) : total;
+    const payable = total;
     if (st.gold >= payable) {
       st.gold -= payable;
       const loyaltyGain = dailyDay === undefined
-        ? (policy.id === "advance" ? 8 : 2)
-        : this.dailyShare(policy.id === "advance" ? 8 : 2, dailyDay);
+        ? 2
+        : this.dailyShare(2, dailyDay);
       for (const m of paidRoster) {
         m.unpaid = false;
         m.unpaidStreak = 0;
@@ -2079,17 +1977,7 @@ const Game = {
     const policy = quote.policy;
     const assignments = this.salaryAssignments();
     const workers = assignments.map(entry => entry.monster);
-    if (policy.id === "advance") {
-      if (!quote.affordable) return false;
-      st.gold -= quote.cost;
-      for (const m of workers) {
-        m.unpaid = false;
-        m.unpaidStreak = 0;
-        m.loyalty = U.clamp(m.loyalty + 8, 0, 100);
-      }
-      st.lastPayrollReport = { policyId: policy.id, base: quote.base, paid: quote.cost, loyaltyDelta: 8 };
-      notes.push(`給与・部門手当を ${quote.cost}G で前払い・厚遇した（所持金 ${st.gold}G）勤務者の忠誠+8`);
-    } else if (policy.id === "withhold") {
+    if (policy.id === "withhold") {
       for (const m of workers) m.unpaid = true;
       st.lastPayrollReport = { policyId: policy.id, base: quote.base, paid: 0, loyaltyDelta: 0, pending: true };
       notes.push(`魔王命令：今回は給与を払わない。勤務者は未払いのまま出撃する`);
@@ -2125,8 +2013,7 @@ const Game = {
     const st = this.state;
     st.pendingVacancies = 0;
     st.lastFallen = [];
-    // 傭兵は軍団員ではない。倒れても欠員にならず、戦没者名簿にも載らない
-    const fallen = (contribution || []).filter(c => c.survived === false && !c.mercenary);
+    const fallen = (contribution || []).filter(c => c.survived === false);
     if (fallen.length === 0) return;
 
     const uids = new Set(fallen.map(c => c.uid));
@@ -2182,8 +2069,6 @@ const Game = {
     { id: "many_death", test: r => (r.fallenTotal || 0) >= 10, phrase: () => "屍を積み上げた" },
     { id: "withhold", test: r => (r.payrollChoices || {}).withhold >= 5,
       phrase: () => "給料を払わなかった" },
-    { id: "advance", test: r => (r.payrollChoices || {}).advance >= 5,
-      phrase: () => "厚遇されすぎた" },
     { id: "raid", test: r => (r.missionCounts || {}).raid >= 5, phrase: () => "略奪しかしなかった" },
     { id: "suppress", test: r => (r.missionCounts || {}).suppress >= 4,
       phrase: () => "身内ばかり殴っていた" },

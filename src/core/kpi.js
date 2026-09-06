@@ -10,7 +10,6 @@
 //                    いずれかが変わった戦闘数
 //                    （同じ編成の連戦は試行として数えない＝1ランで仮説を何回試せたか）
 //   formationChanges 出撃隊の選抜・並び替え・部門配属を変えた回数
-//   mercenariesHired 雇った傭兵の数 / mercenaryGold 使った金貨 / kinHires うち同族
 //   paidHires       有料追加採用の人数 / paidHireGold 払った紹介料
 //   mergesRefused    キングスライム合体を断った回数（既定を覆す判断）
 //   quickRetry       前のランの終了から60秒以内に新しいランを始めたか
@@ -95,7 +94,7 @@ const KPI = {
       demonKingId: (state && state.demonKingId) || null,
       startedAt: at, endedAt: 0, cleared: false, conquest: 0, battles: 0,
       buildAttempts: 0, formationChanges: 0, speedChanges: 0, logSkips: 0, reportSkips: 0,
-      mercenariesHired: 0, mercenaryGold: 0, kinHires: 0, mergesRefused: 0,
+      mergesRefused: 0,
       paidHires: 0, paidHireGold: 0,
       triggerKinds: {}, chainMax: 0, chainAbilityMax: 0, chainSample: null, chainBattles: 0,
       retriesUsed: 0, sessionRun: this.session.runs, quickRetry: false
@@ -122,10 +121,8 @@ const KPI = {
     const departments = (state.roster || [])
       .map(m => `${m.uid}:${m.department || ""}`).sort().join(",");
     // 金貨で雇った傭兵も「今回の仮説」の一部。誰を雇ったかで編成の狙いが変わる
-    const mercenaries = (state.mercenaries || [])
-      .map(m => `${m.tplId || ""}:${m.race || ""}`).sort().join(",");
     return JSON.stringify({
-      deployed, departments, mercenaries,
+      deployed, departments,
       facility: `${state.facilityLevel || 0}:${state.activeFacilityId || "none"}`,
       payroll: state.payrollPolicy || "regular",
       // 合体するか否かも編成の判断（頭数を取るか、1体の硬さを取るか）
@@ -149,12 +146,6 @@ const KPI = {
 
   // 金貨の出口が実際に使われているか。買ったのが同族か余所者かで、
   // 「ビルドを濃くする買い物」だったのかが分かる
-  mercenaryHired(merc, cost, kin) {
-    if (!this.current) return;
-    this.current.mercenariesHired += 1;
-    this.current.mercenaryGold += Number(cost) || 0;
-    if (kin) this.current.kinHires += 1;
-  },
 
   paidHire(cost) {
     if (!this.current) return;

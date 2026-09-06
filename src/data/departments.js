@@ -75,18 +75,10 @@ const PAYROLL_POLICIES = {
     short: "未払い",
     description: "0G。出撃時から未払い扱い。血の気は乗るが、ストライキと忠誠低下を招く。",
     costRate: 0
-  },
-  advance: {
-    id: "advance",
-    icon: "✨",
-    name: "前払い・厚遇",
-    short: "厚遇",
-    description: "通常額の1.5倍を出撃前に支払い、未払いを解消して勤務者の忠誠+8。",
-    costRate: 1.5
   }
 };
 
-const PAYROLL_POLICY_ORDER = ["regular", "withhold", "advance"];
+const PAYROLL_POLICY_ORDER = ["regular", "withhold"];
 
 // ── 部門適性 ─────────────────────────────────
 // 「誰を置いても同じ」を無くすための層。人数ではなく、その人材が何者かで部門効果が変わる。
