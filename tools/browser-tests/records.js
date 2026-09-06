@@ -54,7 +54,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }
   if (histText.includes('総余剰') || histText.includes('獲得G')) errors.push('主要記録以外の統計が並んでいる');
 
-  await page.screenshot({ path: (process.env.SP || '.') + '/records-history.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/records-history.png', fullPage: true });
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 終了画面と魔界史で主要記録2つが読める');
   await browser.close();
   process.exit(errors.length ? 1 : 0);

@@ -25,7 +25,7 @@ const orc = species !== true;
       }
       await page.evaluate(() => BattleScene.stop());
       await page.waitForTimeout(500);
-      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `${orc ? 'orc' : 'species'}-${width}.png`) });
+      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', `${orc ? 'orc' : 'species'}-${width}.png`) });
     }
     // 攻撃動作の尺は BattleScene が決める。ここへ数式を写すと演出を調整するたびに
     // このテストが落ちる（61c89e3 の等速見直しで実際に落ちた）。見るのは契約:

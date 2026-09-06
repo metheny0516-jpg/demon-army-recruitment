@@ -49,8 +49,12 @@ assert(Game.state.generalsMade[0].name === veteran.name, '輩出した将軍を�
 //   2) 将軍を入れると発動するのが general_command **だけ** であること
 // を先に固定してから倍率を見る。無関係なシナジーが増えたら 2) で落ちる。
 const squadOf = general => [
-  Battle.makeUnit({ ...veteran, rankId: general ? 'general' : 'soldier' }, 'player'),
-  Battle.makeUnit({ ...veteran, uid: 100, name: '部下', rankId: 'soldier', salary: 1 }, 'player')
+  Battle.makeUnit({ ...veteran, salary: 4, rankId: general ? 'general' : 'soldier' }, 'player'),
+  Battle.makeUnit({
+    ...veteran,
+    uid: 100, tplId: 'ogre', name: '部下', race: 'オーガ', job: '戦士',
+    rankId: 'soldier', salary: 4
+  }, 'player')
 ];
 
 const plainSquad = squadOf(false);

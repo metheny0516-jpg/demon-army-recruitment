@@ -18,7 +18,7 @@ const path = require('node:path');
       const widths = await page.locator('.card-identity').evaluateAll(els => els.map(e => e.getBoundingClientRect().width));
       assert.ok(widths.length && widths.every(w => w >= 100), JSON.stringify(widths));
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
-      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `first-formation-${width}.png`), fullPage: true });
+      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', `first-formation-${width}.png`), fullPage: true });
       await page.evaluate(() => {
         UI.set(BattleScene.shell({ stage: 1, army: '王国軍', region: '回廊' }));
         for (const side of ['player', 'enemy']) {
@@ -37,7 +37,7 @@ const path = require('node:path');
         });
       });
       assert.equal(overlaps, false, '事件バナーが名前に重なる');
-      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `first-battle-${width}.png`) });
+      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', `first-battle-${width}.png`) });
       await page.close();
     }
     console.log('✓ 初回案内・390/1280px編成名幅・5対5事件バナー');

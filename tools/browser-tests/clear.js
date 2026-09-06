@@ -28,7 +28,7 @@ const { autoDismissMormo } = require('./helpers.js');
   const win = await page.locator('.banner.win').count();
   const head = await page.locator('.banner h2').innerText();
   console.log(`  クリア画面: banner.win=${win} / 見出し="${head.trim()}"`);
-  await page.screenshot({ path: process.env.SP + '/shot-clear.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-clear.png', fullPage: true });
   console.log(errors.length ? '✗ JSエラー: ' + errors.join(', ') : '✓ JSエラーなし');
   await browser.close();
   process.exit(errors.length || !win || process.exitCode ? 1 : 0);

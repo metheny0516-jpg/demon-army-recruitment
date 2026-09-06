@@ -24,7 +24,7 @@ const path = require('node:path');
       }
     }, count);
     const attack = async () => page.evaluate(() => BattleScene.render({ type: 'attack', fromId: 'player0', toId: 'enemy0', dmg: 12, hp: 18, maxHp: 30, emphasis: 1 }));
-    const shot = async name => { if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, name + '.png') }); };
+    const shot = async name => { if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', name + '.png') }); };
     await setup();
     await page.waitForTimeout(250);
     assert.equal(await page.locator('#bu-enemy0').evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)');

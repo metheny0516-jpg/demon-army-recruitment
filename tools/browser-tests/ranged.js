@@ -73,7 +73,7 @@ const path = require('node:path');
       const info = await fire('magic', 1, 2);
       assert.ok(info.text.includes('魔法攻撃'));
       await page.waitForTimeout(300);
-      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `ranged-magic-${width}.png`) });
+      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', `ranged-magic-${width}.png`) });
     }
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const reduced = await fire('arrow');

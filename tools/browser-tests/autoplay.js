@@ -61,13 +61,13 @@ const { autoDismissMormo } = require('./helpers.js');
     const head = (await page.locator('.banner h2').innerText()).trim();
     const cause = (await page.locator('.banner div').first().innerText()).trim();
     console.log(`  ✓ ラン${runs} 終了: ${head} / ${cause}`);
-    await page.screenshot({ path: process.env.SP + `/shot-gameover.png`, fullPage: true });
+    await page.screenshot({ path: (process.env.SP || '.screenshots') + `/shot-gameover.png`, fullPage: true });
     await click('[data-action="history"]');
     // 同じカード部品を使う図鑑・実績を巻き込まないよう、保存済みの魔界史を直接数える。
     const recs = await page.evaluate(() => Storage.loadHistory().length);
     console.log(`    魔界史に ${recs} 代分の記録`);
     if (recs !== runs) throw new Error(`記録数が合わない: ${recs} != ${runs}`);
-    await page.screenshot({ path: process.env.SP + `/shot-history.png`, fullPage: true });
+    await page.screenshot({ path: (process.env.SP || '.screenshots') + `/shot-history.png`, fullPage: true });
     // セーブが消えていること（決着後に「続きから」が残らない）
     if (await page.locator('[data-action="continue"]').count()) throw new Error('決着後もセーブが残っている');
     await click('[data-action="title"]');

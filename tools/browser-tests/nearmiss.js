@@ -33,7 +33,7 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   });
   const closeText = await page.locator('.near-miss-panel').innerText();
   ok(closeText.includes('最も追い詰めた瞬間') && closeText.includes('あと 8 ダメージ'), '本当のニアミスには残ダメージを強調する');
-  if (process.env.SP) await page.screenshot({ path: process.env.SP + '/nearmiss-defeat.png', fullPage: true });
+  if (process.env.SP) await page.screenshot({ path: (process.env.SP || '.screenshots') + '/nearmiss-defeat.png', fullPage: true });
 
   await page.click('[data-action="concede"]');
   await page.waitForTimeout(80);
