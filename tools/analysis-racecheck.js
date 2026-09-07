@@ -4,7 +4,7 @@ const store={};
 const ctx={console,Math,Date,JSON,localStorage:{getItem:k=>k in store?store[k]:null,setItem:(k,v)=>{store[k]=String(v)},removeItem:k=>{delete store[k]}}};
 vm.createContext(ctx);
 for(const f of ['src/data/traits.js','src/data/monsters.js','src/data/synergies.js','src/data/enemies.js','src/data/departments.js','src/data/demon_kings.js',
-                'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'])
+                'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/run.js'])
   vm.runInContext(fs.readFileSync(f,'utf8'),ctx,{filename:f});
 const Battle=vm.runInContext('Battle',ctx), T=vm.runInContext('MONSTER_TEMPLATES',ctx),
       E=vm.runInContext('ENEMY_STAGES',ctx), Syn=vm.runInContext('Synergy',ctx);

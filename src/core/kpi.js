@@ -98,6 +98,9 @@ const KPI = {
       mercenariesHired: 0, mercenaryGold: 0, kinHires: 0, mergesRefused: 0,
       paidHires: 0, paidHireGold: 0,
       triggerKinds: {}, chainMax: 0, chainAbilityMax: 0, chainSample: null, chainBattles: 0,
+      // chainMax をどの数え方で記録したか。現行(V1)のまま。バージョン欠落の旧KPIは
+      // 読む側が V1 として扱い、値を推定変換しない（Chain.versionOf）。
+      chainDefVersion: (typeof Chain !== "undefined" ? Chain.RECORDED_VERSION : 1),
       retriesUsed: 0, sessionRun: this.session.runs, quickRetry: false
     };
     this.update(data => {

@@ -10,7 +10,7 @@
 // だけである。乱数は seed 固定（同じ seed 一覧を基準として保存できる）。
 const fs = require('fs'), vm = require('vm');
 const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/run.js'];
 
 // ── seed 固定の乱数 ────────────────────────────
 let rngState = 1;

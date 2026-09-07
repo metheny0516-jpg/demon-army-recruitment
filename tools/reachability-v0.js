@@ -12,7 +12,7 @@
 // 試行ごとに localStorage を空にして保存状態を独立させる。
 const fs = require('fs'), vm = require('vm');
 const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/run.js'];
 let rngState = 1;
 function rnd() {
   rngState |= 0; rngState = (rngState + 0x6D2B79F5) | 0;

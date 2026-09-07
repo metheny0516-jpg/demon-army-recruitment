@@ -74,6 +74,10 @@ const Game = {
       kingSlimeMerge: true,   // 出撃時に合体するか（既定は合体。編成画面で断れる）
       maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
       maxOverkill: 0,     // 同その2。%で持つ
+      // maxChain を**どの数え方で記録したか**。いまは現行(V1)の数え方しか使っていないので 1。
+      // 正規化API(Chain.summarize)は追加済みだが、記録も倍率も閾値も切り替えていない。
+      // 将来の切替予約を V2 と偽って保存しない（保存値は「いま記録している値」と一致させる）。
+      chainDefVersion: (typeof Chain !== "undefined" ? Chain.RECORDED_VERSION : 1),
       raceCounts: {},
       recruitedTplIds: [],
       discoveredSynergyIds: [],
@@ -186,6 +190,10 @@ const Game = {
     const defaults = {
       demonKingId: "standard",
       roster: [], activeUids: [], applicants: [], hiresLeft: 1, extraHiresThisPhase: 0, maxPower: 0, maxArmySize: 0,
+      // 旧セーブに chainDefVersion は無い。V1 として扱い、maxChain を推定変換しない。
+      // 既に入っている値は defaults では上書きされない（下の undefined/null チェック）ので、
+      // 途中ラン・ロード・再起で保存済みバージョンは変化しない。
+      chainDefVersion: 1,
       maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
@@ -2065,6 +2073,9 @@ const Game = {
       maxPower: st.maxPower,
       maxChain: st.maxChain || 0,
       maxOverkill: st.maxOverkill || 0,
+      // この record の maxChain がどの数え方かを残す。バージョン不明の旧魔界史は
+      // 読む側が V1 として扱う（Chain.versionOf）。値の推定変換はしない。
+      chainDefVersion: Chain.versionOf(st),
       mainRace,
       region: cleared ? "王都（制圧）" : finalMission.region,
       cause: cleared ? "人間界を征服し引退" : `${finalMission.army}に敗北`,
