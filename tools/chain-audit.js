@@ -97,34 +97,81 @@ function classify(type, data) {
 
 // ── 正規化API（契約案・単一の入口） ────────────────────
 // 生の因果グラフ（parentEventId）はそのまま残し、ここで読み方だけを与える。
+//
+// 結合の向き（採用済み仕様に合わせる）:
+//   宣言は**前の親へではなく、効果を担う直接の子へ吸収する**。
+//   「強欲」+「追加攻撃」で1つの step になり、UIは「《強欲》による追加攻撃」と読める。
+//
+// 分岐して実効果の子が複数ある場合（1つの宣言から2体以上が動くなど）:
+//   **同じ宣言を各子の step へ複製して所属させる**（集合stepにはしない）。
+//   理由は、段数は「実際に起きた効果の数」であり、宣言が1つでも効果が2つなら
+//   出来事は2つだから。UIも「《能力》による○○」を効果の数だけ出せる。
+//   複製された宣言の step には sharedDeclaration: true が立ち、
+//   イベント側は stepIds に所属先を全部持つ（stepId はそのうち先頭）。
+function actorIdOf(event) {
+  return event.sourceId || event.unitId || event.fromId || event.sourceUnitId || null;
+}
+
+function abilityOf(event) {
+  const id = event.traitId || event.facilityId || event.synergyId || event.id || null;
+  const name = event.name || event.label || null;
+  return id || name ? { abilityId: id, abilityName: name } : { abilityId: null, abilityName: null };
+}
+
+// 表示に使う名前は battle_start のスナップショットと summon から引く（textを解析しない）
+function nameIndex(timeline) {
+  const names = new Map();
+  for (const e of timeline || []) {
+    if (e.type === 'battle_start') {
+      for (const u of [...(e.player || []), ...(e.enemy || [])]) names.set(u.id, u.name);
+    }
+    if (e.type === 'summon' && e.unit) names.set(e.unit.id, e.unit.name);
+  }
+  return names;
+}
+
 function summarize(timeline) {
   const causal = (timeline || []).filter(e => e.eventId && (e.parentEventId || e.chainId));
   const byId = new Map(causal.map(e => [e.eventId, e]));
+  const names = nameIndex(timeline);
   const childrenOf = new Map();
   for (const e of causal) {
     if (!e.parentEventId) continue;
     if (!childrenOf.has(e.parentEventId)) childrenOf.set(e.parentEventId, []);
     childrenOf.get(e.parentEventId).push(e);
   }
-  const info = new Map();
+  // 効果を担う直接の子（実効果の子、または「実効果の子を持たない＝自分が効果になる宣言」）
+  const effectChildrenOf = event => (childrenOf.get(event.eventId) || [])
+    .filter(c => {
+      const role = classify(c.type, c).role;
+      if (role === 'effect') return true;
+      if (role !== 'declaration') return false;
+      return !(childrenOf.get(c.eventId) || []).some(g => classify(g.type, g).role === 'effect');
+    });
 
+  const info = new Map();
   const resolve = event => {
     if (info.has(event.eventId)) return info.get(event.eventId);
     const parent = event.parentEventId ? byId.get(event.parentEventId) : null;
     const parentInfo = parent ? resolve(parent) : null;
     const { role, kind } = classify(event.type, event);
+    const kids = effectChildrenOf(event);
     let counts;
     if (role === 'effect') counts = true;
     else if (role === 'restate') counts = false;
-    else {
-      // 宣言: 効果を担う子（実効果）がぶら下がっていれば数えない
-      counts = !(childrenOf.get(event.eventId) || []).some(c => classify(c.type, c).role === 'effect');
-    }
+    else counts = kids.length === 0;          // 宣言: 効果を担う子が無ければ自分が1段
     const rawDepth = parentInfo ? parentInfo.rawDepth + 1 : 1;
-    const depth = parentInfo ? parentInfo.depth + (counts ? 1 : 0) : 1;
-    // 代表経路の結合単位。数えない側は親の単位へ吸収される
-    const stepId = (counts || !parentInfo) ? event.eventId : parentInfo.stepId;
-    const got = { role, kind, depth, rawDepth, stepId, counts };
+    // 起点が「数えない」種類（子が効果を担う宣言）なら、段は子から始まる。
+    const depth = parentInfo ? parentInfo.depth + (counts ? 1 : 0) : (counts ? 1 : 0);
+    // 所属する結合単位。
+    //   実効果／効果を持たない宣言 → 自分が単位の代表
+    //   補足                       → 親の単位へ吸収（後ろ向き）
+    //   効果を担う子がある宣言     → **子の単位へ吸収（前向き）**。複数なら全部に所属
+    let stepIds;
+    if (counts) stepIds = [event.eventId];
+    else if (role === 'declaration') stepIds = kids.map(c => c.eventId);
+    else stepIds = parentInfo ? parentInfo.stepIds.slice() : [event.eventId];
+    const got = { role, kind, depth, rawDepth, stepIds, counts, kids };
     info.set(event.eventId, got);
     return got;
   };
@@ -134,7 +181,8 @@ function summarize(timeline) {
     return {
       eventId: e.eventId, parentEventId: e.parentEventId || null, chainId: e.chainId || e.eventId,
       type: e.type, role: got.role, effectKind: got.kind,
-      rawDepth: got.rawDepth, depth: got.depth, counted: got.counts, stepId: got.stepId
+      rawDepth: got.rawDepth, depth: got.depth, counted: got.counts,
+      stepId: got.stepIds[0] || null, stepIds: got.stepIds
     };
   });
 
@@ -153,17 +201,27 @@ function summarize(timeline) {
     if (e.depth !== best.depth) return e.depth > best.depth ? e : best;
     return e.rawDepth > best.rawDepth ? e : best;
   }, null);
-  const deepest = deepestEvent ? { chainId: deepestEvent.chainId, depth: deepestEvent.depth,
-    rawDepth: deepestEvent.rawDepth, steps: mergeSteps(lineage(byEventId, deepestEvent)) } : null;
+  const deepest = deepestEvent ? {
+    chainId: deepestEvent.chainId, depth: deepestEvent.depth, rawDepth: deepestEvent.rawDepth,
+    steps: mergeSteps(lineage(byEventId, deepestEvent), byId, names, info)
+  } : null;
 
   return {
     defVersion: CHAIN_DEF_VERSION,
     maxDepth: events.reduce((m, e) => Math.max(m, e.depth), 0),
     rawMaxDepth: events.reduce((m, e) => Math.max(m, e.rawDepth), 0),
     eventCount: events.length,
-    events,                 // 各イベントの正規化段数（生の段数も併記）
+    events,
     chains: [...chains.values()],
-    deepest                 // 結合後の代表経路
+    deepest,
+    // 任意のイベントで終わる経路を、同じ結合規則で取り出す
+    pathTo(pick) {
+      const hit = events.filter(pick)
+        .reduce((best, e) => (!best || e.rawDepth > best.rawDepth ? e : best), null);
+      if (!hit) return null;
+      const line = lineage(byEventId, hit);
+      return { line, steps: mergeSteps(line, byId, names, info) };
+    }
   };
 }
 
@@ -173,14 +231,62 @@ function lineage(byEventId, event) {
   return line;
 }
 
-// 結合は親子関係だけで判定する（同じ結合単位＝同じ実効果）
-function mergeSteps(line) {
+// 経路上の結合。宣言は次に来る効果イベント（＝その宣言が起こしたもの）と1つの step になる。
+// 結合の判定に使うのは親子関係だけで、時間的な隣接は見ない。
+function mergeSteps(line, byId, names, info) {
   const steps = [];
+  let pending = [];                       // 効果イベントを待っている宣言
   for (const e of line) {
-    const last = steps[steps.length - 1];
-    if (last && last.stepId === e.stepId) { last.eventIds.push(e.eventId); last.types.push(e.type); continue; }
-    steps.push({ stepId: e.stepId, depth: e.depth, rawDepth: e.rawDepth, effectKind: e.effectKind,
-      role: e.role, eventIds: [e.eventId], types: [e.type] });
+    if (!e.counted && e.role === 'declaration') { pending.push(e); continue; }
+    if (!e.counted) {                     // 補足: 直前の step（親）へ吸収
+      const last = steps[steps.length - 1];
+      if (last) { last.eventIds.push(e.eventId); last.types.push(e.type); }
+      continue;
+    }
+    const raw = byId.get(e.eventId) || {};
+    const decl = pending.length ? pending[pending.length - 1] : null;
+    const declRaw = decl ? byId.get(decl.eventId) : null;
+    const ability = declRaw ? abilityOf(declRaw) : abilityOf(raw);
+    const actorId = (declRaw && actorIdOf(declRaw)) || actorIdOf(raw);
+    const declInfo = decl ? info.get(decl.eventId) : null;
+    steps.push({
+      stepId: e.eventId,
+      depth: e.depth,
+      rawDepth: e.rawDepth,
+      effectKind: e.effectKind,
+      role: e.role,
+      // UIが「《能力名》による○○」と書くための情報
+      actorId: actorId || null,
+      actorName: actorId ? (names.get(actorId) || null) : null,
+      abilityId: ability.abilityId,
+      abilityName: ability.abilityName,
+      declaredBy: declRaw ? {
+        eventId: declRaw.eventId, type: declRaw.type,
+        abilityId: abilityOf(declRaw).abilityId, abilityName: abilityOf(declRaw).abilityName,
+        actorId: actorIdOf(declRaw), actorName: names.get(actorIdOf(declRaw)) || null
+      } : null,
+      // 効果そのもののイベント（数値はここから読む）
+      effect: {
+        eventId: raw.eventId, type: raw.type,
+        dmg: raw.dmg, amount: raw.amount, resource: raw.resource, label: raw.label || null,
+        targetId: raw.toId || raw.targetId || raw.unitId || null,
+        targetName: names.get(raw.toId || raw.targetId || raw.unitId) || null
+      },
+      sharedDeclaration: !!(declInfo && declInfo.stepIds.length > 1),
+      eventIds: pending.map(p => p.eventId).concat([e.eventId]),
+      types: pending.map(p => p.type).concat([e.type])
+    });
+    pending = [];
+  }
+  // 経路の終端が宣言だった場合。
+  //   ・効果を担う子が無い宣言（counts=true）は上のループで step になっている。
+  //   ・効果を担う子がある宣言は、その step は**子の側**にある。子はこの経路上に
+  //     居ないので、ここでは step を作らない（作ると「起きていない出来事」を1段に見せる）。
+  //     どこへ所属したかは pendingDeclarations に残して呼び手が追えるようにする。
+  if (pending.length && steps.length) {
+    steps[steps.length - 1].pendingDeclarations = pending.map(d => ({
+      eventId: d.eventId, type: d.type, stepIds: d.stepIds
+    }));
   }
   return steps;
 }
@@ -209,7 +315,7 @@ function patchBattle(src) {
         data.chainDepth = 1;
       }`,
 `      } else {
-        data.chainDepth = 1;
+        data.chainDepth = CHAIN_AUDIT.countAll ? 1 : (CHAIN_AUDIT.step(type, data) ? 1 : 0);
         data.legacyDepth = 1;
       }`);
   // 消費者①ダメージ倍率
@@ -293,17 +399,25 @@ function scenarios(env) {
     const m = env.Game.rollApplicant(tplId);
     if (opt.traits) m.traits = opt.traits.slice();
     if (opt.name) m.name = opt.name;
+    if (opt.loyalty !== undefined) m.loyalty = opt.loyalty;
+    if (opt.unpaid) m.unpaid = true;
     if (opt.boost) { m.atk = Math.round(m.atk * opt.boost); m.hp = Math.round(m.hp * 2); }
     return m;
   };
+  const pool = ids => ids.map(id => {
+    const m = env.Game.rollApplicant(id);
+    return { ...m, alive: true, mods: { dmgMult: 1, takenMult: 1 } };
+  });
   return [
+    // 攻撃 → 追い剥ぎ+1G → 強欲による追加攻撃
     { id: '略奪', seed: 7, stage: 2,
       units: () => [mk('goblin', { traits: ['coward', 'pickpocket'], name: '盗む役' }),
         mk('goblin', { traits: ['coward', 'greedy'], name: '反応役' }),
         mk('ogre', { traits: ['brute'], name: '殴り役', boost: 3 })],
       options: { extortionLedger: true, facilityWorks: 2 },
       endsWith: e => e.type === 'attack' && e.rawDepth >= 4,
-      expect: ['damage', 'gain:gold', 'damage'] },
+      expect: [['damage', null], ['gain:gold', '追い剥ぎ'], ['damage', '強欲']] },
+    // 糧食消費（巨大厨房は同じ効果の修飾なので数えない）
     { id: '食料', seed: 11, stage: 2,
       units: () => [mk('goblin', { traits: ['coward', 'pickpocket'], name: '料理人' }),
         mk('ogre', { traits: ['brute', 'big_eater'], name: '大食漢', boost: 3 }),
@@ -312,39 +426,57 @@ function scenarios(env) {
         bigEaterUids: [], cookUid: null, feastUid: null, hungerUid: null,
         meal: { targetUid: null, boost: .3, boostPercent: 30, kitchenMult: 2, tiedUids: [] } } },
       endsWith: e => e.type === 'facility_trigger' && e.effectKind === 'trait:demon_cook',
-      expect: ['consume:food'] },
+      expect: [['consume:food', null]] },
+    // 糧食消費 → 暴食の宴による追加行動
+    { id: '暴食', seed: 4, stage: 2,
+      units: () => [mk('ogre', { traits: ['brute', 'glutton_feast'], name: '宴の主', boost: 2 }),
+        mk('orc', { traits: ['brute'], name: '前衛' })],
+      feastUid: 0,
+      options: {},
+      endsWith: e => e.type === 'attack' && e.effectKind === 'damage' && e.rawDepth >= 3,
+      expect: [['consume:food', null], ['damage', '暴食の宴']] },
     { id: '死霊', seed: 5, stage: 4,
       units: () => [mk('zombie', { traits: ['tenacity'], name: '前衛' }),
         mk('skeleton', { traits: ['bone', 'soul_harvest'], name: '徴収役' }),
         mk('necromancer', { traits: ['necromancy', 'gravekeeper'], name: '術師' })],
       options: {},
       endsWith: e => e.effectKind === 'trait:soul_harvest' && e.type === 'trait_trigger',
-      expect: ['damage', 'revive', 'trait:soul_harvest'] },
-    { id: '召喚', seed: 3, stage: 6,
+      expect: [['damage', null], ['revive', null], ['trait:soul_harvest', '魂の徴収']] },
+    // 攻撃 → 墓地による召喚
+    { id: '墓地', seed: 3, stage: 6,
       units: () => [mk('zombie', { traits: ['tenacity'], name: '前衛' }),
         mk('skeleton', { traits: ['bone'], name: '骨' }),
         mk('necromancer', { traits: ['necromancy', 'gravekeeper'], name: '術師' })],
       options: { graveyard: true, facilityWorks: 2 },
       endsWith: e => e.type === 'summon',
-      expect: ['damage', 'summon'] },
+      expect: [['damage', null], ['summon', '墓地']] },
+    // 攻撃 → 魔王軍完成による伝播ダメージ
     { id: 'OVERKILL', seed: 9, stage: 1,
-      units: () => [mk('ogre', { traits: ['brute', 'chain_massacre'], name: '虐殺役', boost: 8 }),
-        mk('orc', { traits: ['brute'], name: '前衛' }),
-        mk('goblin', { traits: ['coward', 'pickpocket'], name: '盗む役' })],
+      units: () => [mk('goblin', { traits: ['coward'], name: '殴り役', boost: 10 }),
+        mk('mage', { traits: [], name: '術士', boost: 6 })],
+      poolIds: ['goblin', 'goblin', 'goblin', 'goblin', 'mage', 'mage', 'mage', 'mage'],
       options: {},
       endsWith: e => e.type === 'splash',
-      expect: ['damage', 'damage'] }
+      expect: [['damage', null], ['damage', '魔王軍完成']] },
+    // 仲間割れ（効果を担う子がある宣言）
+    { id: '仲間割れ', seed: 4, stage: 2,
+      units: () => [mk('ogre', { traits: ['brute'], name: '謀反役', loyalty: 5, boost: 2 }),
+        mk('orc', { traits: ['brute'], name: '味方', loyalty: 60 }),
+        mk('goblin', { traits: ['coward'], name: '巻き添え', loyalty: 60 })],
+      options: {},
+      endsWith: e => e.type === 'splash' && e.effectKind === 'damage',
+      expect: [['damage', '今ここで下剋上']] },
+    // 効果を担う子が無いハプニング（宣言そのものが1段）
+    { id: 'ストライキ', seed: 6, stage: 2,
+      units: () => [mk('ogre', { traits: ['brute'], name: '未払い役', unpaid: true }),
+        mk('orc', { traits: ['brute'], name: '前衛', unpaid: true })],
+      options: {},
+      endsWith: e => e.effectKind === 'incident:strike',
+      expect: [['incident:strike', '戦場ストライキ']] }
   ];
 }
 
-function pathTo(sum, pick) {
-  const byEventId = new Map(sum.events.map(e => [e.eventId, e]));
-  const hit = sum.events.filter(pick)
-    .reduce((best, e) => (!best || e.rawDepth > best.rawDepth ? e : best), null);
-  if (!hit) return null;
-  const line = lineage(byEventId, hit);
-  return { line, steps: mergeSteps(line) };
-}
+const pathTo = (sum, pick) => sum.pathTo(pick);
 
 function runPaths() {
   const env = load('B', 1);
@@ -355,12 +487,28 @@ function runPaths() {
     env.seed(sc.seed);
     env.Game.newRun();
     env.seed(sc.seed);
-    const units = sc.units().map(m => env.Battle.makeUnit(m, 'player'));
-    const result = env.Battle.simulate(units, makeFoes(env, sc.stage), sc.options || {});
+    const roster = sc.units();
+    const units = roster.map(m => env.Battle.makeUnit(m, 'player'));
+    if (sc.unpaidAll) units.forEach(u => { u.unpaid = true; });
+    const options = { ...(sc.options || {}) };
+    if (sc.poolIds) {
+      options.synergyPool = sc.poolIds.map(id => {
+        const m = env.Game.rollApplicant(id);
+        return { ...m, alive: true, traits: m.traits || [], tags: m.tags || [],
+          mods: { dmgMult: 1, takenMult: 1 } };
+      });
+    }
+    if (sc.feastUid !== undefined) {
+      options.rations = { consumed: 6, need: 4, shortage: 0, emptied: false, kitchen: false,
+        bigEaterUids: [], cookUid: null, hungerUid: null,
+        feastUid: roster[sc.feastUid].uid, meal: null };
+    }
+    const result = env.Battle.simulate(units, makeFoes(env, sc.stage), options);
     const sum = summarize(result.timeline);
     const found = pathTo(sum, sc.endsWith);
     if (!found) { console.log(`【${sc.id}】 ✗ 期待した終端イベントが出なかった\n`); failures++; continue; }
-    const got = found.steps.map(s => s.effectKind);
+    // 段数だけでなく、各stepの構成（実効果の種類と、その行動を起こした能力名）をassertする
+    const got = found.steps.map(s => [s.effectKind, s.declaredBy ? s.declaredBy.abilityName : s.abilityName]);
     const ok = JSON.stringify(got) === JSON.stringify(sc.expect);
     if (!ok) failures++;
     console.log(`【${sc.id}】 ${ok ? '✓' : '✗'} 結合後 ${found.steps.length}段（生 ${found.line.length}段）`);
@@ -368,8 +516,14 @@ function runPaths() {
       console.log(`      生${String(e.rawDepth).padStart(2)} → 正${String(e.depth).padStart(2)}  `
         + `${e.counted ? '[数]' : '[  ]'} ${e.type.padEnd(17)} <${e.effectKind}>`);
     }
-    console.log(`      結合: ${got.join(' → ')}`);
-    if (!ok) console.log(`      期待: ${sc.expect.join(' → ')}`);
+    for (const st of found.steps) {
+      const by = st.declaredBy ? `《${st.declaredBy.abilityName}》による ` : (st.abilityName ? `《${st.abilityName}》 ` : '');
+      console.log(`      step${st.depth}: ${by}${st.effect.type}`
+        + `${st.actorName ? ' / 行為者 ' + st.actorName : ''}`
+        + `${st.effect.targetName ? ' → ' + st.effect.targetName : ''}`
+        + `${st.sharedDeclaration ? '（宣言を複数stepへ複製）' : ''}`);
+    }
+    if (!ok) console.log(`      期待: ${JSON.stringify(sc.expect)}\n      実際: ${JSON.stringify(got)}`);
     console.log('');
   }
   if (failures) {
