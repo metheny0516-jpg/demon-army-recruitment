@@ -1,7 +1,7 @@
 // CHAIN再定義の影響監査。src/ は一切変更せず、読み込んだ battle.js の写しに対して
 // 「段数の数え方」と「その数を読む場所」だけを差し替えて、新旧を同じ入力・同じseedで比べる。
 //
-//   node tools/chain-audit.js --paths       … 期待経路をassertし、正規化APIの出力を表示
+//   node tools/chain-audit.js --paths       … 期待経路8件＋分岐契約をassertし、正規化APIの出力を表示
 //   node tools/chain-audit.js --runs 200    … 通常ランでの影響（モード別）
 //   node tools/chain-audit.js               … 両方
 //
@@ -247,7 +247,10 @@ function mergeSteps(line, byId, names, info) {
     const decl = pending.length ? pending[pending.length - 1] : null;
     const declRaw = decl ? byId.get(decl.eventId) : null;
     const ability = declRaw ? abilityOf(declRaw) : abilityOf(raw);
-    const actorId = (declRaw && actorIdOf(declRaw)) || actorIdOf(raw);
+    // 行為者は**実効果を起こした側**を優先する。分岐（1宣言→複数の子）では宣言者と
+    // 実行者が別人になるため、宣言側を優先すると全stepが宣言者の名前になってしまう。
+    // 効果イベントが行為者を持たない場合（仲間割れの splash など）だけ宣言者で補う。
+    const actorId = actorIdOf(raw) || (declRaw && actorIdOf(declRaw)) || null;
     const declInfo = decl ? info.get(decl.eventId) : null;
     steps.push({
       stepId: e.eventId,
@@ -474,6 +477,144 @@ function scenarios(env) {
       endsWith: e => e.effectKind === 'incident:strike',
       expect: [['incident:strike', '戦場ストライキ']] }
   ];
+}
+
+// ── 9件目: 1つの宣言から実効果の子が2件ぶら下がる分岐（合成タイムライン） ────
+// 現行の戦闘エンジンではこの形は発生しない。理由は2つあり、どちらもコード上の構造。
+//   ・《強欲》は反応者ごとに別々の trait_trigger を出し、その1件が1回の追加行動を起こす
+//     （battle.js の for (const reactor of allies) … emitCausal → act）
+//   ・《連鎖虐殺》《魔王軍完成》の伝播は次の対象を1体だけ選ぶ（opponents.find）
+// 実測でも「強欲×3／虐殺×2／過負荷×2／暴食×2／混合」の 2000 戦で分岐は0件だった。
+// それでも正規化APIは分岐を扱う契約になっているので、最小の合成タイムラインを直接
+// summarize() へ渡して、契約どおりに振る舞うことをここで固定する。
+function sharedDeclarationTimeline() {
+  const u = (id, name) => ({ id, name });
+  return [
+    { type: 'battle_start',
+      player: [u('p1', '殴り役'), u('p2', '強欲A'), u('p3', '強欲B'), u('p4', '別枝役')],
+      enemy: [u('e1', '剣士ロイ'), u('e2', '弓手ミナ'), u('e3', '盾のガル'), u('e4', '別チェーンの的')] },
+
+    // 本命の枝: 攻撃 → 1つの《強欲》宣言 → 実効果の子が2件
+    { eventId: 'A1', chainId: 'cA', type: 'attack', sourceId: 'p1', toId: 'e1', dmg: 30 },
+    { eventId: 'A2', chainId: 'cA', parentEventId: 'A1', type: 'trait_trigger',
+      traitId: 'greedy', name: '強欲', sourceId: 'p2' },
+    { eventId: 'A3', chainId: 'cA', parentEventId: 'A2', type: 'attack',
+      sourceId: 'p2', toId: 'e2', dmg: 12, label: '強欲' },
+    { eventId: 'A4', chainId: 'cA', parentEventId: 'A2', type: 'attack',
+      sourceId: 'p3', toId: 'e3', dmg: 9, label: '強欲' },
+    // 同じ親を持つ別の枝。A2 の宣言をここへ吸い寄せてはいけない
+    { eventId: 'A5', chainId: 'cA', parentEventId: 'A1', type: 'splash',
+      sourceId: 'p4', toId: 'e3', dmg: 4 },
+
+    // 別チェーン。宣言も子も別物で、上の枝と混ざってはいけない
+    { eventId: 'B1', chainId: 'cB', type: 'attack', sourceId: 'p1', toId: 'e4', dmg: 20 },
+    { eventId: 'B2', chainId: 'cB', parentEventId: 'B1', type: 'trait_trigger',
+      traitId: 'greedy', name: '強欲', sourceId: 'p2' },
+    { eventId: 'B3', chainId: 'cB', parentEventId: 'B2', type: 'attack',
+      sourceId: 'p2', toId: 'e4', dmg: 7, label: '強欲' }
+  ];
+}
+
+function runSharedDeclaration() {
+  console.log('■ 分岐契約（1宣言 → 実効果の子2件・合成タイムライン）\n');
+  const sum = summarize(sharedDeclarationTimeline());
+  const byId = new Map(sum.events.map(e => [e.eventId, e]));
+  const checks = [];
+  const check = (label, cond, detail) => { checks.push([label, !!cond, detail]); };
+
+  const decl = byId.get('A2');
+  const c1 = byId.get('A3'), c2 = byId.get('A4');
+  const sibling = byId.get('A5');
+  const otherDecl = byId.get('B2'), otherChild = byId.get('B3');
+
+  // ① 宣言イベントの stepIds が2件
+  check('宣言 A2 の stepIds が2件', decl && decl.stepIds.length === 2,
+    decl ? JSON.stringify(decl.stepIds) : 'A2 が無い');
+  check('stepIds が実効果の子そのもの', decl
+    && JSON.stringify(decl.stepIds.slice().sort()) === JSON.stringify(['A3', 'A4']),
+    decl ? JSON.stringify(decl.stepIds) : '-');
+  // 最初の子だけを選んでいない（宣言自身は段にならず、どちらの子も落とさない）
+  check('最初の子だけを選んでいない', decl && decl.counted === false && decl.stepIds.length === 2,
+    decl ? `counted=${decl.counted} stepIds=${JSON.stringify(decl.stepIds)}` : '-');
+
+  // ④ 2効果が別々の段として数えられる
+  check('A3 と A4 が別々の step', c1 && c2 && c1.stepId === 'A3' && c2.stepId === 'A4',
+    c1 && c2 ? `${c1.stepId} / ${c2.stepId}` : '-');
+  check('A3・A4 とも 2段目（宣言は段を増やさない）',
+    c1 && c2 && c1.depth === 2 && c2.depth === 2 && c1.rawDepth === 3 && c2.rawDepth === 3,
+    c1 && c2 ? `正 ${c1.depth}/${c2.depth}・生 ${c1.rawDepth}/${c2.rawDepth}` : '-');
+
+  // ②③ 各効果 step の declaredBy が同じ宣言で、両方に sharedDeclaration が立つ
+  const paths = ['A3', 'A4'].map(id => ({ id, found: sum.pathTo(e => e.eventId === id) }));
+  for (const { id, found } of paths) {
+    const last = found && found.steps[found.steps.length - 1];
+    check(`${id} の経路が 2段`, found && found.steps.length === 2,
+      found ? `${found.steps.length}段` : '経路が取れない');
+    check(`${id} の declaredBy.eventId が A2`, last && last.declaredBy && last.declaredBy.eventId === 'A2',
+      last && last.declaredBy ? last.declaredBy.eventId : 'declaredBy が無い');
+    check(`${id} の sharedDeclaration === true`, last && last.sharedDeclaration === true,
+      last ? String(last.sharedDeclaration) : '-');
+    check(`${id} の effect が自分自身（別の子を指していない）`,
+      last && last.effect && last.effect.eventId === id, last && last.effect ? last.effect.eventId : '-');
+  }
+  // 2つの経路の終端 step が本当に別物
+  const [pA, pB] = paths.map(p => p.found && p.found.steps[p.found.steps.length - 1]);
+  check('2経路の終端 step が別の stepId', pA && pB && pA.stepId !== pB.stepId,
+    pA && pB ? `${pA.stepId} / ${pB.stepId}` : '-');
+  // 分岐では宣言者と実行者が別人になる。step の行為者は実行者、declaredBy は宣言者。
+  check('2経路の行為者が別（A3=強欲A / A4=強欲B）',
+    pA && pB && pA.actorName === '強欲A' && pB.actorName === '強欲B',
+    pA && pB ? `${pA.actorName} / ${pB.actorName}` : '-');
+  check('declaredBy はどちらも宣言者 強欲A',
+    pA && pB && pA.declaredBy.actorName === '強欲A' && pB.declaredBy.actorName === '強欲A',
+    pA && pB ? `${pA.declaredBy.actorName} / ${pB.declaredBy.actorName}` : '-');
+  check('2経路の対象が別（弓手ミナ / 盾のガル）',
+    pA && pB && pA.effect.targetName === '弓手ミナ' && pB.effect.targetName === '盾のガル',
+    pA && pB ? `${pA.effect.targetName} / ${pB.effect.targetName}` : '-');
+
+  // ⑥ 別枝・別チェーンを誤結合しない
+  const sibPath = sum.pathTo(e => e.eventId === 'A5');
+  const sibLast = sibPath && sibPath.steps[sibPath.steps.length - 1];
+  check('同じ親の別枝 A5 は A2 の宣言を拾わない',
+    sibLast && sibLast.declaredBy === null && sibLast.eventIds.join(',') === 'A5',
+    sibLast ? `declaredBy=${sibLast.declaredBy && sibLast.declaredBy.eventId} eventIds=${sibLast.eventIds.join(',')}` : '-');
+  check('A5 は A2 の stepIds に入っていない', decl && !decl.stepIds.includes('A5'),
+    decl ? JSON.stringify(decl.stepIds) : '-');
+  check('別チェーンの宣言 B2 の stepIds は B3 のみ',
+    otherDecl && JSON.stringify(otherDecl.stepIds) === JSON.stringify(['B3']),
+    otherDecl ? JSON.stringify(otherDecl.stepIds) : '-');
+  check('B3 の sharedDeclaration === false', otherChild && (() => {
+    const f = sum.pathTo(e => e.eventId === 'B3');
+    const l = f && f.steps[f.steps.length - 1];
+    return l && l.sharedDeclaration === false && l.declaredBy && l.declaredBy.eventId === 'B2';
+  })(), '-');
+  check('チェーンが2本に分かれている',
+    sum.chains.length === 2 && sum.chains.every(c => c.maxDepth === 2),
+    JSON.stringify(sum.chains.map(c => [c.chainId, c.maxDepth])));
+
+  let failures = 0;
+  for (const [label, ok, detail] of checks) {
+    if (!ok) failures++;
+    console.log(`  ${ok ? '✓' : '✗'} ${label}${ok ? '' : '   → ' + detail}`);
+  }
+  console.log('');
+  for (const { id, found } of paths) {
+    if (!found) continue;
+    console.log(`  【経路 ${id}】`);
+    for (const st of found.steps) {
+      const by = st.declaredBy ? `《${st.declaredBy.abilityName}》による ` : '';
+      console.log(`      step${st.depth}: ${by}${st.effect.type}`
+        + `${st.actorName ? ' / 行為者 ' + st.actorName : ''}`
+        + `${st.effect.targetName ? ' → ' + st.effect.targetName : ''}`
+        + `${st.sharedDeclaration ? '（宣言を複数stepへ複製）' : ''}`);
+    }
+  }
+  console.log('');
+  if (failures) {
+    console.error(`✗ 分岐契約 ${failures}件が一致しない。監査を続行しない。`);
+    process.exitCode = 1;
+  }
+  return failures;
 }
 
 const pathTo = (sum, pick) => sum.pathTo(pick);
@@ -706,8 +847,9 @@ if (require.main === module) {
   const runsIndex = args.indexOf('--runs');
   const wantPaths = args.includes('--paths') || runsIndex < 0;
   const n = runsIndex >= 0 ? (Number(args[runsIndex + 1]) || 200) : (args.includes('--paths') ? 0 : 200);
-  if (wantPaths) { if (runPaths() === 0) battleParity(24); }
+  if (wantPaths) { if (runPaths() + runSharedDeclaration() === 0) battleParity(24); }
   if (n > 0) report(n);
 }
 
-module.exports = { classify, summarize, load, patchBattle, scenarios, CHAIN_DEF_VERSION };
+module.exports = { classify, summarize, load, patchBattle, scenarios,
+  sharedDeclarationTimeline, CHAIN_DEF_VERSION };
