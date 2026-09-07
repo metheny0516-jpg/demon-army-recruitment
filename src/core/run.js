@@ -1411,7 +1411,7 @@ const Game = {
       && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
     const result = Battle.simulate(playerUnits, enemyUnits,
       { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks(),
-        synergyPool: this.synergyPool() });
+        synergyPool: this.synergyPool(), chainDefVersion: Chain.versionOf(st) });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);

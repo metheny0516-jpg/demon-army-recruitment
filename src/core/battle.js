@@ -11,6 +11,7 @@
 // 因果イベント共通: { parentEventId?, chainId, chainDepth }
 //   親を持たない攻撃などが chainDepth=1 の起点。死亡・追撃・蘇生は原因イベントを親に持つ。
 //   既存の type は変えず、将来のシナジー発火とCHAIN表示に使うメタデータだけを加える。
+// V2ランだけ v2Depth も並記する。同じ実効果を一度だけ数え、倍率はこの逐次値を読む。
 //
 //   battle_start { player:[Snap], enemy:[Snap] }   Snapは下の snap() 参照
 //   dialogue     { unitId,name,side,quote }         データ指定された開戦台詞
@@ -87,6 +88,8 @@ const Battle = {
 
   simulate(playerUnits, enemyUnits, options) {
     options = options || {};
+    // 保存済みランの版を正本にする。V1途中ランはアップデート後も旧倍率を維持する。
+    const useV2ChainMultiplier = Number(options.chainDefVersion) >= 2;
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
     enemyUnits.forEach((u, i) => { u.id = "e" + i; });
 
@@ -108,6 +111,13 @@ const Battle = {
         data.chainDepth = (parent.chainDepth || 1) + 1;
       } else {
         data.chainDepth = 1;
+      }
+      if (useV2ChainMultiplier) {
+        const classified = Chain.classify(type, data);
+        const counted = classified.role === "effect"
+          || (classified.role === "declaration" && classified.selfEffect);
+        const parentDepth = parent ? (parent.v2Depth ?? 1) : 0;
+        data.v2Depth = parentDepth + (counted ? 1 : 0);
       }
       const event = emit(type, data);
       if (!event.chainId) event.chainId = event.eventId;
@@ -329,10 +339,13 @@ const Battle = {
       // CHAINの深さを全ダメージ系統の共通報酬にする。
       // 3段目は小さな成功、4段目から明確な爆発。強欲だけでなく宴やOVERKILL伝播にも効く。
       const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
-      if (attacker.side === "player" && chainDepth >= 3) {
-        const chainMult = chainDepth === 3 ? 1.25 : Math.min(2.5, 1.75 + (chainDepth - 4) * .25);
+      const v2Depth = opts.parentEvent ? (opts.parentEvent.v2Depth ?? 1) + 1 : 1;
+      const multiplierDepth = useV2ChainMultiplier ? v2Depth : chainDepth;
+      if (attacker.side === "player" && multiplierDepth >= 3) {
+        const chainMult = multiplierDepth === 3
+          ? 1.25 : Math.min(2.5, 1.75 + (multiplierDepth - 4) * .25);
         amount *= chainMult;
-        opts.traits = [...(opts.traits || []), `CHAIN ${chainDepth} ×${chainMult.toFixed(2)}`];
+        opts.traits = [...(opts.traits || []), `CHAIN ${multiplierDepth} ×${chainMult.toFixed(2)}`];
       }
       let dmg = Math.max(1, Math.round(amount * target.mods.takenMult));
       for (const tid of target.traits) {
@@ -371,6 +384,9 @@ const Battle = {
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
+      if (useV2ChainMultiplier && damageEvent.v2Depth !== multiplierDepth) {
+        throw new Error(`V2倍率の逐次段数がイベント段数と不一致: ${multiplierDepth} != ${damageEvent.v2Depth}`);
+      }
       // 食事強化を受けた者の「最初の有効打」。新しいイベントは足さず、
       // すでに出したダメージイベントへ印を書き添えるだけ（順序・回数・深度は動かない）。
       //

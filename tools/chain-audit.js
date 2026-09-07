@@ -58,45 +58,23 @@ function patchBattle(src) {
     src = src.replace(from, to);
   };
   swap(
-`        data.chainId = parent.chainId || parent.eventId;
-        data.chainDepth = (parent.chainDepth || 1) + 1;`,
-`        data.chainId = parent.chainId || parent.eventId;
-        data.legacyDepth = (parent.legacyDepth || 1) + 1;
-        // 親の段数は || 1 で読んではいけない。新定義では 0段の親（未実行の予告や
-        // 効果を子に委ねる宣言）が出るため、0 を 1 に読み替えると子が1段ぶん水増しされる。
-        data.chainDepth = CHAIN_AUDIT.countAll
-          ? (parent.chainDepth || 1) + 1
-          : CHAIN_AUDIT.depthOf(parent) + (CHAIN_AUDIT.step(type, data) ? 1 : 0);`);
-  swap(
-`      } else {
-        data.chainDepth = 1;
-      }`,
-`      } else {
-        data.chainDepth = CHAIN_AUDIT.countAll ? 1 : (CHAIN_AUDIT.step(type, data) ? 1 : 0);
-        data.legacyDepth = 1;
-      }`);
+`    const useV2ChainMultiplier = Number(options.chainDefVersion) >= 2;`,
+`    const recordV2Depth = !CHAIN_AUDIT.countAll;
+    const useV2ChainMultiplier = CHAIN_AUDIT.multNew;`);
+  swap(`      if (useV2ChainMultiplier) {`, `      if (recordV2Depth) {`);
   // 消費者①ダメージ倍率
   swap(
-`      const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
-      if (attacker.side === "player" && chainDepth >= 3) {
-        const chainMult = chainDepth === 3 ? 1.25 : Math.min(2.5, 1.75 + (chainDepth - 4) * .25);
-        amount *= chainMult;
-        opts.traits = [...(opts.traits || []), \`CHAIN \${chainDepth} ×\${chainMult.toFixed(2)}\`];
-      }`,
-`      const chainDepth = opts.parentEvent ? CHAIN_AUDIT.depthOf(opts.parentEvent) + 1 : 1;
-      const legacyDepth = opts.parentEvent ? (opts.parentEvent.legacyDepth || 1) + 1 : 1;
-      const multDepth = CHAIN_AUDIT.multNew ? chainDepth : legacyDepth;
-      if (attacker.side === "player") CHAIN_AUDIT.tiers.push([legacyDepth, chainDepth]);
-      if (attacker.side === "player" && multDepth >= 3) {
-        const chainMult = multDepth === 3 ? 1.25 : Math.min(2.5, 1.75 + (multDepth - 4) * .25);
-        amount *= chainMult;
-        opts.traits = [...(opts.traits || []), \`CHAIN \${multDepth} ×\${chainMult.toFixed(2)}\`];
-      }`);
+`      const multiplierDepth = useV2ChainMultiplier ? v2Depth : chainDepth;`,
+`      const multiplierDepth = useV2ChainMultiplier ? v2Depth : chainDepth;
+      if (attacker.side === "player") CHAIN_AUDIT.tiers.push([chainDepth, v2Depth]);`);
+  swap(
+`      if (useV2ChainMultiplier && damageEvent.v2Depth !== multiplierDepth) {`,
+`      if (recordV2Depth && damageEvent.v2Depth !== v2Depth) {`);
   // 消費者②連鎖ハプニングの発火条件（battle_happenings.js の u.chainDepth >= 3）
   swap(
 `      unit.chainDepth = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;`,
-`      const actorLegacy = actionOpts.parentEvent ? (actionOpts.parentEvent.legacyDepth || 1) + 1 : 1;
-      const actorNew = actionOpts.parentEvent ? CHAIN_AUDIT.depthOf(actionOpts.parentEvent) + 1 : 1;
+`      const actorLegacy = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;
+      const actorNew = actionOpts.parentEvent ? (actionOpts.parentEvent.v2Depth ?? 1) + 1 : 1;
       if (actionOpts.parentEvent) CHAIN_AUDIT.gates.push([actorLegacy, actorNew]);
       unit.chainDepth = CHAIN_AUDIT.gateNew ? actorNew : actorLegacy;`);
   return src;
@@ -558,7 +536,7 @@ function depthParity(n) {
       const got = e.eventId && byId.get(e.eventId);
       if (!got) continue;
       events++;
-      if ((e.chainDepth || 0) !== got.depth) mismatch++;
+      if ((e.v2Depth ?? -1) !== got.depth) mismatch++;
     }
   }
   console.log(`■ 逐次(戦闘中) と 正規化API の段数一致（${battles} 戦 / ${events} イベント）`);

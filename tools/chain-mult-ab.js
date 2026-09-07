@@ -4,7 +4,7 @@
 //   CHAIN_SEED_BASE=2000 node tools/chain-mult-ab.js 200
 //   node tools/chain-mult-ab.js 200 --v2-threshold 2     … 引き下げ案の閾値を変える
 //
-// **ゲーム本体（src/）は1行も変更しない。** battle.js の写しに対して
+// productionはV2same。比較モードでは battle.js の写しに対して
 // 「倍率が読む段数」だけを差し替え、同じseedで走らせて比べる。
 //
 // ── なぜ1回の戦闘から両方を出せないか ──────────────────
@@ -21,8 +21,8 @@
 // になり、勝敗差の原因を倍率だけに絞れる。
 //
 // ── モード ────────────────────────────────────────────
-//   V1     … 現行。倍率は raw chainDepth を読む（>=3 で 1.25 / 1.75 / +0.25 / 上限2.5）
-//   V2same … 倍率は v2Depth を読む。**段数閾値と倍率表は現行のまま**（>=3）
+//   V1     … 旧方式。倍率は raw chainDepth を読む（>=3 で 1.25 / 1.75 / +0.25 / 上限2.5）
+//   V2same … 本番方式。倍率は v2Depth を読む。**段数閾値と倍率表は旧方式のまま**（>=3）
 //   V2low  … 倍率は v2Depth を読む。**V1と近い発生頻度になるよう閾値を下げる**（既定 >=2）
 //
 // V2low の倍率表は閾値からの相対で同じ形にする（T で1.25、T+1 で1.75、以後 +0.25、上限2.5）。
@@ -56,34 +56,25 @@ function patchBattle(src) {
     }
     src = src.replace(from, to);
   };
-  // 因果イベントへ v2Depth を並記する。chainDepth（raw）は触らない。
+  // 本番実装が持つ v2Depth はそのまま使い、保存版による選択だけ測定モードで上書きする。
   swap(
-`        data.chainId = parent.chainId || parent.eventId;
-        data.chainDepth = (parent.chainDepth || 1) + 1;`,
-`        data.chainId = parent.chainId || parent.eventId;
-        data.chainDepth = (parent.chainDepth || 1) + 1;
-        // V2の段数を並記する。親の段数を || 1 で読んではいけない（0段の親が出るため）。
-        data.v2Depth = Math.MULT_AB.depthOf(parent) + (Math.MULT_AB.step(type, data) ? 1 : 0);`);
+`    const useV2ChainMultiplier = Number(options.chainDefVersion) >= 2;`,
+`    const useV2ChainMultiplier = Math.MULT_AB.useV2;`);
   swap(
-`      } else {
-        data.chainDepth = 1;
-      }`,
-`      } else {
-        data.chainDepth = 1;
-        data.v2Depth = Math.MULT_AB.step(type, data) ? 1 : 0;
-      }`);
+`      if (useV2ChainMultiplier) {`,
+`      if (true) {`);
   // 倍率。**ここだけがA/Bの差**。閾値からの相対で同じ形の表を作る。
   swap(
-`      const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
-      if (attacker.side === "player" && chainDepth >= 3) {
-        const chainMult = chainDepth === 3 ? 1.25 : Math.min(2.5, 1.75 + (chainDepth - 4) * .25);
+`      const multiplierDepth = useV2ChainMultiplier ? v2Depth : chainDepth;
+      if (attacker.side === "player" && multiplierDepth >= 3) {
+        const chainMult = multiplierDepth === 3
+          ? 1.25 : Math.min(2.5, 1.75 + (multiplierDepth - 4) * .25);
         amount *= chainMult;
-        opts.traits = [...(opts.traits || []), \`CHAIN \${chainDepth} ×\${chainMult.toFixed(2)}\`];
+        opts.traits = [...(opts.traits || []), \`CHAIN \${multiplierDepth} ×\${chainMult.toFixed(2)}\`];
       }`,
-`      const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
-      const v2Depth = opts.parentEvent ? Math.MULT_AB.depthOf(opts.parentEvent) + 1 : 1;
+`      const multiplierDepth = useV2ChainMultiplier ? v2Depth : chainDepth;
       const AB = Math.MULT_AB;
-      const multDepth = AB.useV2 ? v2Depth : chainDepth;
+      const multDepth = multiplierDepth;
       const T = AB.threshold;
       if (attacker.side === "player") {
         const applied = multDepth >= T;
@@ -160,8 +151,8 @@ function makeEnv(mode) {
 }
 
 const MODES = [
-  { id: 'PROD',   label: 'production（差し替えなし）', patch: false, useV2: false, threshold: 3 },
-  { id: 'V1',     label: 'V1 現行（raw chainDepth・>=3）', patch: true, useV2: false, threshold: 3 },
+  { id: 'PROD',   label: 'production（差し替えなし）', patch: false, useV2: true, threshold: 3 },
+  { id: 'V1',     label: 'V1 旧方式（raw chainDepth・>=3）', patch: true, useV2: false, threshold: 3 },
   { id: 'V2same', label: `V2same（v2Depth・閾値と表は現行のまま >=3）`, patch: true, useV2: true, threshold: 3 },
   { id: 'V2low',  label: `V2low（v2Depth・閾値を下げる >=${V2_LOW_THRESHOLD}）`, patch: true, useV2: true, threshold: V2_LOW_THRESHOLD }
 ];
@@ -231,15 +222,15 @@ const strategies = envs.get('PROD').strategies;
 if (strategies.length !== 15) throw new Error(`戦略が15本でない（${strategies.length}本）`);
 
 console.log(`■ CHAIN倍率をV2基準へ切り替えた場合の勝率影響（全${strategies.length}戦略 × ${N}ラン／seed基 ${SEED_BASE}）`);
-console.log('  ゲーム本体（src/）は未変更。battle.js の写しで「倍率が読む段数」だけを差し替えている。');
+console.log('  productionを基準に、battle.js の写しで「倍率が読む段数」だけを差し替えている。');
 console.log('  記録・ハプニング発火条件・演出閾値は全モードで production と同一（chainDepth は raw のまま）。\n');
 for (const m of MODES) console.log(`    ${m.id.padEnd(7)} ${m.label}`);
 console.log('');
 
-// ── ① 差し替えの透明性: V1モードが production と一致するか ──
+// ── ① 差し替えの透明性: V2sameモードが production と一致するか ──
 // ここが崩れていたら、以後の差はすべて「差し替えの副作用」かもしれない。
 {
-  const prod = envs.get('PROD'), v1 = envs.get('V1');
+  const prod = envs.get('PROD'), v2same = envs.get('V2same');
   let checked = 0, mismatch = 0;
   strategies.forEach((strategy, si) => {
     const statsA = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0,
@@ -248,18 +239,18 @@ console.log('');
     for (let i = 0; i < TRANSPARENCY_RUNS; i++) {
       const s = SEED_BASE + si * 1000003 + i * 7919;
       const a = runOne(prod, strategy, s, statsA);
-      const b = runOne(v1, strategy, s, statsB);
+      const b = runOne(v2same, strategy, s, statsB);
       checked += 1;
       const key = r => JSON.stringify([r.unfinished || false, r.cleared, r.battlesWon, r.conquest, r.maxChain]);
-      if (key(a) !== key(b)) { mismatch += 1; if (mismatch <= 3) console.error(`    ✗ ${strategy.name} seed ${s}\n      prod ${key(a)}\n      V1   ${key(b)}`); }
+      if (key(a) !== key(b)) { mismatch += 1; if (mismatch <= 3) console.error(`    ✗ ${strategy.name} seed ${s}\n      prod   ${key(a)}\n      V2same ${key(b)}`); }
     }
   });
-  console.log(`■ 差し替えの透明性（production と V1モードの一致・${checked}ラン）`);
+  console.log(`■ 差し替えの透明性（production と V2sameモードの一致・${checked}ラン）`);
   if (mismatch) {
-    console.error(`  ✗ ${mismatch}件が不一致。差し替えが V1 の挙動を変えている。集計しない。`);
+    console.error(`  ✗ ${mismatch}件が不一致。測定器が本番V2倍率を再現できていない。集計しない。`);
     process.exit(1);
   }
-  console.log('  不一致 0件 → 「v2Depth の並記」と「倍率の読み替え」は V1 の挙動を変えていない\n');
+  console.log('  不一致 0件 → 測定器のV2sameは本番倍率を忠実に再現している\n');
 }
 
 // ── ② 本測定 ─────────────────────────────────────────
@@ -378,4 +369,4 @@ if (jsonOut) {
   }, null, 2));
   console.log(`\n測定結果を書き出した: ${jsonOut}`);
 }
-console.log(`\n注: ゲーム本体は未変更。Chain.RECORDED_VERSION も倍率も切り替えていない（判断材料の提出まで）。`);
+console.log(`\n注: productionはV2same。V1/V2lowは比較用の写しで、保存契約・ハプニング・演出は変更しない。`);

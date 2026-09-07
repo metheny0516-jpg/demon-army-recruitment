@@ -1,7 +1,8 @@
 // 正規化API（src/core/chain.js）と、CHAIN定義バージョンの保存を固定する。
 //
 // 新規ランの表示・記録・KPIはV2。既存V1ランはV1のまま継続する。
-// 倍率・演出閾値・ハプニング条件と Battle.summarizeChains() はV1を維持する。
+// 倍率は保存版に従い、新規V2ランだけV2へ切り替える。演出閾値・ハプニング条件と
+// Battle.summarizeChains() はraw V1を維持する。
 //
 // 経路の中身・分岐・行為者の区別・未実行の予告は tools/chain-audit.js --paths が
 // 同じ src/core/chain.js に対して assert する（そちらが契約の本体）。
@@ -52,7 +53,7 @@ Game.newRun();
 const squad = ['goblin', 'ogre', 'skeleton', 'necromancer', 'orc']
   .map(id => Battle.makeUnit(Game.rollApplicant(id), 'player'));
 const fight = Battle.simulate(squad, foes(4),
-  { graveyard: true, extortionLedger: true, facilityWorks: 2 });
+  { graveyard: true, extortionLedger: true, facilityWorks: 2, chainDefVersion: 2 });
 
 const before = JSON.stringify(fight.timeline);
 const sum = Chain.summarize(fight.timeline);
@@ -88,6 +89,8 @@ assert(raws.every(e => {
   const got = byId.get(e.eventId);
   return got && got.rawDepth >= 1 && got.parentEventId === (e.parentEventId || null);
 }), '正規化は raw の親子関係を保ったまま別の値として並記する');
+assert(raws.every(e => e.v2Depth === byId.get(e.eventId).depth),
+  'productionの逐次V2段数は正規化APIの後読み結果と全イベントで一致する');
 
 // ── 4. 既存のV1契約が変わっていない ────────────────────
 const v1 = Battle.summarizeChains(fight.timeline);
@@ -102,11 +105,12 @@ assert(v1.maxChain !== sum.maxDepth || v1.maxChain === 0,
 assert(!('defVersion' in v1) && !('maxDepth' in v1),
   '既存の chainSummary に新しい鍵を足していない（表示側の契約は不変）');
 
-// 倍率の付与もV1のまま。CHAIN表記は raw の段数で出ている
+// 新規V2ランの倍率タグは、正規化した逐次段数で出る。
 const tagged = fight.timeline.filter(e => (e.traits || []).some(t => String(t).startsWith('CHAIN ')));
-assert(tagged.every(e => (e.traits || []).some(t => t === `CHAIN ${e.chainDepth} ×${
-  (e.chainDepth === 3 ? 1.25 : Math.min(2.5, 1.75 + (e.chainDepth - 4) * .25)).toFixed(2)}`)),
-  '倍率タグは raw の chainDepth で付いている（倍率をV2へ切り替えていない）');
+assert(tagged.length > 0, 'V2倍率が実際に発火する戦闘を検証している');
+assert(tagged.every(e => (e.traits || []).some(t => t === `CHAIN ${e.v2Depth} ×${
+  (e.v2Depth === 3 ? 1.25 : Math.min(2.5, 1.75 + (e.v2Depth - 4) * .25)).toFixed(2)}`)),
+  '新規ランの倍率タグは逐次V2段数で付いている');
 
 // ── 5. 定義バージョンの保存 ────────────────────────────
 // 新規ラン
