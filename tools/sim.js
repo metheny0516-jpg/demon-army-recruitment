@@ -64,15 +64,32 @@ function runOnce(strat, stats){
             const worst = st.roster.reduce((b,m)=> power(m) < power(b) ? m : b, st.roster[0]);
             Game.fire(worst.uid);
           }
-          if (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5)) { Game.skipHire(); break; }
-          Game.hire(st.applicants.map((m,i)=>[m,i]).filter(([m])=>m.salary>=5)
-                    .reduce((b,x)=> power(x[0])>power(b[0])?x:b)[1]);
+          // 軍が空になったら見送らない。安い兵を全員切った直後に高給の応募者が居ないと
+          // 0体のまま出撃へ進み、deploy() が null を返してランがそこで終わる（記録が残らない）。
+          // 「高給3体だけ」という意図は保ったまま、空のときだけ誰かを採って続行する。
+          if (st.roster.length > 0
+              && (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5))) { Game.skipHire(); break; }
+          // 高給が居ればその中で最も強い者。軍が空で高給が居ない回だけ通常の選び方へ落とす
+          // （ここで採らないと0体のまま出撃してランが終わる）。
+          const rich = st.applicants.map((m,i)=>[m,i]).filter(([m])=>m.salary>=5);
+          const before = st.roster.length;
+          Game.hire(rich.length
+            ? rich.reduce((b,x)=> power(x[0])>power(b[0])?x:b)[1]
+            : chooseIndex(st.applicants, st.roster, strat));
+          // 採用が通らなかった（資金・枠）ならここで止める。continue だと無限ループになる
+          if (st.roster.length === before) { Game.skipHire(); break; }
           continue;
         }
       }
       if (strat.kind === 'elite') {
-        // 3体埋まっている、または高給の応募者がいない回は見送る（シナジーを壊さない）
-        if (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5)) { Game.skipHire(); break; }
+        // 3体埋まっている、または高給の応募者がいない回は見送る（シナジーを壊さない）。
+        // ただし**軍が空のときは見送らない**。初回の応募に高給が居ないと一人も採らずに
+        // 出撃へ進み、deploy() が null を返してランがそこで終わる（記録が残らず、
+        // 測定では「未完」として母集団から落ちる）。
+        // 「高給3体だけ」という意図は保つ。空のときだけ下の通常経路へ落として誰かを採る
+        // （chooseIndex は elite なら給与5G以上を優先し、居なければ最も強い者を選ぶ）。
+        if (st.roster.length > 0
+            && (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5))) { Game.skipHire(); break; }
       }
       if (!Game.canHire()) {
         const idx = chooseIndex(st.applicants, st.roster, strat);
