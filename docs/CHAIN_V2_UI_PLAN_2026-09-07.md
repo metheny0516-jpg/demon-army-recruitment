@@ -118,6 +118,12 @@ CommonJS で走る `tools/kpi-report.js` では `Chain.versionOf()` が**一度�
   **すべてその版のランだけ**から作る。代表CHAINも版ごとに選ぶ。
 - **`triggerKinds` は分離の対象外。** 段数の数え方ではなく「どの能力が連鎖に参加したか」なので、
   版をまたいでも意味が変わらない。
+- **KPIランの版の正本は「渡されたラン状態」であって定数ではない。**
+  `runStarted(state)` は `chainApi().versionOf(state)` を使う。`RECORDED_VERSION` を読むと、
+  切替後に既存V1途中ランを**再起動**したときに壊れる。`KPI.current` はメモリだけなので
+  再起動で消え、次の戦闘で `battleStarted()` が `runStarted()` を呼び直すため、
+  そこで定数を読むとラン状態はV1のままKPIだけV2になり、同じランの `chainMax` が
+  2つの定義に割れる。
 - `KPI.battleFinished()` は `Chain.RECORDED_VERSION` を読み直さない。
   ラン途中で切替コミットを跨いでも、1ランの中でV1とV2が混ざらない
   （混ざった時点でその `chainMax` はどちらの定義でもない値になり、後から分離できない）。

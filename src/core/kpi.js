@@ -98,9 +98,18 @@ const KPI = {
       mercenariesHired: 0, mercenaryGold: 0, kinHires: 0, mergesRefused: 0,
       paidHires: 0, paidHireGold: 0,
       triggerKinds: {}, chainMax: 0, chainAbilityMax: 0, chainSample: null, chainBattles: 0,
-      // chainMax をどの数え方で記録したか。現行(V1)のまま。バージョン欠落の旧KPIは
-      // 読む側が V1 として扱い、値を推定変換しない（Chain.versionOf）。
-      chainDefVersion: this.chainApi().RECORDED_VERSION,
+      // chainMax をどの数え方で記録したか。**正本は渡されたラン状態**であって、
+      // いまの Chain.RECORDED_VERSION ではない。
+      //
+      // ここで定数を読むと、切替後に既存V1途中ランを再起動したときに壊れる。
+      // KPI.current はメモリだけなので再起動で消え、次の戦闘で battleStarted() が
+      // runStarted() を呼び直す。そのときの定数を入れると、ラン状態はV1のままなのに
+      // KPIだけV2になり、同じランの chainMax が2つの定義に割れる。
+      // ラン状態を正本にすれば、途中ラン・ロード・再起・再起動のどれでも版が動かない。
+      //
+      // state が無い（ラン外からの呼び出し）ときは versionOf が V1 を返す。
+      // バージョン欠落の旧stateも同じくV1で、値を推定変換しない。
+      chainDefVersion: this.chainApi().versionOf(state),
       retriesUsed: 0, sessionRun: this.session.runs, quickRetry: false
     };
     this.update(data => {

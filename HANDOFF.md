@@ -39,6 +39,11 @@
 - `chainMax` / `chainAbilityMax` / `chainSample` の平均・最大・代表値は**その版のランだけ**から作る。
 - **`triggerKinds` は分離しない。** 段数の数え方ではなく「どの能力が連鎖に参加したか」なので
   版をまたいでも意味が変わらない。ここを分けると理由なく比較できない指標が増える。
+- **KPIランの版は「渡されたラン状態」を正本にすること**（`chainApi().versionOf(state)`）。
+  `RECORDED_VERSION` を入れると、切替後に既存V1途中ランを**再起動**したときに壊れる。
+  `KPI.current` はメモリだけなので再起動で消え、次の戦闘で `battleStarted()` が
+  `runStarted()` を呼び直す。そこで定数を読むとラン状態はV1のままKPIだけV2になる。
+  **`RECORDED_VERSION=1` の間はブラウザテストでも踏めない**（切替境界に入らないため）。
 - **`KPI.battleFinished()` は `Chain.RECORDED_VERSION` を読み直さない。** ラン途中で切替コミットを
   跨いでも1ランの中でV1とV2が混ざらない。混ざった時点でその `chainMax` はどちらの定義でもない
   値になり、後から分離できない。

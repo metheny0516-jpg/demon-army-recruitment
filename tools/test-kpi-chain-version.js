@@ -158,8 +158,61 @@ const entry = KPI.runEnded(Game.state, { cleared: false });
 assert(entry.chainDefVersion === 1, 'ラン終了時のエントリも開始時の版を持つ');
 assert(entry.chainMax === 5, '観測値そのものは従来どおり記録される');
 
+// ── 4b. 切替境界: 再起動でKPIが再生成されても、ラン状態の版を維持する ──
+// KPI.current はメモリだけなので再起動で消える。次の戦闘で battleStarted() が
+// runStarted() を呼び直すため、ここで「いまの定数」を読むと
+// ラン状態はV1のままなのにKPIだけV2になる。ラン状態を正本にすることで防ぐ。
+{
+  const switched = Chain.RECORDED_VERSION;
+  // (a) V1のラン状態。切替後(RECORDED_VERSION=2)に再起動した状況を作る
+  store = {};
+  Game.newRun();
+  const v1State = Game.state;
+  assert(v1State.chainDefVersion === 1, '切替前に始めたランの保存版は V1');
+  KPI.current = null;                       // 再起動でメモリ上のKPIが消えた
+  Chain.RECORDED_VERSION = 2;               // 切替コミット後の世界
+  KPI.battleStarted(v1State, { missionKind: 'invade' });
+  assert(KPI.current !== null, '再起動後の戦闘でKPIが再生成される');
+  assert(KPI.current.chainDefVersion === 1,
+    '切替後に既存V1途中ランを再起動しても、再生成されたKPIはV1を維持する');
+  KPI.battleFinished({ chainSummary: { maxChain: 4, deepest: null }, timeline: [] });
+  assert(KPI.current.chainDefVersion === 1, 'その後の戦闘でもV1のまま（定数を読み直さない）');
+  assert(KPI.runEnded(v1State, { cleared: false }).chainDefVersion === 1,
+    '保存されるKPIエントリもV1（ラン状態と一致する）');
+
+  // (b) 明示的にV2のラン状態はV2になる
+  store = {};
+  Game.newRun();                            // RECORDED_VERSION=2 の世界で始めた新規ラン
+  const v2State = Game.state;
+  assert(v2State.chainDefVersion === 2, '切替後に始めた新規ランの保存版は V2');
+  KPI.current = null;
+  KPI.battleStarted(v2State, { missionKind: 'invade' });
+  assert(KPI.current.chainDefVersion === 2, '明示V2のラン状態からはV2が入る');
+
+  // (c) 版欠落の旧ラン状態はV1（推定変換しない）
+  KPI.current = null;
+  const legacyState = { ...v2State };
+  delete legacyState.chainDefVersion;
+  KPI.battleStarted(legacyState, { missionKind: 'invade' });
+  assert(KPI.current.chainDefVersion === 1, '版欠落の旧ラン状態はV1として扱う');
+
+  // (d) 正本はラン状態であって定数ではない
+  KPI.current = null;
+  KPI.battleStarted(v1State, { missionKind: 'invade' });
+  assert(KPI.current.chainDefVersion !== Chain.RECORDED_VERSION,
+    '同じ定数(2)の下でもV1ランはV1のまま＝正本はラン状態で定数ではない');
+
+  Chain.RECORDED_VERSION = switched;
+  KPI.current = null;
+}
+
 // ── 5. ロード・再起・再起動で版が変わらない ────────────
 // KPIはラン状態の外にあるので、保存済みエントリは Game 側の操作で書き換わってはいけない。
+store = {};
+Game.newRun();
+KPI.runStarted(Game.state);
+KPI.battleFinished({ chainSummary: { maxChain: 5, deepest: null }, timeline: [] });
+KPI.runEnded(Game.state, { cleared: false });
 const before = JSON.stringify(KPI.load().runs.map(r => [r.chainDefVersion, r.chainMax]));
 Game.save();
 Game.load();
