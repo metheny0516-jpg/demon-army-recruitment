@@ -316,26 +316,65 @@ const UI = {
     </div>`;
   },
 
+  // ランがV2を記録しているときだけ保存済みchainViewを読む。
+  // 旧セーブ・欠損・契約版不一致はV1へ戻し、UIで推定再計算しない。
+  battleChainView(battle) {
+    const legacy = battle && battle.chainSummary || null;
+    const runVersion = (typeof Chain !== "undefined" && typeof Game !== "undefined" && Game.state)
+      ? Chain.versionOf(Game.state) : 1;
+    const view = battle && battle.chainView;
+    if (runVersion < 2 || !view || view.defVersion !== 2
+      || !Number.isFinite(view.maxDepth) || !Number.isFinite(view.rawMaxDepth)) {
+      return { version: 1, maxChain: (legacy && legacy.maxChain) || 0,
+        steps: (legacy && legacy.deepest && legacy.deepest.steps) || [] };
+    }
+    return { version: 2, maxChain: view.maxDepth,
+      steps: (view.deepest && Array.isArray(view.deepest.steps)) ? view.deepest.steps : [] };
+  },
+
+  // 保存済みの構造データだけからV2経路ラベルを作る。rawログのtextは解析しない。
+  chainViewStepLabel(step) {
+    const effect = step && step.effect || {};
+    const ability = (step.declaredBy && step.declaredBy.abilityName) || step.abilityName || "";
+    const unit = effect.resource === "gold" ? "G"
+      : effect.resource === "soul" ? "魂" : (effect.resource || "");
+    let action;
+    if (effect.type === "attack" || effect.type === "splash") action = effect.label || "攻撃";
+    else if (effect.type === "resource_gain") action = `${effect.label || ability || "獲得"}${effect.amount != null ? ` +${effect.amount}${unit}` : ""}`;
+    else if (effect.type === "resource_forfeit") action = `${effect.label || ability || "没収"}${effect.amount != null ? ` -${effect.amount}${unit}` : ""}`;
+    else if (effect.type === "resource_consume") action = `${effect.label || ability || "消費"}${effect.amount != null ? ` ${effect.amount}${unit}` : ""}`;
+    else if (effect.type === "summon") action = `${effect.summonedName || effect.targetName || "援軍"}を召喚`;
+    else if (effect.type === "revive") action = `${effect.targetName || "味方"}を蘇生`;
+    else if (effect.type === "heal") action = `${effect.targetName || "味方"}を回復`;
+    else if (effect.type === "momentum") action = "戦意上昇";
+    else if (effect.type === "survive") action = `${effect.targetName || "味方"}が生存`;
+    else if (effect.type === "incident") action = effect.label || ability || "行動中止";
+    else action = effect.label || ability || effect.type || "反応";
+    return step.declaredBy && ability ? `《${ability}》による${action}`
+      : (ability && !action.includes(ability) ? `《${ability}》 ${action}` : action);
+  },
+
   // 「今回どれだけ壊れたか」を一目で見せるパネル。勝利・敗北・ゲームオーバーで同じものを使う。
   // 主要記録は**最大CHAINと最大OVERKILLの2つだけ**。召喚・資源・蘇生は横並びに増やさず、
   // 下の詳細1行か個人貢献のバッジへ回す（記録が増えるほど、どれも読まれなくなる）。
   breakthroughPanel(battle) {
     if (!battle) return "";
-    const chain = battle.chainSummary || null;
+    const chain = this.battleChainView(battle);
     const overkill = battle.overkillSummary || null;
-    const maxChain = (chain && chain.maxChain) || 0;
+    const maxChain = chain.maxChain || 0;
     const maxPercent = (overkill && overkill.maxPercent) || 0;
     if (!maxChain && !maxPercent) return "";
 
     // 数字だけでは「CHAIN」が何を指すのか伝わらない。経路の上に一行置いて、
     // 「この芋づるの段数が最大CHAINだ」と読めるようにする（説明画面は作らない）。
-    const steps = (chain && chain.deepest && chain.deepest.steps) || [];
+    const steps = chain.steps || [];
     const originName = steps[0] && steps[0].actorName;
+    const labelOf = step => chain.version >= 2 ? this.chainViewStepLabel(step) : step.label;
     const path = steps.length >= 2
       ? `<div class="chain-caption">いちばん長くつながった連鎖（${steps.length}段）</div>
          ${Game.state && Game.state.generation === 1 && Game.state.turn <= 2 ? `<p class="first-guide">モルモ：これがCHAIN、能力の連鎖デス。矢印の順に、誰の働きが次の能力を動かしたかを追ってみてくださいネ。</p>` : ""}
          <div class="chain-path">${steps.map(step =>
-          `<span class="chain-step">${U.esc(step.label)}</span>`).join(`<span class="chain-arrow">→</span>`)}</div>`
+          `<span class="chain-step">${U.esc(labelOf(step))}</span>`).join(`<span class="chain-arrow">→</span>`)}</div>`
       : `<div class="muted">連鎖は起きなかった（ひと突きで終わっている）</div>`;
 
     // 「その戦闘で何を揃えて、どこまで壊れたか」を1行に畳む（作業表 B）。
@@ -367,7 +406,7 @@ const UI = {
         <div><b>${maxChain}</b><span>最大CHAIN</span></div>
         <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>
       </div>
-      ${originName ? `<p class="chain-credit">この連鎖の起点は <b>${U.esc(originName)}</b>。${U.esc(steps[steps.length - 1].label)}までつながった。</p>` : ""}
+      ${originName ? `<p class="chain-credit">この連鎖の起点は <b>${U.esc(originName)}</b>。${U.esc(labelOf(steps[steps.length - 1]))}までつながった。</p>` : ""}
       ${path}
       ${details.length ? `<div class="muted">${details.join("　/　")}</div>` : ""}
     </div>`;
