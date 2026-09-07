@@ -24,18 +24,24 @@ const path = require('node:path');
       }
     }, count);
     const attack = async () => page.evaluate(() => BattleScene.render({ type: 'attack', fromId: 'player0', toId: 'enemy0', dmg: 12, hp: 18, maxHp: 30, emphasis: 1 }));
-    const shot = async name => { if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, name + '.png') }); };
+    const shot = async name => { if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', name + '.png') }); };
     await setup();
     await page.waitForTimeout(250);
     assert.equal(await page.locator('#bu-enemy0').evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)');
     await shot('battlefield-idle');
     await attack();
+    // 振りかぶり中はまだHPが減らない（結果は計算済みでも、当たるまで見せない）。
     assert.equal(await page.locator('#hp-enemy0').evaluate(el => el.style.transform), 'scaleX(1)');
-    await page.waitForTimeout(75);
+    await page.waitForFunction(() => BattleScene.units.player0.sprite?.dataset.pose === 'attack-windup'
+      || document.querySelector('#bu-player0 img')?.dataset.pose === 'attack-windup');
     await shot('battlefield-windup');
     await setup();
     await attack();
-    await page.waitForTimeout(225);
+    // 接触の瞬間はBattleSceneが決める。固定の待ち時間を書くと演出の尺を変えるたびに
+    // ここが落ちる（61c89e3 の等速見直しで実際に落ちた）。見たいのは
+    // 「振りかぶり中は減らず、接触したら減る」なので、状態の側を待つ。
+    await page.waitForFunction(() => document.getElementById('hp-enemy0').style.transform === 'scaleX(0.6)',
+      null, { timeout: 5000 });
     assert.equal(await page.locator('#hp-enemy0').evaluate(el => el.style.transform), 'scaleX(0.6)');
     await page.evaluate(() => { for (const a of BattleScene.motions) a.pause(); });
     await shot('battlefield-contact');

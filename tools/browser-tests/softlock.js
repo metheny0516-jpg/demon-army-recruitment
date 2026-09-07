@@ -21,7 +21,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   await page.evaluate(() => { Game.skipHire(); App.render(); });
   const escape = await page.locator('[data-action="title"]').count();
   ok(escape>=1, '「タイトルへ戻る」で脱出できる');
-  await page.screenshot({ path: process.env.SP+'/softlock-fixed.png', fullPage:true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/softlock-fixed.png', fullPage:true });
   await page.click('[data-action="title"]'); await page.waitForTimeout(120);
   ok(await page.locator('[data-action="new"]').count() >= 1, 'タイトルに戻れた');   // 魔王は複数から選ぶ
   console.log(errs.length?'\n✗ '+errs.join(', '):'\n✓ JSエラーなし');

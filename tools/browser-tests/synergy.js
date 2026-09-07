@@ -34,9 +34,10 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     return document.body.innerText;
   });
   if (!recruitText.includes('今の軍団との接続')) errors.push('応募者カードに接続見出しが出ない');
-  if (!/追い剥ぎ.*金貨獲得.*強欲/s.test(recruitText)) {
-    errors.push('採用前に「追い剥ぎ → 金貨獲得 → 強欲」が読めない');
+  if (!/起点.*追い剥ぎ.*1Gを略奪予約.*反応.*強欲/s.test(recruitText)) {
+    errors.push('採用前に「起点：追い剥ぎ → 1Gを略奪予約 → 反応：強欲」が読めない');
   }
+  if (!/必要：採用・出撃/.test(recruitText)) errors.push('採用と出撃の必要条件が読めない');
 
   await enterMissionPhase(page);
   await page.locator('[data-action="missionpick"]').first().click();
@@ -86,7 +87,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   if (!/あと1体/.test(two)) errors.push('未発動シナジーの「あと何体」が読めない');
 
   await page.locator('.panel', { hasText: '発動中のシナジー' }).first().scrollIntoViewIfNeeded();
-  await page.screenshot({ path: (process.env.SP || '.') + '/synergy-panel.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/synergy-panel.png' });
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 編成画面で効果量と「あと1体で／入れ替えると」が読める');
   await browser.close();
   process.exit(errors.length ? 1 : 0);

@@ -13,6 +13,14 @@ const SYNERGIES = [
     }
   },
   {
+    id: "goblin_pair",
+    name: "追い剥ぎコンビ",
+    condition: "ゴブリン2体以上で出撃",
+    desc: "金貨を略奪するたび、次の味方攻撃+25%",
+    check(units) { return units.filter(u => u.race === "ゴブリン").length >= 2; },
+    apply() { /* 金貨獲得時の発火は battle.js が因果イベントとして処理する */ }
+  },
+  {
     // 3体で頭打ちの固定値だと、4体目・5体目が何も足さず「全振り」が
     // 報われない。頭数に応じて伸ばすことで、種族を統一するコスト
     // （弱い個体で枠を埋めること）に見合う爆発力を持たせる。
@@ -133,3 +141,89 @@ const SYNERGIES = [
     apply() { /* 発火は蘇生者の撃破時に battle.js が因果イベントとして処理する */ }
   }
 ];
+
+// ── 混成シナジー（2026-09-05・CodeX 下書き → Claude 調整）──
+// 異種の採用で、既存の特性を別の種族に「貸す」。付与は戦闘コピーだけに限定する。
+// grant: true の型は《魔王軍完成》の発動数に数えない。
+// 必要数は「2体＋2体」を基本にし、8体前後の軍団でも狙って揃う大きさにした（下書きは3体＋2体）。
+// 数えると、ゴブリン3〜4体を条件に持つ3件がゴブリン軍だけに+60%を乗せ、
+// ゴブリン統一+求人が16%→66%に跳ねた（下書き時の実測）。接続は増やすが、倍率の段は増やさない。
+SYNERGIES.push(
+  {
+    grant: true,
+    id: "slime_collection", name: "粘着集金班",
+    condition: "軍団にゴブリン2体＋スライム2体、スライムが出撃",
+    desc: "出撃スライムに追い剥ぎ。初ダメージで1G予約→味方の強欲へ接続",
+    check(units, ctx) {
+      const p = Synergy.pool(units, ctx);
+      return p.filter(u => u.race === "ゴブリン").length >= 2 && p.filter(u => u.race === "スライム").length >= 2 && units.some(u => u.race === "スライム");
+    },
+    apply(units) { for (const u of units) if (u.race === "スライム" && !u.traits.includes("pickpocket")) u.traits.push("pickpocket"); }
+  },
+  {
+    grant: true,
+    id: "bone_fire", name: "骨炭魔術",
+    condition: "軍団に魔法職2体＋アンデッド2体、火球持ちが出撃",
+    desc: "火球が敵全体へ広がる。撃破の余剰はOVERKILLと戦意へ",
+    check(units, ctx) {
+      const p = Synergy.pool(units, ctx);
+      return p.filter(u => u.tags.includes("caster")).length >= 2 && p.filter(u => u.tags.includes("undead")).length >= 2 && units.some(u => u.traits.includes("fireball"));
+    },
+    apply(units) { for (const u of units) if (u.traits.includes("fireball")) u.mods.fireballAll = true; }
+  },
+  {
+    grant: true,
+    id: "hound_audit", name: "嗅ぎつける監査",
+    condition: "軍団にコボルト2体＋ゴブリン2体、コボルトが出撃",
+    desc: "出撃コボルトに強欲。味方の金貨獲得に威力70%で追撃（同じ連鎖で各1回）",
+    check(units, ctx) {
+      const p = Synergy.pool(units, ctx);
+      return p.filter(u => u.race === "コボルト").length >= 2 && p.filter(u => u.race === "ゴブリン").length >= 2 && units.some(u => u.race === "コボルト");
+    },
+    apply(units) { for (const u of units) if (u.race === "コボルト" && !u.traits.includes("greedy")) u.traits.push("greedy"); }
+  },
+  {
+    grant: true,
+    id: "grave_shift", name: "夜勤の引き継ぎ",
+    condition: "軍団にゾンビ2体＋骸骨兵2体、ゾンビが出撃",
+    desc: "出撃ゾンビに死霊術。倒れた同僚を蘇生→魂の徴収・殉職手当へ",
+    check(units, ctx) {
+      const p = Synergy.pool(units, ctx);
+      return p.filter(u => u.race === "ゾンビ").length >= 2 && p.filter(u => u.race === "骸骨兵").length >= 2 && units.some(u => u.race === "ゾンビ");
+    },
+    apply(units) { for (const u of units) if (u.race === "ゾンビ" && !u.traits.includes("necromancy")) u.traits.push("necromancy"); }
+  },
+  {
+    grant: true,
+    id: "orc_imp_collection", name: "取り立て実習",
+    condition: "軍団にオーク2体＋インプ2体、オークが出撃",
+    desc: "出撃オークに追い剥ぎ。初ダメージの1G予約で強欲や恐喝帳簿を動かす",
+    check(units, ctx) {
+      const p = Synergy.pool(units, ctx);
+      return p.filter(u => u.race === "オーク").length >= 2 && p.filter(u => u.race === "インプ").length >= 2 && units.some(u => u.race === "オーク");
+    },
+    apply(units) { for (const u of units) if (u.race === "オーク" && !u.traits.includes("pickpocket")) u.traits.push("pickpocket"); }
+  },
+  {
+    grant: true,
+    id: "ogre_account", name: "巨人の成功報酬",
+    condition: "軍団にオーガ1体＋ゴブリン3体、オーガが出撃",
+    desc: "出撃オーガに強欲。味方の金貨獲得に威力70%で追撃（同じ連鎖で各1回）",
+    check(units, ctx) {
+      const p = Synergy.pool(units, ctx);
+      return p.some(u => u.race === "オーガ") && p.filter(u => u.race === "ゴブリン").length >= 3 && units.some(u => u.race === "オーガ");
+    },
+    apply(units) { for (const u of units) if (u.race === "オーガ" && !u.traits.includes("greedy")) u.traits.push("greedy"); }
+  },
+  {
+    grant: true,
+    id: "imp_salvage", name: "遺品回収係",
+    condition: "軍団にインプ2体＋アンデッド2体、インプが出撃",
+    desc: "出撃インプに墓守。味方の死亡で魂を回収→アンデッド復帰時の魂の徴収へ",
+    check(units, ctx) {
+      const p = Synergy.pool(units, ctx);
+      return p.filter(u => u.race === "インプ").length >= 2 && p.filter(u => u.tags.includes("undead")).length >= 2 && units.some(u => u.race === "インプ");
+    },
+    apply(units) { for (const u of units) if (u.race === "インプ" && !u.traits.includes("gravekeeper")) u.traits.push("gravekeeper"); }
+  }
+);

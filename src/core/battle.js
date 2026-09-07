@@ -68,6 +68,10 @@ const Battle = {
       salary: m.salary || 0,
       loyalty: m.loyalty ?? 50,
       unpaid: !!m.unpaid,
+      // F: 戦闘中ハプニングの読み取り用状態。ロスターへは保存しない。
+      starved: !!m.starved || (m.traits || []).includes("starved"),
+      feast: false,
+      chainDepth: 1,
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
       introQuote: m.introQuote || "",
@@ -196,10 +200,12 @@ const Battle = {
       }, parent);
     };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
+    const goblinPair = activeSyn.some(s => s.id === "goblin_pair");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;
     let ledgerFires = 0;
     let ledgerBoost = null;
+    let lootPairBoost = null;
     const gainBattleResource = (unit, resource, value, label, parent) => {
       const resourceName = resource === "gold" ? "G" : resource;
       const verb = label === "殉職手当" ? "支給予約" : "略奪予約";
@@ -210,6 +216,12 @@ const Battle = {
       if (resource === "gold") {
         const before = reservedGold;
         reservedGold += value;
+        if (goblinPair) {
+          lootPairBoost = emitCausal("synergy_trigger", {
+            synergyId: "goblin_pair", name: "追い剥ぎコンビ", amount: 25, emphasis: 2,
+            text: "　【追い剥ぎコンビ】盗んだ勢いで、次の味方攻撃+25%！", cls: "synergy"
+          }, event);
+        }
         const nextLedgerMark = (ledgerFires + 1) * 3;
         if (options.extortionLedger && ledgerFires < facilityWorks
           && before < nextLedgerMark && reservedGold >= nextLedgerMark) {
@@ -230,6 +242,16 @@ const Battle = {
     });
     let feastTrigger = null;
     const rations = options.rations;
+    // V2a の伝票（run.js の Game.mealPlan）。ここでは**倍率を計算し直さない**。
+    // 起点・対象・効果量を既存イベントへ書き添えるためだけに読む。
+    const meal = (rations && rations.meal) || null;
+    let mealTarget = null;       // 食事強化を受けた戦闘ユニット
+    let mealSource = null;       // 料理人の戦闘ユニット
+    let mealFirstHitSeen = false;   // 対象者の「最初の有効打」を1回だけ印にする
+    for (const u of playerUnits) {
+      u.starved = u.starved || !!(rations && rations.shortage > 0 && !u.tags.includes("undead"));
+      u.feast = !!(rations && rations.feastUid != null && rations.consumed >= 4);
+    }
     if (rations) {
       const rationEvent = emitCausal("resource_consume", {
         resource: "food", amount: rations.consumed, need: rations.need, shortage: rations.shortage,
@@ -248,9 +270,29 @@ const Battle = {
           text: `　${u.name}の【大食漢】 腹いっぱいで与ダメージ上昇`, cls: "trait" }, rationEvent);
       }
       const cook = byUid(rations.cookUid);
+      mealSource = cook || null;
+      mealTarget = meal && meal.targetUid != null ? byUid(meal.targetUid) : null;
       if (cook && rations.consumed > 0) {
-        emitCausal("trait_trigger", { sourceId: cook.id, traitId: "demon_cook", name: "魔界料理人", emphasis: 1,
-          text: `　${cook.name}の【魔界料理人】 食事を火力へ変換`, cls: "trait" }, rationEvent);
+        // 既存イベントに起点・対象・効果量を書き添える（新しいイベントは足さない）。
+        // 伝票が無い古い呼び出しでは、従来どおり対象も量も持たない1行のまま。
+        const targetName = mealTarget ? mealTarget.name : null;
+        const percent = meal ? meal.boostPercent : 0;
+        emitCausal("trait_trigger", {
+          sourceId: cook.id, traitId: "demon_cook", name: "魔界料理人", emphasis: 1,
+          targetId: mealTarget ? mealTarget.id : null,
+          targetName,
+          amount: meal ? meal.boost : 0,
+          amountPercent: percent,
+          consumed: rations.consumed,
+          kitchenMult: meal ? meal.kitchenMult : 1,
+          // 食欲が同値で並んだ者。「なぜこの人が受けたか」を表示側が説明できる
+          tiedIds: meal ? (meal.tiedUids || []).map(uid => (byUid(uid) || {}).id).filter(Boolean) : [],
+          targetEatsNothing: meal ? !!meal.targetEatsNothing : false,
+          text: targetName
+            ? `　${cook.name}の【魔界料理人】 ${targetName}へ食事を火力へ変換（与ダメージ+${percent}%）`
+            : `　${cook.name}の【魔界料理人】 食事を火力へ変換`,
+          cls: "trait"
+        }, rationEvent);
       }
       const hunger = byUid(rations.hungerUid);
       if (hunger && rations.emptied) {
@@ -284,6 +326,14 @@ const Battle = {
     // ダメージ適用。kind で attack / splash を出し分ける。
     const applyDamage = (attacker, target, amount, kind, opts) => {
       opts = opts || {};
+      // CHAINの深さを全ダメージ系統の共通報酬にする。
+      // 3段目は小さな成功、4段目から明確な爆発。強欲だけでなく宴やOVERKILL伝播にも効く。
+      const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
+      if (attacker.side === "player" && chainDepth >= 3) {
+        const chainMult = chainDepth === 3 ? 1.25 : Math.min(2.5, 1.75 + (chainDepth - 4) * .25);
+        amount *= chainMult;
+        opts.traits = [...(opts.traits || []), `CHAIN ${chainDepth} ×${chainMult.toFixed(2)}`];
+      }
       let dmg = Math.max(1, Math.round(amount * target.mods.takenMult));
       for (const tid of target.traits) {
         const tr = TRAITS[tid];
@@ -321,6 +371,28 @@ const Battle = {
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
+      // 食事強化を受けた者の「最初の有効打」。新しいイベントは足さず、
+      // すでに出したダメージイベントへ印を書き添えるだけ（順序・回数・深度は動かない）。
+      //
+      // 印を付けるのは **食事強化が実際に乗った、敵への一撃**だけ。
+      // 仲間割れ（incident）の同士討ちは unit.atk * 0.7 の生ダメージで、
+      // mods.dmgMult を通らない＝食事強化が反映されていない。味方を殴った回を
+      // 「料理の着地」と呼ぶと、戦果が嘘になる。対象外の回では印の権利も消費しない
+      // （フラグは下の if の中でしか立てない）ので、後の本当の初撃にちゃんと付く。
+      const mealEligible = target.side === "enemy" && !opts.incident;
+      if (mealEligible && mealTarget && attacker === mealTarget && dmg > 0
+        && !mealFirstHitSeen && meal && meal.boost > 0) {
+        mealFirstHitSeen = true;
+        damageEvent.mealBoost = {
+          first: true,
+          sourceId: mealSource ? mealSource.id : null,
+          sourceName: mealSource ? mealSource.name : null,
+          targetId: mealTarget.id,
+          targetName: mealTarget.name,
+          amount: meal.boost,
+          amountPercent: meal.boostPercent
+        };
+      }
       let overkillEvent = null;
       const excessDamage = dead ? Math.max(0, dmg - hpBefore) : 0;
       const excessPercent = excessDamage > 0 ? Math.round(excessDamage / target.maxHp * 100) : 0;
@@ -386,9 +458,10 @@ const Battle = {
       return { dmg, event: damageEvent, deathEvent, overkillEvent };
     };
 
-    const tryIncident = (unit, allies) => {
+    const tryIncident = (unit, allies, actionOpts) => {
       if (unit.side !== "player" || unit.flags.incidentUsed) return false;
-      const candidates = BATTLE_HAPPENINGS.filter(h => h.check(unit));
+      // 既存3件は通常行動だけ。追撃中は明示した連鎖ハプニングだけを判定。
+      const candidates = BATTLE_HAPPENINGS.filter(h => (!actionOpts.isExtra || h.duringChain) && h.check(unit));
       const generalPresent = allies.some(a => a.alive && a.rankId === "general");
       for (const happening of candidates) {
         const chance = happening.chance * (generalPresent ? 0.35 : 1);
@@ -400,11 +473,11 @@ const Battle = {
           target = U.pick(victims);
         }
         unit.flags.incidentUsed = true;
-        emit("incident", {
+        emitCausal("incident", {
           id: happening.id, name: happening.name, unitId: unit.id,
           targetId: target && target.id, emphasis: 3,
           text: happening.text(unit, target), cls: "incident"
-        });
+        }, actionOpts.parentEvent || null);
         if (target) applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true, parentEvent: timeline[timeline.length - 1] });
         return true;
       }
@@ -415,7 +488,8 @@ const Battle = {
       actionOpts = actionOpts || {};
       const living = enemies.filter(u => u.alive);
       if (living.length === 0) return;
-      if (!actionOpts.isExtra && tryIncident(unit, allies)) return;
+      unit.chainDepth = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;
+      if (tryIncident(unit, allies, actionOpts)) return;
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = U.chance(0.6) ? living[0] : U.pick(living);
 
@@ -432,6 +506,11 @@ const Battle = {
         ctx.mult *= 1.4;
         ctx.notes.push("恐喝帳簿");
         ledgerBoost = null;
+      }
+      if (unit.side === "player" && lootPairBoost) {
+        ctx.mult *= 1.25;
+        ctx.notes.push("追い剥ぎコンビ");
+        lootPairBoost = null;
       }
       // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
       if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
@@ -639,6 +718,9 @@ const Battle = {
       : "長期戦の末、判定負け……魔王軍は敗走した。";
     emit("result", {
       victory, reversal: this.detectReversal(timeline, victory), emphasis: 3,
+      // permanent / reversal / firstDiscovery と同じ「重要度の印」。勝敗確定後に導出して付け、
+      // 描画側だけが読む（戦闘計算には一切使わない）。判定決着と全滅を見分けるために要る。
+      wipe: wiped(playerUnits) ? "player" : wiped(enemyUnits) ? "enemy" : null,
       text: resultText, cls: victory ? "result-win" : "result-lose"
     });
 
@@ -659,8 +741,30 @@ const Battle = {
       overkillSummary: this.summarizeOverkill(timeline),
       summonCount: timeline.filter(e => e.type === "summon").length,
       facilitySummary: this.summarizeFacility(timeline),
+      mealSummary: this.summarizeMeal(timeline),
       deathChains: this.summarizeDeathChains(timeline),
       resourceChanges: this.summarizeResourceChanges(timeline)
+    };
+  },
+
+  // 食事強化が「誰から誰へ、どれだけ」効き、その人の最初の有効打がどれだったか。
+  // 戦闘中に別状態を持ち回らず、確定したタイムラインから導出するだけ。
+  // 伝票（rations.meal）が無い戦闘・古い戦果では null を返す。表示側はその表示だけを省く。
+  summarizeMeal(timeline) {
+    const events = timeline || [];
+    const cook = events.find(e => e.type === "trait_trigger" && e.traitId === "demon_cook");
+    if (!cook || !cook.targetId) return null;
+    const hit = events.find(e => e.mealBoost && e.mealBoost.first);
+    return {
+      sourceId: cook.sourceId, targetId: cook.targetId, targetName: cook.targetName || null,
+      amount: cook.amount || 0, amountPercent: cook.amountPercent || 0,
+      consumed: cook.consumed || 0, kitchenMult: cook.kitchenMult || 1,
+      tiedIds: cook.tiedIds || [], targetEatsNothing: !!cook.targetEatsNothing,
+      triggerEventId: cook.eventId,
+      // 強化された者の最初の有効打。無ければ null（一度も攻撃せずに終わった）
+      firstHit: hit ? {
+        eventId: hit.eventId, type: hit.type, toId: hit.toId, dmg: hit.dmg, dead: !!hit.dead
+      } : null
     };
   },
 

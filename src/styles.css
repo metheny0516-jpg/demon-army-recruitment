@@ -772,6 +772,46 @@ button.wide { width: 100%; }
 }
 .scene-intro.show { animation: finalIntro 1.4s ease-out; }
 
+/* ── 戦闘中のモルモの一言 ── */
+/* 全画面報告と違い、戦場を覆わない。読み飛ばしても進行が止まらないのが条件。 */
+.mormo-aside {
+  position: absolute;
+  left: 10px; bottom: 10px;
+  z-index: 9;
+  display: flex; align-items: flex-end; gap: 8px;
+  max-width: min(78%, 460px);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity .28s ease-out, transform .28s ease-out;
+}
+.mormo-aside.show { opacity: 1; transform: none; }
+.mormo-aside-portrait {
+  width: 62px; height: 62px; flex: 0 0 auto;
+  border-radius: 50%; object-fit: cover;
+  border: 2px solid #c79a52;
+  background: #241a24;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .55);
+}
+.mormo-aside-bubble {
+  margin: 0; padding: 8px 12px;
+  border: 1px solid #7c6136; border-radius: 12px 12px 12px 2px;
+  background: rgba(24, 17, 28, .93);
+  color: #f6e6c2; font-size: 13px; line-height: 1.5;
+}
+.mormo-aside-bubble b {
+  display: block;
+  color: #f4ce80; font-size: 10px; letter-spacing: .1em; margin-bottom: 2px;
+}
+@media (max-width: 700px) {
+  .mormo-aside { left: 6px; bottom: 6px; max-width: 88%; gap: 6px; }
+  .mormo-aside-portrait { width: 44px; height: 44px; }
+  .mormo-aside-bubble { font-size: 12px; padding: 6px 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mormo-aside { transition: none; }
+}
+
 /* ── シナジー カットイン ── */
 .cutin {
   position: absolute;
@@ -999,6 +1039,54 @@ button.wide { width: 100%; }
   font-size: 14px;
   margin-top: 6px;
 }
+/* 本文は「地の文」と「台詞」に分かれたブロックの並び。
+   改行そのものはブロック分割で表現するので、外側の pre-wrap は切る
+   （切らないとタグ間の改行がそのまま空行になる）。 */
+.event-text { white-space: normal; display: flex; flex-direction: column; gap: 8px; }
+.event-line { margin: 0; white-space: pre-wrap; }
+.event-say { display: flex; align-items: flex-start; gap: 9px; margin: 2px 0; }
+.event-say .avatar, .event-say .mormo-face {
+  flex: 0 0 52px; width: 52px; height: 52px; border-radius: 50%; overflow: hidden;
+  display: grid; place-items: center; background: #3a2f57; border: 1px solid rgba(100, 55, 67, .4);
+}
+.event-say .mormo-face img { width: 100%; height: 100%; object-fit: cover; }
+.event-say .event-expression img {
+  width: 100%; height: 100%; object-fit: contain; object-position: center bottom;
+  filter: drop-shadow(0 2px 2px rgba(35, 20, 30, .28));
+}
+.event-bubble {
+  position: relative;
+  margin: 0; padding: 8px 13px;
+  border: 1px solid rgba(100, 55, 67, .38);
+  border-radius: 3px 14px 14px 14px;
+  background: rgba(255, 252, 244, .82);
+  white-space: pre-wrap;
+}
+.event-bubble b {
+  display: block;
+  color: #7d5164; font-size: 11px; font-weight: 800; letter-spacing: .12em;
+  font-family: system-ui, sans-serif;
+}
+.event-say.mormo .event-bubble { background: rgba(247, 240, 255, .88); border-color: rgba(96, 70, 122, .4); }
+.event-say.mormo .event-bubble b { color: #6b4d8d; }
+/* 登場人物の並び。誰の話かと、いまの忠誠を見てから選ばせる。 */
+.event-cast { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 4px; }
+.event-cast-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 11px 5px 5px;
+  border: 1px solid rgba(100, 55, 67, .3);
+  border-radius: 999px;
+  background: rgba(255, 252, 244, .7);
+}
+.event-cast-card .avatar { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%; }
+.event-cast-card b { display: block; font-size: 13px; }
+.event-cast-card small { color: #7d5164; font-size: 11px; }
+@media (max-width: 700px) {
+  .event-say .avatar, .event-say .mormo-face { width: 42px; height: 42px; flex-basis: 42px; }
+  .event-cast-card .avatar { width: 32px; height: 32px; flex-basis: 32px; }
+  .event-cast-card { padding: 4px 9px 4px 4px; }
+}
+
 .event-options { display: flex; flex-direction: column; gap: 8px; }
 .event-choice { text-align: left; }
 
@@ -1245,6 +1333,11 @@ button.wide { width: 100%; }
 .applicant-links > div { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
 .applicant-links i { color: #9ef0b8; font-style: normal; }
 .applicant-links small { color: var(--muted); }
+.applicant-links .applicant-link-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; margin-top: 3px; }
+.applicant-link-row span small { display: block; font-size: 9px; line-height: 1; }
+.applicant-link-row strong { flex-basis: 100%; color: var(--gold); font-size: 10px; }
+.applicant-links details { margin-top: 5px; }
+.applicant-links summary { cursor: pointer; color: var(--muted); }
 
 /* ── 2026-09 UI再設計・第一段階 ─────────────────────────
    ブラウザのカード一覧ではなく「魔王城の執務卓」を共通舞台にする。
@@ -2421,6 +2514,15 @@ button.primary::first-letter { color: var(--gold); }
 .record-highlights span { font-size: 11px; color: var(--muted); }
 
 /* 今回の大暴れ。主要記録は2つだけ、下に代表CHAIN経路を一本だけ出す */
+/* 戦果の1行サマリ（CHAIN・シナジー・戦意）。数字の羅列より先に読ませたいので
+   記録タイルの上に置き、金色でひとまとまりに見せる */
+.breakthrough-panel .breakthrough-headline {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px;
+  font-size: 14px; font-weight: bold; color: var(--gold);
+  margin-bottom: 8px; line-height: 1.5;
+}
+.breakthrough-panel .breakthrough-headline .sep { color: var(--muted); font-weight: normal; }
+
 .breakthrough-panel .breakthrough-records {
   display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px;
 }
@@ -2439,6 +2541,14 @@ button.primary::first-letter { color: var(--gold); }
 .facility-panel .death-chain b { font-size: 12px; }
 .facility-panel .chain-step.permanent { color: var(--red); }
 .fallen-panel { border-left: 4px solid #6a2020; }
+
+/* ツケ（後で祟る選択の伝票）。期限が近いほど手前に来るので、上から読めばよい */
+.debt-panel { border-left: 4px solid #6a5320; }
+.debt-row { display: flex; gap: 8px; align-items: baseline; font-size: 12px; margin: 3px 0; }
+.debt-row .debt-due {
+  flex: 0 0 auto; font-weight: bold; color: var(--gold);
+  background: #1b1526; border: 1px solid #3a2f52; border-radius: 10px; padding: 1px 8px;
+}
 
 /* 部門適性チップ。応募者カードでも軍団カードでも同じ見え方にする */
 .aptitudes { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 2px; align-items: center; }
@@ -2735,7 +2845,66 @@ button.primary::first-letter { color: var(--gold); }
   display: flex; flex-direction: column; justify-content: center; gap: 4px;
 }
 .chain-origin { color: #d5ba87; font-size: 12px; }
+
+/* 戦闘開始の予告帯。何が起きるかは伏せ、いくつ起きるかだけ先に見せる。
+   発火するたびに点が灯り、予告が回収されていくのが分かる。 */
+.chain-forecast {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px;
+  font-size: 12px; color: #e2d2ae;
+}
+.chain-forecast i { font-style: normal; }
+.chain-forecast[hidden] { display: none; }
+.chain-forecast .cf-label {
+  font-size: 10px; font-weight: 900; letter-spacing: .12em; padding: 1px 7px;
+  border-radius: 999px; color: #1b1410; background: #d5ba87; white-space: nowrap;
+}
+.chain-forecast .cf-count { font-size: 15px; font-weight: 900; color: #ffe08a; }
+.chain-forecast .cf-count small { font-size: 11px; font-weight: 700; color: #b7a583; }
+.chain-forecast .cf-pips { display: inline-flex; gap: 3px; }
+.chain-forecast .cf-pips b {
+  width: 8px; height: 8px; border-radius: 50%;
+  border: 1px solid #8b7a5c; background: transparent; transition: background .25s ease;
+}
+.chain-forecast .cf-pips b.lit { background: #ffc95a; border-color: #ffc95a; box-shadow: 0 0 8px rgba(255,201,90,.7); }
+.chain-forecast .cf-note { color: #a9977a; font-size: 11px; }
+.chain-forecast[data-state="done"] .cf-label { background: #ffc95a; }
+.chain-forecast[data-state="done"] .cf-note { color: #ffd98a; }
+@keyframes forecastAnnounce {
+  0% { opacity: 0; transform: translateY(-4px); }
+  100% { opacity: 1; transform: none; }
+}
+.chain-forecast.announce { animation: forecastAnnounce .5s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .chain-forecast.announce { animation: none; }
+  .chain-forecast .cf-pips b { transition: none; }
+}
 .chain-story b { color: #fff0c5; font-size: 14px; overflow-wrap: anywhere; }
+
+/* 連鎖の1行は「誰が・何で・誰に・いくら」の固定語順。枠の見た目も固定し、
+   段の深さだけを色で示す。深くなるほど熱くなるので、色を見ただけで段が読める。 */
+#chain-reason { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 6px; font-style: normal; }
+#chain-reason i { font-style: normal; }
+#chain-reason .cs-step {
+  font-size: 11px; font-weight: 900; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px;
+  color: #1b1410; background: var(--chain-depth, #d5ba87); white-space: nowrap;
+}
+#chain-reason .cs-who { color: #fff; font-weight: 800; }
+#chain-reason .cs-by { color: #e2d2ae; font-weight: 500; }
+#chain-reason .cs-to { color: #ffd9c8; font-weight: 700; }
+#chain-reason .cs-amt { color: var(--chain-depth, #ffe6ae); font-weight: 900; }
+#chain-reason .cs-sep { color: #8b7a5c; }
+#chain-reason[data-depth="1"] { --chain-depth: #cfe3ff; }
+#chain-reason[data-depth="2"] { --chain-depth: #9fe6c8; }
+#chain-reason[data-depth="3"] { --chain-depth: #ffe08a; }
+#chain-reason[data-depth="4"] { --chain-depth: #ffb45c; }
+#chain-reason[data-depth="5"] { --chain-depth: #ff8a5c; }
+#chain-reason[data-depth="6"] { --chain-depth: #ff6a6a; }
+.chain-history li[data-depth="1"] b { color: #cfe3ff; }
+.chain-history li[data-depth="2"] b { color: #9fe6c8; }
+.chain-history li[data-depth="3"] b { color: #ffe08a; }
+.chain-history li[data-depth="4"] b { color: #ffb45c; }
+.chain-history li[data-depth="5"] b { color: #ff8a5c; }
+.chain-history li[data-depth="6"] b { color: #ff6a6a; }
 .chain-bolt.relay { background: #ffe99c; box-shadow: 0 0 14px #ffd46c; height: 4px; }
 .scene.fx-loot .scene-fx {
   background: radial-gradient(ellipse at 25% 65%, rgba(255,201,80,.32), transparent 65%);
@@ -2768,3 +2937,10 @@ button.primary::first-letter { color: var(--gold); }
   .chain-history ol { max-height: 190px; }
   .scene-result small { letter-spacing: 0; }
 }
+
+/* ── ダメージ数字は戦場のどの段でも読める大きさに ──
+   位置の修正は battlefield.css（.bu-pop）。ここでは数字を一回り大きくし、
+   隣の立ち絵に隠れないよう前面へ出す。 */
+.game-scene-battle .bu-pop { z-index: 8; }
+.game-scene-battle .fnum { font-size: 17px; }
+.game-scene-battle .fnum.big { font-size: 24px; }

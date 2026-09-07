@@ -22,3 +22,19 @@ const PORTRAITS = [
   "necromancer",
   "ogre",
 ];
+
+// イベント吹き出し専用の全身表情差分。存在する差分だけを宣言し、
+// 未制作・読込失敗時は通常の履歴書絵（さらに失敗すれば絵文字）へ戻す。
+const EVENT_EXPRESSIONS = {
+  goblin: ["surprise", "smirk", "tears"],
+  slime: ["surprise", "smirk", "tears"],
+  king_slime: ["surprise", "smirk", "tears"],
+  kobold: ["surprise", "smirk", "tears"],
+  orc: ["surprise", "smirk", "tears"],
+  skeleton: ["surprise", "smirk", "tears"],
+  zombie: ["surprise", "smirk", "tears"],
+  imp: ["surprise", "smirk", "tears"],
+  mage: ["surprise", "smirk", "tears"],
+  necromancer: ["surprise", "smirk", "tears"],
+  ogre: ["surprise", "smirk", "tears"],
+};

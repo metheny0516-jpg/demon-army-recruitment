@@ -104,6 +104,33 @@ const MormoScene = {
     } else this.close();
   },
 
+  // 戦闘を止めない「野次」。全画面の show() と違い、操作を奪わず自動で消える。
+  // 戦闘中に全画面報告を挟むと、せっかく読ませている連鎖の流れが切れる。
+  // 呼び出し側（BattleScene）が1戦闘1回に制限する責任を持つ。
+  aside(options = {}) {
+    if (typeof document === "undefined") return null;
+    const host = options.host || document.getElementById("scene");
+    if (!host) return null;
+    this.clearAside(host);
+    const expression = this.EXPRESSIONS.includes(options.expression) ? options.expression : "report";
+    const box = document.createElement("div");
+    box.className = `mormo-aside mormo-aside-${expression}`;
+    box.innerHTML = `<img class="mormo-aside-portrait" src="assets/mormo/${expression}.webp" alt="宰相モルモ">
+      <p class="mormo-aside-bubble"><b>モルモ</b>${U.esc(String(options.text || ""))}</p>`;
+    const portrait = box.querySelector(".mormo-aside-portrait");
+    if (portrait) portrait.onerror = () => portrait.remove();
+    host.appendChild(box);
+    void box.offsetWidth;
+    box.classList.add("show");
+    return box;
+  },
+
+  clearAside(host) {
+    const scope = host || (typeof document !== "undefined" && document);
+    if (!scope) return;
+    scope.querySelectorAll(".mormo-aside").forEach(el => el.remove());
+  },
+
   close() {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;

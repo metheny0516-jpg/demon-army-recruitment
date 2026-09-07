@@ -99,22 +99,84 @@ assert(JSON.stringify(untouched) === snapshot, '特性の測定も編成を書�
 // ── 8. 採用前に既存軍団との発火経路を読める ──────────────────
 const looter = { uid: 201, name: '盗賊', race: 'ゴブリン', traits: ['pickpocket'], tags: [] };
 const greedyApplicant = { uid: 202, name: '欲張り', race: 'インプ', traits: ['greedy'], tags: [] };
-const greedLinks = Synergy.connections(greedyApplicant, [looter]);
-assert(greedLinks.some(link => link.from === '追い剥ぎ' && link.signal === '金貨獲得' && link.to === '強欲'),
+const greedLinks = Synergy.connections(greedyApplicant, [looter], [], { activeUids: [looter.uid], maxDeploy: 5 });
+assert(greedLinks.some(link => link.origin.ability === '追い剥ぎ' && link.signal === '金貨獲得' && link.responder.ability === '強欲'),
   '既存の追い剥ぎ → 金貨獲得 → 応募者の強欲を採用前に示す');
-const reverseLinks = Synergy.connections(looter, [greedyApplicant]);
-assert(reverseLinks.some(link => link.from === '追い剥ぎ' && link.signal === '金貨獲得' && link.to === '強欲'),
+assert(greedLinks[0].needs.join('・') === '採用・出撃', '接続には採用と出撃の必要操作を明示する');
+const fullLinks = Synergy.connections(greedyApplicant, [looter, goblin(2), goblin(3), ogre(1), ogre(2)], [],
+  { activeUids: [looter.uid, 2, 3, 101, 102], maxDeploy: 5 });
+assert(fullLinks.some(link => link.needs.includes('入れ替え')), '出撃枠が満員なら入れ替え条件を示す');
+const reverseLinks = Synergy.connections(looter, [greedyApplicant], [], { activeUids: [greedyApplicant.uid], maxDeploy: 5 });
+assert(reverseLinks.some(link => link.origin.ability === '追い剥ぎ' && link.signal === '金貨獲得' && link.responder.ability === '強欲'),
   '応募者が起点を作り、既存軍団が反応する逆向きの接続も示す');
 const necro = { uid: 203, name: 'ネクロ', race: '死霊術師', traits: ['necromancy', 'gravekeeper'], tags: ['caster'] };
 const harvester = { uid: 204, name: '骨', race: '骸骨兵', traits: ['soul_harvest'], tags: ['undead'] };
-const deathLinks = Synergy.connections(harvester, [necro]);
-assert(deathLinks.some(link => link.signal === '蘇生' && link.from === '死霊術' && link.to === '魂の徴収'),
+const deathLinks = Synergy.connections(harvester, [necro], [], { activeUids: [necro.uid], maxDeploy: 5 });
+assert(deathLinks.some(link => link.signal === '蘇生' && link.origin.ability === '死霊術' && link.responder.ability === '魂の徴収'),
   '死霊術 → 蘇生 → 魂の徴収の異種族接続を示す');
 assert(Synergy.connections({ traits: ['coward'] }, [looter]).length === 0,
   '直接つながらない能力を無理にシナジー扱いしない');
 const ledger = { id: 'extortion_ledger', name: '恐喝帳簿', links: { reacts: ['金貨獲得'], emits: ['攻撃強化'] } };
-const facilityLinks = Synergy.connections(looter, [], [ledger]);
-assert(facilityLinks.some(link => link.from === '追い剥ぎ' && link.signal === '金貨獲得' && link.to === '恐喝帳簿'),
+const facilityLinks = Synergy.connections(looter, [], [ledger], {
+  activeUids: [], maxDeploy: 5, facilityNeeds: { extortion_ledger: ['会計職を出撃'] }
+});
+assert(facilityLinks.some(link => link.origin.ability === '追い剥ぎ' && link.signal === '金貨獲得'
+  && link.responder.name === '恐喝帳簿' && link.responder.type === 'facility'),
   '稼働施設を軍団側の要素として履歴書の接続へ含める');
+assert(facilityLinks.some(link => link.needs.includes('会計職を出撃')),
+  '施設の発火に必要な実配置も接続条件へ含める');
+
+const fourthGoblin = goblin(4);
+const speciesLinks = Synergy.connections(fourthGoblin, three, [], { activeUids: three.map(u => u.uid), maxDeploy: 5 });
+assert(speciesLinks.some(link => link.responder.name === '《ゴブリン軍団》' && link.needs.join('・') === '採用'),
+  'linksに無い種族条件も実際のシナジーcheckで確認する');
+
+const cook = { uid: 301, name: '料理人', race: 'インプ', traits: ['demon_cook'], tags: ['caster'] };
+const eater = { uid: 302, name: '大食漢', race: 'オーガ', traits: ['big_eater'], tags: [], salary: 7 };
+const noFoodLinks = Synergy.connections(cook, [eater], [], {
+  activeUids: [eater.uid], maxDeploy: 5, foodAvailable: false, appetiteByUid: { 301: 1, 302: 3 }
+});
+assert(!noFoodLinks.some(link => link.signal === '食事強化'), '食料が無いとき食事強化の成立を断定しない');
+const mealLinks = Synergy.connections(cook, [eater], [], {
+  activeUids: [eater.uid], maxDeploy: 5, foodAvailable: true, appetiteByUid: { 301: 1, 302: 3 }
+});
+assert(mealLinks.some(link => link.origin.name === '料理人' && link.responder.name === '大食漢'),
+  '食料と実際の食欲最大対象を確認して料理人の接続を示す');
+
+// ── 9. 食事予告は本番の activeUids 順・最初の料理人・同値規則に従う ──
+const cookA = { uid: 401, name: '既存料理人', race: 'ゴブリン', traits: ['demon_cook'], tags: [], salary: 2 };
+const tiedA = { uid: 402, name: '同値・前', race: 'オーガ', traits: [], tags: [], salary: 7 };
+const tiedB = { uid: 403, name: '同値・後', race: 'オーガ', traits: [], tags: [], salary: 7 };
+const irrelevant = { uid: 404, name: '応募兵', race: 'オーク', traits: ['brute'], tags: [], salary: 5 };
+const ordered = Synergy.connections(irrelevant, [tiedB, cookA, tiedA], [], {
+  activeUids: [401, 402, 403], maxDeploy: 5, foodAvailable: true,
+  appetiteByUid: { 401: 1, 402: 3, 403: 3, 404: 1 }
+});
+assert(!ordered.some(link => link.signal === '食事強化'),
+  '応募者が関与せず採用前後で変わらない既存食事接続を表示しない');
+
+const tiedApplicant = { ...tiedB, uid: 405, name: '同値応募者' };
+const tieOrder = Synergy.connections(tiedApplicant, [tiedB, cookA, tiedA], [], {
+  activeUids: [401, 402, 403], maxDeploy: 5, foodAvailable: true,
+  appetiteByUid: { 401: 1, 402: 3, 403: 3, 405: 3 }
+});
+assert(!tieOrder.some(link => link.signal === '食事強化'),
+  '食欲同値の応募者は末尾出撃なら既存の先頭対象を奪わない');
+
+const secondCook = { uid: 406, name: '応募料理人', race: 'インプ', traits: ['demon_cook'], tags: [], salary: 3 };
+const cookOrder = Synergy.connections(secondCook, [cookA, eater], [], {
+  activeUids: [401, 302], maxDeploy: 5, foodAvailable: true,
+  appetiteByUid: { 401: 1, 302: 3, 406: 1 }
+});
+assert(!cookOrder.some(link => link.signal === '食事強化'),
+  '応募料理人を無条件で出撃順先頭の既存料理人より優先しない');
+
+const fullMeal = Synergy.connections(secondCook, [cookA, eater], [], {
+  activeUids: [401, 302], maxDeploy: 2, foodAvailable: true,
+  appetiteByUid: { 401: 1, 302: 3, 406: 1 }
+});
+const uncertainMeal = fullMeal.find(link => link.responder.type === 'pending');
+assert(uncertainMeal && uncertainMeal.needs.includes('入れ替え相手と配置を確定'),
+  '満員時に入れ替え相手で料理人・対象が変わるなら成立や対象を断定しない');
 
 console.log('シナジー予告テスト完了');
