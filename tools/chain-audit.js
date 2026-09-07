@@ -49,6 +49,9 @@ const FILES = ['src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/
   'src/core/storage.js', 'src/core/kpi.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/run.js'];
 
 function patchBattle(src) {
+  // git の checkout 設定で battle.js が CRLF になっても、監査用の文字列置換を同じ契約で行う。
+  // Linux/LF だけで通る監査にしない。
+  src = src.replace(/\r\n/g, '\n');
   const swap = (from, to) => {
     if (!src.includes(from)) throw new Error('chain-audit: battle.js の差し替え箇所が見つからない:\n' + from.slice(0, 90));
     src = src.replace(from, to);
