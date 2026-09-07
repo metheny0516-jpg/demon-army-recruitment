@@ -354,6 +354,7 @@ const BattleScene = {
     for (const u of [...start.enemy, ...start.player]) this.registerUnit(u);
     this.updateSpeedBtn();
 
+    this.prepareChainView(timeline);
     this.pacing = this.plan(timeline);
     this.eventById = new Map(timeline.filter(e => e.eventId).map(e => [e.eventId, e]));
     this.activeBeat = null;
@@ -372,6 +373,64 @@ const BattleScene = {
     this.timeline = timeline;
     this.index = 0;
     this.step();
+  },
+
+  // V2ランだけ、正規化APIから再生用のevent→step対応表を一度作る。
+  // raw因果グラフは演出・戦闘用に保持し、V1ランでは既存表示へ一切介入しない。
+  prepareChainView(timeline) {
+    this.chainViewVersion = (typeof Chain !== "undefined" && typeof Game !== "undefined" && Game.state)
+      ? Chain.versionOf(Game.state) : 1;
+    this.chainEventViews = new Map();
+    this.chainPaths = new Map();
+    if (this.chainViewVersion < 2 || typeof Chain === "undefined") return;
+    const summary = Chain.summarize(timeline || []);
+    const byId = new Map(summary.events.map(e => [e.eventId, e]));
+    for (const event of summary.events) {
+      this.chainEventViews.set(event.eventId, event);
+      if (!event.counted) continue;
+      const path = summary.pathTo(e => e.eventId === event.eventId);
+      this.chainPaths.set(event.eventId, path ? path.steps : []);
+    }
+    this.normalizedChainSummary = summary;
+  },
+
+  chainEventView(ev) {
+    if (this.chainViewVersion < 2 || !ev || !this.chainEventViews) return null;
+    return this.chainEventViews.get(ev.eventId) || null;
+  },
+
+  chainStepView(ev) {
+    const info = this.chainEventView(ev);
+    if (!info || !info.counted || !this.chainPaths) return null;
+    const path = this.chainPaths.get(ev.eventId) || [];
+    return path[path.length - 1] || null;
+  },
+
+  chainDisplayDepth(ev) {
+    if (this.chainViewVersion < 2) return (ev && ev.chainDepth) || 0;
+    const info = this.chainEventView(ev);
+    return info && info.counted ? info.depth : 0;
+  },
+
+  chainStepLabel(step) {
+    const effect = step && step.effect || {};
+    const ability = (step.declaredBy && step.declaredBy.abilityName) || step.abilityName || "";
+    const unit = effect.resource === "gold" ? "G"
+      : effect.resource === "soul" ? "魂" : (effect.resource || "");
+    let action;
+    if (effect.type === "attack" || effect.type === "splash") action = effect.label || "攻撃";
+    else if (effect.type === "resource_gain") action = `${effect.label || ability || "獲得"}${effect.amount != null ? ` +${effect.amount}${unit}` : ""}`;
+    else if (effect.type === "resource_forfeit") action = `${effect.label || ability || "没収"}${effect.amount != null ? ` -${effect.amount}${unit}` : ""}`;
+    else if (effect.type === "resource_consume") action = `${effect.label || ability || "消費"}${effect.amount != null ? ` ${effect.amount}${unit}` : ""}`;
+    else if (effect.type === "summon") action = `${effect.summonedName || effect.targetName || "援軍"}を召喚`;
+    else if (effect.type === "revive") action = `${effect.targetName || "味方"}を蘇生`;
+    else if (effect.type === "heal") action = `${effect.targetName || "味方"}を回復`;
+    else if (effect.type === "momentum") action = "戦意上昇";
+    else if (effect.type === "survive") action = `${effect.targetName || "味方"}が生存`;
+    else if (effect.type === "incident") action = effect.label || ability || "行動中止";
+    else action = effect.label || ability || effect.type || "反応";
+    return step.declaredBy && ability ? `《${ability}》による${action}`
+      : (ability && !action.includes(ability) ? `《${ability}》 ${action}` : action);
   },
 
   step() {
@@ -738,7 +797,45 @@ const BattleScene = {
     reason.innerHTML = this.chainLineHtml(depth, slots);
   },
 
+  tellChainV2(ev) {
+    const info = this.chainEventView(ev);
+    const step = this.chainStepView(ev);
+    if (!info || !step) return; // 宣言・補足だけでは表示段を増やさない
+    const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
+    if (!origin || !reason) return;
+    const path = this.chainPaths.get(ev.eventId) || [];
+    const first = path[0];
+    origin.textContent = first && first.actorName ? `起点：${first.actorName}` : "能力がつながった";
+    const effect = step.effect || {};
+    const unit = effect.resource === "gold" ? "G"
+      : effect.resource === "soul" ? "魂" : (effect.resource || "");
+    const slots = {
+      who: step.actorName || (step.declaredBy && step.declaredBy.actorName) || "",
+      by: this.chainStepLabel(step),
+      to: effect.targetName ? `${effect.targetName}へ` : "",
+      amount: effect.dmg != null ? `${effect.dmg}ダメージ`
+        : effect.amount != null ? `${effect.amount >= 0 ? "+" : ""}${effect.amount}${unit}` : ""
+    };
+    this.showChainLine(reason, info.depth, slots);
+
+    // 連鎖が2段目へ到達した時点で、起点を含む経路を一度ずつ履歴へ加える。
+    if (info.depth < 2) return;
+    this.historySeen ||= new Set();
+    const list = document.getElementById("chain-history-list");
+    for (const item of path) {
+      if (!list || !item.stepId || this.historySeen.has(item.stepId)) continue;
+      this.historySeen.add(item.stepId);
+      const row = document.createElement("li");
+      row.dataset.depth = this.chainDepthTier(item.depth);
+      row.innerHTML = `<b>第${item.depth || 1}段</b> ${U.esc(this.chainStepLabel(item))}`;
+      list.appendChild(row);
+    }
+    const count = document.getElementById("chain-history-count");
+    if (count) count.textContent = `（${this.historySeen.size}件）`;
+  },
+
   tellChain(ev, animate = true) {
+    if (this.chainViewVersion >= 2) return this.tellChainV2(ev);
     if (ev.chainId && !ev.parentEventId && ["attack", "splash"].includes(ev.type)) {
       const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
       const from = this.units[ev.fromId], to = this.units[ev.toId];
@@ -1151,7 +1248,9 @@ const BattleScene = {
   },
 
   chainFlare(ev) {
-    const depth = (ev && ev.chainDepth) || 0;
+    const normalized = this.chainEventView(ev);
+    if (this.chainViewVersion >= 2 && (!normalized || !normalized.counted)) return;
+    const depth = this.chainDisplayDepth(ev);
     const flare = document.getElementById("chain-flare");
     if (!flare) return;
     // 連鎖でない出来事が挟まったら、いま伸びている鎖はそこで終わり。
@@ -1541,6 +1640,7 @@ const BattleScene = {
       if (ev.type === "revive" && u) this.setLife(u, false);
       if (ev.type === "momentum") this.setMorale(ev.mult, 0);
       if (ev.type === "synergy") this.countSynergy();
+      if (this.chainViewVersion >= 2) this.chainFlare(ev);
       this.tellChain(ev, false);
     }
     const result = this.timeline.find(e => e.type === "result");
