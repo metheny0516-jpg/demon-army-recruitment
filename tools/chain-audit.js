@@ -108,8 +108,26 @@ function classify(type, data) {
 //   出来事は2つだから。UIも「《能力》による○○」を効果の数だけ出せる。
 //   複製された宣言の step には sharedDeclaration: true が立ち、
 //   イベント側は stepIds に所属先を全部持つ（stepId はそのうち先頭）。
+// 行為者は「その効果を起こした人物」だけ。
+// summon.sourceUnitId は**戦没者**（遺骸を提供した側）であって召喚した人物ではない。
+// 墓地は施設が起こす効果なので人物の行為者は居ない（actor は null、施設は能力情報で表す）。
+// ここで sourceUnitId を拾うと「戦没者が自分を召喚した」ことになるので拾わない。
 function actorIdOf(event) {
-  return event.sourceId || event.unitId || event.fromId || event.sourceUnitId || null;
+  return event.sourceId || event.unitId || event.fromId || null;
+}
+
+// 召喚は登場人物が2人居る。役が違うので別々に保持する。
+//   戦没者 fallen   … 遺骸を提供して倒れた側（summon.sourceUnitId）
+//   召喚個体 summoned … 新たに戦場へ出た側（summon.unit）
+// どちらも「行為者」ではない。
+function summonRoles(raw, names) {
+  if (raw.type !== 'summon') return null;
+  const fallenId = raw.sourceUnitId || null;
+  const summonedId = (raw.unit && raw.unit.id) || null;
+  return {
+    fallenId, fallenName: fallenId ? (names.get(fallenId) || null) : null,
+    summonedId, summonedName: summonedId ? (names.get(summonedId) || (raw.unit && raw.unit.name) || null) : null
+  };
 }
 
 function abilityOf(event) {
@@ -269,12 +287,19 @@ function mergeSteps(line, byId, names, info) {
         actorId: actorIdOf(declRaw), actorName: names.get(actorIdOf(declRaw)) || null
       } : null,
       // 効果そのもののイベント（数値はここから読む）
-      effect: {
-        eventId: raw.eventId, type: raw.type,
-        dmg: raw.dmg, amount: raw.amount, resource: raw.resource, label: raw.label || null,
-        targetId: raw.toId || raw.targetId || raw.unitId || null,
-        targetName: names.get(raw.toId || raw.targetId || raw.unitId) || null
-      },
+      effect: (() => {
+        const roles = summonRoles(raw, names);
+        const targetId = (roles && roles.summonedId) || raw.toId || raw.targetId || raw.unitId || null;
+        return {
+          eventId: raw.eventId, type: raw.type,
+          dmg: raw.dmg, amount: raw.amount, resource: raw.resource, label: raw.label || null,
+          targetId,
+          targetName: (roles && roles.summonedName) || names.get(targetId) || null,
+          // 召喚だけが持つ2役。戦没者を行為者や召喚者として扱ってはいけない
+          ...(roles ? { fallenId: roles.fallenId, fallenName: roles.fallenName,
+            summonedId: roles.summonedId, summonedName: roles.summonedName } : {})
+        };
+      })(),
       sharedDeclaration: !!(declInfo && declInfo.stepIds.length > 1),
       eventIds: pending.map(p => p.eventId).concat([e.eventId]),
       types: pending.map(p => p.type).concat([e.type])
@@ -452,7 +477,30 @@ function scenarios(env) {
         mk('necromancer', { traits: ['necromancy', 'gravekeeper'], name: '術師' })],
       options: { graveyard: true, facilityWorks: 2 },
       endsWith: e => e.type === 'summon',
-      expect: [['damage', null], ['summon', '墓地']] },
+      expect: [['damage', null], ['summon', '墓地']],
+      // 墓地は施設が起こす効果。戦没者は「遺骸を提供した側」であって召喚者ではない。
+      extraAsserts: found => {
+        const st = found.steps[found.steps.length - 1];
+        const ef = st.effect;
+        return [
+          ['召喚stepの人物actorが null', st.actorId === null && st.actorName === null,
+            `actorId=${st.actorId} actorName=${st.actorName}`],
+          ['施設は能力情報で表す（facilityId=graveyard）',
+            st.declaredBy && st.declaredBy.abilityId === 'graveyard' && st.declaredBy.abilityName === '墓地',
+            st.declaredBy ? `${st.declaredBy.abilityId}/${st.declaredBy.abilityName}` : 'declaredBy が無い'],
+          ['宣言側にも人物actorを立てない', st.declaredBy && st.declaredBy.actorId === null,
+            st.declaredBy ? String(st.declaredBy.actorId) : '-'],
+          ['戦没者が召喚者になっていない',
+            ef.fallenId && ef.fallenId !== st.actorId && ef.fallenId !== ef.summonedId,
+            `fallen=${ef.fallenId} actor=${st.actorId} summoned=${ef.summonedId}`],
+          ['戦没者と召喚個体を別の役で保持',
+            !!(ef.fallenName && ef.summonedName && ef.fallenName !== ef.summonedName),
+            `戦没者=${ef.fallenName} / 召喚個体=${ef.summonedName}`],
+          ['対象は召喚個体（戦没者ではない）',
+            ef.targetId === ef.summonedId && ef.targetId !== ef.fallenId,
+            `target=${ef.targetId}`]
+        ];
+      } },
     // 攻撃 → 魔王軍完成による伝播ダメージ
     { id: 'OVERKILL', seed: 9, stage: 1,
       units: () => [mk('goblin', { traits: ['coward'], name: '殴り役', boost: 10 }),
@@ -662,9 +710,14 @@ function runPaths() {
       console.log(`      step${st.depth}: ${by}${st.effect.type}`
         + `${st.actorName ? ' / 行為者 ' + st.actorName : ''}`
         + `${st.effect.targetName ? ' → ' + st.effect.targetName : ''}`
+        + `${st.effect.fallenName ? ' / 戦没者 ' + st.effect.fallenName + '（召喚者ではない）' : ''}`
         + `${st.sharedDeclaration ? '（宣言を複数stepへ複製）' : ''}`);
     }
     if (!ok) console.log(`      期待: ${JSON.stringify(sc.expect)}\n      実際: ${JSON.stringify(got)}`);
+    for (const [label, pass, detail] of (sc.extraAsserts ? sc.extraAsserts(found) : [])) {
+      if (!pass) failures++;
+      console.log(`      ${pass ? '✓' : '✗'} ${label}${pass ? '' : '   → ' + detail}`);
+    }
     console.log('');
   }
   if (failures) {
