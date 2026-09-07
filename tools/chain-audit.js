@@ -16,11 +16,11 @@
 // 未分類のイベントが出たら停止する（黙って0段扱いにしない）。
 //
 // ── モード（倍率とハプニング発火条件を分離して測る） ─────
-//   A legacy 現行。親を持つ因果イベントは種類を問わず必ず+1段。
-//   B record 段数の記録だけ新定義。倍率もハプニング条件も現行の段数で動かす。
-//   C mult   新定義を**倍率だけ**に使う（ハプニング条件は現行）。
-//   D gate   新定義を**ハプニング発火条件だけ**に使う（倍率は現行）。
-//   E both   倍率もハプニング条件も新定義。
+//   A legacy 旧V1。倍率・ハプニング条件ともraw段数。
+//   B record 旧V1倍率・raw条件のまま、V2段数だけ並記。
+//   C mult   production。V2を倍率だけに使い、ハプニング条件はrawのまま。
+//   D gate   旧V1倍率のまま、ハプニング条件だけV2。
+//   E both   productionから、ハプニング条件もV2へ変えた比較案。
 //
 // ── 乱数と保存状態の扱い（固定） ────────────────────────
 //   ・乱数はすべて vm コンテキストへ渡した seed 付き Math.random に通す。
@@ -81,11 +81,11 @@ function patchBattle(src) {
 }
 
 const MODES = {
-  A: { label: 'A 現行',                   countAll: true,  multNew: false, gateNew: false },
-  B: { label: 'B 記録のみ新定義',          countAll: false, multNew: false, gateNew: false },
-  C: { label: 'C 倍率だけ新定義',          countAll: false, multNew: true,  gateNew: false },
-  D: { label: 'D ハプニング条件だけ新定義', countAll: false, multNew: false, gateNew: true },
-  E: { label: 'E 倍率＋ハプニング条件',     countAll: false, multNew: true,  gateNew: true }
+  A: { label: 'A 旧V1',                         countAll: true,  multNew: false, gateNew: false },
+  B: { label: 'B 旧V1＋V2段数並記',              countAll: false, multNew: false, gateNew: false },
+  C: { label: 'C production（V2倍率）',           countAll: false, multNew: true,  gateNew: false },
+  D: { label: 'D 旧V1倍率＋V2ハプニング条件',      countAll: false, multNew: false, gateNew: true },
+  E: { label: 'E production＋V2ハプニング条件',    countAll: false, multNew: true,  gateNew: true }
 };
 
 function load(mode, seed) {
