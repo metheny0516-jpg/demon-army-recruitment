@@ -101,6 +101,27 @@ lastBattle.chainView = {
 - V1とV2を同じ最大値・平均へ混在させない。
 - 旧KPIはV1。推定変換しない。
 
+#### 実装済み（2026-09-07・Opus）
+
+分離は `KPI.chainStatsByVersion(runs)` の1か所に集約した。版の読み出しは `Chain.versionOf()` だけを
+使い、レポート側に写しを持たない（`tools/kpi-report.js` が `src/core/chain.js` と
+`src/core/kpi.js` を `require` する）。
+
+- `chainMaxMean` / `chainMaxTop` / `chainAbilityMean` / `chainAbilityTop` / `sample` は
+  **すべてその版のランだけ**から作る。代表CHAINも版ごとに選ぶ。
+- **`triggerKinds` は分離の対象外。** 段数の数え方ではなく「どの能力が連鎖に参加したか」なので、
+  版をまたいでも意味が変わらない。
+- `KPI.battleFinished()` は `Chain.RECORDED_VERSION` を読み直さない。
+  ラン途中で切替コミットを跨いでも、1ランの中でV1とV2が混ざらない
+  （混ざった時点でその `chainMax` はどちらの定義でもない値になり、後から分離できない）。
+- レポートは**版が1つなら従来どおりの見出しと数字**を出す。混在時だけ警告と版別ブロックにし、
+  統合した平均・最大・代表CHAIN・判定を出さない。
+- 回帰は `tools/test-kpi-chain-version.js`（47本目）。V1のみ／V2のみ／混在／バージョン欠落・
+  不正の4入力を固定し、混在時に全体平均(4.25)や版をまたいだ最高値が現れないことを見る。
+- 不変性: `f0273ae` と比べて V1のみ・バージョン欠落のみのレポート出力が**バイト単位で一致**。
+  120ランの `maxChain`・教訓・ビルド名・V1 `chainSummary`・OVERKILL・KPI も完全一致、
+  300戦の戦闘結果も完全一致。
+
 ### F. 倍率・閾値切替（別タスク）
 
 全15戦略×200の測定前には変更しない。対象は共通CHAIN倍率、ハプニング条件、演出閾値、

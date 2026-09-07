@@ -21,6 +21,26 @@
 
 ## 0. 次チャットの開始点（2026-09-03）
 
+### KPIのCHAIN観測を定義バージョン別に分離（2026-09-07・Opus／切替計画E・実装済み）
+
+[`docs/CHAIN_V2_UI_PLAN_2026-09-07.md`](docs/CHAIN_V2_UI_PLAN_2026-09-07.md) 第3節E。
+**`maxChain`・魔界史・倍率・演出閾値・ハプニング条件・教訓・ビルド名は変更していない。
+`src/ui/` は未編集。**
+
+- 分離は `KPI.chainStatsByVersion(runs)` の1か所だけ。版の読み出しは `Chain.versionOf()` に集約し、
+  レポート側に写しを持たない（`tools/kpi-report.js` が本体を `require` する）。
+- `chainMax` / `chainAbilityMax` / `chainSample` の平均・最大・代表値は**その版のランだけ**から作る。
+- **`triggerKinds` は分離しない。** 段数の数え方ではなく「どの能力が連鎖に参加したか」なので
+  版をまたいでも意味が変わらない。ここを分けると理由なく比較できない指標が増える。
+- **`KPI.battleFinished()` は `Chain.RECORDED_VERSION` を読み直さない。** ラン途中で切替コミットを
+  跨いでも1ランの中でV1とV2が混ざらない。混ざった時点でその `chainMax` はどちらの定義でもない
+  値になり、後から分離できない。
+- レポートは**版が1つなら従来どおりの見た目と数字**。混在時だけ警告＋版別ブロックにし、
+  統合した平均・最大・代表CHAIN・判定を出さない。
+- 回帰は `tools/test-kpi-chain-version.js`（47本目・44件）。
+- `src/core/kpi.js` に `module.exports` を追加した（`typeof module !== "undefined"` ガード付き。
+  ブラウザでは従来どおりグローバル）。
+
 ### 戦果へV2要約を保存（2026-09-07・Opus／切替計画A・実装済み）
 
 [`docs/CHAIN_V2_UI_PLAN_2026-09-07.md`](docs/CHAIN_V2_UI_PLAN_2026-09-07.md) 第3節A（Astra承認済み）。

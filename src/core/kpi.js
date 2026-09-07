@@ -234,6 +234,13 @@ const KPI = {
         (this.current.triggerKinds[ability.key] || 0) + 1;
     }
 
+    // **記録定義バージョンはラン開始時に固定したものを維持する。**
+    // 戦闘のたびに Chain.RECORDED_VERSION を読み直すと、ラン途中で切替コミットを跨いだときに
+    // 1ランの中でV1とV2の値が混ざる。混ざった時点でそのランの chainMax は
+    // どちらの定義でもない値になり、後から分離できない。
+    // （current が無い＝ラン外の呼び出しは先頭の早期returnで弾いている）
+    if (!Number.isFinite(this.current.chainDefVersion)) this.current.chainDefVersion = 1;
+
     const depth = (summary && summary.maxChain) || 0;
     this.current.chainMax = Math.max(this.current.chainMax, depth);
     const abilities = this.chainAbilities(timeline, summary && summary.deepest);
@@ -291,8 +298,48 @@ const KPI = {
     return entry;
   },
 
+  // ── CHAIN観測の定義バージョン別集計 ───────────────────
+  // chainMax / chainAbilityMax / chainSample は**数え方が変わると意味が変わる**。
+  // V1（親を持つ因果イベントを種類を問わず+1段）とV2（同じ実効果を一度だけ数える）を
+  // 同じ平均・最大・代表値へ混ぜると、どちらの定義でもない数字ができあがる。
+  // そこで版ごとに分けて返し、混在時に統合値を出さないための材料にする。
+  //
+  // 版の読み出しは Chain.versionOf() ひとつに集約する。
+  // **バージョン欠落・不正な旧KPIはV1として扱い、値を推定変換しない。**
+  //
+  // triggerKinds（発火したトリガーの種類）はここに含めない。段数の数え方ではなく
+  // 「どの能力が連鎖に参加したか」なので、版をまたいでも意味が変わらない。
+  chainStatsByVersion(runs) {
+    const version = entry => (typeof Chain !== "undefined" ? Chain.versionOf(entry)
+      : (Number.isFinite(Number(entry && entry.chainDefVersion))
+        && Number(entry.chainDefVersion) >= 1 ? Number(entry.chainDefVersion) : 1));
+    const groups = new Map();
+    for (const entry of (Array.isArray(runs) ? runs : [])) {
+      const v = version(entry);
+      if (!groups.has(v)) groups.set(v, []);
+      groups.get(v).push(entry);
+    }
+    const num = (entry, key) => Number(entry[key]) || 0;
+    return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([defVersion, list]) => ({
+      defVersion,
+      runs: list.length,
+      // 平均・最大は**そのバージョンのランだけ**から作る
+      chainMaxMean: list.reduce((t, r) => t + num(r, 'chainMax'), 0) / list.length,
+      chainMaxTop: list.reduce((m, r) => Math.max(m, num(r, 'chainMax')), 0),
+      chainAbilityMean: list.reduce((t, r) => t + num(r, 'chainAbilityMax'), 0) / list.length,
+      chainAbilityTop: list.reduce((m, r) => Math.max(m, num(r, 'chainAbilityMax')), 0),
+      // 代表CHAINも版をまたいで比べない。各版で「いちばん条件をまたいだ1本」を選ぶ
+      sample: list.reduce((best, r) => {
+        if (!r.chainSample || !(r.chainSample.abilities || []).length) return best;
+        return !best || num(r, 'chainAbilityMax') > num(best, 'chainAbilityMax') ? r : best;
+      }, null)
+    }));
+  },
+
   // 端末内のKPIをそのまま取り出す。DevToolsで copy(KPI.export()) して
   // tools/kpi-report.js へ渡す（ゲーム内に分析画面は作らない）
   export() { return JSON.stringify(this.load(), null, 2); },
   reset() { try { localStorage.removeItem(this.KEY); } catch (e) {} this.current = null; this.session.runs = 0; }
 };
+
+if (typeof module !== "undefined") module.exports = { KPI };
