@@ -10,7 +10,9 @@
 //   ・実効果 effect      : 別の能力・規則が起こす、別個の状態変化。1段と数える。
 //   ・補足   restate     : 親と同じ一つの効果の言い換え・内訳・修飾。段を増やさない。
 //   ・宣言   declaration : 「これから起こす」。効果を担う子があるならその子が1段。
-//                          効果を担う子が無ければ、その宣言自体が唯一の表現なので1段。
+//                          子が無いときは selfEffect で分かれる。
+//                            selfEffect=true  … そのイベント自身が実効果（行動中止など）→ 1段
+//                            selfEffect=false … 予告しただけで実行されなかった          → 0段
 // 未分類のイベントが出たら停止する（黙って0段扱いにしない）。
 //
 // ── モード（倍率とハプニング発火条件を分離して測る） ─────
@@ -52,14 +54,16 @@ const CLASSIFY = {
   resource_consume: d => d.resource === 'soul'
     ? { role: 'restate', kind: 'trait:soul_harvest' }
     : { role: 'effect', kind: 'consume:' + (d.resource || '?') },
-  // 仲間割れは「これから同士討ちする」宣言で、効果は子のダメージが担う。
-  // 子を持たない種類のハプニングでは、この宣言自体が唯一の表現になる。
-  incident: d => ({ role: 'declaration', kind: 'incident:' + (d.id || '?') }),
+  // 仲間割れ(friendly_fire)は「これから同士討ちする」宣言で、効果は子のダメージが担う。
+  // ストライキなど(skip)は「行動を中止した」こと自体が実効果なので、子が無くても1段。
+  incident: d => ({ role: 'declaration', kind: 'incident:' + (d.id || '?'),
+    selfEffect: happeningKind(d.id) === 'skip' }),
   trait_trigger: d => {
     switch (d.traitId) {
       // 宣言。効果は直後の子（追加行動・伝播ダメージ）が担う
+      // どれも「追加行動をする」という予告。実行されなければ何も起きていないので0段。
       case 'greedy': case 'chain_massacre': case 'overload': case 'glutton_feast':
-        return { role: 'declaration', kind: 'trait:' + d.traitId };
+        return { role: 'declaration', kind: 'trait:' + d.traitId, selfEffect: false };
       // それ自体が唯一の表現である実効果（同じ効果を担う別イベントがタイムラインに無い）
       case 'demon_cook':     // 食事強化。倍率の計算場所は run.js だが、効果の表現はこの1件だけ
       case 'big_eater':      // その人物の与ダメージ上昇
@@ -75,13 +79,33 @@ const CLASSIFY = {
   facility_trigger: d => {
     switch (d.facilityId) {
       case 'extortion_ledger': return { role: 'effect', kind: 'facility:extortion_ledger' };
-      case 'graveyard': return { role: 'declaration', kind: 'facility:graveyard' };
+      // 「遺骸が動き出す」という予告。召喚されなければ何も起きていないので0段
+      case 'graveyard': return { role: 'declaration', kind: 'facility:graveyard', selfEffect: false };
       // 巨大厨房は食事強化の**修飾**。増やしているのは料理人の効果そのものなので数えない
       case 'grand_kitchen': return { role: 'restate', kind: 'trait:demon_cook' };
       default: return null;
     }
   }
 };
+
+// incident の実効果性は battle_happenings.js の kind で決まる。
+//   kind: 'skip'          … 行動中止そのものが実効果。子は無く、これで完結する → selfEffect
+//   kind: 'friendly_fire' … 同士討ちの予告。効果は子の splash が担う            → 予告
+// イベント側に kind が乗っていないので、データから id→kind を引く。
+let HAPPENING_KIND = null;
+function happeningKind(id) {
+  if (!HAPPENING_KIND) {
+    HAPPENING_KIND = new Map();
+    const src = fs.readFileSync(__dirname + '/../src/data/battle_happenings.js', 'utf8');
+    const ctx = { out: null };
+    vm.createContext(ctx);
+    vm.runInContext(src + '\n; out = BATTLE_HAPPENINGS;', ctx);
+    for (const h of ctx.out) HAPPENING_KIND.set(h.id, h.kind);
+  }
+  const kind = HAPPENING_KIND.get(id);
+  if (!kind) throw new Error(`未知のハプニング id=${id} → battle_happenings.js に無い`);
+  return kind;
+}
 
 function classify(type, data) {
   const fn = CLASSIFY[type];
@@ -92,7 +116,8 @@ function classify(type, data) {
       + `resource=${(data || {}).resource}\n`
       + '  → CLASSIFY へ役を足すまで監査は続行しない（黙って0段扱いにしない）');
   }
-  return got;
+  // selfEffect の既定は false。宣言は明示したものだけが「自分自身で1段」になる。
+  return { selfEffect: false, ...got };
 }
 
 // ── 正規化API（契約案・単一の入口） ────────────────────
@@ -161,9 +186,12 @@ function summarize(timeline) {
   // 効果を担う直接の子（実効果の子、または「実効果の子を持たない＝自分が効果になる宣言」）
   const effectChildrenOf = event => (childrenOf.get(event.eventId) || [])
     .filter(c => {
-      const role = classify(c.type, c).role;
+      const { role, selfEffect } = classify(c.type, c);
       if (role === 'effect') return true;
       if (role !== 'declaration') return false;
+      // 子が効果を担わない宣言は、それ自身が実効果を表すときだけ「効果を担う子」になる。
+      // 未実行の予告は効果ではないので、親から見ても子から見ても段にならない。
+      if (!selfEffect) return false;
       return !(childrenOf.get(c.eventId) || []).some(g => classify(g.type, g).role === 'effect');
     });
 
@@ -172,12 +200,15 @@ function summarize(timeline) {
     if (info.has(event.eventId)) return info.get(event.eventId);
     const parent = event.parentEventId ? byId.get(event.parentEventId) : null;
     const parentInfo = parent ? resolve(parent) : null;
-    const { role, kind } = classify(event.type, event);
+    const { role, kind, selfEffect } = classify(event.type, event);
     const kids = effectChildrenOf(event);
     let counts;
     if (role === 'effect') counts = true;
     else if (role === 'restate') counts = false;
-    else counts = kids.length === 0;          // 宣言: 効果を担う子が無ければ自分が1段
+    // 宣言: 子が効果を担うならその子が1段。子が無いときは
+    //   ・そのイベント自身が実効果を表す（行動中止など）→ 1段
+    //   ・予告しただけで実行されなかった                 → 0段
+    else counts = kids.length === 0 && selfEffect;
     const rawDepth = parentInfo ? parentInfo.rawDepth + 1 : 1;
     // 起点が「数えない」種類（子が効果を担う宣言）なら、段は子から始まる。
     const depth = parentInfo ? parentInfo.depth + (counts ? 1 : 0) : (counts ? 1 : 0);
@@ -335,9 +366,11 @@ function patchBattle(src) {
         data.chainDepth = (parent.chainDepth || 1) + 1;`,
 `        data.chainId = parent.chainId || parent.eventId;
         data.legacyDepth = (parent.legacyDepth || 1) + 1;
+        // 親の段数は || 1 で読んではいけない。新定義では 0段の親（未実行の予告や
+        // 効果を子に委ねる宣言）が出るため、0 を 1 に読み替えると子が1段ぶん水増しされる。
         data.chainDepth = CHAIN_AUDIT.countAll
           ? (parent.chainDepth || 1) + 1
-          : (parent.chainDepth || 1) + (CHAIN_AUDIT.step(type, data) ? 1 : 0);`);
+          : CHAIN_AUDIT.depthOf(parent) + (CHAIN_AUDIT.step(type, data) ? 1 : 0);`);
   swap(
 `      } else {
         data.chainDepth = 1;
@@ -354,7 +387,7 @@ function patchBattle(src) {
         amount *= chainMult;
         opts.traits = [...(opts.traits || []), \`CHAIN \${chainDepth} ×\${chainMult.toFixed(2)}\`];
       }`,
-`      const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
+`      const chainDepth = opts.parentEvent ? CHAIN_AUDIT.depthOf(opts.parentEvent) + 1 : 1;
       const legacyDepth = opts.parentEvent ? (opts.parentEvent.legacyDepth || 1) + 1 : 1;
       const multDepth = CHAIN_AUDIT.multNew ? chainDepth : legacyDepth;
       if (attacker.side === "player") CHAIN_AUDIT.tiers.push([legacyDepth, chainDepth]);
@@ -367,7 +400,7 @@ function patchBattle(src) {
   swap(
 `      unit.chainDepth = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;`,
 `      const actorLegacy = actionOpts.parentEvent ? (actionOpts.parentEvent.legacyDepth || 1) + 1 : 1;
-      const actorNew = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;
+      const actorNew = actionOpts.parentEvent ? CHAIN_AUDIT.depthOf(actionOpts.parentEvent) + 1 : 1;
       if (actionOpts.parentEvent) CHAIN_AUDIT.gates.push([actorLegacy, actorNew]);
       unit.chainDepth = CHAIN_AUDIT.gateNew ? actorNew : actorLegacy;`);
   return src;
@@ -393,7 +426,16 @@ function load(mode, seed) {
     ...cfg, tiers: [], gates: [],
     // 発火時点では子がまだ出ていない。宣言は「数えない側」に寄せる（倍率・条件用の近似）。
     // 最終的な段数は summarize() が生グラフ全体から決める。
-    step: (type, data) => classify(type, data).role === 'effect'
+    // 戦闘中は子がまだ存在しないので「子を見る」判定はできない。
+    // 新定義ではその必要がない: 実効果に加えて、selfEffect の宣言（行動中止など）だけを数える。
+    // どちらもイベント単体で決まるため、正規化APIと同じ結果が逐次でも出せる。
+    // 旧案の「子のない宣言は一律1段」は先読みが要るので戦闘中には実装できなかった。
+    // 0段の親を 1段と読み替えない。未定義（非因果イベント）だけ 1 とみなす。
+    depthOf: ev => (ev && ev.chainDepth != null ? ev.chainDepth : 1),
+    step: (type, data) => {
+      const c = classify(type, data);
+      return c.role === 'effect' || (c.role === 'declaration' && c.selfEffect);
+    }
   };
   const ctx = { console, Math: M, Date, JSON, CHAIN_AUDIT: audit, localStorage: {
     getItem: k => (k in store ? store[k] : null),
@@ -523,7 +565,50 @@ function scenarios(env) {
         mk('orc', { traits: ['brute'], name: '前衛', unpaid: true })],
       options: {},
       endsWith: e => e.effectKind === 'incident:strike',
-      expect: [['incident:strike', '戦場ストライキ']] }
+      expect: [['incident:strike', '戦場ストライキ']],
+      // 子のない宣言でも「行動を中止した」こと自体が実効果なので1段
+      extraAsserts: (found, sum) => {
+        const ev = sum.events.find(e => e.effectKind === 'incident:strike');
+        const st = found.steps[found.steps.length - 1];
+        return [
+          ['ストライキ（kind=skip）は selfEffect で1段', ev && ev.counted === true && ev.depth === 1,
+            ev ? `counted=${ev.counted} depth=${ev.depth}` : '-'],
+          ['宣言イベント自身が step になっている', ev && ev.stepIds.length === 1 && ev.stepIds[0] === ev.eventId,
+            ev ? JSON.stringify(ev.stepIds) : '-'],
+          ['子を持たない（行動中止で完結）', st && st.eventIds.length === 1,
+            st ? JSON.stringify(st.eventIds) : '-']
+        ];
+      } },
+    // 追加行動の予告だけで、実行されなかった宣言（0段）
+    { id: '暴食未実行', seed: 4292, stage: 3,
+      units: () => [mk('goblin', { traits: ['coward', 'greedy'], name: '強欲', unpaid: true, loyalty: 10 }),
+        mk('ogre', { traits: ['brute', 'chain_massacre', 'overload'], name: '虐殺', loyalty: 10, boost: 5 }),
+        mk('orc', { traits: ['brute', 'glutton_feast'], name: '宴', unpaid: true, loyalty: 10, boost: 3 }),
+        mk('necromancer', { traits: ['necromancy', 'gravekeeper'], name: '術師', loyalty: 10 })],
+      feastUid: 2,
+      options: { graveyard: true, extortionLedger: true, facilityWorks: 2 },
+      endsWith: e => e.effectKind === 'trait:glutton_feast',
+      // 予告だけなので step は作られない。経路は親の糧食消費で終わる
+      expect: [['consume:food', null]],
+      extraAsserts: (found, sum) => {
+        const ev = sum.events.find(e => e.effectKind === 'trait:glutton_feast');
+        const last = found.steps[found.steps.length - 1];
+        return [
+          ['未実行の宣言は 0段（counted=false）', ev && ev.counted === false,
+            ev ? `counted=${ev.counted}` : '-'],
+          ['どの step にも所属しない（stepIds が空）', ev && ev.stepIds.length === 0,
+            ev ? JSON.stringify(ev.stepIds) : '-'],
+          ['段を増やしていない（親と同じ 1段）', ev && ev.depth === 1 && ev.rawDepth === 2,
+            ev ? `正${ev.depth} / 生${ev.rawDepth}` : '-'],
+          ['実効果の子を持たない', ev && !sum.events.some(c => c.parentEventId === ev.eventId),
+            '-'],
+          ['起きていない出来事を step にしていない', found.steps.length === 1,
+            `${found.steps.length}段`],
+          ['所属先を追える形で残す（pendingDeclarations）',
+            last && last.pendingDeclarations && last.pendingDeclarations.some(d => d.eventId === (ev && ev.eventId)),
+            last && last.pendingDeclarations ? JSON.stringify(last.pendingDeclarations) : 'なし']
+        ];
+      } }
   ];
 }
 
@@ -714,7 +799,7 @@ function runPaths() {
         + `${st.sharedDeclaration ? '（宣言を複数stepへ複製）' : ''}`);
     }
     if (!ok) console.log(`      期待: ${JSON.stringify(sc.expect)}\n      実際: ${JSON.stringify(got)}`);
-    for (const [label, pass, detail] of (sc.extraAsserts ? sc.extraAsserts(found) : [])) {
+    for (const [label, pass, detail] of (sc.extraAsserts ? sc.extraAsserts(found, sum) : [])) {
       if (!pass) failures++;
       console.log(`      ${pass ? '✓' : '✗'} ${label}${pass ? '' : '   → ' + detail}`);
     }
@@ -750,6 +835,41 @@ function battleParity(n) {
   console.log(`■ 戦闘内の同一性（A vs B、固定編成 ${n} 戦）`);
   console.log(`  ダメージ列と勝敗の不一致: ${mismatch}件 ${mismatch === 0
     ? '→ 記録の数え直しは戦闘計算へ漏れていない' : '→ ✗ 漏れている'}\n`);
+  if (mismatch) process.exitCode = 1;
+  return mismatch;
+}
+
+// ── 逐次(戦闘中) と 正規化API の段数一致 ────────────────
+// 新定義は「実効果」＋「selfEffect の宣言」だけを数えるので、どちらもイベント単体で決まる。
+// つまり戦闘中の逐次計算でも、後からタイムラインを読み直しても同じ値が出るはずである。
+// ここが食い違うと、倍率が見ている段数と記録・UIが見ている段数がずれる。
+function depthParity(n) {
+  const env = load('B', 1);
+  let mismatch = 0, events = 0, battles = 0;
+  for (let i = 0; i < n; i++) {
+    const seed = 500 + i * 131;
+    env.clearStorage(); env.seed(seed); env.Game.newRun(); env.seed(seed);
+    const squad = ['goblin', 'ogre', 'skeleton', 'necromancer', 'orc']
+      .map(id => env.Battle.makeUnit(env.Game.rollApplicant(id), 'player'));
+    // 未払い・低忠誠を混ぜて skip / friendly_fire のハプニングを踏ませる
+    squad.forEach((u, j) => { if (j % 2 === 0) u.unpaid = true; u.loyalty = 15; });
+    let result;
+    try {
+      result = env.Battle.simulate(squad, makeFoes(env, 2 + (i % 6)),
+        { graveyard: true, extortionLedger: true, facilityWorks: 2 });
+    } catch (e) { continue; }
+    battles++;
+    const byId = new Map(summarize(result.timeline).events.map(e => [e.eventId, e]));
+    for (const e of result.timeline) {
+      const got = e.eventId && byId.get(e.eventId);
+      if (!got) continue;
+      events++;
+      if ((e.chainDepth || 0) !== got.depth) mismatch++;
+    }
+  }
+  console.log(`■ 逐次(戦闘中) と 正規化API の段数一致（${battles} 戦 / ${events} イベント）`);
+  console.log(`  不一致: ${mismatch}件 ${mismatch === 0
+    ? '→ 同じ契約が逐次でも後読みでも同じ値を出す' : '→ ✗ 実装が割れている'}\n`);
   if (mismatch) process.exitCode = 1;
   return mismatch;
 }
@@ -900,7 +1020,9 @@ if (require.main === module) {
   const runsIndex = args.indexOf('--runs');
   const wantPaths = args.includes('--paths') || runsIndex < 0;
   const n = runsIndex >= 0 ? (Number(args[runsIndex + 1]) || 200) : (args.includes('--paths') ? 0 : 200);
-  if (wantPaths) { if (runPaths() + runSharedDeclaration() === 0) battleParity(24); }
+  if (wantPaths) {
+    if (runPaths() + runSharedDeclaration() === 0) { battleParity(24); depthParity(400); }
+  }
   if (n > 0) report(n);
 }
 
