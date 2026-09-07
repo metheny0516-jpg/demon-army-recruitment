@@ -307,11 +307,23 @@ const UI = {
   // 魔界史の主要記録は最大CHAINと最大OVERKILLの2つだけ（設計憲法 第11節）。
   // 勝敗・到達点の隣に置き、総余剰・獲得G・召喚数などは主要記録へ増やさない。
   // フィールドの無い旧レコードは0として表示する。
-  recordHighlights(record) {
+  chainRecordVersion(record) {
+    return (typeof Chain !== "undefined") ? Chain.versionOf(record) : 1;
+  },
+
+  hasMixedChainVersions(records) {
+    return new Set((records || []).map(record => this.chainRecordVersion(record))).size > 1;
+  },
+
+  recordHighlights(record, showChainVersion = false) {
     const chain = Math.max(0, Number(record && record.maxChain) || 0);
     const overkill = Math.max(0, Number(record && record.maxOverkill) || 0);
+    const version = this.chainRecordVersion(record);
+    const chainLabel = showChainVersion
+      ? `最大CHAIN（${version >= 2 ? `新定義 V${version}` : "旧定義 V1"}）`
+      : "最大CHAIN";
     return `<div class="record-highlights">
-      <div><b>⛓ ${chain}</b><span>最大CHAIN</span></div>
+      <div><b>⛓ ${chain}</b><span>${chainLabel}</span></div>
       <div><b>💥 ${overkill}%</b><span>最大OVERKILL</span></div>
     </div>`;
   },
@@ -1277,7 +1289,7 @@ const UI = {
         </div>`; })() : ""}
       <div class="panel">
         <h3>第${record.gen}代魔王軍の記録</h3>
-        ${this.recordHighlights(record)}
+        ${this.recordHighlights(record, this.hasMixedChainVersions(history))}
         <dl class="history-item" style="border:none;padding:0;background:none">
           <dt>在位</dt><dd>${record.reignYears}年</dd>
           <dt>魔王</dt><dd>${U.esc(record.demonKingName || "若き魔王")}</dd>
@@ -1311,6 +1323,7 @@ const UI = {
   },
 
   history(list) {
+    const mixedChainVersions = this.hasMixedChainVersions(list);
     const discovered = new Set();
     const discoveredSynergies = new Set();
     for (const r of list) {
@@ -1341,7 +1354,7 @@ const UI = {
       <div class="history-item ${r.cleared ? "cleared" : ""}">
         <div class="gen">第${r.gen}代魔王軍 ${r.cleared ? "👑 人間界制圧" : ""}</div>
         ${r.buildName ? `<div class="build-name">「${U.esc(r.buildName)}」</div>` : ""}
-        ${this.recordHighlights(r)}
+        ${this.recordHighlights(r, mixedChainVersions)}
         <dl>
           <dt>在位</dt><dd>${r.reignYears}年</dd>
           <dt>魔王</dt><dd>${U.esc(r.demonKingName || "若き魔王")}</dd>
@@ -1364,6 +1377,7 @@ const UI = {
     this.set(`<div class="panel">
         <h2>📖 魔界史</h2>
         <div class="muted">これまでに滅んだ（あるいは君臨した）魔王軍の記録。</div>
+        ${mixedChainVersions ? `<div class="muted chain-version-note">CHAINは数え方が異なるため、旧定義と新定義の値を世代間で直接比較しません。</div>` : ""}
       </div>
       <div class="panel">
         <h2>📚 魔物採用図鑑 ${discovered.size}/${MONSTER_TEMPLATES.length}</h2>
