@@ -1,6 +1,6 @@
 // 戦闘中UIがV2ランだけ正規化stepを使い、V1のraw表示契約を変えないことを固定する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/battle_happenings.js', 'src/core/chain.js', 'src/ui/battle_scene.js'];
+const files = ['src/data/battle_happenings.js', 'src/core/chain.js', 'src/ui/chain_view.js', 'src/ui/battle_scene.js'];
 const ctx = { console, Game: { state: { chainDefVersion: 1 } } };
 vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });

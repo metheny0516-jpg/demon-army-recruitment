@@ -2,7 +2,7 @@
 const fs = require('fs'), vm = require('vm');
 const ctx = { console, document: {}, Game: { state: { chainDefVersion: 1, generation: 2, turn: 3 } } };
 vm.createContext(ctx);
-for (const file of ['src/core/util.js', 'src/core/chain.js', 'src/ui/ui.js']) {
+for (const file of ['src/core/util.js', 'src/core/chain.js', 'src/ui/chain_view.js', 'src/ui/ui.js']) {
   vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 }
 const UI = vm.runInContext('UI', ctx);

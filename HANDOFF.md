@@ -21,6 +21,15 @@
 
 ## 0. 次チャットの開始点（2026-09-03）
 
+### CHAIN V2表示モデル一本化（2026-09-07・Sol）
+
+V2の構造化stepから表示文言を作る処理を `src/ui/chain_view.js` の
+`ChainViewUI.stepLabel()` へ集約した。戦闘中・明示スキップ・戦果は同じ関数を読み、
+片方だけ文言が変わる状態を防ぐ。V1表示、倍率、閾値、raw因果グラフは変更していない。
+
+回帰 `tools/test-chain-ui-formatter.js` は期待効果9種と分岐2経路について、共通文言、
+行為者／宣言者／対象、召喚の戦没者／召喚個体の分離、raw `text` 非依存を固定する。
+
 ### CHAIN V2切替前統合レビュー（2026-09-07・Sol）
 
 結果は [`docs/CHAIN_V2_INTEGRATION_REVIEW_2026-09-07.md`](docs/CHAIN_V2_INTEGRATION_REVIEW_2026-09-07.md)。
