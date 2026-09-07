@@ -440,6 +440,28 @@ step2: 《墓地》による summon → 前衛の骸骨従者 / 戦没者 前衛
 `tools/chain-audit.js` は写しを持たず **`src/core/chain.js` をそのまま読み込んで**assertする。
 監査ツールと本体が静かに食い違うのを防ぐため。
 
+### 6.2 戦果のV2表示用保存契約（2026-09-07・Astra承認済み／未実装）
+
+既存V1の `lastBattle.chainSummary` を保持したまま、V2表示用の加算フィールドを保存する。
+
+```js
+lastBattle.chainView = {
+  defVersion: 2,
+  maxDepth,
+  rawMaxDepth,
+  deepest: { steps: [] } // 経路がなければ null
+};
+```
+
+- `Chain.summarize(result.timeline)` の出力から作り、UIで再計算しない。
+- `steps` は名前・能力・効果・根拠イベントID・行為者／宣言者・召喚の各役を保持する。
+- 関数は保存せず、JSON化できる値だけにする。
+- 旧セーブで欠落していればV1表示へ戻し、ロード時に推定生成しない。
+- V1途中ランはV1表示を維持する。`chainView.defVersion` とランの記録定義バージョンは別物。
+- 保存→ロードで代表経路と帰属が一致し、再起で対応する戦果へ戻ることをテストする。
+
+承認範囲は保存契約の追加まで。`maxChain`・KPI・倍率・閾値のV2切替は含まない。
+
 ---
 
 ## 7. 推奨

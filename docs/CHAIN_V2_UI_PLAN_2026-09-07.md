@@ -21,15 +21,33 @@
 
 ## 3. 実装順
 
-### A. 戦果へV2要約を保存する契約を確定（Opus、Astra確認点）
+### A. 戦果へV2要約を保存する契約を実装（Opus、Astra承認済み）
 
 戦闘中はtimelineから正規化できるが、`lastBattle` はtimelineを保存しない。そのため、ロード後の戦果で
 V2代表経路を再構成できない。V2切替前に、`Chain.summarize(result.timeline)` のうち表示に必要な
 `defVersion / maxDepth / rawMaxDepth / deepest.steps` を戦果へ保存する必要がある。
 
-これは新しい保存契約なので、フィールド名と保持範囲だけAstraへ戻す。候補は既存V1の
-`chainSummary` を破壊せず、加算フィールド（例: `chainView`）として保持する形。旧セーブはフィールド欠落のまま
-V1表示へフォールバックし、推定変換しない。
+Astra承認済みの保存形は次のとおり。既存V1の `chainSummary` は破壊しない。
+
+```js
+lastBattle.chainView = {
+  defVersion: 2,
+  maxDepth,
+  rawMaxDepth,
+  deepest: { steps: [] } // 経路がなければ deepest は null
+};
+```
+
+- 正規化APIの出力から作り、UIで再計算しない。
+- `steps` は名前・能力・効果・根拠イベントID・行為者／宣言者・召喚の各役を保持し、
+  timelineなしで再表示できる形にする。
+- `pathTo` などの関数は保存せず、JSON化できる値だけにする。
+- 旧セーブで `chainView` がなければV1表示へ戻す。ロード時に推定生成しない。
+- V1途中ランではV1表示を維持する。`chainView.defVersion`（API出力契約）と
+  ランの `chainDefVersion`（記録値の定義）を混同しない。
+- 保存→ロードで代表経路と帰属が一致し、再起で対応する戦果へ戻ることを回帰テストにする。
+
+承認範囲はこの加算保存契約まで。`maxChain`・KPI・倍率・閾値のV2切替は含まない。
 
 ### B. 戦闘中UIをバージョン分岐（Sol）
 
