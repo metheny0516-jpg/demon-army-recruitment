@@ -316,21 +316,35 @@ console.log('  ゲームは二重実行しない。倍率・閾値・UI・raw因
 strategies.forEach((strategy, si) => {
   const stats = { syn: {}, payroll: {}, unpaid: 0, battles: 0, lossStage: {}, retries: 0, rerolls: 0,
     events: 0, incidents: 0, foodShortages: 0, maxArmy: 0, paidHires: 0, paidHireGold: 0, seizes: 0 };
+  // ── 有効ランを必ず N 本そろえる ──────────────────────
+  // 未完を単純に落とすと母集団が戦略ごとに変わり、「全15戦略×N」の比較でなくなる。
+  // 未完が出たらseedを追加採番して補充し、**未完の件数と原因は別に残す**。
+  // 補充は N の2倍までで打ち切る（そこまで出るなら原因の切り分けが先）。
   const rows = [];
-  for (let i = 0; i < N; i++) {
-    const row = measureRun(strategy, SEED_BASE + si * 1000003 + i * 7919, stats);
+  let draws = 0;
+  const maxDraws = N * 2;
+  while (rows.length < N && draws < maxDraws) {
+    const row = measureRun(strategy, SEED_BASE + si * 1000003 + draws * 7919, stats);
+    draws += 1;
     if (halted) {
       console.error(`\n✗ 測定を停止する: ${halted}`);
-      console.error(`  戦略「${strategy.name}」 ラン ${i + 1}`);
+      console.error(`  戦略「${strategy.name}」 ${draws} 回目の採番`);
       process.exit(1);
     }
     if (row.unfinished) { unfinished.push(row); continue; }
     rows.push(row);
   }
+  if (rows.length < N) {
+    console.error(`\n✗ 測定を停止する: 「${strategy.name}」で有効ランが ${rows.length}/${N} しか揃わない`
+      + `（${draws} 回採番して未完 ${draws - rows.length} 件）`);
+    console.error('  母集団を欠いたまま集計しない。node tools/deploy-falsy-probe.js で原因を切り分けること。');
+    process.exit(1);
+  }
   all.push(...rows);
   const s = summaryOf(rows);
   const skipped = unfinished.filter(r => r.strategy === strategy.name).length;
-  console.log(`■ ${strategy.name}（${N}ラン中 有効 ${rows.length}${skipped ? ` / 未完 ${skipped}` : ''}）`);
+  console.log(`■ ${strategy.name}（有効 ${rows.length}ラン${
+    skipped ? ` / 未完 ${skipped}件を追加採番で補充（採番 ${draws} 回）` : ''}）`);
   console.log(`  最大CHAIN  V1 平均 ${f1(s.v1Mean)} 中央 ${s.v1Median} P90 ${s.v1P90} 最高 ${s.v1Max}`
     + `　→　V2 平均 ${f1(s.v2Mean)} 中央 ${s.v2Median} P90 ${s.v2P90} 最高 ${s.v2Max}`);
   console.log(`  教訓 maxChain<=2   条件一致 V1 ${f1(s.v1LessonHit)}% → V2 ${f1(s.v2LessonHit)}%`
@@ -345,14 +359,23 @@ strategies.forEach((strategy, si) => {
 // ── 全体 ──────────────────────────────────────────────
 const g = summaryOf(all);
 console.log('═══ 全体（15戦略 × ' + N + 'ラン ＝ 有効 ' + all.length + 'ラン'
-  + (unfinished.length ? ` / 未完 ${unfinished.length}ラン を除外` : '') + '） ═══\n');
+  + (unfinished.length ? ` / 未完 ${unfinished.length}件は追加採番で補充` : '') + '） ═══\n');
+if (all.length !== strategies.length * N) {
+  console.error(`✗ 有効ラン数が ${all.length} で ${strategies.length * N} に満たない。集計しない。`);
+  process.exit(1);
+}
 if (unfinished.length) {
-  console.log(`■ 除外した未完のラン ${unfinished.length}件（${f1(pct(unfinished.length, unfinished.length + all.length))}%）`);
+  console.log(`■ 未完のラン ${unfinished.length}件（採番に対して ${
+    f1(pct(unfinished.length, unfinished.length + all.length))}%）`);
   console.log('  sim.js の runOnce が Game.deploy() の falsy で break し、endRun() へ到達しなかったもの。');
-  console.log('  record が無いので maxChain も教訓もビルド名も存在しない。0として数えると率が歪む。');
+  console.log('  record が無いので maxChain も教訓もビルド名も存在しない。');
+  console.log('  **集計からは外し、同数を追加採番で補充してある**（母集団は戦略ごとに ' + N + ' 本で揃う）。');
   const byStrat = new Map();
   for (const r of unfinished) byStrat.set(r.strategy, (byStrat.get(r.strategy) || 0) + 1);
-  console.log('  内訳 ' + [...byStrat.entries()].map(([k, v]) => `${k}:${v}`).join(' ') + '\n');
+  console.log('  内訳 ' + [...byStrat.entries()].map(([k, v]) => `${k}:${v}`).join(' '));
+  console.log('  原因の切り分けは node tools/deploy-falsy-probe.js\n');
+} else {
+  console.log('■ 未完のラン 0件。全15戦略とも最初の ' + N + ' 本がそのまま有効ラン。\n');
 }
 console.log(`■ 最大CHAINの分布`);
 console.log(`  V1 平均 ${f1(g.v1Mean)} 中央 ${g.v1Median} P90 ${g.v1P90} 最高 ${g.v1Max}`);
