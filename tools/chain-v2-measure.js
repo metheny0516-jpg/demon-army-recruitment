@@ -16,10 +16,23 @@
 // 戦闘計算・倍率・ハプニング条件・演出閾値・UI・raw因果グラフには一切触れない。
 // `Chain.RECORDED_VERSION` も 2 へ切り替えない。読み直しているだけである。
 //
+// ── 再起（リトライ）で破棄された戦闘を数えないこと ────────
+// 本体は `Game.retry()` で state を丸ごとチェックポイントへ巻き戻す。
+// `record.maxChain` もそこで巻き戻り、やり直した戦闘の連鎖は歴史から消える。
+// 測定側が戦闘ごとの最大値を単調加算すると、**測定器だけが破棄された歴史を残す**。
+// （実測: seed基1000 / ゴブリン統一 11ラン目 で record.maxChain=3 に対し測定器 4）
+// そこで採用済み戦闘を配列で持ち、本体と同じ境界で巻き戻す:
+//   ・`saveCheckpoint()` … いまの採用件数を控える
+//   ・`retry()` が成功  … 控えた件数まで配列を切り捨てる
+// 最大値・能力数・代表経路は、すべて**採用が確定した戦闘だけ**から作る。
+//
 // 一致確認（1件でも崩れたら測定を停止する）:
 //   ・V1の再計算値と `chainSummary.maxChain` が一致すること
 //   ・`Chain.summarize()` がタイムラインを書き換えないこと
 //   ・raw の `parentEventId / chainId / chainDepth` が読み直しの前後で同一であること
+//   ・ラン終了時に 測定V1最大 === `record.maxChain`
+//   ・ラン終了時に 測定V1最大 === 採用履歴から再構成したV1最大
+//   ・ラン終了時に 測定V2最大 === 同じ採用履歴から再構成したV2最大
 //
 // 戦略定義とランの回し方は tools/sim.js のものを**そのまま**使う。
 // 写しを持つと「sim.js とは別のゲームを測っている」ことになるため、
@@ -97,16 +110,43 @@ const v2Abilities = view => {
 let halted = null;
 const samples = [];      // 分類が変わった代表例
 
+// ── 採用済み戦闘の台帳。本体のチェックポイントと同じ境界で巻き戻す ──
+// `accepted` に積むのは観測値だけ（タイムラインは保持しない。9000ラン分は重すぎる）。
+// `checkpointAt` は「巻き戻したときに残る件数」。retry() は state を
+// チェックポイントの中身へ入れ替えるので、台帳もその時点の長さへ切り戻せばよい。
+let accepted = [];
+let checkpointAt = 0;
+
+const originalSaveCheckpoint = Game.saveCheckpoint.bind(Game);
+Game.saveCheckpoint = function () {
+  const r = originalSaveCheckpoint();
+  checkpointAt = accepted.length;
+  return r;
+};
+
+const originalRetry = Game.retry.bind(Game);
+Game.retry = function () {
+  const at = checkpointAt;                 // 本体が巻き戻す先の件数
+  const ok = originalRetry();
+  if (ok) {
+    // originalRetry() は末尾で saveCheckpoint() を呼ぶ（＝上のフックが
+    // 切り捨て前の長さを控えてしまう）ので、切り捨てと同時に控えも戻す。
+    accepted.length = at;
+    checkpointAt = at;
+  }
+  return ok;
+};
+
+// 採用履歴からの再構成。単調加算ではなく、そのつど台帳から作り直す。
+const maxOf = (list, key) => list.reduce((m, b) => Math.max(m, b[key] || 0), 0);
+
 function measureRun(strategy, runSeed, stats) {
   seed(runSeed);
   for (const k of Object.keys(store)) delete store[k];   // ラン間の保存状態を持ち越さない
   KPI.reset();
 
-  const run = {
-    v1Max: 0, v2Max: 0, battles: 0,
-    v1AbilityMax: 0, v2AbilityMax: 0,
-    v1Sample: null, v2Sample: null
-  };
+  accepted = [];
+  checkpointAt = 0;
 
   battleHook = result => {
     const timeline = result.timeline || [];
@@ -127,18 +167,17 @@ function measureRun(strategy, runSeed, stats) {
     }
     if (halted) return;
 
-    run.battles += 1;
-    run.v1Max = Math.max(run.v1Max, v1);
-    run.v2Max = Math.max(run.v2Max, view.maxDepth);
-
+    // ここでは台帳へ積むだけ。最大値も代表例も、採用が確定してから作る。
+    // （再起で捨てられる戦闘がまだ混じっている段階なので、確定させてはいけない）
     const a1 = v1Abilities(timeline, result.chainSummary);
     const a2 = v2Abilities(view);
-    if (a1.length > run.v1AbilityMax) { run.v1AbilityMax = a1.length; run.v1Sample = { depth: v1, abilities: a1 }; }
-    if (a2.length > run.v2AbilityMax) { run.v2AbilityMax = a2.length; run.v2Sample = { depth: view.maxDepth, abilities: a2 }; }
-
-    // 分類が変わった代表例を少しだけ残す（構造化経路つき）
-    if (samples.length < 12 && v1 - view.maxDepth >= 3 && view.deepest) {
-      samples.push({
+    accepted.push({
+      v1, v2: view.maxDepth,
+      a1Len: a1.length, a2Len: a2.length,
+      v1Sample: { depth: v1, abilities: a1 },
+      v2Sample: { depth: view.maxDepth, abilities: a2 },
+      // 分類が変わった代表例の候補（構造化経路つき）
+      sample: (v1 - view.maxDepth >= 3 && view.deepest) ? {
         strategy: strategy.name, seed: runSeed, v1, v2: view.maxDepth,
         rawMaxDepth: view.rawMaxDepth,
         steps: view.deepest.steps.map(s => ({
@@ -146,13 +185,49 @@ function measureRun(strategy, runSeed, stats) {
           actor: s.actorName, declaredBy: s.declaredBy && s.declaredBy.abilityName,
           target: s.effect.targetName, shared: s.sharedDeclaration
         }))
-      });
-    }
+      } : null
+    });
   };
 
   const record = runOnce(strategy, stats);
   battleHook = null;
   if (halted) return null;
+
+  // ── ここから先は「採用が確定した戦闘」だけを見る ──────────
+  const kept = accepted;
+  const run = {
+    battles: kept.length,
+    v1Max: maxOf(kept, 'v1'),
+    v2Max: maxOf(kept, 'v2'),
+    v1AbilityMax: maxOf(kept, 'a1Len'),
+    v2AbilityMax: maxOf(kept, 'a2Len'),
+    v1Sample: null, v2Sample: null
+  };
+  for (const b of kept) {
+    if (b.a1Len === run.v1AbilityMax && !run.v1Sample) run.v1Sample = b.v1Sample;
+    if (b.a2Len === run.v2AbilityMax && !run.v2Sample) run.v2Sample = b.v2Sample;
+  }
+  for (const b of kept) {
+    if (b.sample && samples.length < 12) samples.push(b.sample);
+  }
+
+  // ── ラン終了時の整合性（1件でも崩れたら測定を停止する） ──────
+  // 本体は再起で state ごとチェックポイントへ戻る。台帳がその境界で
+  // 巻き戻っていなければ、ここで record.maxChain と食い違う。
+  const recordMaxChain = record.maxChain || 0;
+  if (run.v1Max !== recordMaxChain) {
+    halted = `ラン終了時に 測定V1最大(${run.v1Max}) と record.maxChain(${recordMaxChain}) が一致しない`
+      + `（再起 ${record.retriesUsed || 0} 回 / 採用戦闘 ${kept.length} 件）`;
+    return null;
+  }
+  if (run.v1Max !== kept.reduce((m, b) => Math.max(m, b.v1 || 0), 0)) {
+    halted = 'ラン終了時に 測定V1最大 と 採用履歴から再構成したV1最大 が一致しない';
+    return null;
+  }
+  if (run.v2Max !== kept.reduce((m, b) => Math.max(m, b.v2 || 0), 0)) {
+    halted = 'ラン終了時に 測定V2最大 と 採用履歴から再構成したV2最大 が一致しない';
+    return null;
+  }
 
   // ── 記録の消費者。同じ record から V1 と V2 を出す ──
   // maxChain 以外は同一なので、閾値の当たり方だけが違う。
@@ -168,6 +243,8 @@ function measureRun(strategy, runSeed, stats) {
   return {
     strategy: strategy.name, seed: runSeed, battles: run.battles,
     cleared: !!record.cleared, conquest: record.conquest || 0,
+    // 回帰テストが読む。v1Max はこの値と必ず一致していなければならない。
+    recordMaxChain, retriesUsed: record.retriesUsed || 0,
     v1Max: run.v1Max, v2Max: run.v2Max,
     v1AbilityMax: run.v1AbilityMax, v2AbilityMax: run.v2AbilityMax,
     v1Sample: run.v1Sample, v2Sample: run.v2Sample,
