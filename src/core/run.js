@@ -1499,6 +1499,12 @@ const Game = {
       contribution: this.attachVoices(result.contribution, result.victory),
       nearMiss: result.nearMiss,
       chainSummary: result.chainSummary,
+      // V2の代表経路を、ロード後の戦果でも出せるように保存しておく（加算保存）。
+      // 戦闘中はタイムラインから正規化できるが、lastBattle はタイムラインを持たないため、
+      // これが無いとロードした戦果でV2経路を作り直せない。
+      // **既存V1の chainSummary は壊さない。**表示の切り替えはこのコミットには含まれない。
+      // 旧セーブにこの鍵は無い。読む側は「無ければV1表示」で、推定生成してはいけない。
+      chainView: Chain.viewOf(result.timeline),
       overkillSummary: result.overkillSummary,
       // 戦意（momentum）の到達倍率。戦闘中は帯に出続けるが、終わると消えてしまい
       // 「今日はどれだけ乗ったのか」が戦果に残らなかった。タイムラインから導出するだけで、

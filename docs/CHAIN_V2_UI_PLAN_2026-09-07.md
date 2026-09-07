@@ -49,6 +49,26 @@ lastBattle.chainView = {
 
 承認範囲はこの加算保存契約まで。`maxChain`・KPI・倍率・閾値のV2切替は含まない。
 
+#### 実装済み（2026-09-07・Opus）
+
+`Chain.viewOf(timeline)` を追加し、`run.js` の `lastBattle` へ `chainView` を1行足した。
+保存するのは `defVersion` / `maxDepth` / `rawMaxDepth` / `deepest` の4つだけで、
+`deepest` は `steps` だけを持つ（`pathTo()` などの関数は保存しない）。
+最後に `JSON.parse(JSON.stringify(...))` を通し、関数や循環が紛れ込んだら
+**保存されてから気づくのではなくその場で落とす**。
+
+- `migrateState()` に `chainView` の既定値は**足していない**。`chainView` の無い戦果は
+  無いまま残り、読む側が V1 表示へ戻す。**ロード時に推定生成しない。**
+- ランの `chainDefVersion` は **1 のまま**。`chainView.defVersion`（API出力契約の版 = 2）と
+  混同しないよう、回帰テストで「2つが別の値として共存する」ことを固定してある。
+- 回帰テストは `tools/test-chain-view.js`（28件）。実際に戦闘を通して
+  **2段以上かつ宣言結合を含む代表経路**の戦果を作り、保存→ロードで各 step の
+  行為者・宣言者・能力・効果・分岐印が1つも変わらないこと、再起でチェックポイント時点の
+  戦果へ戻ること、旧セーブに要約を作らないことを見る。
+- 不変性は2方向で確認した。`a44a152` と比べて
+  **300戦のタイムライン・CHAIN値・倍率タグ・勝敗がバイト単位で一致**、
+  **120ランの `maxChain`・教訓の提示・ビルド名・V1 `chainSummary`・OVERKILL・KPI が完全一致**。
+
 ### B. 戦闘中UIをバージョン分岐（Sol）
 
 - `Chain.versionOf(Game.state) === 1` は現在の表示を完全維持する。

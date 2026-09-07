@@ -45,7 +45,33 @@ const Chain = {
   },
 
   summarize(timeline) { return summarize(timeline); },
-  classify(type, data) { return classify(type, data); }
+  classify(type, data) { return classify(type, data); },
+
+  // 戦果へ保存する要約（lastBattle.chainView）。
+  //
+  // 戦闘中はタイムラインから何度でも正規化できるが、`lastBattle` はタイムラインを保存しない。
+  // そのため保存・ロードを挟むと、V2の代表経路を後から作り直せない。ここで**表示に必要な分だけ**
+  // を切り出して残す。作るのは正規化APIの出力からだけで、UI側で作り直させない。
+  //
+  //   { defVersion, maxDepth, rawMaxDepth, deepest: { steps: [...] } | null }
+  //
+  // ・`pathTo()` などの関数は保存しない。**JSON化できる値だけ**にする。
+  // ・`steps` は名前・能力・効果・根拠イベントID・行為者／宣言者・召喚の各役を保持し、
+  //   タイムラインが無くても再表示できる形にする。
+  // ・`defVersion` は**APIの出力契約の版**であって、そのランが記録している値の版ではない。
+  //   ランの記録値の版は `state.chainDefVersion`（`Chain.versionOf`）。混同しないこと。
+  // ・**旧セーブから推定生成しない。** `chainView` が無い戦果は V1 表示へ戻すのが正しい。
+  viewOf(timeline) {
+    const sum = summarize(timeline);
+    const view = {
+      defVersion: sum.defVersion,
+      maxDepth: sum.maxDepth,
+      rawMaxDepth: sum.rawMaxDepth,
+      deepest: sum.deepest ? { steps: sum.deepest.steps } : null
+    };
+    // 関数や循環が紛れ込んでいれば、保存されてから気づくのではなくここで落とす。
+    return JSON.parse(JSON.stringify(view));
+  }
 };
 
 // ── 因果イベントの役 ───────────────────────────────────
