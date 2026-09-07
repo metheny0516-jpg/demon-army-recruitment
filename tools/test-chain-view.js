@@ -133,20 +133,18 @@ for (let i = 0; i < view.deepest.steps.length; i++) {
   assert(same, `ロード後も step${i + 1} の全帰属が一致（行為者・宣言者・能力・効果・分岐印）`);
 }
 
-// ── 4. 既存V1契約は不変 ───────────────────────────────
+// ── 4. raw V1契約を残しつつ、新規ランの記録はV2 ──────────
 assert(Game.state.lastBattle.chainSummary
   && Number.isFinite(Game.state.lastBattle.chainSummary.maxChain),
   '既存V1の chainSummary はそのまま残っている');
 assert(!('chainView' in Game.state.lastBattle.chainSummary),
   'chainView を chainSummary の中へ入れていない（V1の形を変えない）');
-assert(Game.state.chainDefVersion === 1,
-  'ランの記録値のバージョンは V1 のまま（chainView.defVersion と混同しない）');
-assert(view.defVersion !== Game.state.chainDefVersion,
-  'API出力契約の版(2)と、ランの記録値の版(1)は別の値として共存する');
-assert(Game.state.maxChain >= Game.state.lastBattle.chainSummary.maxChain,
-  'ラン記録の maxChain は V1 の chainSummary の最大値（maxDepth へ切り替えていない）');
-assert(Game.state.maxChain !== view.maxDepth || view.maxDepth === view.rawMaxDepth,
-  'ラン記録に V2 の maxDepth が混ざっていない');
+assert(Game.state.chainDefVersion === 2,
+  '切替後に始めた新規ランの記録値は V2');
+assert(view.defVersion === Game.state.chainDefVersion,
+  'API出力契約の版と新規ランの記録版がV2で揃う');
+assert(Game.state.maxChain === view.maxDepth,
+  '新規V2ランの maxChain は正規化済み maxDepth を記録する');
 
 // ── 5. 再起で対応する戦果へ戻る ────────────────────────
 // チェックポイント時点の戦果（＝いまの lastBattle）を控え、別の戦果で上書きしてから戻す。

@@ -145,11 +145,11 @@ assert(withLegacy.length === 2 && withLegacy[0].defVersion === 1,
 // ── 4. ラン開始時に固定した版を battleFinished が維持する ──
 store = {};
 Game.newRun();
+Game.state.chainDefVersion = 1;             // 切替前から続いているラン
 KPI.runStarted(Game.state);
 assert(KPI.current.chainDefVersion === 1, 'ラン開始時に記録定義バージョンが固定される');
-// ラン途中で切替コミットを跨いだ状況を作る（本体の定数だけ 2 へ動かす）
+// ラン途中で切替コミットを跨いでも、本体の定数ではなく保存済み版を維持する
 const savedRecorded = Chain.RECORDED_VERSION;
-Chain.RECORDED_VERSION = 2;
 KPI.battleFinished({ chainSummary: { maxChain: 5, deepest: null }, timeline: [] });
 assert(KPI.current.chainDefVersion === 1,
   'battleFinished はラン開始時の版を維持する（途中で Chain.RECORDED_VERSION が変わっても混ざらない）');
@@ -168,6 +168,7 @@ assert(entry.chainMax === 5, '観測値そのものは従来どおり記録さ�
   store = {};
   Game.newRun();
   const v1State = Game.state;
+  v1State.chainDefVersion = 1;
   assert(v1State.chainDefVersion === 1, '切替前に始めたランの保存版は V1');
   KPI.current = null;                       // 再起動でメモリ上のKPIが消えた
   Chain.RECORDED_VERSION = 2;               // 切替コミット後の世界
@@ -188,6 +189,23 @@ assert(entry.chainMax === 5, '観測値そのものは従来どおり記録さ�
   KPI.current = null;
   KPI.battleStarted(v2State, { missionKind: 'invade' });
   assert(KPI.current.chainDefVersion === 2, '明示V2のラン状態からはV2が入る');
+  const v2Timeline = [
+    { eventId: 'e1', type: 'attack', chainId: 'e1', chainDepth: 1 },
+    { eventId: 'e2', type: 'overkill', parentEventId: 'e1', chainId: 'e1', chainDepth: 2 },
+    { eventId: 'e3', type: 'trait_trigger', traitId: 'chain_massacre', name: '連鎖虐殺',
+      parentEventId: 'e2', chainId: 'e1', chainDepth: 3 },
+    { eventId: 'e4', type: 'splash', label: '連鎖虐殺', parentEventId: 'e3', chainId: 'e1', chainDepth: 4 },
+    { eventId: 'e5', type: 'death', parentEventId: 'e4', chainId: 'e1', chainDepth: 5 },
+    { eventId: 'e6', type: 'facility_trigger', facilityId: 'graveyard', name: '墓地',
+      parentEventId: 'e5', chainId: 'e1', chainDepth: 6 },
+    { eventId: 'e7', type: 'summon', parentEventId: 'e6', chainId: 'e1', chainDepth: 7 }
+  ];
+  const v2Seen = KPI.battleFinished({ timeline: v2Timeline,
+    chainSummary: { maxChain: 7, deepest: { steps: v2Timeline } } });
+  assert(v2Seen.depth === 3 && KPI.current.chainMax === 3,
+    'V2 KPIはraw 7段でなく正規化済み3段を記録する');
+  assert(v2Seen.abilities.join('→') === '連鎖虐殺→墓地',
+    'V2 KPIは結合済みstepから能力の接続を数える');
 
   // (c) 版欠落の旧ラン状態はV1（推定変換しない）
   KPI.current = null;

@@ -14,7 +14,8 @@
 //   V2 … 同じタイムラインを Chain.summarize() で読み直した `maxDepth`
 //
 // 戦闘計算・倍率・ハプニング条件・演出閾値・UI・raw因果グラフには一切触れない。
-// `Chain.RECORDED_VERSION` も 2 へ切り替えない。読み直しているだけである。
+// 本番切替後も再現できるよう、この測定器のラン状態だけV1へ固定して両方を読み出す。
+// `Chain.RECORDED_VERSION`（新規ランの本番既定値）そのものは書き換えない。
 //
 // ── 再起（リトライ）で破棄された戦闘を数えないこと ────────
 // 本体は `Game.retry()` で state を丸ごとチェックポイントへ巻き戻す。
@@ -84,6 +85,18 @@ const originalBattleFinished = KPI.battleFinished.bind(KPI);
 KPI.battleFinished = result => {
   if (battleHook) battleHook(result);
   return originalBattleFinished(result);
+};
+
+// 本番切替後も「同じ戦闘をV1/V2で読み比べる」基準測定を再現できるよう、
+// この測定器のランだけ保存版をV1へ固定する。ゲーム本体の新規ラン既定値は書き換えない。
+const originalNewRun = Game.newRun.bind(Game);
+Game.newRun = (...args) => {
+  originalNewRun(...args);
+  Game.state.chainDefVersion = 1;
+  Game.saveCheckpoint();
+  Game.save();
+  if (KPI.current) KPI.current.chainDefVersion = 1;
+  return Game.state;
 };
 
 const rawSignature = timeline => (timeline || [])
@@ -426,11 +439,13 @@ console.log(`  （記録した代表例は ${samples.length} 件。--json で全
 if (jsonOut) {
   fs.writeFileSync(jsonOut, JSON.stringify({
     seedBase: SEED_BASE, runsPerStrategy: N, unfinished,
-    chainDefVersion: { api: Chain.DEF_VERSION, recorded: Chain.RECORDED_VERSION },
+    chainDefVersion: { api: Chain.DEF_VERSION, productionRecorded: Chain.RECORDED_VERSION,
+      measurementRecorded: 1 },
     overall: g, byStrategy: strategies.map(s => ({ name: s.name,
       ...summaryOf(all.filter(r => r.strategy === s.name)) })),
     samples, runs: all
   }, null, 2));
   console.log(`\n測定結果を書き出した: ${jsonOut}`);
 }
-console.log(`\n注: Chain.RECORDED_VERSION は ${Chain.RECORDED_VERSION} のまま（V2へ切り替えていない）。`);
+console.log(`\n注: 本番の Chain.RECORDED_VERSION は ${Chain.RECORDED_VERSION}。`
+  + ' 比較測定のラン状態だけV1へ固定している。');

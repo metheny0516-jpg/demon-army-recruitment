@@ -20,6 +20,7 @@ vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 vm.runInContext('U.chance = () => false; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
 const Game = vm.runInContext('Game', ctx), Storage = vm.runInContext('Storage', ctx);
+const Chain = vm.runInContext('Chain', ctx);
 const assert = (condition, message) => { if (!condition) throw new Error(message); console.log(`✓ ${message}`); };
 
 // deploy() を通さずに「戦闘が1回終わった」状態だけを再現する。
@@ -58,7 +59,7 @@ Game.newRun();
       const out = Game.deploy();
       if (!out) break;
       battles++;
-      expectedChain = Math.max(expectedChain, out.result.chainSummary.maxChain);
+      expectedChain = Math.max(expectedChain, Chain.summarize(out.result.timeline).maxDepth);
       expectedOverkill = Math.max(expectedOverkill, out.result.overkillSummary.maxPercent);
       assert(st.maxChain === expectedChain && st.maxOverkill === expectedOverkill,
         `${battles}戦目の deploy() が最大CHAIN(${expectedChain})と最大OVERKILL(${expectedOverkill}%)を更新する`);

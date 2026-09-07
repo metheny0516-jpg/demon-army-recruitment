@@ -74,9 +74,8 @@ const Game = {
       kingSlimeMerge: true,   // 出撃時に合体するか（既定は合体。編成画面で断れる）
       maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
       maxOverkill: 0,     // 同その2。%で持つ
-      // maxChain を**どの数え方で記録したか**。いまは現行(V1)の数え方しか使っていないので 1。
-      // 正規化API(Chain.summarize)は追加済みだが、記録も倍率も閾値も切り替えていない。
-      // 将来の切替予約を V2 と偽って保存しない（保存値は「いま記録している値」と一致させる）。
+      // maxChain をどの数え方で記録するか。新規ランは現在の記録版、旧セーブは migrateState() が
+      // V1のまま保つ。ラン途中で定数を読み直さず、保存値を正本にする。
       chainDefVersion: (typeof Chain !== "undefined" ? Chain.RECORDED_VERSION : 1),
       raceCounts: {},
       recruitedTplIds: [],
@@ -1424,7 +1423,11 @@ const Game = {
     // ラン全体の主要記録は最大CHAINと最大OVERKILLの2つだけ（設計憲法 第11節）。
     // 勝敗を問わず更新する。再起で巻き戻したときはチェックポイントごと戻るのが正しい
     // （やり直した歴史の記録は残さない）ので、ここに別のテレメトリは持たない。
-    st.maxChain = Math.max(st.maxChain || 0, (result.chainSummary && result.chainSummary.maxChain) || 0);
+    const chainView = Chain.viewOf(result.timeline);
+    const recordedChain = Chain.versionOf(st) >= 2
+      ? chainView.maxDepth
+      : ((result.chainSummary && result.chainSummary.maxChain) || 0);
+    st.maxChain = Math.max(st.maxChain || 0, recordedChain);
     st.maxOverkill = Math.max(st.maxOverkill || 0, (result.overkillSummary && result.overkillSummary.maxPercent) || 0);
     // 「どの条件がどこへ繋がったか」の観測。KPI側で読むだけで、ラン状態には触らない
     // （したがって再起で巻き戻しても消えない＝試した事実として残る）。
@@ -1502,9 +1505,10 @@ const Game = {
       // V2の代表経路を、ロード後の戦果でも出せるように保存しておく（加算保存）。
       // 戦闘中はタイムラインから正規化できるが、lastBattle はタイムラインを持たないため、
       // これが無いとロードした戦果でV2経路を作り直せない。
-      // **既存V1の chainSummary は壊さない。**表示の切り替えはこのコミットには含まれない。
+      // **既存V1の chainSummary は壊さない。**新規V2ランはchainView、保存済みV1ランは
+      // chainSummaryを表示側が選ぶ。
       // 旧セーブにこの鍵は無い。読む側は「無ければV1表示」で、推定生成してはいけない。
-      chainView: Chain.viewOf(result.timeline),
+      chainView,
       overkillSummary: result.overkillSummary,
       // 戦意（momentum）の到達倍率。戦闘中は帯に出続けるが、終わると消えてしまい
       // 「今日はどれだけ乗ったのか」が戦果に残らなかった。タイムラインから導出するだけで、
@@ -2010,7 +2014,7 @@ const Game = {
         grand_kitchen: "厨房を焚き続けた"
       }[r.activeFacilityId] || "城を建てきった") },
     { id: "overkill", test: r => (r.maxOverkill || 0) >= 200, phrase: () => "過剰殺戮の" },
-    { id: "chain", test: r => (r.maxChain || 0) >= 6,
+    { id: "chain", test: r => (r.maxChain || 0) >= (Chain.versionOf(r) >= 2 ? 4 : 6),
       phrase: r => `${r.maxChain}連鎖を通した` },
     { id: "no_death", test: r => (r.fallenTotal || 0) === 0 && (r.battlesWon || 0) >= 5,
       phrase: () => "誰ひとり死なせなかった" },

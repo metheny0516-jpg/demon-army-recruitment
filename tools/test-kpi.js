@@ -127,6 +127,9 @@ assert(KPI.current.mergesRefused === 1, '合体を断った回数を数える（
 // 手組みのタイムラインを渡し、「発火したトリガー種類」と
 // 「代表CHAINを構成した異なる能力数」が因果メタデータだけから導出されることを固定する。
 {
+  // このブロックは既存V1 KPIの互換契約を固定する。V2の正規化経路は
+  // test-kpi-chain-version.js が別に確認する。
+  KPI.current.chainDefVersion = 1;
   const timeline = [
     { eventId: 'e1', type: 'attack', chainId: 'e1', chainDepth: 1 },
     { eventId: 'e2', type: 'overkill', parentEventId: 'e1', chainId: 'e1', chainDepth: 2, percent: 140, rank: 'OVERKILL' },

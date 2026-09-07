@@ -1,8 +1,7 @@
 // 正規化API（src/core/chain.js）と、CHAIN定義バージョンの保存を固定する。
 //
-// この作業で承認されたのは「APIの追加」と「バージョン保存」だけである。
-// 倍率・演出閾値・ハプニング条件・表示・戦果・KPI・魔界史はV2へ切り替えていない。
-// したがってこのテストの主眼は、**追加しただけで何も変わっていないこと**を示すことにある。
+// 新規ランの表示・記録・KPIはV2。既存V1ランはV1のまま継続する。
+// 倍率・演出閾値・ハプニング条件と Battle.summarizeChains() はV1を維持する。
 //
 // 経路の中身・分岐・行為者の区別・未実行の予告は tools/chain-audit.js --paths が
 // 同じ src/core/chain.js に対して assert する（そちらが契約の本体）。
@@ -30,10 +29,10 @@ const assert = (cond, msg) => { if (!cond) throw new Error(msg); console.log(`�
 
 // ── 1. バージョンの意味 ────────────────────────────────
 assert(Chain.DEF_VERSION === 2, 'APIの出力契約バージョンは 2');
-assert(Chain.RECORDED_VERSION === 1,
-  'いま実際に記録しているCHAIN値のバージョンは 1（V2へ切り替えていない）');
-assert(Chain.RECORDED_VERSION !== Chain.DEF_VERSION,
-  '「APIの契約版」と「記録している値の版」は別物として持つ');
+assert(Chain.RECORDED_VERSION === 2,
+  '新規ランが実際に記録するCHAIN値のバージョンは 2');
+assert(Chain.RECORDED_VERSION === Chain.DEF_VERSION,
+  'APIの契約版と新規ランの記録版がV2で揃う');
 
 // バージョン不明は V1。推定変換をしない
 assert(Chain.versionOf(null) === 1, 'バージョン不明（null）は V1 として扱う');
@@ -112,14 +111,14 @@ assert(tagged.every(e => (e.traits || []).some(t => t === `CHAIN ${e.chainDepth}
 // ── 5. 定義バージョンの保存 ────────────────────────────
 // 新規ラン
 store = {}; Game.newRun();
-assert(Game.state.chainDefVersion === 1, '新規ランの保存バージョンは V1（いま記録している値と一致）');
+assert(Game.state.chainDefVersion === 2, '新規ランの保存バージョンは V2（いま記録している値と一致）');
 
 // 途中ラン（保存 → 読み直し）
 Game.state.maxChain = 7;
 Game.save();
-assert(JSON.parse(store[Storage.SAVE_KEY]).chainDefVersion === 1, '途中ランの保存にバージョンが入る');
+assert(JSON.parse(store[Storage.SAVE_KEY]).chainDefVersion === 2, '途中ランの保存にバージョンが入る');
 Game.load();
-assert(Game.state.chainDefVersion === 1 && Game.state.maxChain === 7,
+assert(Game.state.chainDefVersion === 2 && Game.state.maxChain === 7,
   'ロードしてもバージョンは変化しない');
 
 // 再起（チェックポイント巻き戻し）でも変化しない
@@ -153,7 +152,7 @@ store = {}; Game.newRun();
 Game.state.maxChain = 5;
 Game.endRun(false);
 const history = Storage.loadHistory();
-assert(history.length === 1 && history[0].chainDefVersion === 1,
+assert(history.length === 1 && history[0].chainDefVersion === 2,
   '魔界史のレコードに記録時のバージョンが入る');
 assert(history[0].maxChain === 5, '魔界史の maxChain はそのまま（変換しない）');
 assert(Chain.versionOf({ maxChain: 3 }) === 1, 'バージョン欠落の旧魔界史は V1 として扱う');
@@ -161,7 +160,7 @@ assert(Chain.versionOf({ maxChain: 3 }) === 1, 'バージョン欠落の旧魔�
 // KPI
 const kpi = KPI.load();
 const entry = (kpi.runs || [])[kpi.runs.length - 1];
-assert(entry && entry.chainDefVersion === 1, 'KPIのランにも記録時のバージョンが入る');
+assert(entry && entry.chainDefVersion === 2, 'KPIのランにも記録時のバージョンが入る');
 assert(Chain.versionOf({ chainMax: 4 }) === 1, 'バージョン欠落の旧KPIは V1 として扱う');
 
-console.log('\nOK: 正規化APIの追加とバージョン保存。表示・記録・戦闘結果は不変。');
+console.log('\nOK: 新規ランはV2、既存V1はV1。倍率・戦闘結果のraw契約は不変。');

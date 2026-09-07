@@ -229,7 +229,7 @@ const KPI = {
   // 結果を読むだけで、result も state も書き換えない。
   battleFinished(result) {
     if (!this.current || !result) return null;
-    const summary = result.chainSummary || null;
+    const legacySummary = result.chainSummary || null;
     const timeline = Array.isArray(result.timeline) ? result.timeline : [];
     this.current.chainBattles += 1;
 
@@ -250,14 +250,29 @@ const KPI = {
     // （current が無い＝ラン外の呼び出しは先頭の早期returnで弾いている）
     if (!Number.isFinite(this.current.chainDefVersion)) this.current.chainDefVersion = 1;
 
-    const depth = (summary && summary.maxChain) || 0;
+    const v2 = this.current.chainDefVersion >= 2 ? this.chainApi().summarize(timeline) : null;
+    const depth = v2 ? v2.maxDepth : ((legacySummary && legacySummary.maxChain) || 0);
     this.current.chainMax = Math.max(this.current.chainMax, depth);
-    const abilities = this.chainAbilities(timeline, summary && summary.deepest);
+    const abilities = v2
+      ? this.normalizedChainAbilities(v2.deepest)
+      : this.chainAbilities(timeline, legacySummary && legacySummary.deepest);
     if (abilities.length > this.current.chainAbilityMax) {
       this.current.chainAbilityMax = abilities.length;
       this.current.chainSample = { depth, abilities };
     }
     return { depth, abilities };
+  },
+
+  // V2の代表経路は宣言と効果が結合済み。生イベントへ戻さず、stepに保存した能力名を読む。
+  normalizedChainAbilities(deepest) {
+    const labels = [], seen = new Set();
+    for (const step of (deepest && Array.isArray(deepest.steps) ? deepest.steps : [])) {
+      const label = (step.declaredBy && step.declaredBy.abilityName) || step.abilityName;
+      if (!label || seen.has(label)) continue;
+      seen.add(label);
+      labels.push(label);
+    }
+    return labels;
   },
 
   speedChanged() {

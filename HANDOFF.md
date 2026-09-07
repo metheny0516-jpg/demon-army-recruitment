@@ -21,6 +21,25 @@
 
 ## 0. 次チャットの開始点（2026-09-03）
 
+### CHAIN V2を新規ランへ本番切替（2026-09-07・CodeX）
+
+`Chain.RECORDED_VERSION = 2`。**切替後に始める新規ランだけ**、戦闘中表示・戦果・
+ランの `maxChain`・魔界史・KPIを正規化V2で揃えた。進行中・再起・ロード・再起動した
+V1ランは保存済み `chainDefVersion` を正本にして、V1の値・表示・KPIを維持する。
+
+- ラン記録はV2なら `Chain.viewOf(timeline).maxDepth`、V1なら従来の
+  `result.chainSummary.maxChain` を読む。raw `chainSummary` 自体は互換用に変更していない。
+- KPIはV2だけ `Chain.summarize(timeline)` と結合済みstepから深さ・能力列を作る。
+  `triggerKinds` は従来どおり版に依存しないrawイベントから集計する。
+- 教訓は決定どおりV1/V2とも `<=2`。ビルド名はV1 `>=6`、V2 `>=4`。
+- 倍率、ハプニング条件、演出閾値はraw V1のまま。今回の切替へ混ぜていない。
+- Node回帰49/49、期待経路9件・分岐20件、固定24戦、400戦18,513イベント一致。
+- ブラウザ回帰はPlaywrightモジュール不在で47本すべて起動前停止。Chrome操作面も利用不可、
+  in-app browserのローカルファイル表示はセキュリティ方針で拒否されたため実機未確認。
+
+次は**倍率・ハプニング・演出閾値を消費者ごとに測定するタスク**。V2切替済みという理由だけで
+一括変換しない。まず倍率の勝率影響、次に戦闘内ハプニング発火率、最後に演出頻度を別々に測る。
+
 ### CHAIN V2記録閾値を決定（2026-09-07・Astra／判断のみ）
 
 決定は [`docs/CHAIN_V2_THRESHOLD_DECISION_2026-09-07.md`](docs/CHAIN_V2_THRESHOLD_DECISION_2026-09-07.md)。

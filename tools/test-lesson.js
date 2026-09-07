@@ -29,6 +29,11 @@ assert(ids({ facilityLevel: 2, fallenTotal: 9, battlesWon: 8 })[0] === 'mourning
   '戦死者を多く出したランは、まず弔いの記憶を差し出す');
 assert(ids({ facilityLevel: 2, battlesWon: 2 }).includes('rout'),
   '早々に敗走したランには敗走の記憶が並ぶ');
+assert(Game.lessonById('arcane').test({ chainDefVersion: 1, maxChain: 2 })
+  && Game.lessonById('arcane').test({ chainDefVersion: 2, maxChain: 2 }),
+  '未完の記憶は決定どおりV1/V2とも2段以下に一致する');
+assert(!Game.lessonById('arcane').test({ chainDefVersion: 2, maxChain: 3 }),
+  'V2の3段は未完の記憶に一致しない');
 
 // ── 2. どんな負け方でも必ず3つ出る ───────────────────────────
 // 「当てはまったものだけ」にすると、綺麗に負けたランで選択肢が消えてしまう。

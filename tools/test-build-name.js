@@ -40,6 +40,16 @@ assert(name({}) === '特筆すべきことのない寄せ集め軍団', '空の�
 assert(name({ mainRace: 'オーク', maxArmySize: 6, discoveredSynergyIds: ['elite_few'], alert: 14 })
   === '指名手配された精鋭', 'シナジー名が中核になるときは「軍団」を重ねない');
 
+// ── 3b. CHAIN定義版ごとの閾値 ──────────────────────────
+assert(name({ chainDefVersion: 1, maxChain: 5, mainRace: 'ゴブリン', maxArmySize: 8 })
+  === '特筆すべきことのないゴブリン軍団', 'V1は5段ではCHAIN名を付けない');
+assert(name({ chainDefVersion: 1, maxChain: 6, mainRace: 'ゴブリン', maxArmySize: 8 })
+  === '6連鎖を通したゴブリン軍団', 'V1は従来どおり6段からCHAIN名を付ける');
+assert(name({ chainDefVersion: 2, maxChain: 4, mainRace: 'ゴブリン', maxArmySize: 8 })
+  === '4連鎖を通したゴブリン軍団', 'V2は決定済み閾値の4段からCHAIN名を付ける');
+assert(name({ chainDefVersion: 2, maxChain: 3, mainRace: 'ゴブリン', maxArmySize: 8 })
+  === '特筆すべきことのないゴブリン軍団', 'V2は3段ではCHAIN名を付けない');
+
 // ── 4. ほぼ全ランで起きることは名前を占領しない ────────────────
 // 拠点接収と再起はどちらも「普通の行動」なので、他に言うことがあるランでは名乗らない。
 assert(name({ mainRace: 'ゴブリン', maxArmySize: 8, seizeUsed: true, retriesUsed: 1,
