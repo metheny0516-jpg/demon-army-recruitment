@@ -211,6 +211,17 @@ function measureRun(strategy, runSeed, stats) {
     if (b.sample && samples.length < 12) samples.push(b.sample);
   }
 
+  // ── 最後まで終わらなかったランを混ぜない ────────────────
+  // sim.js の runOnce は `Game.deploy()` が falsy を返すと while を break する。
+  // そのとき endRun() へ到達しないので `st.record` が無く、`{}` が返る。
+  // これを普通のランとして数えると **maxChain 0 のランが水増しされ**、
+  // 教訓「未完の記憶」(maxChain<=2) の率が実際より高く出る。
+  // （実測 750ラン中 38件 = 5.1%。前回報告のV1教訓率 5.1% はほぼこれだった）
+  // 本体もsimも直さず、測定対象から外して件数だけ報告する。
+  if (!record || record.maxChain === undefined) {
+    return { strategy: strategy.name, seed: runSeed, unfinished: true, battles: kept.length };
+  }
+
   // ── ラン終了時の整合性（1件でも崩れたら測定を停止する） ──────
   // 本体は再起で state ごとチェックポイントへ戻る。台帳がその境界で
   // 巻き戻っていなければ、ここで record.maxChain と食い違う。
@@ -297,6 +308,7 @@ const summaryOf = rows => ({
 });
 
 const all = [];
+const unfinished = [];      // 最後まで終わらなかったラン（集計から外す）
 console.log(`■ CHAIN V2切替前の測定（全${strategies.length}戦略 × ${N}ラン／seed基 ${SEED_BASE}）`);
 console.log('  1つの戦闘結果から V1（raw chainDepth）と V2（Chain.summarize）を同時に算出。');
 console.log('  ゲームは二重実行しない。倍率・閾値・UI・raw因果グラフは変更していない。\n');
@@ -312,11 +324,13 @@ strategies.forEach((strategy, si) => {
       console.error(`  戦略「${strategy.name}」 ラン ${i + 1}`);
       process.exit(1);
     }
+    if (row.unfinished) { unfinished.push(row); continue; }
     rows.push(row);
   }
   all.push(...rows);
   const s = summaryOf(rows);
-  console.log(`■ ${strategy.name}（${N}ラン）`);
+  const skipped = unfinished.filter(r => r.strategy === strategy.name).length;
+  console.log(`■ ${strategy.name}（${N}ラン中 有効 ${rows.length}${skipped ? ` / 未完 ${skipped}` : ''}）`);
   console.log(`  最大CHAIN  V1 平均 ${f1(s.v1Mean)} 中央 ${s.v1Median} P90 ${s.v1P90} 最高 ${s.v1Max}`
     + `　→　V2 平均 ${f1(s.v2Mean)} 中央 ${s.v2Median} P90 ${s.v2P90} 最高 ${s.v2Max}`);
   console.log(`  教訓 maxChain<=2   条件一致 V1 ${f1(s.v1LessonHit)}% → V2 ${f1(s.v2LessonHit)}%`
@@ -330,7 +344,16 @@ strategies.forEach((strategy, si) => {
 
 // ── 全体 ──────────────────────────────────────────────
 const g = summaryOf(all);
-console.log('═══ 全体（15戦略 × ' + N + 'ラン = ' + all.length + 'ラン） ═══\n');
+console.log('═══ 全体（15戦略 × ' + N + 'ラン ＝ 有効 ' + all.length + 'ラン'
+  + (unfinished.length ? ` / 未完 ${unfinished.length}ラン を除外` : '') + '） ═══\n');
+if (unfinished.length) {
+  console.log(`■ 除外した未完のラン ${unfinished.length}件（${f1(pct(unfinished.length, unfinished.length + all.length))}%）`);
+  console.log('  sim.js の runOnce が Game.deploy() の falsy で break し、endRun() へ到達しなかったもの。');
+  console.log('  record が無いので maxChain も教訓もビルド名も存在しない。0として数えると率が歪む。');
+  const byStrat = new Map();
+  for (const r of unfinished) byStrat.set(r.strategy, (byStrat.get(r.strategy) || 0) + 1);
+  console.log('  内訳 ' + [...byStrat.entries()].map(([k, v]) => `${k}:${v}`).join(' ') + '\n');
+}
 console.log(`■ 最大CHAINの分布`);
 console.log(`  V1 平均 ${f1(g.v1Mean)} 中央 ${g.v1Median} P90 ${g.v1P90} 最高 ${g.v1Max}`);
 console.log(`  V2 平均 ${f1(g.v2Mean)} 中央 ${g.v2Median} P90 ${g.v2P90} 最高 ${g.v2Max}`);
@@ -379,7 +402,7 @@ console.log(`  （記録した代表例は ${samples.length} 件。--json で全
 
 if (jsonOut) {
   fs.writeFileSync(jsonOut, JSON.stringify({
-    seedBase: SEED_BASE, runsPerStrategy: N,
+    seedBase: SEED_BASE, runsPerStrategy: N, unfinished,
     chainDefVersion: { api: Chain.DEF_VERSION, recorded: Chain.RECORDED_VERSION },
     overall: g, byStrategy: strategies.map(s => ({ name: s.name,
       ...summaryOf(all.filter(r => r.strategy === s.name)) })),
