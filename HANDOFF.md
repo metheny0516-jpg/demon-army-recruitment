@@ -28,7 +28,14 @@
 `src/ui/` は未編集。**
 
 - 分離は `KPI.chainStatsByVersion(runs)` の1か所だけ。版の読み出しは `Chain.versionOf()` に集約し、
-  レポート側に写しを持たない（`tools/kpi-report.js` が本体を `require` する）。
+  写しを持たない（`tools/kpi-report.js` が本体を `require` する）。
+- **`Chain` の解決は `KPI.chainApi()` 経由にすること。** ブラウザはグローバル、Node は
+  `require("./chain.js")`、取れなければ例外。`typeof Chain !== "undefined"` の三項演算子で
+  自前の版判定へ落とす書き方をすると、**CommonJS では `Chain.versionOf()` が一度も呼ばれない**
+  （`const Chain` は chain.js のモジュール内に閉じてグローバルには出ない）。
+  同じ理由で `tools/chain-audit.js` の vm 読み込みリストにも chain.js が要る。
+- **混在時の判定は2つに分ける。** トリガー種類は版に依存しないので全体で1つ、
+  CHAINの判定は版ごとにその版の `chainAbilityMean` だけから作る。
 - `chainMax` / `chainAbilityMax` / `chainSample` の平均・最大・代表値は**その版のランだけ**から作る。
 - **`triggerKinds` は分離しない。** 段数の数え方ではなく「どの能力が連鎖に参加したか」なので
   版をまたいでも意味が変わらない。ここを分けると理由なく比較できない指標が増える。

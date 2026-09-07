@@ -104,8 +104,15 @@ lastBattle.chainView = {
 #### 実装済み（2026-09-07・Opus）
 
 分離は `KPI.chainStatsByVersion(runs)` の1か所に集約した。版の読み出しは `Chain.versionOf()` だけを
-使い、レポート側に写しを持たない（`tools/kpi-report.js` が `src/core/chain.js` と
-`src/core/kpi.js` を `require` する）。
+使い、写しを持たない（`tools/kpi-report.js` が `src/core/chain.js` と `src/core/kpi.js` を
+`require` する）。
+
+**Chain の解決は `KPI.chainApi()` に集約する。** ブラウザではグローバルの `Chain`、Node では
+`require("./chain.js")` を返し、どちらでも取れなければ**例外で止める**（版を推測して集計を続けない）。
+初版はここに `typeof Chain !== "undefined" ? ... : 自前の版判定` という写しを置いていたため、
+CommonJS で走る `tools/kpi-report.js` では `Chain.versionOf()` が**一度も呼ばれず**
+写しの方が使われていた（`const Chain` は chain.js のモジュール内に閉じるのでグローバルには出ない）。
+実装が2つある状態では、片方だけ直したときに静かに食い違う。
 
 - `chainMaxMean` / `chainMaxTop` / `chainAbilityMean` / `chainAbilityTop` / `sample` は
   **すべてその版のランだけ**から作る。代表CHAINも版ごとに選ぶ。
@@ -116,6 +123,10 @@ lastBattle.chainView = {
   （混ざった時点でその `chainMax` はどちらの定義でもない値になり、後から分離できない）。
 - レポートは**版が1つなら従来どおりの見出しと数字**を出す。混在時だけ警告と版別ブロックにし、
   統合した平均・最大・代表CHAIN・判定を出さない。
+- **混在時の判定は2つに分ける。** 「トリガー種類の判定」は版に依存しないので全体で1つ、
+  「CHAINの判定」は版ごとにその版の `chainAbilityMean` だけから作る。
+  初版は版別ブロックの判定にグローバルな `kindsMean` を混ぜており、
+  版別と呼びながら入力群が揃っていなかった。
 - 回帰は `tools/test-kpi-chain-version.js`（47本目）。V1のみ／V2のみ／混在／バージョン欠落・
   不正の4入力を固定し、混在時に全体平均(4.25)や版をまたいだ最高値が現れないことを見る。
 - 不変性: `f0273ae` と比べて V1のみ・バージョン欠落のみのレポート出力が**バイト単位で一致**。

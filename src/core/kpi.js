@@ -100,7 +100,7 @@ const KPI = {
       triggerKinds: {}, chainMax: 0, chainAbilityMax: 0, chainSample: null, chainBattles: 0,
       // chainMax をどの数え方で記録したか。現行(V1)のまま。バージョン欠落の旧KPIは
       // 読む側が V1 として扱い、値を推定変換しない（Chain.versionOf）。
-      chainDefVersion: (typeof Chain !== "undefined" ? Chain.RECORDED_VERSION : 1),
+      chainDefVersion: this.chainApi().RECORDED_VERSION,
       retriesUsed: 0, sessionRun: this.session.runs, quickRetry: false
     };
     this.update(data => {
@@ -298,6 +298,22 @@ const KPI = {
     return entry;
   },
 
+  // ── Chain（正規化API）への依存 ─────────────────────────
+  // 版の判定は Chain.versionOf() **だけ**を使う。ここに写しを置くと、
+  // ブラウザ（グローバル）とNode（CommonJS）で別々の実装が動き、
+  // 片方だけ直したときに静かに食い違う。実際 tools/kpi-report.js は CommonJS で
+  // 動くため、写しがあると Chain.versionOf が一度も呼ばれないまま集計されていた。
+  //
+  //   ブラウザ … index.html が chain.js を先に読むのでグローバルの Chain を使う
+  //   Node     … CommonJS では chain.js の Chain はモジュール内に閉じているので require する
+  //
+  // どちらでも取れなければ**例外で止める**。版を推測して集計を続けない。
+  chainApi() {
+    if (typeof Chain !== "undefined") return Chain;
+    if (typeof require === "function") return require("./chain.js").Chain;
+    throw new Error("KPI: Chain が読み込まれていない（src/core/chain.js を先に読むこと）");
+  },
+
   // ── CHAIN観測の定義バージョン別集計 ───────────────────
   // chainMax / chainAbilityMax / chainSample は**数え方が変わると意味が変わる**。
   // V1（親を持つ因果イベントを種類を問わず+1段）とV2（同じ実効果を一度だけ数える）を
@@ -310,12 +326,10 @@ const KPI = {
   // triggerKinds（発火したトリガーの種類）はここに含めない。段数の数え方ではなく
   // 「どの能力が連鎖に参加したか」なので、版をまたいでも意味が変わらない。
   chainStatsByVersion(runs) {
-    const version = entry => (typeof Chain !== "undefined" ? Chain.versionOf(entry)
-      : (Number.isFinite(Number(entry && entry.chainDefVersion))
-        && Number(entry.chainDefVersion) >= 1 ? Number(entry.chainDefVersion) : 1));
+    const chain = this.chainApi();
     const groups = new Map();
     for (const entry of (Array.isArray(runs) ? runs : [])) {
-      const v = version(entry);
+      const v = chain.versionOf(entry);
       if (!groups.has(v)) groups.set(v, []);
       groups.get(v).push(entry);
     }

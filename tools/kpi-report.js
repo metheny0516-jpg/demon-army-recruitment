@@ -65,16 +65,9 @@ const chainLines = (g, indent) => {
   console.log(`${indent}最大CHAIN: 平均 ${fixed(g.chainMaxMean)}（最高 ${g.chainMaxTop}）`);
   console.log(`${indent}代表CHAINを構成した異なる能力数: 平均 ${fixed(g.chainAbilityMean)}（最高 ${g.chainAbilityTop}）`);
 };
-if (!mixed) {
-  chainLines(chainGroups[0], '  ');
-} else {
-  console.log('  ⚠ CHAINの定義バージョンが混在している。数え方が違うので合算した平均・最大・');
-  console.log('    代表CHAINは出さない。版ごとに読むこと（版をまたいだ比較もしない）。');
-  for (const g of chainGroups) {
-    console.log(`  ── 定義V${g.defVersion}（${g.runs}ラン）`);
-    chainLines(g, '     ');
-  }
-}
+// 混在時はCHAINの行をここでは出さない。内訳のあとに版ごとのブロックとしてまとめて出す
+// （最大CHAIN・代表CHAIN・判定が版ごとに一続きで読めるようにするため）。
+if (!mixed) chainLines(chainGroups[0], '  ');
 // 何が発火していないかを見るため、種類ごとの回数を多い順に出す。
 // 一度も出てこない能力は「弱い」のではなく「繋がる条件が無い」可能性が高い
 const kindTotals = new Map();
@@ -95,7 +88,8 @@ const sampleLine = (g, indent, label) => {
     sample.chainSample.depth}）:`);
   console.log(`${indent}  ${sample.chainSample.abilities.join(' → ')}`);
 };
-// 判定も版ごとに出す。混在時に1つの結論へまとめると、どちらの定義の話か分からなくなる。
+// 単一版のときの判定。入力群が1つしかないので kindsMean と chainAbilityMean は同じ母集団から
+// 来ており、従来どおり1行にまとめてよい（出力を変えないためにも従来の文面のまま）。
 const verdict = (g, indent) => console.log(`${indent}判定: ${kindsMean < 4
   ? '発火するトリガーの種類が少ない → 条件そのものが足りない（能力追加＝CodeX側）'
   : g.chainAbilityMean < 3
@@ -105,9 +99,21 @@ if (!mixed) {
   sampleLine(chainGroups[0], '  ', '');
   verdict(chainGroups[0], '  ');
 } else {
+  // 版をまたいで意味が変わらない指標（トリガー種類）と、変わる指標（CHAINの深さ）を分ける。
+  // 版別判定にグローバルな kindsMean を混ぜると、入力群の揃っていない判定になる。
+  console.log(`  判定（トリガー種類・版に依存しない）: ${kindsMean < 4
+    ? '発火するトリガーの種類が少ない → 条件そのものが足りない（能力追加＝CodeX側）'
+    : 'トリガーの種類は足りている → 次に見るのは版ごとのCHAIN判定'}`);
+  console.log('  ⚠ CHAINの定義バージョンが混在している。数え方が違うので合算した平均・最大・');
+  console.log('    代表CHAINは出さない。版ごとに読むこと（版をまたいだ比較もしない）。');
   for (const g of chainGroups) {
+    console.log(`  ── 定義V${g.defVersion}（${g.runs}ラン）`);
+    chainLines(g, '     ');
     sampleLine(g, '     ', `（定義V${g.defVersion}）`);
-    verdict(g, '     ');
+    // この判定は**その版のランだけ**から作る（chainAbilityMean 以外を混ぜない）
+    console.log(`     判定（CHAIN・定義V${g.defVersion}のみ）: ${g.chainAbilityMean < 3
+      ? '連鎖が同じ能力で閉じている → 足りないのは「異なる条件をつなぐ橋」'
+      : '異なる条件が実際につながっている → いまの方向で厚みを増やしてよい'}`);
   }
 }
 console.log('');

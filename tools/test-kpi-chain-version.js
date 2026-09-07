@@ -88,7 +88,56 @@ assert(legacyGroups.length === 1 && legacyGroups[0].defVersion === 1,
 assert(legacyGroups[0].chainMaxTop === 6 && legacyGroups[0].chainMaxMean === 5.5,
   '旧KPIの値を推定変換しない（6と5がそのまま入る）');
 assert(Chain.versionOf(legacy) === 1 && Chain.versionOf(broken) === 1,
-  '版の読み出しは Chain.versionOf に集約されている');
+  'Chain.versionOf 自体がバージョン欠落・不正をV1にする');
+
+// 「集約されている」は関数の存在では示せない。実際に呼ばれることを監視して固定する。
+// ここが写しへ落ちると、ブラウザ（グローバル）とNode（CommonJS）で別の実装が動き、
+// 片方だけ直したときに静かに食い違う。
+{
+  const original = Chain.versionOf;
+  const seen = [];
+  Chain.versionOf = entry => { seen.push(entry); return original(entry); };
+  let stats;
+  try { stats = KPI.chainStatsByVersion([v1a, v2a, legacy, broken]); }
+  finally { Chain.versionOf = original; }
+  assert(seen.length === 4,
+    'chainStatsByVersion は各エントリで Chain.versionOf を呼ぶ（版判定の写しを持たない）');
+  assert(seen[0] === v1a && seen[2] === legacy,
+    'Chain.versionOf へ渡しているのはKPIエントリそのもの');
+  assert(stats.length === 2, '監視関数を通しても結果は変わらない');
+}
+// 監視関数が返した版がそのまま使われる（写しの結果で上書きされない）
+{
+  const original = Chain.versionOf;
+  Chain.versionOf = () => 7;                       // ありえない版を返させる
+  let stats;
+  try { stats = KPI.chainStatsByVersion([v1a, v2a]); }
+  finally { Chain.versionOf = original; }
+  assert(stats.length === 1 && stats[0].defVersion === 7,
+    'Chain.versionOf の戻り値がそのまま群の版になる（chainDefVersion を直接読んでいない）');
+}
+// ブラウザ側の経路（グローバルの Chain・require なし）。このテストの vm コンテキストには
+// require が無く、Chain だけがグローバルにあるので、ここまでの assert がその経路そのもの。
+assert(vm.runInContext('typeof require', ctx) === 'undefined'
+  && vm.runInContext('typeof Chain', ctx) === 'object',
+  'ブラウザと同じ条件（require なし・グローバルの Chain）で動いている');
+assert(vm.runInContext('KPI.chainApi() === Chain', ctx),
+  'グローバルが在るときは chainApi() がそれを返す（require へ落ちない）');
+
+// Node（CommonJS）でも同じ関数を通る。kpi-report.js が実際に走る経路。
+{
+  const chainMod = require('../src/core/chain.js');
+  assert(KPI.chainApi === undefined || typeof KPI.chainApi === 'function',
+    'Chain の解決は chainApi() に集約されている');
+  const original = chainMod.Chain.versionOf;
+  let calls = 0;
+  chainMod.Chain.versionOf = entry => { calls++; return original(entry); };
+  const { KPI: KPIcjs } = require('../src/core/kpi.js');
+  try { KPIcjs.chainStatsByVersion([v1a, v2a, legacy]); }
+  finally { chainMod.Chain.versionOf = original; }
+  assert(calls === 3,
+    'CommonJS（kpi-report.js の経路）でも Chain.versionOf が呼ばれる');
+}
 const withLegacy = KPI.chainStatsByVersion([legacy, v2a]);
 assert(withLegacy.length === 2 && withLegacy[0].defVersion === 1,
   '旧KPIとV2が混ざれば、旧KPIはV1群として分離される');
@@ -173,8 +222,32 @@ assert((outMix.match(/いちばん条件をまたいだ代表CHAIN/g) || []).len
   '混在: 代表CHAINも版ごとに1本ずつ（統合した代表を出さない）');
 assert(outMix.includes('（定義V1）') && outMix.includes('（定義V2）'),
   '混在: どちらの版の代表経路か明示する');
-assert((outMix.match(/判定:/g) || []).length >= 2 + 2,
-  '混在: CHAINの判定も版ごとに出す（1つの結論へまとめない）');
+assert(outMix.includes('判定（トリガー種類・版に依存しない）:'),
+  '混在: トリガー種類の判定は全体で1つ（版に依存しない指標だと明示する）');
+assert(outMix.includes('判定（CHAIN・定義V1のみ）:') && outMix.includes('判定（CHAIN・定義V2のみ）:'),
+  '混在: CHAINの判定は版ごとに出す');
+assert((outMix.match(/判定（CHAIN・定義V/g) || []).length === 2,
+  '混在: CHAIN判定の行は版の数だけ');
+// 「シナジー接続」節の中に、種類とCHAINを混ぜた従来の1行判定が残っていないこと
+// （他の節の「判定:」まで拾わないよう、節を切り出して見る）
+{
+  const section = outMix.split('■ シナジー接続')[1].split('■ ')[0];
+  assert(!/\n\s+判定: /.test(section),
+    '混在: 種類とCHAINを混ぜた従来の1行判定は出さない（入力群が揃っていないため）');
+}
+// 版別判定が、その版のランだけから決まっていること。
+// V1群は chainAbilityMean=3、V2群は 2 なので、同じ文面にならないのが正しい。
+{
+  const v1Line = outMix.split('\n').find(l => l.includes('判定（CHAIN・定義V1のみ）'));
+  const v2Line = outMix.split('\n').find(l => l.includes('判定（CHAIN・定義V2のみ）'));
+  assert(v1Line.includes('異なる条件が実際につながっている'),
+    '混在: V1の判定はV1群の chainAbilityMean(3.0) から決まる');
+  assert(v2Line.includes('同じ能力で閉じている'),
+    '混在: V2の判定はV2群の chainAbilityMean(2.0) から決まる（V1の値に引きずられない）');
+}
+// トリガー種類は全群で同じ（版に依存しない）ので、CHAIN判定の分岐がそれに左右されない
+assert(outMix.indexOf('判定（トリガー種類') < outMix.indexOf('定義V1（'),
+  '混在: 版に依存しない判定を先に、版別ブロックを後に出す');
 
 const outLegacy = report(write('legacy.json', [legacy, broken]));
 assert(outLegacy.includes('  最大CHAIN: 平均 5.5（最高 6）'),
