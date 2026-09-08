@@ -1,9 +1,12 @@
 // 尺の圧縮が「通常攻撃と無反応区間」だけに掛かり、事件は縮まないこと（実機・DOMあり）。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { autoDismissMormo } = require('./helpers.js');
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  // 尺の完走を測る試験なので、モルモの確認は人の代わりに即送る。
+  await autoDismissMormo(page);
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });

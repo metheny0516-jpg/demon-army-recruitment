@@ -865,8 +865,7 @@ button.wide { width: 100%; }
 /*
  * 試遊で「いいんだけど目立たない」と言われたので、隅の小さな野次から
  * **戦場の下半分を使う帯**へ変えた。1戦闘に1回しか出ないので、出るときは大胆に出す。
- * 読み終われば自分で引く（wipe＝全滅のときだけ結果画面まで残す）。
- * pointer-events: none は維持する。覆っても操作は下へ通り、進行は止まらない。
+ * 読み終えたら確認ボタンで戦闘へ戻す。表示中は戦闘そのものも操作も止める。
  */
 .mormo-aside {
   position: absolute;
@@ -878,7 +877,7 @@ button.wide { width: 100%; }
   min-height: 48%;
   display: flex; align-items: center; gap: 18px;
   padding: 20px 20px 22px;
-  pointer-events: none;
+  pointer-events: auto;
   /* 下から立ち上がる幕。上端はぼかして戦場と地続きに見せる */
   background: linear-gradient(to top, rgba(10, 7, 16, .97) 62%, rgba(10, 7, 16, .88) 84%, rgba(10, 7, 16, 0));
   opacity: 0;
@@ -913,10 +912,29 @@ button.wide { width: 100%; }
   color: #f6e6c2; font-size: 25px; line-height: 1.75;
   box-shadow: 0 8px 26px rgba(0, 0, 0, .5);
 }
+.mormo-aside-bubble p { margin: 0; }
 .mormo-aside-bubble b {
   display: block;
   color: #f4ce80; font-size: 13px; letter-spacing: .12em; margin-bottom: 6px;
 }
+.mormo-aside-continue {
+  display: block;
+  min-width: min(100%, 260px);
+  margin: 16px 0 0 auto;
+  padding: 12px 20px;
+  border: 1px solid #e7bd68;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #8f4c28, #66301f);
+  color: #fff2ce;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  cursor: pointer;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .45);
+}
+.mormo-aside-continue:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
+.mormo-aside-continue:hover { filter: brightness(1.12); }
 @media (max-width: 700px) {
   /* 狭い画面では横並びだと吹き出しが細くなり、1行が数文字で折り返して読みにくい。
      顔を上、台詞を下の縦積みにして、台詞に画面幅をまるごと使わせる。 */
@@ -930,6 +948,7 @@ button.wide { width: 100%; }
     font-size: 19px; padding: 14px 16px; line-height: 1.7;
     border-radius: 4px 16px 16px 16px;
   }
+  .mormo-aside-continue { width: 100%; margin-top: 10px; padding: 11px 14px; font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mormo-aside { transition: none; }

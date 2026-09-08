@@ -108,7 +108,8 @@ const shell = { stage: 3, baseStage: 3, missionKind: 'invade', region: '辺境',
         // 顔を少し上へ置き、跳ね毛を切って首元を見せるため、画像自体を枠の上へ送る。
         cropTop: imgRect && faceRect ? (imgRect.top - faceRect.top) / faceRect.height : 0,
         fontSize: bubble ? parseFloat(getComputedStyle(bubble).fontSize) : 0,
-        pass: getComputedStyle(box).pointerEvents
+        blocks: getComputedStyle(box).pointerEvents,
+        button: (box.querySelector('.mormo-aside-continue') || {}).textContent || ''
       };
     }, deep);
     assert.ok(look, `${label}: 一言が出ている`);
@@ -117,7 +118,8 @@ const shell = { stage: 3, baseStage: 3, missionKind: 'invade', region: '辺境',
     assert.ok(look.zoom >= 2.5, `${label}: 立ち絵を ${look.zoom.toFixed(1)}倍に寄せて顔だけ見せる（全身を丸に入れない）`);
     assert.ok(look.cropTop <= -0.25, `${label}: 画像を枠高の ${Math.round(-look.cropTop * 100)}% 上へ送り、跳ね毛より首元を優先する（25%以上）`);
     assert.ok(look.fontSize >= 18, `${label}: 台詞は ${look.fontSize}px（18px以上）`);
-    assert.equal(look.pass, 'none', `${label}: 覆っても操作は下へ通る（進行を止めない）`);
+    assert.equal(look.blocks, 'auto', `${label}: 表示中は戦場への操作を遮る`);
+    assert.match(look.button, /戦闘を再開/, `${label}: プレイヤーが明示的に再開できる`);
     console.log(`  ✓ ${label}: 下側 ${Math.round(look.share * 100)}% / 顔 ${Math.round(look.faceSize)}px / ${look.zoom.toFixed(1)}倍 / 上へ${Math.round(-look.cropTop * 100)}% / ${look.fontSize}px`);
     if (process.env.SP) {
       await page.waitForTimeout(350); // 0.3秒の登場transition後を目視用に残す
@@ -126,7 +128,35 @@ const shell = { stage: 3, baseStage: 3, missionKind: 'invade', region: '辺境',
   }
   await page.setViewportSize({ width: 390, height: 844 });
 
+  // 6) 自動再生でも、モルモが出た時点でプレイヤーの確認まで本当に停止する。
+  await page.evaluate(d => {
+    UI.set(BattleScene.shell(window.shellData));
+    BattleScene.play(build(d), () => {});
+  }, deep);
+  await page.waitForSelector('.mormo-aside.show', { timeout: 10000 });
+  const held = await page.evaluate(() => ({
+    index: BattleScene.index,
+    paused: BattleScene.paused,
+    awaiting: BattleScene.mormoAwaiting,
+    skipDisabled: document.querySelector('[data-action="skiplog"]').disabled
+  }));
+  await page.waitForTimeout(800);
+  const still = await page.evaluate(() => BattleScene.index);
+  assert.equal(still, held.index, '確認しない限りタイムラインは進まない');
+  assert.ok(held.paused && held.awaiting, 'モルモ専用の確認待ち状態になる');
+  assert.ok(held.skipDisabled, '確認待ちは下の戦闘操作もロックする');
+  await page.click('.mormo-aside-continue');
+  await page.waitForFunction(before => BattleScene.index > before, held.index, { timeout: 2000 });
+  const resumed = await page.evaluate(() => ({
+    aside: !!document.querySelector('.mormo-aside'),
+    paused: BattleScene.paused,
+    awaiting: BattleScene.mormoAwaiting,
+    skipDisabled: document.querySelector('[data-action="skiplog"]').disabled
+  }));
+  assert.deepEqual(resumed, { aside: false, paused: false, awaiting: false, skipDisabled: false },
+    '確認ボタンで一言を閉じ、操作を戻して戦闘を再開する');
+
   assert.deepEqual(errors, []);
-  console.log('✓ モルモの一言: 3場面・優先度・1戦闘1回・静かな戦闘では出ない・大胆に出す');
+  console.log('✓ モルモの一言: 優先度・1戦闘1回・大胆な表示・確認まで停止・タップで再開');
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

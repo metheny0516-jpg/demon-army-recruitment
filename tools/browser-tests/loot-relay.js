@@ -2,12 +2,15 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { autoDismissMormo } = require('./helpers.js');
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   try {
     for (const [width, speed, reduced] of [[1280, 1, false], [390, 2, false], [390, 4, true]]) {
       const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+      // 連鎖を最後まで観測する試験なので、モルモの確認は人の代わりに即送る。
+      await autoDismissMormo(page);
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
       await page.goto('file://' + process.env.GAME + '/battle-preview.html');

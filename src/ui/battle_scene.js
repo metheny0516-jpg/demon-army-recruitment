@@ -148,6 +148,7 @@ const BattleScene = {
     this.motions.clear();
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
+    this.mormoAwaiting = false;
     const scene = document.getElementById("scene");
     if (scene) {
       scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt, .mormo-aside").forEach(el => el.remove());
@@ -339,6 +340,7 @@ const BattleScene = {
     this.onDone = onDone;
     this.finished = false;
     this.paused = false;
+    this.mormoAwaiting = false;
     this.resultPending = null;
     this.historySeen = new Set();
     const history = document.getElementById("chain-history-list");
@@ -436,6 +438,9 @@ const BattleScene = {
     this.eventScale = item.scale;
     const dur = this.render(ev);
     if (ev.type === "result") return; // 勝利の一拍と曲は倍速から独立
+    // モルモの確認待ちに入ったイベントでは次の予約を作らない。
+    // 読み終えた時間がそのまま「この一拍」なので、確認後は直ちに次へ進む。
+    if (this.mormoAwaiting) return;
     const wait = Math.max(60, ((item.duration || dur) * this.eventScale) / this.speed);
     this.scheduleStep(wait);
   },
@@ -447,7 +452,7 @@ const BattleScene = {
   },
 
   togglePause() {
-    if (this.finished || this.resultPending) return;
+    if (this.finished || this.resultPending || this.mormoAwaiting) return;
     this.paused = !this.paused;
     if (this.paused) {
       clearTimeout(this.stepTimer);
@@ -1400,12 +1405,50 @@ const BattleScene = {
       this.lastMormoLine[plan.scene] = text;
       expression = set.expression;
     }
-    const box = MormoScene.aside({ expression, text, host: document.getElementById("scene") });
-    if (!box) return;
+    const isWipe = plan.scene === "wipe";
+    this.mormoAwaiting = true;
+    if (!isWipe) this.paused = true;
+    this.setMormoControlsLocked(true, isWipe);
+    const box = MormoScene.aside({
+      expression,
+      text,
+      host: document.getElementById("scene"),
+      buttonLabel: isWipe ? "戦果を確認する ▶" : "戦闘を再開 ▶",
+      onContinue: () => this.continueAfterMormo(isWipe)
+    });
+    if (!box) {
+      this.mormoAwaiting = false;
+      if (!isWipe) this.paused = false;
+      this.setMormoControlsLocked(false);
+      return;
+    }
     if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
-    // 決着の一言は結果画面まで残す。戦闘中の一言だけ自動で引く。
-    if (plan.scene === "wipe") return;
-    this.timers.push(setTimeout(() => box.remove(), this.MORMO_ASIDE_MS / this.speed));
+  },
+
+  setMormoControlsLocked(locked, wipe = false) {
+    for (const id of ["speed-btn", "pause-btn", "next-btn"]) {
+      const button = document.getElementById(id);
+      if (button) button.disabled = locked;
+    }
+    const skip = document.querySelector('[data-action="skiplog"]');
+    if (skip) skip.disabled = locked;
+    const pause = document.getElementById("pause-btn");
+    if (pause && locked && !wipe) pause.textContent = "モルモの報告中";
+  },
+
+  continueAfterMormo(wipe = false) {
+    if (!this.mormoAwaiting) return;
+    this.mormoAwaiting = false;
+    this.setMormoControlsLocked(false);
+    if (wipe || this.finished) {
+      const pause = document.getElementById("pause-btn");
+      if (pause) pause.disabled = true;
+      return;
+    }
+    this.paused = false;
+    const pause = document.getElementById("pause-btn");
+    if (pause) pause.textContent = "⏸ 読むために停止";
+    this.step();
   },
 
   // 戦闘開始の時点で「今日いくつ発動するか」だけ先に約束する。

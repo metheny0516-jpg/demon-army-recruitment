@@ -2,6 +2,7 @@
 // 快感は演出でしか出ないので、壊れても気づけるようにここで縛る。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const assert = require('node:assert/strict');
+const { autoDismissMormo } = require('./helpers.js');
 
 const scenario = () => {
   let n = 0;
@@ -59,6 +60,8 @@ const watch = async (page, ms, step) => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    // このテストは演出の最後までを観測する。人の代わりにモルモの確認を即送る。
+    await autoDismissMormo(page);
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
     await page.goto('file://' + process.env.GAME + '/battle-preview.html');

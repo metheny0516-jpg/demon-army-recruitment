@@ -104,9 +104,9 @@ const MormoScene = {
     } else this.close();
   },
 
-  // 戦闘を止めない「野次」。全画面の show() と違い、操作を奪わず自動で消える。
-  // 戦闘中に全画面報告を挟むと、せっかく読ませている連鎖の流れが切れる。
-  // 呼び出し側（BattleScene）が1戦闘1回に制限する責任を持つ。
+  // 戦闘中の一言。試遊では自動で消えると内容を認識する前に戦闘へ戻ってしまったため、
+  // 明示的な確認ボタンを持つ。停止・再開そのものは呼び出し側（BattleScene）が担う。
+  // 呼び出し側は1戦闘1回に制限する責任も持つ。
   // spotlight の事実を、モルモの声にする（D1）。
   //
   // 戦果の1文（UI.spotlightSentence）とは**別の声**であって、同じ文の焼き直しではない。
@@ -138,17 +138,31 @@ const MormoScene = {
     const expression = this.EXPRESSIONS.includes(options.expression) ? options.expression : "report";
     const box = document.createElement("div");
     box.className = `mormo-aside mormo-aside-${expression}`;
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-label", "宰相モルモからの戦況報告");
     // 立ち絵は512pxの全身像。丸く抜くと全身が縮んで表情が読めないので、
     // 枠で切り抜いて顔だけを見せる（オーナー試遊の指摘）。倍率と位置はCSS側。
     box.innerHTML = `<span class="mormo-aside-face"><img class="mormo-aside-portrait"
         src="assets/mormo/${expression}.webp" alt="宰相モルモ"></span>
-      <p class="mormo-aside-bubble"><b>宰相モルモ</b>${U.esc(String(options.text || ""))}</p>`;
+      <div class="mormo-aside-bubble"><b>宰相モルモ</b><p>${U.esc(String(options.text || ""))}</p>
+        <button type="button" class="mormo-aside-continue">${U.esc(String(options.buttonLabel || "戦闘を再開 ▶"))}</button>
+      </div>`;
     const portrait = box.querySelector(".mormo-aside-portrait");
     // 画像が無い環境では枠ごと畳む（空の丸が残らないようにする）
     if (portrait) portrait.onerror = () => { const face = portrait.closest(".mormo-aside-face"); (face || portrait).remove(); };
     host.appendChild(box);
     void box.offsetWidth;
     box.classList.add("show");
+    const button = box.querySelector(".mormo-aside-continue");
+    if (button) {
+      button.addEventListener("click", () => {
+        if (!box.isConnected) return;
+        box.remove();
+        if (typeof options.onContinue === "function") options.onContinue();
+      }, { once: true });
+      button.focus({ preventScroll: true });
+    }
     return box;
   },
 

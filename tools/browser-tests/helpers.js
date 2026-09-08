@@ -1,6 +1,6 @@
 // ブラウザ回帰テストの共通ヘルパー。
 //
-// モルモの全画面報告は**自動で閉じない**（読み終える前に消えないための実装意図）。
+// モルモの全画面報告と戦闘中の一言は**自動で閉じない**（読み終える前に消えないための実装意図）。
 // つまり報告が出ている間、下の画面のボタンは覆われていてクリックできない。
 // 実プレイでは人が送るので問題にならないが、テストは明示的に送ってやる必要がある。
 // 報告そのものの挙動は `mormo.js` が見る。他のテストはここを通して先へ進む。
@@ -29,6 +29,12 @@ async function autoDismissMormo(page) {
       MormoScene.__autoDismiss = true;
       const show = MormoScene.show.bind(MormoScene);
       MormoScene.show = function (options) { show(options); this.close(); };
+      const aside = MormoScene.aside.bind(MormoScene);
+      MormoScene.aside = function (options) {
+        const box = aside(options);
+        queueMicrotask(() => box && box.querySelector('.mormo-aside-continue')?.click());
+        return box;
+      };
     };
     patch();
   });
@@ -41,6 +47,12 @@ async function silenceMormoFromNow(page) {
     MormoScene.__autoDismiss = true;
     const show = MormoScene.show.bind(MormoScene);
     MormoScene.show = function (options) { show(options); this.close(); };
+    const aside = MormoScene.aside.bind(MormoScene);
+    MormoScene.aside = function (options) {
+      const box = aside(options);
+      queueMicrotask(() => box && box.querySelector('.mormo-aside-continue')?.click());
+      return box;
+    };
     MormoScene.close();
   });
   await page.waitForTimeout(30);
