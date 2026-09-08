@@ -1538,7 +1538,12 @@ const Game = {
         };
       })(),
       facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
-      deathChains: result.deathChains || []
+      deathChains: result.deathChains || [],
+      // 戦果の1文の材料（B1）。「誰の能力が誰の何を動かし、結果どうなったか」を
+      // 根拠イベントID付きで最大1件。証拠が揃わない戦闘では null になり、表示側は
+      // その1文だけを省く。**日本語はここで作らない**（ui.js が組み立てる）。
+      // 旧セーブにこの鍵は無い。無ければ出さないのが正しく、推定生成してはいけない。
+      spotlight: typeof Spotlight !== "undefined" ? Spotlight.of(result.timeline) : null
     };
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
     // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
