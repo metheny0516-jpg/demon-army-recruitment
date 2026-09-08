@@ -332,11 +332,15 @@ const Sound = {
         break;
       case "win":
         // 約3.2秒のオリジナル凱旋句。戦闘速度で音程や曲の長さを変えない。
+        // 音量は合成音どうしではなく、**直前に鳴っている実録の打撃WAV**を基準に置く。
+        // 打撃は Audio 要素で volume*0.9 まで出るのに対し、合成音の既定 gain は .065 しかなく、
+        // 約23dB下だった。勝ち確の連打の直後では埋もれて「鳴っていない」と受け取られる。
+        // 合成音全体の水準はここでは触らない（別タスク）。凱旋句だけを打撃と同じ土俵へ上げる。
         [[392,0,.16],[392,.21,.16],[392,.42,.16],[523,.68,.42],
           [494,1.16,.20],[440,1.42,.20],[494,1.68,.24],[523,2.02,1.1]]
-          .forEach(([freq,delay,duration]) => this.tone(freq,duration,{type:"triangle",gain:.065,delay}));
-        this.chord([196,247,294], .7, {type:"triangle",gain:.018,delay:1.25});
-        this.chord([131,262,330,392], 1.12, {type:"triangle",gain:.022,delay:2.02});
+          .forEach(([freq,delay,duration]) => this.tone(freq,duration,{type:"triangle",gain:.30,delay}));
+        this.chord([196,247,294], .7, {type:"triangle",gain:.085,delay:1.25});
+        this.chord([131,262,330,392], 1.12, {type:"triangle",gain:.10,delay:2.02});
         break;
       case "lose":
         [294, 233, 175, 117].forEach((freq, i) => this.tone(freq, .3 * pace, {

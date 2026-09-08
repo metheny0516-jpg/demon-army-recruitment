@@ -1608,10 +1608,16 @@ const BattleScene = {
     const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
     if (typeof Music !== "undefined") Music.suspend();
-    if (typeof KPI !== "undefined") KPI.logSkipped();
-    if (typeof Sound !== "undefined") {
-      Sound.stopAll();
-      Sound.cue("skip");
+    // 決着表示が出たあとの「飛ばす」は、残りの戦闘を飛ばしているのではなく
+    // 勝利の余韻を早送りしているだけ。ここで stopAll() すると鳴っている最中の
+    // ファンファーレを自分で切ってしまい、勝利音が無いまま戦果へ飛ぶ。
+    // 飛ばす対象が残っていないので、スキップ音もKPIのスキップも記録しない。
+    if (!announced) {
+      if (typeof KPI !== "undefined") KPI.logSkipped();
+      if (typeof Sound !== "undefined") {
+        Sound.stopAll();
+        Sound.cue("skip");
+      }
     }
     while (this.index < this.timeline.length) {
       const ev = this.timeline[this.index++];
