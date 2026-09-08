@@ -62,11 +62,24 @@ const { autoDismissMormo } = require('./helpers.js');
     assert.ok(stack.ids.includes('overload'), '2つ以上で魔王軍完成が重なる');
 
     // 4) 魔王軍完成は単独では立たない
+    //
+    // 見たいのは「非メタが1つのときに overload が立たないこと」であって、
+    // 特定の編成そのものではない。以前はゴブリン2体出撃で測っていたが、あとから
+    // 《追い剥ぎコンビ》（ゴブリン2体で成立）が増えて非メタが2つになり、
+    // overload が正しく立つのに落ちるテストになっていた（2026-09-06 から既知の失敗）。
+    // 同じ腐り方を繰り返さないよう、**前提そのものを assert する**。
     const single = await page.evaluate(() => {
       const army = [1, 2, 3, 4].map(i => mk('goblin', i));
-      return Synergy.active(box(army.slice(0, 2)), { pool: box(army) }).map(s => s.id);
+      const squad = box(army.slice(0, 1));          // 出撃1体（追い剥ぎコンビは成立しない）
+      const active = Synergy.active(squad, { pool: box(army) });
+      return {
+        ids: active.map(s => s.id),
+        plain: active.filter(s => !s.meta && !s.grant).map(s => s.id)
+      };
     });
-    assert.ok(!single.includes('overload'), '1つだけでは魔王軍完成にならない');
+    assert.equal(single.plain.length, 1,
+      `前提: 非メタのシナジーがちょうど1つ（実際: ${single.plain.join(',') || 'なし'}）`);
+    assert.ok(!single.ids.includes('overload'), '1つだけでは魔王軍完成にならない');
 
     // 5) 編成画面の予告が本番と同じ答えを返す
     const preview = await page.evaluate(() => {

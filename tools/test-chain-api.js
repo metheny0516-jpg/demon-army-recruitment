@@ -48,12 +48,35 @@ const foes = stage => ENEMY(stage).units.map((u, j) => Battle.makeUnit({
 const ENEMY = stage => vm.runInContext('ENEMY_STAGES', ctx)[Math.min(
   vm.runInContext('ENEMY_STAGES', ctx).length - 1, Math.max(0, stage))];
 
-vm.runInContext('U.rand = Math.random;', ctx);
-Game.newRun();
-const squad = ['goblin', 'ogre', 'skeleton', 'necromancer', 'orc']
-  .map(id => Battle.makeUnit(Game.rollApplicant(id), 'player'));
-const fight = Battle.simulate(squad, foes(4),
-  { graveyard: true, extortionLedger: true, facilityWorks: 2, chainDefVersion: 2 });
+// 乱数は種で固定する。以前はここが素の Math.random で、CHAIN 3段へ届くかが運任せだった。
+// そのため「V2倍率が実際に発火する戦闘を検証している」が8回に3〜4回落ちていた。
+// 落ちる原因はゲーム側ではなくテストの作り方なので、こちらを直す。
+//
+// ただし種を1つ決め打ちにはしない。バランスが動けばその種でも届かなくなり、同じ形で腐る。
+// **倍率が発火する戦闘に当たるまで種を引き直し**、当たらなかったときだけ落とす。
+// こうすると「倍率が一度も発火しなくなった」という本物の異常だけがこのテストを赤くする。
+const seeded = seed => () => {
+  seed = (seed + 0x6D2B79F5) | 0;
+  let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const hasMultiplier = f => f.timeline.some(e => (e.traits || []).some(t => String(t).startsWith('CHAIN ')));
+const SEED_TRIES = 60;
+let fight = null, usedSeed = -1;
+for (let seed = 1; seed <= SEED_TRIES && !fight; seed++) {
+  ctx.Math.random = seeded(seed * 7919);
+  vm.runInContext('U.rand = Math.random;', ctx);
+  Game.newRun();
+  const squad = ['goblin', 'ogre', 'skeleton', 'necromancer', 'orc']
+    .map(id => Battle.makeUnit(Game.rollApplicant(id), 'player'));
+  const trial = Battle.simulate(squad, foes(4),
+    { graveyard: true, extortionLedger: true, facilityWorks: 2, chainDefVersion: 2 });
+  if (hasMultiplier(trial)) { fight = trial; usedSeed = seed; }
+}
+assert(fight !== null,
+  `CHAIN倍率が発火する戦闘が ${SEED_TRIES} 通りの種の中に存在する（倍率が死んでいない）`);
+console.log(`  （倍率が発火する戦闘: 種 ${usedSeed}／${SEED_TRIES}通り目までで確定・以後この戦闘で検証する）`);
 
 const before = JSON.stringify(fight.timeline);
 const sum = Chain.summarize(fight.timeline);
