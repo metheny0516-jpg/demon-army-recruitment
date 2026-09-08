@@ -138,10 +138,14 @@ const MormoScene = {
     const expression = this.EXPRESSIONS.includes(options.expression) ? options.expression : "report";
     const box = document.createElement("div");
     box.className = `mormo-aside mormo-aside-${expression}`;
-    box.innerHTML = `<img class="mormo-aside-portrait" src="assets/mormo/${expression}.webp" alt="宰相モルモ">
-      <p class="mormo-aside-bubble"><b>モルモ</b>${U.esc(String(options.text || ""))}</p>`;
+    // 立ち絵は512pxの全身像。丸く抜くと全身が縮んで表情が読めないので、
+    // 枠で切り抜いて顔だけを見せる（オーナー試遊の指摘）。倍率と位置はCSS側。
+    box.innerHTML = `<span class="mormo-aside-face"><img class="mormo-aside-portrait"
+        src="assets/mormo/${expression}.webp" alt="宰相モルモ"></span>
+      <p class="mormo-aside-bubble"><b>宰相モルモ</b>${U.esc(String(options.text || ""))}</p>`;
     const portrait = box.querySelector(".mormo-aside-portrait");
-    if (portrait) portrait.onerror = () => portrait.remove();
+    // 画像が無い環境では枠ごと畳む（空の丸が残らないようにする）
+    if (portrait) portrait.onerror = () => { const face = portrait.closest(".mormo-aside-face"); (face || portrait).remove(); };
     host.appendChild(box);
     void box.offsetWidth;
     box.classList.add("show");
