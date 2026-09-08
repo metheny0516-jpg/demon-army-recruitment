@@ -21,6 +21,63 @@
 
 ## 0. 次チャットの開始点（2026-09-03）
 
+### R2: 前回出撃との差分を作り、戦果の1文へ渡す（2026-09-08・Opus）
+
+設計書 6.2 / チケットR2。これで **B1 の優先順1番目「今回変えた人の確実な働き」が動く**。
+**戦闘計算・数値・ハプニング条件・演出閾値は変更していない。**
+
+#### 契約（HANDOFF 第2節へ足す新フィールド）
+
+```
+st.lastBuildSnapshot = null | { deployed:[{uid,name,tplId,rankId,traits}], roster:[uid],
+                                departments:{uid:deptId}, mercenaries:[name],
+                                facility, payroll, merge, mission }
+lastBattle.buildChanges = { first, hired[], deployed[], benched[], reassigned[],
+                            reordered, mercenaries[], facility, payroll, merge, mission,
+                            changedUids[] }
+lastBattle.spotlight.changedActor = bool   // 今回動かした人が実際に働いた回だけ true
+```
+
+- **結果を一切見ない。** `buildChanges` が答えるのは「何を変えたか」だけで、
+  「変えたから勝ったか」ではない（設計書6.2「効果を捏造する材料にしない」）。
+  勝敗・タイムラインを参照していないことを**ソースの静的検査としてテストで固定**した。
+- **比較する前が無いとき（ランの初戦・旧セーブ）は差分なし。** `first: true` を立てるだけで、
+  「全部変えた」と読み替えない。
+- **並び順も見る。** 顔ぶれが同じでも順番が変われば `reordered`。先頭ほど狙われるので、
+  同じ5人でも別の編成である（V0で踏んだ「配置で結果が割れるのに画面に出ない」の続き）。
+- **再起では比較の基準もチェックポイントへ戻る。** `st` の中にあるので自動的にそうなるが、
+  テストで固定した。
+
+#### KPI との関係（設計書の「KPIの比較処理を再利用できるか確認」への答え）
+
+**流用しない。** `KPI.fingerprint()` は「何か変わったか」の真偽を返す文字列指紋で、
+**誰が変わったかを持たない**。目的が違う。ただし**見る次元は揃えた**
+（出撃隊・配属・傭兵・施設・給与方針・合体・作戦）。片方だけ次元が増えると
+「試行として数えたのに差分は空」という食い違いが静かに生まれるので、
+**両者が同じ判定を返すことをテストで固定**した。次にどちらかを触る人は両方を直すこと。
+
+#### 戦闘中IDと永続uidの橋渡し
+
+`Spotlight.of(timeline, { highlightIds })` に**戦闘中ID**を渡す。対応表は
+`simulate()` が id を埋めたあとの `playerUnits` から run.js が作る。
+**battle.js の `battle_start` スナップショットには uid を足していない**
+（そこを触らずに済ませられたので触らなかった）。
+
+#### 表示
+
+戦果の1文の見出しだけが変わる。**「変えたから勝った」とは書かない。**
+
+```
+今回動かした人が、こう働いた
+ネルがガロを蘇生。ガロは復帰後に2回動き、15ダメージを与えた
+```
+
+印が立つのは、動かした人が**実際に働いた**候補だけ。動かしただけでは立たない。
+
+検証: 新規 `node tools/test-build-changes.js`（結果を見ない・前が無ければ空・並び順・
+KPIとの次元一致・選び方への影響・再起で戻る）と `tools/browser-tests/spotlight.js` へ追加。
+Node 53本・ブラウザ52本すべて通過。`node tools/sim.js 50` のクリア率 42〜66% で帯の中。
+
 ### CHAIN V2 ハプニング条件を全15戦略でA/B測定（2026-09-08・Gemini／測定と推奨案のみ・本番切替なし）
 
 結果は [`docs/CHAIN_V2_HAPPENING_GATE_MEASURE_2026-09-08.md`](docs/CHAIN_V2_HAPPENING_GATE_MEASURE_2026-09-08.md)。

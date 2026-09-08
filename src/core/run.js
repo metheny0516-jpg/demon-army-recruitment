@@ -85,6 +85,9 @@ const Game = {
       // 魔界史へ残す「記憶」1件（R3）。ラン状態の中にあるので、再起で巻き戻せば
       // 記憶も一緒に戻る（やり直した歴史の出来事は残さない）。
       memory: null,
+      // 前回出撃の確定値（R2）。次の出撃で「何を変えたか」を出すための基準。
+      // ラン状態の中にあるので、再起では比較の基準もチェックポイントへ戻る。
+      lastBuildSnapshot: null,
       retriesLeft: this.RETRIES_PER_RUN,
       retriesUsed: 0,
       rerollsThisPhase: 0,
@@ -201,6 +204,9 @@ const Game = {
       // 魔界史へ残す「記憶」1件（R3）。ラン状態の中にあるので、再起で巻き戻せば
       // 記憶も一緒に戻る（やり直した歴史の出来事は残さない）。旧セーブには無い。
       memory: null,
+      // 前回出撃の確定値（R2）。旧セーブには無いので、読み直した最初の1戦は
+      // 「比較する前がない」＝差分なしとして扱う（無いものを差分として捏造しない）。
+      lastBuildSnapshot: null,
       rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
@@ -1425,6 +1431,11 @@ const Game = {
     } : null;
     const extortionLedger = st.activeFacilityId === "extortion_ledger" && this.facilityReady("extortion_ledger");
     const graveyard = st.activeFacilityId === "graveyard" && this.facilityReady("graveyard");
+    // 前回出撃との差分（R2）。戦闘へ入る前の確定値で撮る。
+    // 戦闘の結果は一切見ないので、「変えたから勝った」の材料にはならない。
+    const buildSnapshot = this.buildSnapshot(stageData);
+    const buildChanges = this.buildChanges(st.lastBuildSnapshot, buildSnapshot);
+    st.lastBuildSnapshot = buildSnapshot;
     const result = Battle.simulate(playerUnits, enemyUnits,
       { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks(),
         synergyPool: this.synergyPool(), chainDefVersion: Chain.versionOf(st) });
@@ -1549,7 +1560,16 @@ const Game = {
       // 根拠イベントID付きで最大1件。証拠が揃わない戦闘では null になり、表示側は
       // その1文だけを省く。**日本語はここで作らない**（ui.js が組み立てる）。
       // 旧セーブにこの鍵は無い。無ければ出さないのが正しく、推定生成してはいけない。
-      spotlight: typeof Spotlight !== "undefined" ? Spotlight.of(result.timeline) : null
+      // 何を変えたかの記録（R2）。表示側は「変えたから勝った」と書かないこと。
+      buildChanges,
+      // 戦果の1文の材料（B1）。設計書6.1の優先順1番目「今回変えた人の確実な働き」を
+      // 効かせるため、今回動かした人の**戦闘中ID**を渡す。対応表は simulate が id を
+      // 埋めたあとの playerUnits から作る（battle.js のスナップショットは触らない）。
+      spotlight: typeof Spotlight !== "undefined" ? Spotlight.of(result.timeline, {
+        highlightIds: playerUnits
+          .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
+          .map(u => u.id).filter(Boolean)
+      }) : null
     };
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, result.victory);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
@@ -2082,6 +2102,79 @@ const Game = {
     // 何も起きなかったランは、そう名乗らせる（第12節・くすっと笑える）
     if (!prefix) return `特筆すべきことのない${core}${suffix}`;
     return `${prefix}${core}${suffix}`;
+  },
+
+  // ── 前回出撃との差分（R2） ────────────────────────────
+  //
+  // 設計書 6.1 の優先順1番目「今回新しく採用/出撃/配属を変えた人の確実な働き」を
+  // 出すための材料。**効果を捏造する材料にはしない**（設計書 6.2）。
+  // ここが答えるのは「何を変えたか」だけで、「変えたから勝ったか」ではない。
+  //
+  // KPI にも前戦との比較はあるが（`KPI.fingerprint`）、あちらは
+  // 「何か変わったか」の真偽を返す文字列指紋で、**誰が変わったかを持たない**。
+  // 目的が違うので流用しない。ただし**見る次元は揃える**
+  //（出撃隊・配属・傭兵・施設・給与方針・合体・作戦）。片方だけ次元が増えると、
+  // 「試行として数えたのに差分は空」のような食い違いが静かに生まれる。
+  buildSnapshot(stageData) {
+    const st = this.state;
+    if (!st) return null;
+    const byUid = new Map((st.roster || []).map(m => [m.uid, m]));
+    return {
+      // 並び順は配置そのものなので、集合ではなく順序を保つ
+      deployed: (st.activeUids || []).map(uid => {
+        const m = byUid.get(uid);
+        return { uid, name: m ? m.name : null, tplId: m ? m.tplId : null,
+          rankId: m ? m.rankId : null, traits: m ? (m.traits || []).slice().sort() : [] };
+      }),
+      roster: (st.roster || []).map(m => m.uid).sort((a, b) => a - b),
+      departments: Object.fromEntries((st.roster || []).map(m => [m.uid, this.departmentOf(m).id])),
+      mercenaries: (st.mercenaries || []).map(m => m.name),
+      facility: `${st.facilityLevel || 0}:${st.activeFacilityId || "none"}`,
+      payroll: st.payrollPolicy || "regular",
+      merge: st.kingSlimeMerge !== false,
+      mission: (stageData && stageData.missionKind) || null
+    };
+  },
+
+  // 2つのスナップショットの差。前が無い（ランの初戦・旧セーブ）ときは
+  // **差分なし**として返す。無いものを「全部変えた」と読み替えない。
+  buildChanges(prev, next) {
+    if (!next) return null;
+    const none = {
+      first: !prev, hired: [], deployed: [], benched: [], reassigned: [],
+      reordered: false, mercenaries: [], facility: null, payroll: null,
+      merge: false, mission: null, changedUids: []
+    };
+    if (!prev) return none;
+    const prevDeployed = new Map(prev.deployed.map(d => [d.uid, d]));
+    const prevRoster = new Set(prev.roster || []);
+    const hired = next.deployed.filter(d => !prevRoster.has(d.uid));
+    const deployed = next.deployed.filter(d => prevRoster.has(d.uid) && !prevDeployed.has(d.uid));
+    const benched = prev.deployed.filter(d => !next.deployed.some(x => x.uid === d.uid));
+    const reassigned = [];
+    for (const [uid, dept] of Object.entries(next.departments || {})) {
+      const before = (prev.departments || {})[uid];
+      if (before !== undefined && before !== dept) {
+        const found = next.deployed.find(d => String(d.uid) === String(uid));
+        reassigned.push({ uid: Number(uid), name: found ? found.name : null, from: before, to: dept });
+      }
+    }
+    // 顔ぶれが同じでも並び順が違えば「配置を変えた」。先頭ほど狙われるので意味が変わる。
+    const sameMembers = next.deployed.length === prev.deployed.length
+      && next.deployed.every(d => prevDeployed.has(d.uid));
+    const reordered = sameMembers
+      && next.deployed.some((d, i) => prev.deployed[i] && prev.deployed[i].uid !== d.uid);
+    const changed = new Set([...hired, ...deployed, ...reassigned].map(d => d.uid));
+    return {
+      first: false, hired, deployed, benched, reassigned, reordered,
+      mercenaries: next.mercenaries.filter(name => !prev.mercenaries.includes(name)),
+      facility: prev.facility !== next.facility ? { from: prev.facility, to: next.facility } : null,
+      payroll: prev.payroll !== next.payroll ? { from: prev.payroll, to: next.payroll } : null,
+      merge: prev.merge !== next.merge,
+      mission: prev.mission !== next.mission ? { from: prev.mission, to: next.mission } : null,
+      // 「今回動かした人」。戦果の1文が、この人たちの働きを優先して選ぶ。
+      changedUids: [...changed]
+    };
   },
 
   // ── 魔界史へ残す「記憶」1件（R3） ─────────────────────

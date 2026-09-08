@@ -16,14 +16,8 @@ const Spotlight = {
   // 出力契約のバージョン。保存された戦果を読む側が推定変換しないための目印。
   DEF_VERSION: 1,
 
-  // 選ぶ順序（同点なら先に定義した kind が勝つ）。
-  //
-  // 設計書の優先順は「今回変えた人の確実な働き → 初めての接続 → 既存の代表経路」。
-  // 1番目には前回出撃との差分（チケットR2の buildChanges）が要るが、まだ無い。
-  // **無いものを推測で埋めない**ので、いまは2番目以降だけを実装している。
-  // 実装している範囲での順序は「結果がどこまで届いたか」で決める:
-  //   撃破まで届いた > 追加の行動が起きた > 効果量だけ
-  // これは第4節「接続数」を見せるための順序であって、強さの順ではない。
+  // 「結果がどこまで届いたか」。撃破まで届いた > 追加の行動が起きた > 効果量だけ。
+  // 第4節「接続数」を見せるための順序であって、強さの順ではない。
   reach(candidate) {
     if (!candidate) return 0;
     if (candidate.numbers && candidate.numbers.killed) return 3;
@@ -31,9 +25,23 @@ const Spotlight = {
     return 1;
   },
 
-  of(timeline) {
+  // 選ぶ順序。設計書6.1の「今回変えた人の確実な働き → 初めての接続 → 既存の代表経路」。
+  //
+  // `highlightIds`（R2の buildChanges から来る「今回動かした人」の戦闘中ID）に
+  // 関わる候補を先に採る。**これは因果の主張ではない。** 「その人を動かしたから勝った」
+  // ではなく、「あなたが今回動かした人が、実際にこう働いた」という事実の選び方でしかない。
+  // 同じ優先度の中では reach で決める（＝「確実な働き」を優先する）。
+  priority(candidate, highlight) {
+    if (!candidate) return 0;
+    const touched = highlight && highlight.size
+      && [candidate.origin, candidate.actor].some(p => p && highlight.has(p.id));
+    return (touched ? 10 : 0) + this.reach(candidate);
+  },
+
+  of(timeline, options) {
     const events = (timeline || []).filter(Boolean);
     if (!events.length) return null;
+    const highlight = new Set(((options && options.highlightIds) || []).filter(Boolean));
     const candidates = [
       lootRelay(events),
       mealBoost(events),
@@ -41,9 +49,14 @@ const Spotlight = {
     ].filter(Boolean);
     if (!candidates.length) return null;
     const best = candidates.reduce((top, c) =>
-      this.reach(c) > this.reach(top) ? c : top, candidates[0]);
+      this.priority(c, highlight) > this.priority(top, highlight) ? c : top, candidates[0]);
+    // 「今回動かした人が関わっている」ことは表示側が知りたい事実なので印を残す。
+    // 印が立つのは**その人が実際に動いた**候補だけで、動かしただけでは立たない。
+    const changedActor = !!(highlight.size
+      && [best.origin, best.actor].some(p => p && highlight.has(p.id)));
     // 保存して読み直せる形だけにする（関数・循環を持ち込まない）。
-    return JSON.parse(JSON.stringify({ defVersion: this.DEF_VERSION, candidateCount: candidates.length, ...best }));
+    return JSON.parse(JSON.stringify({
+      defVersion: this.DEF_VERSION, candidateCount: candidates.length, changedActor, ...best }));
   }
 };
 

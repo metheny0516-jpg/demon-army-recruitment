@@ -93,6 +93,15 @@ const relay = {
   ok(r.text === null, 'spotlight が無ければ1文ごと出さない（推測で書かない）');
   ok(r.panels === 1 && r.records === 2, '1文が無くても戦果パネルは従来どおり');
 
+  console.log('▼ 今回動かした人が働いた回');
+  r = await showResult(page, { ...relay, changedActor: true });
+  console.log('    ' + r.text);
+  ok(/今回動かした人/.test(r.text), '見出しが変わり、自分の操作が効いたことが分かる');
+  ok(!/勝っ|勝利したから|おかげで勝/.test(r.text), '「変えたから勝った」とは書かない（反実仮想を断言しない）');
+  ok(await page.locator('.spotlight-line.changed').count() === 1, '印が付く');
+  r = await showResult(page, { ...relay, changedActor: false });
+  ok(/この戦いの一手/.test(r.text) && !/今回動かした人/.test(r.text), '動かしていない回は従来の見出し');
+
   console.log('▼ 表示量');
   r = await showResult(page, relay);
   ok(r.text.length <= 70, `1文は ${r.text.length} 文字（70文字以内に収める）`);

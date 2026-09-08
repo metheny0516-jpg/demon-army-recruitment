@@ -364,8 +364,14 @@ const UI = {
   // spotlight が無い戦果（証拠が揃わなかった戦闘・この機能より前のセーブ）では
   // **何も出さない**。推測で書くと「変えたから勝った」という反実仮想になる。
   spotlightSentence(battle) {
-    const text = this.spotlightText(battle && battle.spotlight);
-    return text ? `<p class="spotlight-line"><i>この戦いの一手</i>${text}</p>` : "";
+    const s = battle && battle.spotlight;
+    const text = this.spotlightText(s);
+    if (!text) return "";
+    // 今回動かした人が実際に働いた回だけ、見出しを変える（R2）。
+    // **「変えたから勝った」とは書かない。** 書けるのは「動かした人が、こう動いた」まで。
+    // 印は spotlight 側が、その人が実際に関わった候補にだけ立てている。
+    const label = s.changedActor ? "今回動かした人が、こう働いた" : "この戦いの一手";
+    return `<p class="spotlight-line${s.changedActor ? " changed" : ""}"><i>${label}</i>${text}</p>`;
   },
 
   // 魔界史へ残った出来事1件（R3/U3）。**同じ事実から、同じ言い方で**書く。
