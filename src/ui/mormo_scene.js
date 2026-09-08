@@ -107,6 +107,29 @@ const MormoScene = {
   // 戦闘を止めない「野次」。全画面の show() と違い、操作を奪わず自動で消える。
   // 戦闘中に全画面報告を挟むと、せっかく読ませている連鎖の流れが切れる。
   // 呼び出し側（BattleScene）が1戦闘1回に制限する責任を持つ。
+  // spotlight の事実を、モルモの声にする（D1）。
+  //
+  // 戦果の1文（UI.spotlightSentence）とは**別の声**であって、同じ文の焼き直しではない。
+  // 戦果は記録として事実を書き、モルモは現場から野次を飛ばす。ただし
+  // **どちらも同じ spotlight の事実からしか作らない**ので、片方だけ嘘になることはない。
+  // 差し込む語彙は MORMO_SPOTLIGHT_LINES（data）が持ち、埋めるのはここ1か所。
+  spotlightLine(spotlight, avoid) {
+    if (!spotlight || !spotlight.origin || !spotlight.actor) return null;
+    if (typeof MORMO_SPOTLIGHT_LINES === "undefined") return null;
+    // 同じ人が起点と反応を兼ねている回は「AがBを動かした」と言えない。
+    // 名前を2つ並べると嘘になるので、この声は出さない（戦果の1文は別の言い方で出る）。
+    if (spotlight.sameActor) return null;
+    const set = MORMO_SPOTLIGHT_LINES[spotlight.kind] || MORMO_SPOTLIGHT_LINES.fallback;
+    if (!set || !set.lines.length) return null;
+    const pool = set.lines.filter(line => line !== avoid);
+    const template = (pool.length ? pool : set.lines)[Math.floor(Math.random() * (pool.length || set.lines.length))];
+    const text = template
+      .replace(/\{origin\}/g, spotlight.origin.name || "どなたか")
+      .replace(/\{actor\}/g, spotlight.actor.name || "どなたか")
+      .replace(/\{target\}/g, (spotlight.target && spotlight.target.name) || "相手");
+    return { expression: set.expression, text, template };
+  },
+
   aside(options = {}) {
     if (typeof document === "undefined") return null;
     const host = options.host || document.getElementById("scene");

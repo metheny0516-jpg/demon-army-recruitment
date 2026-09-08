@@ -71,3 +71,44 @@ const MORMO_BATTLE_LINES = {
     ]
   },
 };
+
+// spotlight（誰の能力が誰を動かしたか）に反応する台詞。設計書 6.3 / チケットD1。
+//
+// 名前を差し込むだけでなく、**起きた行動そのものに反応する**こと。
+// 「グルグ殿が頑張りましたデス」では、汎用台詞に名前を貼っただけで事件にならない。
+//
+// {origin} 起点になった人／{actor} それに反応して動いた人／{target} 相手
+// 差し込みは MormoScene.spotlightLine() が行う。ここは語彙だけを持つ。
+//
+// **起きたことしか言わない。** 戦闘結果や、これから死ぬ人の話をさせない（設計書 6.3）。
+// spotlight は根拠イベントが揃ったものだけなので、この台詞が出る時点で全部起きている。
+const MORMO_SPOTLIGHT_LINES = {
+  loot_relay: {
+    expression: "panic",
+    lines: [
+      "{origin}殿の集金で、{actor}殿まで走り出しましたヨ！？",
+      "金貨の音がした途端に{actor}殿が……{origin}殿、何を撒いたんデスかー！",
+    ]
+  },
+  meal_boost: {
+    expression: "joy",
+    lines: [
+      "{origin}殿のごはんが効いてますデス！ {actor}殿、さっきと別人デスよ！",
+      "見てくださいデス！ {origin}殿の一皿で{actor}殿がこんなに……食事は大事デスねぇ！",
+    ]
+  },
+  revive_return: {
+    expression: "worried",
+    lines: [
+      "{origin}殿が{actor}殿を起こしましたデス……起きて早々に働かせてすみませんデス！",
+      "{actor}殿、戻ってきましたヨ！ {origin}殿、労災の申請はこちらデス！",
+    ]
+  },
+  // kind が増えたときの受け皿。名前と「届いた」ことだけを言う。
+  fallback: {
+    expression: "joy",
+    lines: [
+      "{origin}殿の働きが、{actor}殿のところまで届きましたデス！",
+    ]
+  },
+};

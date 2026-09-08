@@ -1350,8 +1350,32 @@ const BattleScene = {
   pickMormoAside(timeline) {
     if (typeof MORMO_BATTLE_LINES === "undefined" || typeof MormoScene === "undefined") return null;
     const pick = (scene, at) => at ? { scene, at } : null;
+    // spotlight（誰の能力が誰を動かしたか）に反応する一言（D1）。
+    //
+    // 出すのは**根拠の最後のイベント**の位置。そこまで来れば全部起きているので、
+    // 「起きる前に結果や将来の死亡をしゃべらない」（設計書 6.3）を構造で守れる。
+    //
+    // 順序は設計書 6.1 の優先順に合わせる。全滅が最優先、次が初めての接続（discovery）、
+    // その次に spotlight。spotlight は汎用の chain（5段）を**置き換える**位置に置く。
+    // 名前と行動が入るぶん、同じ枠なら chain の汎用台詞より事件になる。
+    //
+    // **絞る。** 300戦の実測で spotlight 自体は79%の戦闘で成立する。そのまま出すと
+    // モルモが5戦に4戦しゃべることになり、「1戦闘に1回」を守っていても一言が
+    // 事件ではなく毎回のナレーションになる（第12節・ゲート8）。
+    // 出すのは **撃破まで届いた接続で、かつ起点と反応が別人** の回だけにした。
+    // これで一言の頻度は従来36%から48%へ。増えるが、増えるぶんは名前と行動が入る。
+    // 戦果の1文（U2）はこの制限を受けない。あちらは記録で、こちらは事件。
+    let spotAside = null;
+    const spot = typeof Spotlight !== "undefined" ? Spotlight.of(timeline) : null;
+    if (spot && spot.numbers && spot.numbers.killed && !spot.sameActor
+      && spot.evidence && spot.evidence.length) {
+      const lastId = spot.evidence[spot.evidence.length - 1];
+      const at = timeline.find(e => e.eventId === lastId);
+      if (at) spotAside = { scene: "spotlight", at, spotlight: spot };
+    }
     return pick("wipe", timeline.find(e => e.type === "result" && e.wipe === "player"))
       || pick("discovery", timeline.find(e => e.type === "synergy" && e.firstDiscovery))
+      || spotAside
       || pick("chain", timeline.find(e => (e.chainDepth || 0) >= 5));
   },
 
@@ -1359,14 +1383,24 @@ const BattleScene = {
     const plan = this.mormoAside;
     if (!plan) return;
     this.mormoAside = null; // 1戦闘1回。撃ったら予約を消す
-    const set = MORMO_BATTLE_LINES[plan.scene];
-    if (!set || !set.lines.length) return;
-    // 直前に出た1本は避ける。同じ場面が続いても同じ声にはならない。
     this.lastMormoLine ||= {};
-    const pool = set.lines.filter(line => line !== this.lastMormoLine[plan.scene]);
-    const text = (pool.length ? pool : set.lines)[Math.floor(Math.random() * (pool.length || set.lines.length))];
-    this.lastMormoLine[plan.scene] = text;
-    const box = MormoScene.aside({ expression: set.expression, text, host: document.getElementById("scene") });
+    let expression, text;
+    if (plan.scene === "spotlight") {
+      // 台詞は spotlight の事実から組む。直前に出た型は避ける（名前が違っても同じ言い回しは続かせない）
+      const said = MormoScene.spotlightLine(plan.spotlight, this.lastMormoLine.spotlightTemplate);
+      if (!said) return;
+      this.lastMormoLine.spotlightTemplate = said.template;
+      ({ expression, text } = said);
+    } else {
+      const set = MORMO_BATTLE_LINES[plan.scene];
+      if (!set || !set.lines.length) return;
+      // 直前に出た1本は避ける。同じ場面が続いても同じ声にはならない。
+      const pool = set.lines.filter(line => line !== this.lastMormoLine[plan.scene]);
+      text = (pool.length ? pool : set.lines)[Math.floor(Math.random() * (pool.length || set.lines.length))];
+      this.lastMormoLine[plan.scene] = text;
+      expression = set.expression;
+    }
+    const box = MormoScene.aside({ expression, text, host: document.getElementById("scene") });
     if (!box) return;
     if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
     // 決着の一言は結果画面まで残す。戦闘中の一言だけ自動で引く。
