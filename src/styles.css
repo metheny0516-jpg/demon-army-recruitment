@@ -349,6 +349,26 @@ button.wide { width: 100%; }
   padding-top: 6px;
 }
 
+/* ── 戦果の1文（この戦いの一手） ─────────────────── */
+.spotlight-line {
+  margin: 10px 0 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #2b2350;
+  border-left: 3px solid var(--gold);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.spotlight-line i {
+  display: block;
+  font-style: normal;
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: .08em;
+  margin-bottom: 2px;
+}
+.spotlight-line b { color: var(--text); }
+
 /* ── 戦闘中の答え合わせ（1戦闘に1回） ───────────── */
 .chain-answer {
   margin: 6px 0 0;

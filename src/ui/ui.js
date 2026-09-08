@@ -352,6 +352,40 @@ const UI = {
   // 「今回どれだけ壊れたか」を一目で見せるパネル。勝利・敗北・ゲームオーバーで同じものを使う。
   // 主要記録は**最大CHAINと最大OVERKILLの2つだけ**。召喚・資源・蘇生は横並びに増やさず、
   // 下の詳細1行か個人貢献のバッジへ回す（記録が増えるほど、どれも読まれなくなる）。
+  // ── 戦果の1文（U2） ───────────────────────────────────
+  //
+  // 「よく分からないけどつながった」を戦果まで持ち越さないための1文。
+  // 材料は Spotlight（core）が根拠つきで作った**事実だけ**で、日本語を組み立てるのは
+  // ここだけにする。同じ事実をモルモや魔界史でも使うが、言い方の管理はこの1か所へ寄せる。
+  //
+  // パネルは増やさない（設計書 6.1「パネルをさらに積み重ねない」）。既存の
+  // 「今回の大暴れ」の中へ入れ、最大CHAINと最大OVERKILLの2記録はそのまま残す。
+  //
+  // spotlight が無い戦果（証拠が揃わなかった戦闘・この機能より前のセーブ）では
+  // **何も出さない**。推測で書くと「変えたから勝った」という反実仮想になる。
+  spotlightSentence(battle) {
+    const s = battle && battle.spotlight;
+    if (!s || !s.origin || !s.actor) return "";
+    const n = s.numbers || {};
+    const name = person => `<b>${U.esc(person.name || "誰か")}</b>`;
+    // 撃破まで届いたときだけ「撃破した」と書く。届いていない回に書くと嘘になる。
+    const landed = (verb) => n.killed && s.target && s.target.name
+      ? `${name(s.target)}を撃破した`
+      : `${U.esc(String(n.dmg || 0))}ダメージを${verb}`;
+    let text;
+    if (s.kind === "loot_relay") {
+      text = s.sameActor
+        ? `${name(s.actor)}が自分で奪った金貨に反応して、もう一度動いた。${landed("追加で通した")}`
+        : `${name(s.origin)}の${U.esc(s.originAbility || "略奪")}を受け、${name(s.actor)}が追撃した。${landed("上乗せした")}`;
+    } else if (s.kind === "meal_boost") {
+      text = `${name(s.origin)}の料理が${name(s.actor)}を強化（+${U.esc(String(n.percent || 0))}%）。${landed("通した")}`;
+    } else if (s.kind === "revive_return") {
+      text = `${name(s.origin)}が${name(s.actor)}を蘇生。${name(s.actor)}は復帰後に${
+        U.esc(String(n.actions || 0))}回動き、${landed("与えた")}`;
+    } else return "";
+    return `<p class="spotlight-line"><i>この戦いの一手</i>${text}</p>`;
+  },
+
   breakthroughPanel(battle) {
     if (!battle) return "";
     const chain = this.battleChainView(battle);
@@ -401,6 +435,7 @@ const UI = {
         <div><b>${maxChain}</b><span>最大CHAIN</span></div>
         <div><b>${maxPercent}%</b><span>最大OVERKILL</span></div>
       </div>
+      ${this.spotlightSentence(battle)}
       ${originName ? `<p class="chain-credit">この連鎖の起点は <b>${U.esc(originName)}</b>。${U.esc(labelOf(steps[steps.length - 1]))}までつながった。</p>` : ""}
       ${path}
       ${details.length ? `<div class="muted">${details.join("　/　")}</div>` : ""}
