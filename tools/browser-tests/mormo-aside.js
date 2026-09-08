@@ -78,7 +78,45 @@ const shell = { stage: 3, baseStage: 3, missionKind: 'invade', region: '辺境',
   assert.ok(!quiet.scene, '普通の戦闘ではモルモは出てこない');
   assert.equal(quiet.shown, 0, '出番がないときは何も描かない');
 
+  // 5) 大胆に出す（2026-09-08 のオーナー試遊「いいんだけど目立たない」への対応）
+  //    小さな野次へ戻さないための下限。ここが縮んだら、また目立たなくなっている。
+  for (const [w, h, label] of [[390, 844, 'スマホ'], [1280, 900, 'PC']]) {
+    await page.setViewportSize({ width: w, height: h });
+    const look = await page.evaluate(d => {
+      UI.set(BattleScene.shell(window.shellData));
+      BattleScene.play(build(d), () => {});
+      // 決着の手前まで一気に進める（上の run と同じやり方。決着は stop() で片付けるため）
+      while (BattleScene.index < BattleScene.timeline.length
+        && BattleScene.timeline[BattleScene.index].type !== 'result') {
+        BattleScene.render(BattleScene.timeline[BattleScene.index++]);
+      }
+      const box = document.querySelector('.mormo-aside');
+      const scene = document.getElementById('scene');
+      if (!box) return null;
+      const b = box.getBoundingClientRect(), s = scene.getBoundingClientRect();
+      const face = box.querySelector('.mormo-aside-face');
+      const img = box.querySelector('.mormo-aside-portrait');
+      const bubble = box.querySelector('.mormo-aside-bubble');
+      return {
+        share: b.height / s.height,
+        faceSize: face ? face.getBoundingClientRect().width : 0,
+        // 全身を丸に押し込むと顔が小さくて表情が読めない。枠より大きく拡大されているか
+        zoom: img && face ? img.getBoundingClientRect().width / face.getBoundingClientRect().width : 0,
+        fontSize: bubble ? parseFloat(getComputedStyle(bubble).fontSize) : 0,
+        pass: getComputedStyle(box).pointerEvents
+      };
+    }, deep);
+    assert.ok(look, `${label}: 一言が出ている`);
+    assert.ok(look.share >= 0.4, `${label}: 戦場の下側を ${Math.round(look.share * 100)}% 使う（40%以上）`);
+    assert.ok(look.faceSize >= 110, `${label}: 顔の丸は ${Math.round(look.faceSize)}px（110px以上）`);
+    assert.ok(look.zoom >= 2.5, `${label}: 立ち絵を ${look.zoom.toFixed(1)}倍に寄せて顔だけ見せる（全身を丸に入れない）`);
+    assert.ok(look.fontSize >= 18, `${label}: 台詞は ${look.fontSize}px（18px以上）`);
+    assert.equal(look.pass, 'none', `${label}: 覆っても操作は下へ通る（進行を止めない）`);
+    console.log(`  ✓ ${label}: 下側 ${Math.round(look.share * 100)}% / 顔 ${Math.round(look.faceSize)}px / ${look.zoom.toFixed(1)}倍 / ${look.fontSize}px`);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+
   assert.deepEqual(errors, []);
-  console.log('✓ モルモの一言: 連鎖5段・初発見・全滅の3場面、優先度、1戦闘1回、静かな戦闘では出ない');
+  console.log('✓ モルモの一言: 3場面・優先度・1戦闘1回・静かな戦闘では出ない・大胆に出す');
   await browser.close();
 })().catch(e => { console.error(e); process.exit(1); });

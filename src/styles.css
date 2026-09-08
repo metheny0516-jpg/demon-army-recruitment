@@ -862,40 +862,75 @@ button.wide { width: 100%; }
 .scene-intro.show { animation: finalIntro 1.4s ease-out; }
 
 /* ── 戦闘中のモルモの一言 ── */
-/* 全画面報告と違い、戦場を覆わない。読み飛ばしても進行が止まらないのが条件。 */
+/*
+ * 試遊で「いいんだけど目立たない」と言われたので、隅の小さな野次から
+ * **戦場の下半分を使う帯**へ変えた。1戦闘に1回しか出ないので、出るときは大胆に出す。
+ * 読み終われば自分で引く（wipe＝全滅のときだけ結果画面まで残す）。
+ * pointer-events: none は維持する。覆っても操作は下へ通り、進行は止まらない。
+ */
 .mormo-aside {
   position: absolute;
-  left: 10px; bottom: 10px;
-  z-index: 9;
-  display: flex; align-items: flex-end; gap: 8px;
-  max-width: min(78%, 460px);
+  left: 0; right: 0; bottom: 0;
+  /* 決着表示（.scene-result・z-index 10・全面に薄い幕）より上へ出す。
+     全滅の一言は結果画面まで残す仕様なので、幕の下に沈むと最後の一言が読めない。
+     決着の文字は画面中央、この帯は下半分なので、重ねても文字は隠さない。 */
+  z-index: 11;
+  min-height: 48%;
+  display: flex; align-items: center; gap: 18px;
+  padding: 20px 20px 22px;
   pointer-events: none;
+  /* 下から立ち上がる幕。上端はぼかして戦場と地続きに見せる */
+  background: linear-gradient(to top, rgba(10, 7, 16, .97) 62%, rgba(10, 7, 16, .88) 84%, rgba(10, 7, 16, 0));
   opacity: 0;
-  transform: translateY(10px);
-  transition: opacity .28s ease-out, transform .28s ease-out;
+  transform: translateY(18px);
+  transition: opacity .3s ease-out, transform .3s ease-out;
 }
 .mormo-aside.show { opacity: 1; transform: none; }
-.mormo-aside-portrait {
-  width: 62px; height: 62px; flex: 0 0 auto;
-  border-radius: 50%; object-fit: cover;
-  border: 2px solid #c79a52;
+
+/* 立ち絵は全身像なので、枠で顔だけを切り抜く。数値の意味:
+ * 画像は512x512、顔の中心が上から約18%・左右中央。
+ * 3.3倍に拡大し、その点が枠の中心へ来るよう左 -115% / 上 -9.4% ずらす
+ * （0.5 - 3.3*0.5 = -1.15、0.5 - 3.3*0.18 = -0.094）。 */
+.mormo-aside-face {
+  position: relative;
+  width: 190px; height: 190px; flex: 0 0 auto;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #c79a52;
   background: #241a24;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .55);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .6);
+}
+.mormo-aside-portrait {
+  position: absolute;
+  width: 330%; height: 330%;
+  left: -115%; top: -9.4%;
+  object-fit: contain;
 }
 .mormo-aside-bubble {
-  margin: 0; padding: 8px 12px;
-  border: 1px solid #7c6136; border-radius: 12px 12px 12px 2px;
-  background: rgba(24, 17, 28, .93);
-  color: #f6e6c2; font-size: 13px; line-height: 1.5;
+  flex: 1 1 auto;
+  margin: 0; padding: 20px 24px;
+  border: 1px solid #7c6136; border-radius: 16px 16px 16px 4px;
+  background: rgba(30, 21, 36, .96);
+  color: #f6e6c2; font-size: 25px; line-height: 1.75;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, .5);
 }
 .mormo-aside-bubble b {
   display: block;
-  color: #f4ce80; font-size: 10px; letter-spacing: .1em; margin-bottom: 2px;
+  color: #f4ce80; font-size: 13px; letter-spacing: .12em; margin-bottom: 6px;
 }
 @media (max-width: 700px) {
-  .mormo-aside { left: 6px; bottom: 6px; max-width: 88%; gap: 6px; }
-  .mormo-aside-portrait { width: 44px; height: 44px; }
-  .mormo-aside-bubble { font-size: 12px; padding: 6px 9px; }
+  /* 狭い画面では横並びだと吹き出しが細くなり、1行が数文字で折り返して読みにくい。
+     顔を上、台詞を下の縦積みにして、台詞に画面幅をまるごと使わせる。 */
+  .mormo-aside {
+    flex-direction: column; align-items: flex-start;
+    gap: 8px; padding: 12px 12px 14px; min-height: 50%;
+  }
+  .mormo-aside-face { width: 124px; height: 124px; border-width: 2px; }
+  .mormo-aside-bubble {
+    align-self: stretch;
+    font-size: 19px; padding: 14px 16px; line-height: 1.7;
+    border-radius: 4px 16px 16px 16px;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .mormo-aside { transition: none; }
