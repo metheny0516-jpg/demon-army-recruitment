@@ -47,12 +47,12 @@ BATTLE_HAPPENINGS.push(
   },
   {
     id: "chain_receipt", name: "追撃より小銭", kind: "skip", chance: 0.003, duringChain: true,
-    check(u) { return u.chainDepth >= 3 && u.traits.includes("greedy"); },
+    check(u) { return u.chainDepth >= 3 && u.traits.includes("greedy") && !u.traits.includes("coward"); },
     text(u) { return `${u.name}「追撃？ 先に今の金貨を数える！」 小銭に気を取られ、この一撃を取り逃した！`; }
   },
   {
     id: "chain_stagefright", name: "連鎖に出遅れ", kind: "skip", chance: 0.003, duringChain: true,
-    check(u) { return u.chainDepth >= 3 && !u.traits.includes("greedy") && u.traits.includes("coward"); },
+    check(u) { return u.chainDepth >= 3 && u.traits.includes("greedy") && u.traits.includes("coward"); },
     text(u) { return `${u.name}「次、俺の番！？ 聞いてない！」 仲間の勢いに腰が引け、この一撃を取り逃した！`; }
   }
 );

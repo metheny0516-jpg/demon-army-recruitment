@@ -24,7 +24,7 @@ const contexts = [
   ['feast_belt',{feast:true,traits:['big_eater']}],
   ['feast_receipt',{feast:true,traits:['greedy']}],
   ['chain_receipt',{chainDepth:3,traits:['greedy']}],
-  ['chain_stagefright',{chainDepth:3,traits:['coward']}]
+  ['chain_stagefright',{chainDepth:3,traits:['greedy','coward']}]
 ];
 for (const [id, values] of contexts) {
   const h=byId(id), u={starved:false,feast:false,chainDepth:1,traits:[],...values};
@@ -47,6 +47,13 @@ const interrupted=result.timeline.find(e=>e.type==='incident' && e.id==='chain_r
 const parent=result.timeline.find(e=>e.eventId===interrupted?.parentEventId);
 assert(parent?.traitId==='greedy' && interrupted.chainId===parent.chainId,'追撃中の不祥事を実際の強欲に因果接続');
 assert(!result.timeline.some(e=>e.type==='attack' && e.label==='強欲'),'発生時はその追撃だけを休む');
+let timidGreedy=unit(1,'臆病な小銭好き',80,false); timidGreedy.traits=['pickpocket','greedy','coward'];
+result=Battle.simulate([timidGreedy],[enemy()]);
+const stagefright=result.timeline.find(e=>e.type==='incident' && e.id==='chain_stagefright');
+const stagefrightParent=result.timeline.find(e=>e.eventId===stagefright?.parentEventId);
+assert(stagefrightParent?.traitId==='greedy' && stagefright.chainId===stagefrightParent.chainId,'臆病な強欲持ちは追撃中に「連鎖に出遅れ」へ到達する');
+assert(!result.incidents.some(i=>i.id==='chain_receipt'),'臆病な強欲持ちの同じ追撃を小銭事件が先取りしない');
+assert(!result.timeline.some(e=>e.type==='attack' && e.label==='強欲'),'出遅れた追撃は実行しない');
 let captured=[];
 vm.runInContext('U.chance = p => { capture(p); return false; };',Object.assign(ctx,{capture:p=>captured.push(p)}));
 let leader=unit(2,'将軍',80,false);leader.rankId='general';
