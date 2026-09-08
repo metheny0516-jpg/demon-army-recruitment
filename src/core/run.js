@@ -545,6 +545,18 @@ const Game = {
     return FACILITIES.find(f => f.id === this.state.activeFacilityId) || null;
   },
 
+  // 選んだ施設が「この出撃で実際に働けるか」。
+  // deploy() が Battle へ渡す条件と同じ判定をここへ置き、編成画面の見取り図が
+  // 同じ答えを読む。二重に書くと、片方だけ直したときに画面だけ嘘をつく。
+  facilityReady(facilityId) {
+    const id = facilityId || this.state.activeFacilityId;
+    if (!id) return false;
+    if (id === "extortion_ledger") return this.activeRoster().some(m => (m.job || "").includes("会計"));
+    if (id === "graveyard") return this.departmentRoster("construction").some(m => m.tplId === "necromancer");
+    if (id === "grand_kitchen") return true;
+    return false;
+  },
+
   // 拠点接収：建設部門に誰も置かないと施設は「存在しない」ままだった。
   // 勝利した拠点をそのまま接収することで、施工役なしでも1ランに一度だけ最初の施設へ届く。
   // ただし奪った拠点は目立つ（警戒度+3＝以後の敵が約6%強くなる）。
@@ -1405,10 +1417,8 @@ const Game = {
       boostTargetUid: mealPlan ? mealPlan.targetUid : null,
       boostAmount: mealPlan ? mealPlan.boost : 0
     } : null;
-    const extortionLedger = st.activeFacilityId === "extortion_ledger"
-      && this.activeRoster().some(m => (m.job || "").includes("会計"));
-    const graveyard = st.activeFacilityId === "graveyard"
-      && this.departmentRoster("construction").some(m => m.tplId === "necromancer");
+    const extortionLedger = st.activeFacilityId === "extortion_ledger" && this.facilityReady("extortion_ledger");
+    const graveyard = st.activeFacilityId === "graveyard" && this.facilityReady("graveyard");
     const result = Battle.simulate(playerUnits, enemyUnits,
       { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks(),
         synergyPool: this.synergyPool(), chainDefVersion: Chain.versionOf(st) });

@@ -17,6 +17,7 @@ const SYNERGIES = [
     name: "追い剥ぎコンビ",
     condition: "ゴブリン2体以上で出撃",
     desc: "金貨を略奪するたび、次の味方攻撃+25%",
+    links: { reacts: ["金貨獲得"], emits: ["攻撃強化"], on: "金貨を略奪するたび" },
     check(units) { return units.filter(u => u.race === "ゴブリン").length >= 2; },
     apply() { /* 金貨獲得時の発火は battle.js が因果イベントとして処理する */ }
   },
@@ -28,6 +29,7 @@ const SYNERGIES = [
     name: "ゴブリン軍団",
     condition: "軍団にゴブリンが4体以上",
     desc: "出撃したゴブリンの与ダメージ+12%刻み。敵撃破時、さらに1Gを略奪予約",
+    links: { emits: ["金貨獲得"], on: "出撃ゴブリンが敵を倒すたび" },
     // 数えるのは軍団全体（pool）、強くなるのは出撃した者だけ。
     // 出撃5枠で3体そろえる必要が無くなり、他のシナジーと枠を奪い合わなくなる。
     count(units, ctx) { return Synergy.pool(units, ctx).filter(u => u.race === "ゴブリン").length; },
@@ -133,6 +135,7 @@ const SYNERGIES = [
     name: "殉職手当",
     condition: "死霊術＋追い剥ぎか強欲",
     desc: "蘇生者の初撃破で2G予約。戦闘終了時に本人が死亡していれば没収",
+    links: { emits: ["金貨獲得"], on: "蘇生した者が敵を初めて倒したとき", once: true },
     check(units) {
       const necromancy = units.some(u => u.traits.includes("necromancy"));
       const economy = units.some(u => u.traits.includes("pickpocket") || u.traits.includes("greedy"));

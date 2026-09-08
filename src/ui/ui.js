@@ -645,6 +645,85 @@ const UI = {
     return `<div class="syn-reach"><h4>いまの並びで効いている特性</h4>${rows}</div>`;
   },
 
+  // ── 連鎖の見取り図（いまはゴブリンの略奪連鎖＝「金貨獲得」だけ） ──
+  //
+  // 試遊の不満は火力ではなく「よく分からないけどつながった。これでいいのか？」だった。
+  // 倍率はもう伝わっているので、ここで足すのは **起点・反応・伸ばし方** の3つだけにする。
+  // 効果量は下のシナジー欄が持っているので二重に出さない。
+  //
+  // ・全連鎖へ広げない。まず1本で表示量と理解度を試遊で確かめる（設計憲法 第14節）。
+  // ・完成レシピは公開しない。手持ちで埋められる欠けだけを出す（第7節）。
+  CHAIN_MAP_SIGNAL: "金貨獲得",
+
+  chainMapPanel(roster) {
+    const facility = Game.activeFacility();
+    const map = Synergy.signalChain(this.CHAIN_MAP_SIGNAL, roster, {
+      pool: Game.synergyPool(),
+      slots: Game.MAX_DEPLOY,
+      facility,
+      facilityReady: facility ? Game.facilityReady(facility.id) : false
+    });
+    // 起点も反応も無く、手持ちで埋める案も無いなら、この編成に略奪連鎖の話は要らない
+    if (!map.sources.length && !map.reactors.length && !map.missing.length) return "";
+
+    // 同じ能力を持つ者が3人いても3行にはしない。読ませたいのは人数ではなく因果なので、
+    // 能力ごとに1行へまとめ、持ち主は名前を並べる。回数の話は once と下の再発火文が担う。
+    const groupBy = nodes => {
+      const groups = new Map();
+      for (const node of nodes) {
+        const key = `${node.kind}|${node.id}`;
+        if (!groups.has(key)) groups.set(key, { ...node, holders: [] });
+        if (node.who) groups.get(key).holders.push(node.who.name);
+      }
+      return [...groups.values()];
+    };
+    const badge = group => group.kind === "synergy" ? `<i class="cm-kind">シナジー</i>`
+      : group.kind === "facility" ? `<i class="cm-kind">施設</i>` : "";
+    const row = (group, tail) => `<li class="cm-row">
+      <b>《${U.esc(group.name)}》</b>${
+        group.holders.length ? `<span class="cm-who">${U.esc(group.holders.join("・"))}</span>` : ""}${badge(group)}
+      <span class="cm-on">${U.esc(group.on || "条件は能力の説明を見よ")}</span>
+      ${group.once ? `<i class="cm-once">各人1戦闘に1回</i>` : ""}
+      ${tail || ""}</li>`;
+
+    const sources = map.sources.length
+      ? `<ol class="cm-list">${groupBy(map.sources).map(n => row(n)).join("")}</ol>`
+      : `<p class="cm-empty">金貨を出す者がいない。ここが空だと、この連鎖は始まらない。</p>`;
+    const reactors = map.reactors.length
+      ? `<ol class="cm-list">${groupBy(map.reactors).map(n => row(n,
+          n.emits.length ? `<span class="cm-emit">→ ${U.esc(n.emits.join("・"))}</span>` : "")).join("")}</ol>`
+      : `<p class="cm-empty">金貨獲得に反応する者がいない。金貨は貯まるが、何も起きない。</p>`;
+
+    // 「どうすれば意図的に伸ばせるのか」への答え。ここだけは断定できる形にする。
+    const grow = map.loops
+      ? `<p class="cm-loop"><b>↺ 回り続ける形になっている。</b>
+          反応の追加攻撃がまた敵を倒すと、${U.esc(map.sources.filter(n => !n.once).map(n => "《" + n.name + "》").join("・"))}
+          がもう一度金貨を出し、同じ列がまた頭から動く。</p>`
+      : map.sources.length && map.reactors.length
+        ? `<p class="cm-loop">一度は繋がるが、まだ回り続けはしない。
+            <b>倒すたびに金貨を出す起点</b>を足すと、同じ列が何度も動くようになる。</p>`
+        : `<p class="cm-loop">起点と反応が両方そろって初めて1段目が2段目になる。</p>`;
+
+    const missing = map.missing.length
+      ? `<div class="cm-missing"><h4>いまの手持ちで繋がるもの</h4><ul>${
+          map.missing.slice(0, 4).map(m => `<li>
+            <i class="cm-role">${m.role === "source" ? "起点" : "反応"}</i>
+            《${U.esc(m.name)}》<span class="cm-how">${U.esc(m.how)}</span></li>`).join("")
+        }</ul></div>`
+      : "";
+
+    return `<div class="panel chain-map">
+      <h3>⛓ 略奪の連鎖 <span class="muted">— この編成でどう回るか</span></h3>
+      <div class="cm-step"><i class="cm-num">1</i><b>起点</b><span class="muted">金貨を出す</span></div>
+      ${sources}
+      <div class="cm-signal">↓ <b>金貨獲得</b></div>
+      <div class="cm-step"><i class="cm-num">2</i><b>反応</b><span class="muted">金貨獲得に反応する</span></div>
+      ${reactors}
+      ${grow}
+      ${missing}
+    </div>`;
+  },
+
   synergyPanel(roster) {
     // 予告は本番と同じ母集団（軍団全体）で測る。ここがズレると編成画面だけ嘘をつく。
     const entries = Synergy.preview(roster, { slots: Game.MAX_DEPLOY, pool: Game.synergyPool() });
@@ -1017,6 +1096,7 @@ const UI = {
       </section>
       <aside class="formation-intel">
       <div class="formation-intel-title"><span>参謀卓</span><small>発火予測・敵情</small></div>
+      ${this.chainMapPanel(active)}
       ${this.synergyPanel(active)}
       ${this.enemyPreview()}
       <div class="formation-orders">

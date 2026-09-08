@@ -267,6 +267,114 @@ const Synergy = {
     return rows.sort((a, b) => a.readyRank - b.readyRank || a.sortKey.localeCompare(b.sortKey));
   },
 
+  // ── 連鎖の見取り図（信号1本ぶん） ─────────────────────
+  // 試遊で出た不満はこれ:「よく分からないけどつながった。これでいいのか？」。
+  // 倍率は伝わっているのに、**何が起点で・なぜ次へ行き・どう伸ばすか**が伝わっていない。
+  //
+  // ここでは1本の信号（例「金貨獲得」）について、
+  //   起点  signal を **出す** 能力
+  //   反応  signal に **反応する** 能力と、その反応が次に出す信号
+  //   再発火 反応が生む信号で、起点がもう一度動けるか
+  // を返す。効果量は返さない（それは preview / traitEffects の仕事）。
+  //
+  // 大原則が2つある。
+  // 1. **説明文から推測しない。** 語彙は data 側の links（emits / reacts / on / once）と、
+  //    シナジーの実際の check だけから組む。desc の日本語を解析すると、効果を変えたときに
+  //    表示だけ古いまま残る。
+  // 2. **完成レシピを全公開しない**（設計憲法 第7節）。`missing` に載せるのは
+  //    **いま手元にある駒で埋められる欠け**だけ。持っていない能力の名前は出さない。
+  signalChain(signal, squad, options) {
+    options = options || {};
+    const units = squad || [];
+    const pool = Array.isArray(options.pool) && options.pool.length ? options.pool : units;
+    const ctx = { pool };
+    const linksOf = source => source && source.links && typeof source.links === "object" ? source.links : null;
+    const node = (kind, id, name, links, who) => ({
+      kind, id, name,
+      who: who || null,
+      on: links.on || null,
+      once: !!links.once,
+      emits: (links.emits || []).slice(),
+      reacts: (links.reacts || []).slice()
+    });
+
+    // その編成でいま成立している役者だけを集める。
+    // 特性は出撃した者、シナジーは実際に check が通ったもの、施設は実際に働けるものだけ。
+    const collect = squadUnits => {
+      const found = [];
+      for (const unit of squadUnits) {
+        for (const traitId of unit.traits || []) {
+          const trait = typeof TRAITS !== "undefined" ? TRAITS[traitId] : null;
+          const links = linksOf(trait);
+          if (links) found.push(node("trait", traitId, trait.name, links, unit));
+        }
+      }
+      for (const synergy of this.active(this.sandbox(squadUnits), { pool: this.sandbox(pool) })) {
+        const links = linksOf(synergy);
+        if (links) found.push(node("synergy", synergy.id, synergy.name, links, null));
+      }
+      if (options.facility && linksOf(options.facility) && options.facilityReady !== false) {
+        found.push(node("facility", options.facility.id, options.facility.name, options.facility.links, null));
+      }
+      return found;
+    };
+
+    const established = collect(units);
+    const sources = established.filter(n => n.emits.includes(signal));
+    const reactors = established.filter(n => n.reacts.includes(signal));
+    // 反応が出す信号のうち、起点をもう一度動かせるもの。
+    // 「もう一度動ける起点」は once が立っていない起点（初回限定ではない起点）だけ。
+    const repeatable = sources.filter(n => !n.once);
+    const relaySignals = [...new Set(reactors.flatMap(n => n.emits))];
+    const loops = !!(repeatable.length && relaySignals.includes("追加攻撃"));
+
+    // ── 欠けを埋める案は「手持ちだけ」から作る ──────────
+    // 出していない軍団員の能力と、いまの手持ちであと少しで成立するシナジーだけを見る。
+    const deployed = new Set(units.map(u => u.uid));
+    const missing = [];
+    const wantSource = sources.length === 0;
+    const wantReactor = reactors.length === 0;
+    const seen = new Set(established.map(n => `${n.kind}|${n.id}`));
+    for (const unit of pool) {
+      if (deployed.has(unit.uid)) continue;
+      for (const traitId of unit.traits || []) {
+        const trait = typeof TRAITS !== "undefined" ? TRAITS[traitId] : null;
+        const links = linksOf(trait);
+        if (!links) continue;
+        const isSource = (links.emits || []).includes(signal);
+        const isReactor = (links.reacts || []).includes(signal);
+        if (!isSource && !isReactor) continue;
+        // 起点も反応も既に居るなら、「もう1人足すと回数が増える」案だけを出す
+        if (!wantSource && !wantReactor && !isReactor) continue;
+        missing.push({
+          role: isSource ? "source" : "reactor",
+          kind: "trait", id: traitId, name: trait.name,
+          how: `${unit.name}（${unit.race || ""}）を出撃させる`,
+          uid: unit.uid
+        });
+      }
+    }
+    // シナジーは「あと何体」を実測で出す。手持ちの誰かを増やして届くものだけが返る。
+    for (const entry of this.preview(units, { slots: options.slots, pool })) {
+      if (entry.active || entry.need === null) continue;
+      const synergy = SYNERGIES.find(s => s.id === entry.id);
+      const links = linksOf(synergy);
+      if (!links) continue;
+      const isSource = (links.emits || []).includes(signal);
+      const isReactor = (links.reacts || []).includes(signal);
+      if (!isSource && !isReactor) continue;
+      if (seen.has(`synergy|${entry.id}`)) continue;
+      missing.push({
+        role: isSource ? "source" : "reactor",
+        kind: "synergy", id: entry.id, name: entry.name,
+        how: `${entry.needRace ? entry.needRace + "を" : ""}あと${entry.need}体（${entry.condition || "条件"}）`,
+        need: entry.need
+      });
+    }
+
+    return { signal, sources, reactors, relaySignals, loops, missing, established: established.length };
+  },
+
   // 発動中なら「いまの効き目」と「もう1体増やしたとき／1体入れ替えたときの効き目」、
   // 未発動なら「あと何体で発動するか」を返す。すべて実測。
   // slots は出撃枠（省略時は無制限）。枠が埋まっているなら「増やす」ではなく

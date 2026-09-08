@@ -71,7 +71,7 @@ const TRAITS = {
   pickpocket: {
     name: "追い剥ぎ",
     desc: "自身が敵へ初めてダメージを与えたとき、勝利時に1Gを略奪",
-    links: { emits: ["金貨獲得"] },
+    links: { emits: ["金貨獲得"], on: "自分が敵へ初めてダメージを与えたとき", once: true },
     postAttack(ctx) {
       const u = ctx.attacker;
       if (ctx.dmg <= 0 || u.flags.pickpocketUsed) return;
@@ -82,7 +82,7 @@ const TRAITS = {
   greedy: {
     name: "強欲",
     desc: "味方が金貨獲得：威力70%で追撃（各人、同じ連鎖で1回）",
-    links: { reacts: ["金貨獲得"], emits: ["追加攻撃"] },
+    links: { reacts: ["金貨獲得"], emits: ["追加攻撃"], on: "味方が金貨を得るたび（同じ連鎖で各1回）" },
     onTriggeredEvents(ctx) {
       const gold = ctx.events.find(e => e.type === "resource_gain" && e.resource === "gold");
       if (!gold) return;
