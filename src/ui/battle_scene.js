@@ -48,6 +48,8 @@ const BattleScene = {
     heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
     resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200
   },
+  // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
+  ANSWER_READ_MS: 2200,
   VICTORY_PAUSE_MS: 900,
   VICTORY_HOLD_MS: 3500,
 
@@ -175,6 +177,7 @@ const BattleScene = {
         <span class="chain-forecast" id="chain-forecast" hidden></span>
         <span class="chain-origin" id="chain-origin">能力がつながる瞬間を見届けよう</span>
         <b id="chain-reason"></b>
+        <p class="chain-answer" id="chain-answer" hidden></p>
         <details class="chain-history" id="chain-history">
           <summary>ここまでの連鎖を読み返す <span id="chain-history-count"></span></summary>
           <p>最初の行動が1段目。その行動が次の出来事を起こすと2段目、さらに続くと3段目です。同じ段から別の反応に分かれることもあります。</p>
@@ -355,6 +358,7 @@ const BattleScene = {
     this.updateSpeedBtn();
 
     this.prepareChainView(timeline);
+    this.chainAnswer = this.pickChainAnswer(timeline);
     this.pacing = this.plan(timeline);
     this.eventById = new Map(timeline.filter(e => e.eventId).map(e => [e.eventId, e]));
     this.activeBeat = null;
@@ -366,6 +370,8 @@ const BattleScene = {
     this.synergyFired = 0;
     this.showForecast();
     this.mormoAside = this.pickMormoAside(timeline);
+    const answerBand = document.getElementById("chain-answer");
+    if (answerBand) { answerBand.hidden = true; answerBand.textContent = ""; }
     document.getElementById("scene").querySelectorAll(".scene-result").forEach(e => e.remove());
     document.getElementById("scene").classList.remove("decided");
     this.eventScale = 1;
@@ -482,6 +488,8 @@ const BattleScene = {
   plan(timeline) {
     const events = timeline || [];
     const parents = new Set(events.filter(e => e.parentEventId).map(e => e.parentEventId));
+    // 答え合わせの1件は初見の説明そのものなので、畳み掛けから外して読む尺を渡す
+    const answerEvent = this.chainAnswer ? this.chainAnswer.at : null;
     const items = events.map(ev => ({
       duration: this.durationOf(ev),
       protected: this.isProtected(ev, !!(ev.eventId && parents.has(ev.eventId))),
@@ -512,7 +520,7 @@ const BattleScene = {
         item.showBurst = ev.type !== "overkill" || i === peak;
         if (i === hits[0]) item.beat = "origin";
         else if (i === peak || (i === hits[hits.length - 1] && hits.length > 1)) item.beat = "payoff";
-        const preserve = item.beat !== "relay" || firstAbility || ev.firstDiscovery || ev.permanent
+        const preserve = ev === answerEvent || item.beat !== "relay" || firstAbility || ev.firstDiscovery || ev.permanent
           || ["revive", "summon", "survive", "result", "synergy", "incident", "dialogue"].includes(ev.type);
         if (preserve) {
           item.protected = true;
@@ -537,6 +545,14 @@ const BattleScene = {
       compressScale = Math.min(1, Math.max(this.MIN_COMPRESS, room));
     }
     for (const item of items) if (!item.protected) item.scale = compressScale;
+    if (answerEvent) {
+      const at = events.indexOf(answerEvent);
+      if (at >= 0) {
+        items[at].protected = true;
+        items[at].scale = 1;
+        items[at].duration = Math.max(items[at].duration, this.ANSWER_READ_MS);
+      }
+    }
     return {
       items, rawMs, protectedMs, compressibleMs, compressScale,
       plannedMs: sum(items, i => i.duration * i.scale)
@@ -550,6 +566,7 @@ const BattleScene = {
     if (this.mormoAside && this.mormoAside.at === ev && this.mormoAside.scene !== "wipe") this.sayMormo();
     this.chainFlare(ev);
     this.tellChain(ev);
+    if (this.chainAnswer && this.chainAnswer.at === ev) this.sayChainAnswer();
     if (typeof Sound !== "undefined" && !["attack", "splash", "result"].includes(ev.type)) {
       const from = this.units[ev.fromId];
       Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from && from.side });
@@ -1356,6 +1373,52 @@ const BattleScene = {
   // 戦闘開始の時点で「今日いくつ発動するか」だけ先に約束する。
   // 名前は伏せる。何が起きるかは伏せたまま、何回起きるかだけ渡すのが期待になる。
   // 数が減っていく（0/3 → 3/3）のを見せることで、予告が回収されたと分かる。
+  // ── 答え合わせ（1戦闘に1回だけ） ───────────────────
+  //
+  // 編成画面の見取り図で「追い剥ぎ：金貨を得る → 強欲：金貨獲得に反応」を約束した。
+  // 戦闘中は、その約束が実際に起きた**最初の1回だけ**を同じ言葉で確かめさせる。
+  // 毎回出すと読み飛ばされ、出さないと「よく分からないけどつながった」に戻る。
+  //
+  // 選ぶのは「金貨獲得を親に持つ最初の反応」。ただし追加攻撃を生む反応
+  //（強欲）が同じ戦闘にあるなら、そちらを優先する。倍率だけの反応より
+  // 「もう一度殴った」の方が、因果として目で追える。
+  pickChainAnswer(timeline) {
+    const byId = new Map((timeline || []).filter(e => e.eventId).map(e => [e.eventId, e]));
+    const reactions = [];
+    for (const ev of timeline || []) {
+      if (!ev.parentEventId) continue;
+      if (!["trait_trigger", "synergy_trigger", "facility_trigger"].includes(ev.type)) continue;
+      const parent = byId.get(ev.parentEventId);
+      if (!parent || parent.type !== "resource_gain" || parent.resource !== "gold") continue;
+      reactions.push({ at: ev, parent });
+    }
+    if (!reactions.length) return null;
+    const emitsExtraAttack = ev => {
+      const trait = ev.traitId && typeof TRAITS !== "undefined" ? TRAITS[ev.traitId] : null;
+      return !!(trait && trait.links && (trait.links.emits || []).includes("追加攻撃"));
+    };
+    const picked = reactions.find(r => emitsExtraAttack(r.at)) || reactions[0];
+    return {
+      at: picked.at,
+      // 「何の金貨か」は資源イベントの label（追い剥ぎ／略奪者の連携／殉職手当）から取る。
+      cause: picked.parent.label || "略奪",
+      reaction: picked.at.name || (picked.at.traitId && typeof TRAITS !== "undefined"
+        && TRAITS[picked.at.traitId] && TRAITS[picked.at.traitId].name) || "反応"
+    };
+  },
+
+  sayChainAnswer() {
+    const plan = this.chainAnswer;
+    this.chainAnswer = null;   // 1戦闘に1回。出したら予約を消す
+    const band = document.getElementById("chain-answer");
+    if (!plan || !band) return;
+    band.hidden = false;
+    band.innerHTML = `<i>答え合わせ</i>《${U.esc(plan.cause)}》の金貨に、《${U.esc(plan.reaction)}》が反応した。`;
+    band.classList.remove("show");
+    void band.offsetWidth;
+    band.classList.add("show");
+  },
+
   showForecast(announce = false) {
     const band = document.getElementById("chain-forecast");
     if (!band) return;

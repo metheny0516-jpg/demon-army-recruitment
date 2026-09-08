@@ -349,6 +349,33 @@ button.wide { width: 100%; }
   padding-top: 6px;
 }
 
+/* ── 戦闘中の答え合わせ（1戦闘に1回） ───────────── */
+.chain-answer {
+  margin: 6px 0 0;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #2b2350;
+  border: 1px solid var(--gold);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.chain-answer i {
+  font-style: normal;
+  font-size: 10px;
+  color: #1b1526;
+  background: var(--gold);
+  border-radius: 4px;
+  padding: 0 5px;
+  margin-right: 6px;
+}
+.chain-answer.show { animation: cm-answer-in .32s ease-out; }
+@keyframes cm-answer-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) { .chain-answer.show { animation: none; } }
+
 /* ── 連鎖の見取り図（略奪連鎖の試作） ─────────── */
 /* 数字ではなく「起点 → 信号 → 反応」の並びが読めることを優先する。
    390px でも折り返さずに1行が読める大きさに留める。 */
