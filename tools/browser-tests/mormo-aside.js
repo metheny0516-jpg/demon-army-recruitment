@@ -2,6 +2,7 @@
 // 見たいのは「出ること」より「連発しないこと」と「いちばん珍しい場面が選ばれること」。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const assert = require('node:assert/strict');
+const path = require('node:path');
 
 const shell = { stage: 3, baseStage: 3, missionKind: 'invade', region: '辺境', army: '王国軍' };
 
@@ -97,11 +98,15 @@ const shell = { stage: 3, baseStage: 3, missionKind: 'invade', region: '辺境',
       const face = box.querySelector('.mormo-aside-face');
       const img = box.querySelector('.mormo-aside-portrait');
       const bubble = box.querySelector('.mormo-aside-bubble');
+      const faceRect = face && face.getBoundingClientRect();
+      const imgRect = img && img.getBoundingClientRect();
       return {
         share: b.height / s.height,
-        faceSize: face ? face.getBoundingClientRect().width : 0,
+        faceSize: faceRect ? faceRect.width : 0,
         // 全身を丸に押し込むと顔が小さくて表情が読めない。枠より大きく拡大されているか
-        zoom: img && face ? img.getBoundingClientRect().width / face.getBoundingClientRect().width : 0,
+        zoom: imgRect && faceRect ? imgRect.width / faceRect.width : 0,
+        // 顔を少し上へ置き、跳ね毛を切って首元を見せるため、画像自体を枠の上へ送る。
+        cropTop: imgRect && faceRect ? (imgRect.top - faceRect.top) / faceRect.height : 0,
         fontSize: bubble ? parseFloat(getComputedStyle(bubble).fontSize) : 0,
         pass: getComputedStyle(box).pointerEvents
       };
@@ -110,9 +115,14 @@ const shell = { stage: 3, baseStage: 3, missionKind: 'invade', region: '辺境',
     assert.ok(look.share >= 0.4, `${label}: 戦場の下側を ${Math.round(look.share * 100)}% 使う（40%以上）`);
     assert.ok(look.faceSize >= 110, `${label}: 顔の丸は ${Math.round(look.faceSize)}px（110px以上）`);
     assert.ok(look.zoom >= 2.5, `${label}: 立ち絵を ${look.zoom.toFixed(1)}倍に寄せて顔だけ見せる（全身を丸に入れない）`);
+    assert.ok(look.cropTop <= -0.25, `${label}: 画像を枠高の ${Math.round(-look.cropTop * 100)}% 上へ送り、跳ね毛より首元を優先する（25%以上）`);
     assert.ok(look.fontSize >= 18, `${label}: 台詞は ${look.fontSize}px（18px以上）`);
     assert.equal(look.pass, 'none', `${label}: 覆っても操作は下へ通る（進行を止めない）`);
-    console.log(`  ✓ ${label}: 下側 ${Math.round(look.share * 100)}% / 顔 ${Math.round(look.faceSize)}px / ${look.zoom.toFixed(1)}倍 / ${look.fontSize}px`);
+    console.log(`  ✓ ${label}: 下側 ${Math.round(look.share * 100)}% / 顔 ${Math.round(look.faceSize)}px / ${look.zoom.toFixed(1)}倍 / 上へ${Math.round(-look.cropTop * 100)}% / ${look.fontSize}px`);
+    if (process.env.SP) {
+      await page.waitForTimeout(350); // 0.3秒の登場transition後を目視用に残す
+      await page.screenshot({ path: path.join(process.env.SP, `mormo-aside-${w}.png`) });
+    }
   }
   await page.setViewportSize({ width: 390, height: 844 });
 

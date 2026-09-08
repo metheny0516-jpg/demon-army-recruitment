@@ -887,10 +887,9 @@ button.wide { width: 100%; }
 }
 .mormo-aside.show { opacity: 1; transform: none; }
 
-/* 立ち絵は全身像なので、枠で顔だけを切り抜く。数値の意味:
- * 画像は512x512、顔の中心が上から約18%・左右中央。
- * 3.3倍に拡大し、その点が枠の中心へ来るよう左 -115% / 上 -9.4% ずらす
- * （0.5 - 3.3*0.5 = -1.15、0.5 - 3.3*0.18 = -0.094）。 */
+/* 立ち絵は全身像なので、枠で顔だけを切り抜く。
+ * 3.3倍の大きさは維持し、画像を上へ30%ずらす。顔を丸の中央より少し上へ置くことで、
+ * 頭頂の跳ね毛を枠外へ切り、下側は首元まで見せる（2026-09-08 オーナー試遊）。 */
 .mormo-aside-face {
   position: relative;
   width: 190px; height: 190px; flex: 0 0 auto;
@@ -903,7 +902,7 @@ button.wide { width: 100%; }
 .mormo-aside-portrait {
   position: absolute;
   width: 330%; height: 330%;
-  left: -115%; top: -9.4%;
+  left: -115%; top: -30%;
   object-fit: contain;
 }
 .mormo-aside-bubble {
