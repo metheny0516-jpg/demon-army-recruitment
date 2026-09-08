@@ -364,7 +364,24 @@ const UI = {
   // spotlight が無い戦果（証拠が揃わなかった戦闘・この機能より前のセーブ）では
   // **何も出さない**。推測で書くと「変えたから勝った」という反実仮想になる。
   spotlightSentence(battle) {
-    const s = battle && battle.spotlight;
+    const text = this.spotlightText(battle && battle.spotlight);
+    return text ? `<p class="spotlight-line"><i>この戦いの一手</i>${text}</p>` : "";
+  },
+
+  // 魔界史へ残った出来事1件（R3/U3）。**同じ事実から、同じ言い方で**書く。
+  // 統計を1行増やすのではなく、「第N戦で誰が誰を動かしたか」という話を残す（第11節）。
+  // 旧レコードに memory は無い。無ければ出さないのが正しく、推定生成してはいけない。
+  memoryLine(record) {
+    const m = record && record.memory;
+    const text = this.spotlightText(m);
+    if (!text) return "";
+    const where = [m.turn ? `第${m.turn}戦` : "", m.army ? `対 ${m.army}` : ""].filter(Boolean).join("・");
+    return `<p class="spotlight-line memory-line"><i>魔界史に残った出来事${
+      where ? `　${U.esc(where)}` : ""}</i>${text}</p>`;
+  },
+
+  // 事実 → 日本語。戦果・魔界史のどちらもここを通す（言い方の管理を1か所に保つ）。
+  spotlightText(s) {
     if (!s || !s.origin || !s.actor) return "";
     const n = s.numbers || {};
     const name = person => `<b>${U.esc(person.name || "誰か")}</b>`;
@@ -383,7 +400,7 @@ const UI = {
       text = `${name(s.origin)}が${name(s.actor)}を蘇生。${name(s.actor)}は復帰後に${
         U.esc(String(n.actions || 0))}回動き、${landed("与えた")}`;
     } else return "";
-    return `<p class="spotlight-line"><i>この戦いの一手</i>${text}</p>`;
+    return text;
   },
 
   breakthroughPanel(battle) {
@@ -1368,6 +1385,7 @@ const UI = {
       ${record.buildName ? `<div class="panel build-name-panel">
         <div class="muted">この軍団は、魔界史にこう記された</div>
         <h2 class="build-name">「${U.esc(record.buildName)}」</h2>
+        ${this.memoryLine(record)}
       </div>` : ""}
       ${!record.cleared ? (() => {
         const chosen = Game.state && Game.state.chosenLessonId;
@@ -1452,6 +1470,7 @@ const UI = {
       <div class="history-item ${r.cleared ? "cleared" : ""}">
         <div class="gen">第${r.gen}代魔王軍 ${r.cleared ? "👑 人間界制圧" : ""}</div>
         ${r.buildName ? `<div class="build-name">「${U.esc(r.buildName)}」</div>` : ""}
+        ${this.memoryLine(r)}
         ${this.recordHighlights(r, mixedChainVersions)}
         <dl>
           <dt>在位</dt><dd>${r.reignYears}年</dd>

@@ -82,6 +82,9 @@ const Game = {
       discoveredSynergyIds: [],
       uidSeq: 1,
       lastBattle: null,
+      // 魔界史へ残す「記憶」1件（R3）。ラン状態の中にあるので、再起で巻き戻せば
+      // 記憶も一緒に戻る（やり直した歴史の出来事は残さない）。
+      memory: null,
       retriesLeft: this.RETRIES_PER_RUN,
       retriesUsed: 0,
       rerollsThisPhase: 0,
@@ -195,6 +198,9 @@ const Game = {
       chainDefVersion: 1,
       maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
+      // 魔界史へ残す「記憶」1件（R3）。ラン状態の中にあるので、再起で巻き戻せば
+      // 記憶も一緒に戻る（やり直した歴史の出来事は残さない）。旧セーブには無い。
+      memory: null,
       rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
@@ -1545,6 +1551,7 @@ const Game = {
       // 旧セーブにこの鍵は無い。無ければ出さないのが正しく、推定生成してはいけない。
       spotlight: typeof Spotlight !== "undefined" ? Spotlight.of(result.timeline) : null
     };
+    this.rememberSpotlight(st.lastBattle.spotlight, stageData, result.victory);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
     // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
     if ((st.mercenaries || []).length) {
@@ -2077,6 +2084,46 @@ const Game = {
     return `${prefix}${core}${suffix}`;
   },
 
+  // ── 魔界史へ残す「記憶」1件（R3） ─────────────────────
+  //
+  // 第11節「魔界史は単なる統計画面ではない。自分だけの魔王軍の話を保存する場所」。
+  // 統計はもう十分あるので、ここで残すのは**誰が誰を動かしたか**という出来事1件だけ。
+  //
+  // 残すのは名前と数値だけにする。設計書 6.2 の注意どおり、**戦闘中IDと永続uidは別**で、
+  // p0/x0 のような戦闘限りのIDや根拠イベントIDは、戦闘が終われば何も指さない。
+  // それを魔界史へ持ち込むと「存在しないuid」を抱えた記録になるので、ここで落とす。
+  // 残った形だけで**自立して再表示できる**ことが、この関数の責任。
+  rememberSpotlight(spotlight, stageData, victory) {
+    const st = this.state;
+    if (!st || !spotlight || !spotlight.origin || !spotlight.actor) return null;
+    const strip = person => person && person.name ? { name: person.name } : null;
+    const memory = {
+      kind: spotlight.kind,
+      origin: strip(spotlight.origin),
+      originAbility: spotlight.originAbility || null,
+      actor: strip(spotlight.actor),
+      ability: spotlight.ability && spotlight.ability.name ? { name: spotlight.ability.name } : null,
+      target: strip(spotlight.target),
+      sameActor: !!spotlight.sameActor,
+      numbers: { ...(spotlight.numbers || {}) },
+      // いつの出来事だったか。魔界史で「第N代の何戦目」と添えられるようにする。
+      turn: st.turn || 0,
+      army: (stageData && stageData.army) || null,
+      region: (stageData && stageData.region) || null,
+      victory: !!victory
+    };
+    if (!memory.origin || !memory.actor) return null;
+    // ラン中で1件だけ残す。選ぶ基準は B1 と同じ「結果がどこまで届いたか」で、
+    // 同じなら大きいほう、それも同じなら**後の戦い**を採る（進むほど話が大きくなる）。
+    const current = st.memory;
+    const better = !current
+      || Spotlight.reach(memory) > Spotlight.reach(current)
+      || (Spotlight.reach(memory) === Spotlight.reach(current)
+        && (memory.numbers.dmg || 0) >= (current.numbers.dmg || 0));
+    if (better) st.memory = memory;
+    return st.memory;
+  },
+
   // ── ラン終了と魔界史 ──────────────────────
   endRun(cleared) {
     const st = this.state;
@@ -2120,6 +2167,9 @@ const Game = {
       recruitedTplIds: (st.recruitedTplIds || []).slice(),
       discoveredSynergyIds: (st.discoveredSynergyIds || []).slice(),
       hallOfFame: this.hallOfFameMember(),
+      // そのランで一番遠くまで届いた出来事1件（R3）。統計ではなく話として残す。
+      // 旧魔界史にこの鍵は無い。無ければ表示しないのが正しく、推定生成してはいけない。
+      memory: st.memory || null,
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
       seizeUsed: !!st.seizeUsed,
       date: new Date().toISOString().slice(0, 10)

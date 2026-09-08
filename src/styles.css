@@ -368,6 +368,8 @@ button.wide { width: 100%; }
   margin-bottom: 2px;
 }
 .spotlight-line b { color: var(--text); }
+.memory-line { background: #221c38; }
+.memory-line i { letter-spacing: .04em; }
 
 /* ── 戦闘中の答え合わせ（1戦闘に1回） ───────────── */
 .chain-answer {
