@@ -229,6 +229,11 @@ const Sound = {
     freqs.forEach((freq, i) => this.tone(freq, duration, { ...opts, delay: (opts.delay || 0) + i * (opts.stagger || 0) }));
   },
 
+  // 決着音が鳴り終わるまでの秒数。BGMを鳴らし直す側がこれを読んで待つ。
+  // 音の長さは音を作っている側が知っているべきで、呼ぶ側に定数を写すと片方だけ古くなる。
+  CUE_LENGTH: { win: 3.2, lose: 1.4 },
+  cueLength(name) { return this.CUE_LENGTH[name] || 0; },
+
   cue(name, data = {}) {
     if (this.muted) return;
     if (name === "attack") {

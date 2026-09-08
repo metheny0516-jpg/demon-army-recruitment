@@ -138,6 +138,9 @@ const BattleScene = {
   saveSpeed() { try { localStorage.setItem("maou_speed", String(this.speed)); } catch (e) {} },
 
   stop() {
+    // 決着音を待っているBGMの鳴り直しも、ここで畳む（画面が変われば App 側が鳴らす）
+    clearTimeout(this.musicTimer);
+    this.musicTimer = null;
     this.resetChain(true);
     for (const settle of this.pendingHits) settle();
     this.pendingHits.clear();
@@ -370,6 +373,7 @@ const BattleScene = {
     this.synergyFired = 0;
     this.showForecast();
     this.mormoAside = this.pickMormoAside(timeline);
+    this.settleCueUntil = 0;
     const answerBand = document.getElementById("chain-answer");
     if (answerBand) { answerBand.hidden = true; answerBand.textContent = ""; }
     document.getElementById("scene").querySelectorAll(".scene-result").forEach(e => e.remove());
@@ -1637,11 +1641,20 @@ const BattleScene = {
     if (typeof Sound !== "undefined") Sound.stopAll();
     const announce = () => {
       this.banner(ev.victory);
-      if (typeof Sound !== "undefined") Sound.cue(ev.victory ? "win" : "lose", { speed: 1 });
+      this.playSettleCue(ev.victory);
     };
     const silence = ev.victory ? this.VICTORY_PAUSE_MS : 500;
     this.timers.push(setTimeout(announce, silence));
     this.timers.push(setTimeout(() => this.finish(), silence + (ev.victory ? this.VICTORY_HOLD_MS : 1800)));
+  },
+
+  // 決着音を鳴らし、鳴り終わる時刻を控える。BGMの再開はこの時刻まで待つ。
+  playSettleCue(victory) {
+    const name = victory ? "win" : "lose";
+    this.settleCueUntil = 0;
+    if (typeof Sound === "undefined" || Sound.muted) return;
+    Sound.cue(name, { speed: 1 });
+    this.settleCueUntil = Date.now() + Sound.cueLength(name) * 1000;
   },
 
   banner(victory) {
@@ -1698,7 +1711,7 @@ const BattleScene = {
     const result = this.timeline.find(e => e.type === "result");
     if (result) {
       this.banner(result.victory);
-      if (!announced && typeof Sound !== "undefined") Sound.cue(result.victory ? "win" : "lose", { speed: 1 });
+      if (!announced) this.playSettleCue(result.victory);
     }
     this.finish();
   },
@@ -1725,9 +1738,23 @@ const BattleScene = {
     if (this.mormoAside && this.mormoAside.scene === "wipe") this.sayMormo();
     // ファンファーレ（Sound）のあいだ BGM は止めてある。区切りが済んだら決着の場面曲へ切り替える。
     // 通常再生もスキップもここを通るので、場面名が battle のまま残らない。
+    //
+    // ただし**鳴り終わるのを待つ**。決着表示のあとに「最後まで飛ばす」を押すと finish() が
+    // 即座に走るため、待たないと BGM がまだ3秒残っているファンファーレの上へ重なる。
+    // BGMは音量1.0の実素材、ファンファーレは合成音なので、重なると完全に埋もれる。
+    // これが「勝利のファンファーレが鳴らない」の3つ目の原因だった。
     const result = (this.timeline || []).find(e => e.type === "result");
     if (result && typeof Music !== "undefined" && typeof Game !== "undefined" && Game.state) {
-      Music.update(Game.state, { scene: result.victory ? "victory" : "defeat" });
+      const scene = result.victory ? "victory" : "defeat";
+      const wait = Math.max(0, (this.settleCueUntil || 0) - Date.now());
+      // 予約は this.timers ではなく専用の枠へ置く。this.timers は「まだ描画が残っている」
+      // ことを表す枠で、スキップ直後に空であることを回帰テストが契約として見ているため。
+      // 画面を離れたら App.render() が先に場面曲を鳴らし、そのあとの UI.set() →
+      // stop() がこの予約を捨てるので、鳴り直しが二重にならない。
+      clearTimeout(this.musicTimer);
+      this.musicTimer = null;
+      if (wait > 0) this.musicTimer = setTimeout(() => Music.update(Game.state, { scene }), wait);
+      else Music.update(Game.state, { scene });
     }
     const pause = document.getElementById("pause-btn");
     if (pause) pause.disabled = true;

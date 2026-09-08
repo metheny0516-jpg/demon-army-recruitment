@@ -96,11 +96,22 @@ async function toBattle(page) {
     page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
     await toBattle(page);
     t0 = await page.evaluate(() => Sound.ctx.currentTime);
-    await page.waitForTimeout(400);
     await page.click('[data-action="skiplog"]');
+    // BGMは実素材で音量1.0、ファンファーレは合成音。まだ鳴っている上へ重ねると完全に埋もれる。
+    // 決着後の「飛ばす」は finish() を即座に走らせるので、ここが待てているかを**押した直後に**見る。
+    const during = await page.evaluate(() => ({
+      paused: Music.track ? Music.track.paused : true, march: !!Music.timer,
+      left: Math.max(0, BattleScene.settleCueUntil - Date.now())
+    }));
+    ok(during.left > 0, `勝利音はまだ ${during.left}ms 残っている（この間の話をしている）`);
+    ok(during.paused && !during.march, '鳴っている最中にBGMを重ねない（曲もマーチも止めたまま）');
     await page.waitForTimeout(3400);
     peak = await peakSince(page, t0, 3.4);
     ok(peak >= FLOOR, `飛ばしたあとも勝利音の実測ピーク ${peak.toFixed(3)} が ${FLOOR.toFixed(3)} 以上`);
+    const after = await page.evaluate(() => ({
+      paused: Music.track ? Music.track.paused : true, scene: Music.desc && Music.desc.scene
+    }));
+    ok(!after.paused && after.scene === 'victory', '鳴り終わったら勝利BGMへ切り替わる（無音のまま残らない）');
     await page.close();
   } finally {
     await browser.close();
