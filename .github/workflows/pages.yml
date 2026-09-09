@@ -1,0 +1,60 @@
+# GitHub Pages へ公開して、ブラウザだけで試遊できるようにする。
+#
+# 公開しているのはリポジトリの中身そのもの（ビルドなし。素の HTML/CSS/JS）。
+#   https://<owner>.github.io/demon-army-recruitment/               本編
+#   https://<owner>.github.io/demon-army-recruitment/hero-arrival.html  勇者襲来 試作
+#
+# 前提: リポジトリの Settings → Pages → Build and deployment → Source を
+#       「GitHub Actions」にしておくこと（一度だけ。UI からしか設定できない）。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - claude/hero-arrival-tavern-prototype-uy2toh
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 公開は同時に1本だけ。実行中のものは走り切らせる。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Jekyll に触らせない（素の静的サイトとしてそのまま配る）
+      - run: touch .nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      # 配信に要らないものは載せない。assets/ と src/ は必要なので残す。
+      - name: 配信物をまとめる
+        run: |
+          rm -rf _site
+          mkdir _site
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'node_modules' \
+            --exclude '.screenshots' \
+            --exclude 'tools/browser-tests' \
+            ./ _site/
+          ls -la _site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
