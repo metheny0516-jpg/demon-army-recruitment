@@ -116,7 +116,7 @@ const MONSTER_TEMPLATES = [
     jobs: ["戦士", "破壊兵", "用心棒", "取り立て屋", "解体屋"],
     base: { hp: 34, atk: 11, def: 5, spd: 5 },
     salary: [4, 6], loyalty: [50, 75],
-    fixedTrait: "brute", traitPool: ["rage_unpaid", "tough_skin"],
+    fixedTrait: "brute", traitPool: ["rage_unpaid", "tough_skin", "drunkard"],
     prevJobs: ["傭兵（渡り歩き・年数不明）", "採石場の人足（8年）", "酒場の用心棒（クビ）", "前魔王軍・第三破壊部隊",
       "闘技場の雇われ剣士（賭けに負けて解雇）", "山賊団のリーダー（内部分裂で解散）", "港の荷役（喧嘩が絶えずクビ）", "前魔王軍・第三破壊部隊（給料未払いで離反）"],
     motives: ["金払いがいいと聞いた", "暴れられる職場を探してる", "前の雇い主が金を払わなかった", "飯が出るのか？",

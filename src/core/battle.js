@@ -92,6 +92,16 @@ const Battle = {
     const useV2ChainMultiplier = Number(options.chainDefVersion) >= 2;
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
     enemyUnits.forEach((u, i) => { u.id = "e" + i; });
+    // 遅刻。特性の lateArrival が返したラウンド数だけ、戦場にいない。
+    // 開戦の並びにも入らず、口上も言わず、狙われもしない。到着は summon イベントで描く。
+    for (const u of playerUnits) {
+      for (const tid of u.traits) {
+        const tr = TRAITS[tid];
+        if (!tr || !tr.lateArrival) continue;
+        const rounds = Math.max(0, Math.floor(tr.lateArrival({ unit: u, rng: U.rand }) || 0));
+        if (rounds > 0) { u.flags.late = rounds; u.flags.absent = true; }
+      }
+    }
 
     const timeline = [];
     let nextEventId = 1;
@@ -174,8 +184,11 @@ const Battle = {
       id: u.id, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon, side: u.side,
       hp: u.hp, maxHp: u.maxHp, atk: u.atk, def: u.def, spd: u.spd,
       traits: u.traits.slice(), tags: u.tags.slice(), introQuote: u.introQuote,
-      summoned: !!u.flags.summoned
+      summoned: !!u.flags.summoned,
+      late: !!u.flags.late
     });
+    // 戦場にいる者。開戦時に不在（遅刻）の者は生きていても狙えず、動けず、数に入らない。
+    const onField = u => u.alive && !u.flags.absent;
 
     // シナジー適用（merge型は出撃時に処理済み）
     // 発火条件は出撃5枠の外まで数える（options.synergyPool＝軍団全体）。
@@ -246,8 +259,7 @@ const Battle = {
       return event;
     };
 
-    emit("battle_start", {
-      player: playerUnits.map(snap),
+    emit("battle_start", { player: playerUnits.filter(onField).map(snap),
       enemy: enemyUnits.map(snap)
     });
     let feastTrigger = null;
@@ -316,7 +328,7 @@ const Battle = {
       }
     }
     for (const u of [...enemyUnits, ...playerUnits]) {
-      if (!u.introQuote) continue;
+      if (!u.introQuote || u.flags.absent) continue;
       emit("dialogue", {
         unitId: u.id, name: u.name, side: u.side, quote: u.introQuote,
         emphasis: 2, text: `${u.name}「${u.introQuote}」`, cls: "dialogue"
@@ -449,7 +461,7 @@ const Battle = {
         if (overkillEvent && overkillEvent.percent >= needPercent && propagationDepth < limit
           && (byTrait || byOverload)) {
           const opponents = attacker.side === "player" ? enemyUnits : playerUnits;
-          const next = opponents.find(unit => unit.alive);
+          const next = opponents.find(onField);
           if (next) {
             const label = byTrait ? "連鎖虐殺" : "魔王軍完成";
             const step = propagationDepth + 1;
@@ -478,13 +490,13 @@ const Battle = {
       if (unit.side !== "player" || unit.flags.incidentUsed) return false;
       // 既存3件は通常行動だけ。追撃中は明示した連鎖ハプニングだけを判定。
       const candidates = BATTLE_HAPPENINGS.filter(h => (!actionOpts.isExtra || h.duringChain) && h.check(unit));
-      const generalPresent = allies.some(a => a.alive && a.rankId === "general");
+      const generalPresent = allies.some(a => onField(a) && a.rankId === "general");
       for (const happening of candidates) {
         const chance = happening.chance * (generalPresent ? 0.35 : 1);
         if (!U.chance(chance)) continue;
         let target = null;
         if (happening.kind === "friendly_fire") {
-          const victims = allies.filter(a => a.alive && a !== unit);
+          const victims = allies.filter(a => onField(a) && a !== unit);
           if (!victims.length) continue;
           target = U.pick(victims);
         }
@@ -502,7 +514,7 @@ const Battle = {
 
     const act = (unit, allies, enemies, round, actionOpts) => {
       actionOpts = actionOpts || {};
-      const living = enemies.filter(u => u.alive);
+      const living = enemies.filter(onField);
       if (living.length === 0) return;
       unit.chainDepth = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;
       if (tryIncident(unit, allies, actionOpts)) return;
@@ -572,7 +584,7 @@ const Battle = {
         // 各人の greedyChains が再帰に入る前に使用済みになるため、
         // 追加攻撃で別の金貨が出ても、同じ鎖で同じ人は二度動かない。
         for (const reactor of allies) {
-          if (!reactor.alive || !enemies.some(e => e.alive)) continue;
+          if (!onField(reactor) || !enemies.some(onField)) continue;
           const reaction = {
             attacker: reactor, events: triggeredEvents,
             extraAction: (mult, parentEvent, label) => {
@@ -629,6 +641,7 @@ const Battle = {
         : all();
       const before = all().map(u => ({ u, alive: u.alive, hp: u.hp }));
       for (const unit of candidates) {
+        if (unit.flags.absent) continue;
         const allies = unit.side === "player" ? playerUnits : enemyUnits;
         const enemies = unit.side === "player" ? enemyUnits : playerUnits;
         for (const tid of unit.traits) {
@@ -663,8 +676,20 @@ const Battle = {
     for (round = 1; round <= this.MAX_ROUNDS; round++) {
       emit("round_start", { round, emphasis: 1, text: `── ラウンド ${round} ──`, cls: "round" });
 
+      // 遅刻者の到着。その場にいなかった者が、途中から戦場に立つ。
+      // 味方が全員倒れたあとに一人で着くこともある。それはそれで、そういう戦いだったということ。
+      for (const u of playerUnits) {
+        if (!u.flags.absent || round <= u.flags.late) continue;
+        u.flags.absent = false;
+        u.flags.arrivedRound = round;
+        emit("summon", {
+          sourceUnitId: null, unit: snap(u), late: true, emphasis: 2,
+          text: `　${u.name}が遅れて到着「……杯を置いてきた」`, cls: "revive"
+        });
+      }
+
       const order = all()
-        .filter(u => u.alive)
+        .filter(onField)
         .sort((a, b) => b.spd - a.spd || (U.chance(0.5) ? -1 : 1));
       let rescuedThisRound = false;
       for (const unit of order) {
@@ -1035,6 +1060,7 @@ const Battle = {
       return {
         id: u.id, uid: u.uid, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
         mercenary: !!u.flags.mercenary,   // 金で雇った一時要員。戦功・欠員・戦没者に数えない
+        late: u.flags.late || 0,          // 遅刻したラウンド数。0なら開戦から居た
         unpaid: !!u.unpaid, dealt, taken, kills,
         overkillCount: overkills.length,
         maxOverkill: overkills.reduce((max, event) => Math.max(max, event.percent || 0), 0),

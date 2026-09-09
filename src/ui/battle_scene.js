@@ -296,7 +296,8 @@ const BattleScene = {
     if (!data || this.units[data.id]) return null;
     const band = document.getElementById(data.side === "player" ? "band-player" : "band-enemy");
     if (!band) return null;
-    const unit = { ...data, summoned: true };
+    // 遅刻して着いた軍団員は召喚物ではない（ラベルも戦功も別）
+    const unit = { ...data, summoned: !data.late };
     band.insertAdjacentHTML("beforeend", this.unitHtml(unit));
     this.registerUnit(unit);
     return this.units[data.id];
@@ -880,6 +881,7 @@ const BattleScene = {
       if (e.type === "momentum") return `戦意 ×${Number(e.mult).toFixed(2)}`;
       if (e.type === "overkill") return `${e.rank || "OVERKILL"} ${e.percent}%`;
       if (e.type === "death") return `${who}が倒れた`;
+      if (e.type === "summon" && e.late) return `${e.unit ? e.unit.name : who}が遅れて到着`;
       return `${who}${who ? "の" : ""}${e.name || e.label || ({revive: "蘇生", summon: "召喚", survive: "生存", heal: "回復"}[e.type] || "反応")}`;
     };
     origin.textContent = starter ? `起点：${starter.name}` : "能力がつながった";
