@@ -308,6 +308,25 @@
       doMove(world, a);
     }
 
+    // 4.2 過負荷は毎 tick 事故の目がある。無料の強化にしない。
+    if (world.furnaceOverload && !world.furnaceBroken) {
+      const risk = world.furnaceUnstable ? 0.22 : 0.10;
+      if (world.rng() < risk) {
+        world.furnaceBroken = true;
+        world.furnaceOverload = false;
+        const ev = record(world, "accident", { room: "furnace" });
+        say(world, "furnace", `※ 魔力炉が悲鳴を上げて停止した`, ev);
+        for (const v of at(world, "lab").concat(at(world, "furnace"))) {
+          if (!v.alive) continue;
+          const d = 6 + Math.floor(world.rng() * 8);
+          v.hp -= d;
+          say(world, v.room, `${v.name}が炉の暴発を浴びた（${d}）`, ev);
+          if (v.hp <= 0) { v.alive = false; say(world, v.room, `★ ${v.name}、倒れる（炉の事故）`, ev); }
+        }
+        for (const x of world.agents) if (x.magic) x.atkBonus = 1;
+      }
+    }
+
     // 4.5 その tick の打ち合いを部屋ごとに1行へまとめる
     if (world.blows && world.blows.length) {
       const byRoom = {};
@@ -327,6 +346,8 @@
   }
 
   function doFight(world, a, foes) {
+    // 囮役は殴り合わない。逃げるのが仕事。
+    if (a.goal && a.goal.kind === "bait" && a.baitStarted) { doMove(world, a); return; }
     // 非戦闘員は殴り合わない。逃げ道があれば必ず下がる。
     if (a.noncombat) {
       const away = ROOMS[a.room].links.filter(r => r !== "outside" && !at(world, r).some(x => x.side !== a.side));
@@ -354,7 +375,15 @@
       }
     }
     const target = foes[Math.floor(world.rng() * foes.length)];
-    const dmg = Math.max(1, Math.round((a.atk - target.def) * (0.7 + world.rng() * 0.6)));
+    // 酩酊しているとよく外す。強く振れるが当たらない、という手触りにする。
+    if (a.drunkFight && world.rng() < 0.4) {
+      world.blows = world.blows || [];
+      world.blows.push({ room: a.room, text: `${a.name}→${target.name} 空振り` });
+      return;
+    }
+    // 隊列から離れた者は連携を欠く
+    const power = a.atk * (a.atkBonus || 1) * (a.separated ? 0.7 : 1);
+    const dmg = Math.max(1, Math.round((power - target.def) * (0.7 + world.rng() * 0.6)));
     target.hp -= dmg;
     // 打撃1行ずつは読めなかったので、その tick のその部屋ぶんをまとめて出す
     world.blows = world.blows || [];
@@ -370,6 +399,29 @@
   function doMove(world, a) {
     // 勇者側は玉座を目指して進む
     if (a.side === "hero") {
+      // 目の前で逃げた者を追うかどうか。追えば玉座から逸れる＝分断される。
+      const bait = world.agents.find(b => b.alive && b.baitTo && b.lastSeenFrom === a.room && !b.baitResolved);
+      if (bait && !a.chasing) {
+        if (world.rng() < 0.55) {
+          a.chasing = bait.id;
+          a.linger = 0;
+          a.separated = true;         // 隊列から外れた＝仲間の援護が無い
+          say(world, a.room, `${a.name}が逃げる${bait.name}を追い、隊列から離れた`);
+          world.baitWorked = true;
+        } else {
+          say(world, a.room, `${a.name}は追わなかった`);
+          bait.baitResolved = true;
+        }
+      }
+      if (a.chasing) {
+        const b = world.agents.find(x => x.id === a.chasing);
+        if (!b || !b.alive || a.room === b.room) { a.chasing = null; }
+        else {
+          const r = path(a.room, b.room, world.sealed);
+          if (r.length) { say(world, a.room, `${a.name}が${ROOMS[r[0]].name}へ追う`); a.room = r[0]; return; }
+          a.chasing = null;
+        }
+      }
       // 部屋を抜けるのに手間取る。城は廊下ではない。
       a.linger = (a.linger || 0) + 1;
       const fought = world.events.some(e => e.type === "defeat" && e.room === a.room && e.tick >= world.tick - 2);
@@ -387,6 +439,37 @@
       }
       return;
     }
+    // 囮。臆病な者に「逃げるふり」をさせる。ふりが本気になることもある。
+    if (a.goal && a.goal.kind === "bait") {
+      // 見られてから逃げる。先に走り出しては囮にならない（最初の測定で誰も追わなかった）
+      if (!a.baitStarted) {
+        if (!enemiesOf(world, a).length) {
+          if (!a.baitWaiting) { a.baitWaiting = true; say(world, a.room, `${a.name}は震えながら、その場で待っている`); }
+          return;
+        }
+        a.baitStarted = true;
+        a.lastSeenFrom = a.room;
+        say(world, a.room, `${a.name}が悲鳴を上げて逃げ出した`);
+      }
+      if (a.room === a.baitTo) {
+        a.baitResolved = true;
+        a.goal = null;
+        // 臆病が勝つと、そのまま走り去る
+        if (world.rng() < 0.3) {
+          world.baitFled = true;
+          say(world, a.room, `${a.name}はそのまま走り去った（演技ではなくなった）`);
+          a.room = "throne";
+          a.post = "throne";
+        } else {
+          say(world, a.room, `${a.name}は${ROOMS[a.room].name}で足を止め、振り返った`);
+        }
+        return;
+      }
+      const r = path(a.room, a.baitTo, world.sealed);
+      if (r.length) { a.lastSeenFrom = a.room; a.room = r[0]; }
+      return;
+    }
+
     // 目的があれば向かう
     if (a.goal) {
       if (a.room === a.goal.room) {
@@ -442,6 +525,116 @@
     }
   }
 
+
+  // ── 人物が持ち込む「手段」──────────────────────
+  //
+  // ここが今回の一点突破。前回の測定で分かったのは、
+  // 「誰をどこに置くか」という介入はどれも戦力の足し算で、20本中18〜20本が同じ結末になったこと。
+  // 盤面を動かしても、足し算のままなら映画にしかならなかった。
+  //
+  // なので手段を人物に紐づける。**その人物がいなければ、その手は存在しない。**
+  // 採用した顔ぶれが、そのまま「打てる手の一覧」になる。
+  //
+  // どの手も、勝率だけでなく**勝敗の後に残るもの（aftermath）が違う**。
+  // 「勝つけど、どの傷を残すか」を選ばせるのが狙い。
+  // 条件に合う者が複数いれば、いちばん任せがいのある者を出す。
+  const pickOwner = (w, ok) => w.agents
+    .filter(a => a.alive && a.side === "demon" && ok(a))
+    .sort((x, y) => (y.hp + y.atk * 2) - (x.hp + x.atk * 2))[0] || null;
+
+  const ABILITIES = {
+    rouse: {
+      id: "rouse", name: "叩き起こす",
+      // 酒好きの者がいるときだけ存在する手
+      owner: (w) => pickOwner(w, a => has(a, "drunk")),
+      advise: (w, a) => `${a.name}殿なら間に合います。ただ……かなり酔っていますヨ`,
+      use: (w, a, target) => {
+        a.goal = { kind: "engage", room: target || "gate", cause: "ability:rouse" };
+        a.commanded = true;
+        a.drunkFight = true;               // 攻撃は荒くなるが当たらない
+        a.atkBonus = 1.6;
+        say(w, a.room, `【手段】${a.name}を叩き起こした。杯を置いて出ていく`);
+        record(w, "ability", { kind: "rouse", who: a.id, whoName: a.name });
+      },
+      // 使うと必ず何かが残る。勝っても残る。
+      settle: (w, a) => {
+        if (!a.alive) return ["食堂の主が戻らなかった"];
+        const out = [];
+        if (a.hp <= a.maxHp * 0.4) out.push(`${a.name}重傷`);
+        out.push("食堂が荒れた");
+        return out;
+      }
+    },
+    overload: {
+      id: "overload", name: "魔力炉を過負荷運転",
+      owner: (w) => pickOwner(w, a => a.magic),
+      advise: (w, a) => `${a.name}殿なら魔力炉を回せます。${w.furnaceUnstable ? "ただし、前回の事故で炉心が不安定デス……" : "無理をさせすぎなければ、大丈夫だと思いますヨ"}`,
+      use: (w, a, target) => {
+        w.furnaceOverload = true;
+        for (const m of w.agents) if (m.alive && m.side === "demon" && m.magic) m.atkBonus = 2.4;
+        a.goal = { kind: "engage", room: target || "hall", cause: "ability:overload" };
+        a.commanded = true;
+        say(w, a.room, `【手段】魔力炉を過負荷で回した。${a.name}の魔力が跳ね上がる`);
+        record(w, "ability", { kind: "overload", who: a.id, whoName: a.name });
+      },
+      settle: (w, a) => {
+        const out = [];
+        if (w.furnaceBroken) { out.push("魔力炉が故障した", "研究が止まった"); }
+        else out.push("炉心に負荷が残った");
+        if (a.alive && !w.furnaceBroken) out.push(`${a.name}が手応えを得た`);
+        return out;
+      }
+    },
+    feign: {
+      id: "feign", name: "偽装撤退させる",
+      owner: (w) => pickOwner(w, a => has(a, "coward") && !a.noncombat),
+      advise: (w, a) => `${a.name}殿は臆病デス。逃げるふりは、たぶん上手デス。……本当に逃げてしまうかもしれませんが`,
+      use: (w, a, target) => {
+        a.baitTo = target || "dungeon";
+        a.commanded = true;
+        a.goal = { kind: "bait", room: a.baitTo, cause: "ability:feign" };
+        say(w, a.room, `【手段】${a.name}に、逃げるふりを命じた`);
+        record(w, "ability", { kind: "feign", who: a.id, whoName: a.name });
+      },
+      settle: (w, a) => {
+        if (w.baitWorked) return [`${a.name}に《勇者を欺いた》記憶`, `${a.name}の恐怖がやわらいだ`];
+        if (!a.alive) return [`${a.name}が戻らなかった`];
+        if (w.baitFled) return [`${a.name}は本当に逃げた`, `${a.name}の忠誠が下がった`];
+        return ["誘いに乗らなかった"];
+      }
+    }
+  };
+
+  // 使える手の一覧。**顔ぶれで変わる。** いない人物の手はメニューに出ない。
+  function availableAbilities(world) {
+    return Object.values(ABILITIES)
+      .map(ab => ({ ability: ab, owner: ab.owner(world) }))
+      .filter(x => x.owner && !world.usedAbilities?.includes(x.ability.id));
+  }
+
+  function useAbility(world, id, target) {
+    const ab = ABILITIES[id];
+    if (!ab) return false;
+    const owner = ab.owner(world);
+    if (!owner) return false;
+    world.usedAbilities = world.usedAbilities || [];
+    if (world.usedAbilities.includes(id)) return false;
+    world.usedAbilities.push(id);
+    ab.use(world, owner, target);
+    return true;
+  }
+
+  // 勝敗のあとに残るもの。使った手ごとに違う。
+  function aftermath(world) {
+    const out = [];
+    for (const id of world.usedAbilities || []) {
+      const ab = ABILITIES[id];
+      const owner = world.agents.find(a => world.events.some(e => e.type === "ability" && e.kind === id && e.who === a.id));
+      if (ab && owner) out.push(...ab.settle(world, owner));
+    }
+    return out;
+  }
+
   // ── 魔王の介入 ──────────────────────────────
   // 生ログで分かったこと：介入が無いと、世界は動いていても毎回同じ順に動く。
   // 20本のうち12本で因果の並びが完全に一致した。観察だけでは映画になる。
@@ -485,7 +678,7 @@
     return fn ? fn(world, order) : false;
   }
 
-  const api = { ROOMS, TRAITS, REACTIONS, ORDERS, path, makeRng, makeWorld, step, at, describe, record, learn, intervene };
+  const api = { ROOMS, TRAITS, REACTIONS, ORDERS, ABILITIES, path, makeRng, makeWorld, step, at, describe, record, learn, intervene, availableAbilities, useAbility, aftermath };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   root.CastleTick = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

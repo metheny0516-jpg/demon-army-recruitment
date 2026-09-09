@@ -14,25 +14,29 @@ function setup(seed) {
   // 魔王軍
   w.add({ name: "ゴブ太", room: "gate", hp: 26, atk: 5, def: 2, traits: ["coward"] });
   w.add({ name: "ゴブ次", room: "gate", hp: 26, atk: 5, def: 2, traits: ["coward"] });
-  w.add({ name: "ゴブ三", room: "gate", hp: 26, atk: 5, def: 2, traits: ["coward"] });
   w.add({ name: "オーク隊長ガロ", room: "kitchen", hp: 46, atk: 11, def: 4, traits: ["loyalfoe", "drunk", "brave"], order: "free" });
-  w.add({ name: "スライムぷに", room: "dungeon", hp: 34, atk: 4, def: 5, traits: ["lazy"], order: "free" });
-  w.add({ name: "魔術師リゼ", room: "lab", hp: 24, atk: 13, def: 1, traits: ["dutiful", "curious", "brave"], order: "free", post: "lab" });
-  w.add({ name: "門番ガンツ", room: "yard", hp: 52, atk: 6, def: 7, traits: ["dutiful", "brave"], order: "free", post: "gate" });
+  w.add({ name: "魔術師リゼ", room: "lab", hp: 24, atk: 13, def: 1, traits: ["dutiful", "brave"], magic: true, order: "free", post: "lab" });
+  w.add({ name: "ボグリ", room: "yard", hp: 30, atk: 7, def: 3, traits: ["coward"], order: "free", post: "yard" });
+  w.add({ name: "門番ガンツ", room: "gate", hp: 52, atk: 6, def: 7, traits: ["dutiful", "brave"], order: "free", post: "gate" });
   w.add({ name: "モルモ", room: "hall", hp: 10, atk: 1, def: 0, traits: ["coward"], role: "herald", order: "free", post: "hall", noncombat: true });
-  // 勇者一行
   const hero = { side: "hero", room: "outside" };
-  w.add(Object.assign({ name: "勇者アレン", hp: 60, atk: 12, def: 4, traits: ["brave"] }, hero));
-  w.add(Object.assign({ name: "戦士ドルフ", hp: 52, atk: 10, def: 5, traits: ["brave"] }, hero));
-  w.add(Object.assign({ name: "賢者ミラ", hp: 30, atk: 11, def: 2, traits: [] }, hero));
+  w.add(Object.assign({ name: "勇者アレン", hp: 52, atk: 11, def: 3, traits: ["brave"] }, hero));
+  w.add(Object.assign({ name: "戦士ドルフ", hp: 45, atk: 10, def: 4, traits: ["brave"] }, hero));
+  w.add(Object.assign({ name: "賢者ミラ", hp: 27, atk: 10, def: 2, traits: [] }, hero));
   return w;
 }
 
-function runOne(seed, maxTicks) {
+function runOne(seed, maxTicks, use) {
   const w = setup(seed);
   const lines = [];
   for (let t = 0; t < maxTicks && !w.over; t++) {
     const before = w.log.length;
+    // 魔王の手。t3 に一度だけ。使わない回も見る。
+    if (use && w.tick === 3) {
+      const av = C.availableAbilities(w).find(x => x.ability.id === use.id);
+      if (av) w.log.push({ tick: w.tick, room: av.owner.room, text: `モルモ「${av.ability.advise(w, av.owner)}」`, cause: null });
+      C.useAbility(w, use.id, use.target);
+    }
     C.step(w);
     const fresh = w.log.slice(before);
     if (!fresh.length) continue;
@@ -41,10 +45,10 @@ function runOne(seed, maxTicks) {
   return { w, lines };
 }
 
-function render(seed, maxTicks) {
-  const { w, lines } = runOne(seed, maxTicks);
+function render(seed, maxTicks, use) {
+  const { w, lines } = runOne(seed, maxTicks, use);
   const out = [];
-  out.push(`════ seed ${seed} ════`);
+  out.push(`════ seed ${seed}${use ? ` ／ 使った手: ${C.ABILITIES[use.id].name}` : " ／ 手を使わない"} ════`);
   for (const { tick, rows } of lines) {
     // 部屋ごとにまとめる。どこで何が起きているかが読めないと意味がない。
     const byRoom = {};
@@ -58,6 +62,8 @@ function render(seed, maxTicks) {
   out.push(`\n── 結末 ── ${w.over ? (w.over.kind === "throne_reached" ? `玉座到達（t${w.over.tick}）` : `撃退（t${w.over.tick}）`) : "決着せず"}`);
   const dead = w.agents.filter(a => !a.alive).map(a => a.name);
   out.push(`戦没: ${dead.length ? dead.join("、") : "なし"}`);
+  const after = C.aftermath(w);
+  if (after.length) out.push(`あとに残ったもの: ${after.join(" / ")}`);
   out.push(`生存: ${w.agents.filter(a => a.alive).map(a => `${a.name}(${a.hp})`).join(" ")}`);
   // 因果の連なりを1本だけ辿って見せる（作文ではなく台帳から）
   const chains = w.events.filter(e => e.type === "decide" && e.cause);
@@ -71,10 +77,18 @@ function render(seed, maxTicks) {
   return out.join("\n");
 }
 
+const USE = { rouse: { id: "rouse", target: "gate" }, overload: { id: "overload", target: "hall" }, feign: { id: "feign", target: "dungeon" } };
 const args = process.argv.slice(2);
-if (args[0] === "--runs") {
-  const n = Number(args[1] || 5);
-  for (let i = 1; i <= n; i++) console.log(render(i, 60) + "\n");
+const useArg = args.find(a => USE[a]);
+const rest = args.filter(a => !USE[a]);
+if (rest[0] === "--compare") {
+  // 同じ seed を、手を使わない回と使った回で並べる
+  const seed = Number(rest[1] || 1);
+  console.log(render(seed, 60, null));
+  console.log("\n\n");
+  console.log(render(seed, 60, USE[useArg || "rouse"]));
+} else if (rest[0] === "--runs") {
+  for (let i = 1; i <= Number(rest[1] || 5); i++) console.log(render(i, 60, useArg ? USE[useArg] : null) + "\n");
 } else {
-  console.log(render(Number(args[0] || 1), Number(args[1] || 60)));
+  console.log(render(Number(rest[0] || 1), Number(rest[1] || 60), useArg ? USE[useArg] : null));
 }
