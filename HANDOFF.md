@@ -21,7 +21,45 @@
 
 ## 0. 次チャットの開始点（2026-09-03）
 
-### 現在：勇者襲来v0.2へ改稿（2026-09-09・CodeX／文書のみ）
+### 現在：勇者襲来 A/B の独立試作を実装（2026-09-09・Claude／オーナー試遊待ち）
+
+[設計書 v0.2](docs/HERO_ARRIVAL_VERTICAL_DESIGN_2026-09-09.md) の **A（普通の迎撃）と B（店を任せる）だけ**を、
+本編から独立した入口 **`hero-arrival.html`** として実装した。設計書 v0.3 は作っていない。
+
+- 実装：`src/prototype/hero_arrival_world.js`（世界・DOM非依存）／`src/prototype/hero_arrival_ui.js`（画面）
+- 既存資産は **読むだけ**で使う：`Battle.simulate`、`BattleScene`、`UI`、`MormoScene`、`Sound`、立ち絵
+- **既存ファイルは1行も変更していない**（`git diff` が空。新規追加のみ）
+- 検証：`node tools/test-hero-arrival.js`（43件）／`node tools/sim-hero-arrival.js 300`／
+  `tools/browser-tests/hero-arrival.js`（実機で一周＋隔離）
+
+**本編からの隔離**（オーナー指摘を反映）：セーブ・魔界史だけでなく、
+戦闘速度 `maou_speed`・音量 `maou_volume`/`maou_muted`・BGM `maou_bgm`・KPI `maou_kpi` も汚さない。
+入口ページ冒頭で `window.localStorage` を `heroproto_` 名前空間のシムへ差し替えているので、
+今後モジュールが鍵を増やしても隔離漏れが起きない。`run.js`/`storage.js`/`kpi.js` は読み込まない。
+ブラウザテストが「試作の前後で本編の名前空間が1文字も変わらないこと」を差分で確認している。
+
+**この試作で確かめたいこと**：「人を採って仕事を任せたら、直接命令していない出来事が
+別の出来事につながった」と感じられるか。核はモルモの
+**「魔王様、勇者です。先ほどまで、うちで飲んでいた方です」**。
+
+**専用イベントにしない担保**（テストで固定している）：
+- モグを店以外に置く → 酒はできない（設備は仕事、能力は本人）
+- 酒造の能力が無い者を店に置く → 酒はできない。普通に店を開けた勤務結果は残る
+- 客が飲むかは**客側の条件**（A=任務優先は断る／B=休憩中は飲む）が決める。提供者の性格では決まらない
+- 「販売のみ（外の者に振る舞うな）」→ 提供しない。裏で振る舞う罰はない
+- 接触の時点では身元不明（「旅の方」）。門番を外すと身元が分からず、同じ一言は出ない
+- モルモの台詞は facts 台帳からのみ生成。事実が無ければ言わない
+
+**未実装（今回の範囲外。設計書にはあるが作っていない）**：
+レナ×アレンの元同僚交渉、グルグの雇用契約（D/F）、ガンツの通行拒否による商談不成立（E）、
+プルの摂食と聖剣（C）、洪水・反乱・研究暴走、CHAIN追加、新しい戦闘機構。
+レナは「関係は持っているが勤務中は任務を離れない」対照として在籍させてある。
+
+**次にやること**：オーナーの試遊。触り方と未検証事項は
+[docs/HERO_ARRIVAL_PROTOTYPE_2026-09-09.md](docs/HERO_ARRIVAL_PROTOTYPE_2026-09-09.md) にまとめてある。
+この試作を根拠に本編改修・全体仕様化へ自動で広げない。
+
+### 履歴：勇者襲来v0.2へ改稿（2026-09-09・CodeX／文書のみ）
 
 オーナーは第8節の結末をどれも楽しいと評価。文章の堅さは口調・表現で調整する方針。
 配置パズルへの不安を受け、[設計書](docs/HERO_ARRIVAL_VERTICAL_DESIGN_2026-09-09.md) の三点を改稿した。
@@ -3603,6 +3641,22 @@ GAME=$(pwd) CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
 | `test-enemy-formations.js` | 敵の代替隊列、戦力帯、事前開示、戻る操作で再抽選されないこと |
 | `analysis-voices.js` | 戦闘後の一言が状況どおり選ばれるか |
 | `analysis-shape.js` | 戦闘のラウンド数・ログ行数 |
+
+### 勇者襲来の縦切り試作（`hero-arrival.html`）
+
+本編とは独立している。本編のデータを変えても壊れないし、逆に試作を変えても本編は動く。
+
+```bash
+node tools/test-hero-arrival.js      # 世界ロジックと境界（ブラウザ不要・速い）
+node tools/sim-hero-arrival.js 300   # 迎撃の数値校正。編成・育成・酔いで差が出るか
+CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome \
+  GAME="$(pwd)" SP="$(pwd)/.screenshots" node tools/browser-tests/hero-arrival.js
+```
+
+ブラウザテストは実機で B を一周し、発見の一言・敵情への接続・台帳を見たうえで、
+**本編の localStorage が試作の前後で1文字も変わらないこと**を差分で確認する。
+試作の数値（`HERO_PARTY` / 人物の `base`）を触ったら `sim-hero-arrival.js` を流し直すこと。
+本編の `tools/sim.js` は試作とは無関係（試作は `src/data/` を読んでいない）。
 
 ---
 
