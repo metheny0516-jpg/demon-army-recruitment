@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="src/battlefield.css">
 <style>
 /* 試作専用。本編の styles.css は戦闘画面のために読むだけで、上書きしない。 */
+.pa-banner { max-width: 1080px; margin: 0 auto; padding: 16px 12px 0; }
 .pa-wrap { max-width: 1080px; margin: 0 auto; padding: 16px 12px 64px; }
 .pa-top h1 { font-size: 22px; margin: 8px 0 4px; }
 .pa-lead { margin: 0 0 16px; line-height: 1.7; opacity: .85; }
@@ -44,6 +45,50 @@
 .pa-mormo { display: flex; gap: 12px; align-items: center; margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: rgba(120,80,180,.18); border: 1px solid rgba(190,150,255,.25); }
 .pa-mormo img { width: 56px; height: 56px; object-fit: cover; object-position: top center; border-radius: 50%; flex: none; }
 .pa-mormo p { margin: 0; font-size: 14px; line-height: 1.6; }
+/* ── 面接。この試作の中心なので、一人ぶんを大きく出す ── */
+.pa-interview { max-width: 760px; }
+.pa-iv-bar { display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; font-size: 13px; padding: 10px 14px; border-radius: 8px; background: rgba(0,0,0,.3); border: 1px solid rgba(255,255,255,.14); margin-bottom: 14px; }
+.pa-iv-bar b { color: #ffd479; font-size: 15px; }
+.pa-iv-bar b.pa-low { color: #ff9a7a; }
+.pa-iv-card { display: flex; gap: 18px; padding: 18px; border-radius: 12px; border: 1px solid rgba(255,214,120,.3); background: rgba(255,255,255,.04); }
+.pa-iv-photo { flex: none; width: 148px; text-align: center; }
+.pa-iv-face { width: 148px; height: 197px; object-fit: cover; object-position: top center; border-radius: 6px; border: 3px solid rgba(255,255,255,.15); background: rgba(0,0,0,.25); display: block; }
+.pa-iv-photo .pa-face-emoji { font-size: 76px; line-height: 197px; }
+.pa-face-emoji { display: block; text-align: center; }
+.pa-iv-photo-note { display: block; margin-top: 6px; font-size: 10px; opacity: .5; letter-spacing: .1em; }
+.pa-iv-body { flex: 1; min-width: 0; }
+.pa-iv-body h1 { font-size: 24px; margin: 0 0 14px; }
+.pa-iv-body h1 small { display: block; font-size: 12px; font-weight: normal; opacity: .65; margin-top: 3px; }
+.pa-iv-block { margin: 0 0 12px; padding: 10px 12px; border-radius: 7px; border-left: 3px solid rgba(255,255,255,.2); background: rgba(0,0,0,.18); }
+.pa-iv-block h2 { font-size: 11px; margin: 0 0 6px; letter-spacing: .14em; opacity: .6; }
+.pa-iv-block dl { display: grid; grid-template-columns: 5.5em 1fr; gap: 3px 8px; margin: 0; font-size: 13px; line-height: 1.6; }
+.pa-iv-block dt { opacity: .55; }
+.pa-iv-block dd { margin: 0; }
+.pa-iv-known { border-left-color: #8fd4a0; }
+.pa-iv-said { border-left-color: #9fb8e8; }
+.pa-iv-unknown { border-left-color: #ffd479; background: rgba(255,214,120,.09); }
+.pa-iv-unknown p { margin: 0; font-size: 14px; line-height: 1.7; }
+.pa-iv-unknown small { display: block; margin-top: 6px; font-size: 11px; opacity: .55; }
+.pa-iv-quote { margin: 0; font-size: 14px; line-height: 1.7; }
+.pa-iv-note { margin: 5px 0 0; font-size: 12px; opacity: .7; }
+.pa-iv-nums { font-size: 11px; opacity: .55; display: block; }
+.pa-iv-actions { display: flex; gap: 12px; justify-content: center; margin-top: 20px; }
+.pa-pass { font-size: 15px; padding: 12px 28px; border-radius: 8px; border: 1px solid rgba(255,255,255,.3); background: transparent; color: inherit; cursor: pointer; }
+.pa-go[disabled] { opacity: .35; cursor: not-allowed; }
+.pa-iv-warn { text-align: center; font-size: 12px; opacity: .6; margin: 10px 0 0; }
+.pa-iv-roster { text-align: center; font-size: 12px; opacity: .75; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.1); }
+.pa-iv-reveal-line { margin: 0 0 8px; font-size: 15px; line-height: 1.7; }
+.pa-clue { font-size: 11px; opacity: .65; line-height: 1.6; margin: 6px 0 8px; }
+.pa-unknown { color: #ffd479; opacity: .85; }
+.pa-reveal { border-color: rgba(255,214,120,.4); background: rgba(255,214,120,.07); }
+.pa-reveal ul { margin: 0; padding-left: 1.2em; line-height: 1.9; font-size: 14px; }
+.pa-hist { margin-top: 18px; font-size: 12px; }
+.pa-hist summary { cursor: pointer; opacity: .7; }
+.pa-hist ol { margin: 8px 0 0; padding-left: 1.4em; line-height: 1.8; }
+.pa-hist li span { display: block; opacity: .7; font-size: 11px; }
+.pa-hist-pass { opacity: .55; font-size: 11px; }
+.pa-report li.is-hit { color: #ffd479; }
+.pa-report li.is-miss { opacity: .7; }
 .pa-report { margin: 0; padding-left: 1.2em; line-height: 1.9; }
 .pa-quote { display: block; font-size: 12px; opacity: .8; }
 .pa-badge { display: inline-block; margin-left: 6px; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: #ffd479; color: #1a1420; }
@@ -96,8 +141,8 @@
   window.__heroProtoStorage = { prefix: PREFIX, real: real };
 })();
 </script>
-<header class="pa-wrap" style="padding-bottom:0">
-  <p class="pa-note">勇者襲来の縦切り試作（A：普通の迎撃／B：店を任せる）。
+<header class="pa-banner">
+  <p class="pa-note">勇者襲来の縦切り試作 v2 ── 履歴書を読んで採り、任せて、答え合わせをする。
   本編のセーブ・魔界史・戦績・音量・速度設定に書き込みません。</p>
 </header>
 <div id="app"></div>

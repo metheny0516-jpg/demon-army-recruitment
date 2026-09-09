@@ -26,26 +26,30 @@ function fight(playerRaw, enemyRaw) {
   return Battle.simulate(p, e);
 }
 
-// 迎撃1回。squad は人物ID、opts で育成と酔いを切り替える。
+// 迎撃1回。squad は人物ID。面接を通さず直接名簿へ入れて数値だけを見る。
 function interception(squadIds, opts = {}) {
-  const w = W.newWorld({ seed: 1, guestCondition: opts.drunk ? 'B' : 'A' });
-  for (const id of squadIds) if (!W.person(w, id).hired) W.hire(w, id, 'guard');
-  if (opts.trained) {
-    const garo = W.person(w, 'garo');
-    garo.merit = 5;               // 近郊警戒を1回こなした想定（小隊長）
+  const w = W.newWorld({ seed: opts.seed || 1, allApplicants: true });
+  for (const id of squadIds) {
+    const p = W.person(w, id);
+    if (!p) throw new Error('no such person: ' + id);
+    if (!p.hired) {
+      p.hired = true;
+      p.assignment = 'guard';
+      W.HIDDEN_TRAITS[p.hidden].apply(p);   // 採用時と同じく隠れた性質を効かせる
+    }
   }
-  if (opts.drunk) {
-    w.facts.push({ verb: 'consume', actor: 'allen', target: 'allen', itemId: 'sake', effect: 'drunk', source: 'mog' });
+  if (opts.trained) W.person(w, 'garo').merit = 5;   // 近郊警戒を1回こなした想定
+  if (opts.drink) {
+    w.facts.push({ verb: 'consume', actor: 'allen', target: 'allen', drinkId: opts.drink, source: 'mog' });
   }
-  const squad = squadIds.map(id => W.toUnit(W.person(w, id)));
-  return fight(squad, W.heroUnits(w));
+  return fight(squadIds.map(id => W.toUnit(W.person(w, id))), W.heroUnits(w));
 }
 
 function run(label, squadIds, opts) {
   let wins = 0, rounds = 0, deaths = 0;
   const takenBy = {};
   for (let i = 0; i < N; i++) {
-    const r = interception(squadIds, opts);
+    const r = interception(squadIds, Object.assign({ seed: i + 1 }, opts));
     if (r.victory) wins++;
     rounds += r.rounds;
     for (const c of r.contribution) {
@@ -63,15 +67,25 @@ function run(label, squadIds, opts) {
 }
 
 console.log(`勇者襲来 試作の迎撃 — 各${N}回\n`);
-const standard = ['garo', 'gantz', 'honekichi', 'rize', 'rena'];
-run('標準5名（ガロ先頭・育成なし）', standard);
-run('標準5名（ガロ先頭・育成あり）', standard, { trained: true });
-run('前衛をガンツへ（育成なし）', ['gantz', 'garo', 'honekichi', 'rize', 'rena']);
-run('リゼを外して職人モグを入れる', ['garo', 'gantz', 'honekichi', 'mog', 'rena']);
-run('4名（レナなし）', ['garo', 'gantz', 'honekichi', 'rize']);
+// 予算6G・枠3 で**実際に組める**編成だけを比べる（7G の編成は組めないので出さない）
+const cheap = ['garo', 'gantz', 'honekichi', 'boru', 'pipi'];             // 1+1+1 = 3G
+const power = ['garo', 'gantz', 'honekichi', 'boru', 'rize'];             // 1+1+3 = 5G
+const shop  = ['garo', 'gantz', 'mog', 'honekichi', 'boru'];              // 2+1+1 = 4G
+run('安く5人そろえる（3G）', cheap);
+run('安く5人＋火力1枚（5G）', power);
+run('4人で火力に寄せる（リゼ+レナ 6G）', ['garo', 'gantz', 'rize', 'rena']);
+run('追加採用なし（在籍2名のみ）', ['garo', 'gantz']);
 console.log('');
-run('標準5名・相手が酒を飲んでいる', standard, { drunk: true });
-run('標準5名・育成あり＋酒', standard, { trained: true, drunk: true });
+run('同じ5人＋ガロを近郊警戒で育てた', power, { trained: true });
+run('同じ5人＋前衛をガンツへ', ['gantz', 'garo', 'honekichi', 'boru', 'rize']);
+console.log('');
+run('店に1枠（モグ）＝賭けが外れた', shop);
+run('店に1枠（モグ）＝新酒が通った', shop, { drink: 'ale' });
+run('店に1枠（ドゥバ3G）＝蒸留酒が通った', ['garo', 'gantz', 'duba', 'honekichi', 'boru'], { drink: 'spirit' });
+console.log('');
+const both = ['garo', 'gantz', 'mog', 'rize', 'honekichi'];   // 2+3+1 = 6G ちょうど
+run('店も火力も取る（6G）＝外れた', both);
+run('店も火力も取る（6G）＝通った', both, { drink: 'ale' });
 console.log('');
 // 近郊警戒そのもの（ガロ単独で行かせる回）
 let survived = 0, promoted = 0;
