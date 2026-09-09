@@ -41,7 +41,7 @@ Keep image IDs synchronized with `src/data/monsters.js` and `src/data/portraits.
 **CodeX＝増やす**（絵・モンスター・台詞・イベント・敵データ）/
 **Claude＝繋ぐ・測る・直す**（エンジン、相互作用、バランス検証、テスト）。
 
-これは `GAME_DESIGN_PRINCIPLES.md` 第19節「大量生成 → 選別 → 調整」の分業に対応する。
+これは `GAME_DESIGN_PRINCIPLES.md` 第18節「コンテンツ制作とAI」の分業に対応する。
 
 ### 専有ではなく優先権
 
