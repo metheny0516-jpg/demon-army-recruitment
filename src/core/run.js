@@ -912,7 +912,9 @@ const Game = {
       army: defenseArmy || (isInvade ? base.army : type.armies[variant]),
       region: counter ? "魔王城" : (isInvade ? base.region : type.regions[variant]),
       reward,
-      alertDelta: type.alertDelta,
+      // 進軍の警戒度は counterattack.js の invadeAlert が正本（反撃A で missions.js を 0 に戻した）。
+      // 反撃B はここを読み忘れていて、進軍に勝っても警戒が上がらなかった（時計が動かない）。
+      alertDelta: isInvade ? this.counterRules().invadeAlert : type.alertDelta,
       conquestDelta: type.conquestDelta,
       loyaltyDelta: type.loyaltyDelta,
       foodReward: type.foodReward || 0,
@@ -2357,7 +2359,8 @@ const Game = {
       threshold: rules.threshold !== undefined ? rules.threshold : 6,
       nearChance: rules.nearChance !== undefined ? rules.nearChance : 0.5,
       ransack: rules.ransack || { facilityLevels: 1, foodRatio: 0.5, relics: 1 },
-      seize: rules.seize || { materials: 2, food: 2 }
+      seize: rules.seize || { materials: 2, food: 2 },
+      invadeAlert: rules.invadeAlert !== undefined ? rules.invadeAlert : 2
     };
   },
 
