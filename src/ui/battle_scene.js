@@ -1616,13 +1616,14 @@ const BattleScene = {
     this.paused = true;
     this.setMormoControlsLocked(true, false);
     const candidates = ev.candidates || [];
+    const unready = (ev.unready || []).map(u => `${u.name}は気合が抜けたまま（${u.spirit}/${u.cost}）`).join("。");
     const box = MormoScene.aside({
       expression: "report",
       text: ev.text ? String(ev.text).replace(/^\s*モルモ「|」\s*$/g, "") : "号令を",
-      note: `${candidates.map(c => `${c.name}：${c.note}`).join("。")}。命じた者は次に真っ先に動いて技を必ず出す（与ダメ+50%）が、その次の手番は息が上がって動けない。`,
+      note: `${candidates.map(c => `${c.name}：${c.note}`).join("。")}。${unready ? unready + "。" : ""}命じた者は次に真っ先に動いて技を必ず出す（与ダメ+50%）が、その次の手番は息が上がって動けない。`,
       host: document.getElementById("scene"),
       choices: [
-        ...candidates.map(c => ({ label: `📣 ${c.name}「${c.label}」`, value: c.unitId })),
+        ...candidates.map(c => ({ label: `📣 ${c.name}「${c.label}」${typeof c.cost === "number" && c.cost > 0 ? `（気合${c.cost}）` : ""}`, value: c.unitId })),
         { label: "任せる", value: "none", primary: true }
       ],
       onChoose: choice => this.answerOrder(choice)

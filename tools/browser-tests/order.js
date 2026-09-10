@@ -32,7 +32,7 @@ async function autoDismissAsidesExceptOrder(page) {
 const SETUP = () => {
   Game.state.roster = [
     { uid: 901, tplId: 'ogre', name: 'ガロ', race: 'オーガ', job: '', hp: 260, atk: 26, def: 6, spd: 3,
-      salary: 2, loyalty: 70, traits: ['brute'], tags: [], quote: '', unpaid: false, injured: 0 }
+      salary: 2, loyalty: 70, traits: ['brute'], tags: [], quote: '', unpaid: false, injured: 0, spirit: 3 }
   ];
   Game.state.activeUids = [901];
   Game.state.stage = 1; Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation';
@@ -78,6 +78,7 @@ async function deployUntilOffer(page, tries = 6) {
   }));
   ok(/号令を/.test(offer.text) && /ガロ/.test(offer.text), `モルモが号令を促し、名前を言う（${offer.text}）`);
   ok(offer.labels.length === 2 && /ガロ/.test(offer.labels[0]) && /怪力を出せ/.test(offer.labels[0]), `名指しのボタン（${offer.labels[0]}）`);
+  ok(/気合1/.test(offer.labels[0]), '名指しのボタンに気合の消費が出る');
   ok(/任せる/.test(offer.labels[1]) && /任せる/.test(offer.focused || ''), '「任せる」が既定（フォーカス）');
   ok(/息が上がって/.test(offer.note), '代償が添えてある');
   ok(offer.awaiting && offer.paused, '戦闘は止まっている');
@@ -106,6 +107,8 @@ async function deployUntilOffer(page, tries = 6) {
   ok(after.execs === 1 && after.answered === 'p0', '差し替えたタイムラインに order_exec が1回、提案に答えが刻まれる');
   ok(/息が上がっている/.test(after.log) || /敵軍を全滅/.test(after.log), '息切れの手番が出る（その前に勝てば出ない）');
   ok(after.orderCount === 1, `号令の回数が数えられる（${after.orderCount}）`);
+  const spiritAfter = await page.evaluate(() => (Game.state.roster.find(m => m.uid === 901) || {}).spirit);
+  ok(spiritAfter === 3, `気合は名指しで1減り、出撃の決着で1戻る（3 → ${spiritAfter}）`);
   ok(!after.pending && ['result', 'defeat', 'clear', 'gameover'].includes(after.phase), `決着した（${after.phase}）`);
 
   console.log('▼ 「任せる」なら今までどおりの展開のまま');

@@ -275,6 +275,11 @@ const UI = {
     const veteranNote = (opts.resume && m.veteran)
       ? `<div class="bond-note veteran-note">🎖 歴戦</div>` : "";
     const secondGen = this.secondGenLabel(m);
+    // 気合（号令の限定）。応募者の札には出さない（採用時に 1 で入る）。
+    const spiritRules = Game.spiritRules ? Game.spiritRules() : { max: 3 };
+    const spiritValue = typeof m.spirit === "number" ? m.spirit : null;
+    const spirit = (!opts.resume && spiritValue !== null && (m.traits || []).some(id => (TRAITS[id] || {}).order))
+      ? `<span class="spirit" title="号令に使う。出撃で+1、留守番で+2">気合 ${"●".repeat(spiritValue)}${"○".repeat(Math.max(0, spiritRules.max - spiritValue))}</span>` : "";
     return `<div class="card">
       <div class="card-head">
         ${this.avatarHtml(m, opts.resume ? "photo" : "")}
@@ -304,6 +309,7 @@ const UI = {
         ${opts.resume ? "" : this.departmentTag(m)}
         ${unpaid}
         ${injured}
+        ${spirit}
       </div>
       ${opts.resume ? "" : this.recordNote(m)}
       ${opts.resume ? "" : relicChips}
@@ -1197,6 +1203,7 @@ const UI = {
           <dt>作戦結果</dt><dd>${U.esc(consequence)}</dd>
           <dt>警戒度</dt><dd>+${m.alertDelta}</dd>
           <dt>軍勢警戒</dt><dd>${m.armyPressure ? `敵能力 +${m.armyPressure}%` : "なし"}</dd>
+          ${m.familiarity ? `<dt>守りの慣れ</dt><dd>敵能力 +${m.familiarity}%（この辺りで戦い続けた分）</dd>` : ""}
         </dl>
         <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
       </div>`;
