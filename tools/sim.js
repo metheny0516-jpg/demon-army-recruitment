@@ -195,6 +195,11 @@ function runOnce(strat, stats){
       else Game.concede();
     }
   }
+  // 全滅と再建の観測（再建の仕様）。旧実装では wipeCount が無いので 0 になる。
+  if (!stats.wipes) stats.wipes = 0;
+  if (!stats.emptyEnds) stats.emptyEnds = 0;
+  stats.wipes += st.wipeCount || 0;
+  if (!st.roster.length) stats.emptyEnds++;
   return st.record || {};
 }
 
@@ -247,6 +252,7 @@ for (const s of strategies) {
   console.log(`  ビルド名: ${nameCount.size}種/${N}ラン　多い順 ${topNames || 'なし'}`);
   const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
   for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
+  console.log(`  全滅 ${stats.wipes || 0}回／名簿が空で終わったラン ${stats.emptyEnds || 0}`);
   console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}／拠点接収 ${stats.seizes}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);

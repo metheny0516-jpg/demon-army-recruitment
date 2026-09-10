@@ -113,6 +113,8 @@ const Game = {
       // 撤退（2026-09-10）
       retreatCount: 0,
       pendingBattle: null,
+      // 全滅の回数（2026-09-10・再建）
+      wipeCount: 0,
       // 継承（2026-09-10）。永久離脱の履歴・蔵の品・次の面接に混ざる縁の者の予約。
       // **migrateState の defaults と両方に足すこと**（新規ランはこちらしか通らない）。
       departed: [],
@@ -235,7 +237,7 @@ const Game = {
       feastPending: null, hungerStreak: 0,
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
-      retreatCount: 0, pendingBattle: null,
+      retreatCount: 0, pendingBattle: null, wipeCount: 0,
       // 継承（2026-09-10）。旧セーブには無い。departed は永久離脱の履歴、
       // relics は蔵の品、pendingBond は「次の面接に混ざる縁の者」の予約。
       departed: [], relics: [], relicSeq: 0, pendingBond: null,
@@ -1907,10 +1909,15 @@ const Game = {
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
     const goldBefore = st.gold;
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
+    // 判定負け（30ラウンド経過。全滅ではない）は撤退と同じ結末にする。
+    // 倒れていた者は担いで帰り、報酬は無い。**決着の経路は二つのまま**
+    // （ここで委譲する。カウンタと育成を二度走らせないよう tally より前で分ける）。
+    if (!result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
+    let wipedFallen = null, wipedRelics = null;
     if (result.victory) {
       st.gold += stageData.reward + lootGold;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
@@ -1950,8 +1957,39 @@ const Game = {
         this.genApplicants();
       }
     } else {
-      // 敗北。再起の余地があるうちは魔界史に確定させない
-      st.phase = "defeat";
+      // 出撃隊の全滅。**敗北であって終了ではない。**
+      // 出撃した軍団員は全員戦死し、留守番と金で軍団を建て直す。
+      // 戦死は processCasualties が recordDeparture を通すので、履歴・遺物・縁の者が
+      // そのまま付いてくる（名簿から消すだけにすると、いちばん多い離脱の形で継承が発火しない）。
+      const relicsBefore = (st.relics || []).length;
+      this.processCasualties(result.contribution, notes);
+      const relicsLeft = (st.relics || []).slice(relicsBefore).map(r => ({ name: r.name }));
+      wipedFallen = (st.lastFallen || []).slice();
+      wipedRelics = relicsLeft;
+      // 倒れる前の働きは残る。戦功は戦死者にも付く（昇進はもう意味が無いが記録は残る）。
+      this.awardMerit(result.contribution, notes);
+      // 征服は進まない。だが敵に見つかった事実は残る（撤退と同じ）。
+      const alertDelta = Number(stageData.alertDelta) || 1;
+      st.alert = Math.max(0, st.alert + alertDelta);
+      notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
+      // 留守番の仕事と手当は続く。城は落ちていない。
+      // 出撃隊は死んでいるので給与は発生しない（paySalaries は名簿を見るが、もう外れている）。
+      if (!openingBattle) {
+        this.processDepartments(stageData, notes, undefined, battleRations);
+        this.paySalaries(notes);
+        this.processDepartures(notes);
+      }
+      st.turn += 1;
+      st.missionOffers = [];
+      st.wipeCount = (st.wipeCount || 0) + 1;
+      // 再起（時の巻き戻し）は「軍団が空で、雇う金も無い」ときの最後の手段だけに縮めた。
+      // それ以外の全滅は通常の流れへ戻り、面接で建て直す。
+      if (this.canRebuild()) {
+        st.phase = "result";
+        this.genApplicants();
+      } else {
+        st.phase = "defeat";
+      }
     }
 
     // ツケの取り立ては勝敗を問わない。負ければ踏み倒せるなら、
@@ -1960,6 +1998,10 @@ const Game = {
 
     st.lastBattle = {
       victory: result.victory,
+      // 出撃隊の全滅（表示用）。戻らなかった者と、蔵に残った品。
+      wiped: !!wipedFallen,
+      fallen: wipedFallen || [],
+      relicsLeft: wipedRelics || [],
       // この戦いで技を覚えた者（表示用）。覚えた者がいない戦い・旧セーブには無い。
       unlocked,
       missionKind: stageData.missionKind,
@@ -2046,12 +2088,18 @@ const Game = {
 
   // 退いた場合の決着。勝利でも敗北でもない第三の結末。
   // 倒れていた軍団員は担いで帰る（戦死しない）が、報酬は無く、征服も進まない。
-  settleRetreat(pending) {
+  settleRetreat(pending, options = {}) {
     const st = this.state;
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
     const goldBefore = st.gold;
+    const lostOnPoints = !!options.lostOnPoints;
     // 提案時点の戦果。倒れていた軍団員は survived: true / injured: true になっている。
-    const contribution = (result.retreatOffer && result.retreatOffer.contribution) || result.contribution;
+    // 判定負けは「押し返された」だけで全滅ではないので、終了時点の戦果を使い、
+    // 倒れていた者はここで担いで帰る扱いにする（撤退と同じ。仕様2.2）。
+    const contribution = lostOnPoints
+      ? result.contribution.map(row => (row.mercenary || row.survived) ? row
+        : { ...row, survived: true, injured: true })
+      : ((result.retreatOffer && result.retreatOffer.contribution) || result.contribution);
     const carried = contribution.filter(c => c.injured && !c.mercenary);
     // 個人カウンタは名簿が動く前に進める（引退・戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(contribution, false);
@@ -2066,9 +2114,11 @@ const Game = {
     // この戦闘の決着ぶんの回復を先に済ませてから、今回担いで帰った者へ負傷を付ける。
     this.recoverInjuries();
 
-    notes.push(`${stageData.army} から退いた。`
-      + (carried.length ? `${carried.map(c => c.name).join("、")}を担いで帰った（報酬は無い）`
-        : "報酬は無い"));
+    notes.push(lostOnPoints
+      ? `${stageData.army} に押し返された。`
+        + (carried.length ? `${carried.map(c => c.name).join("、")}を担いで戻った（報酬は無い）` : "報酬は無い")
+      : `${stageData.army} から退いた。`
+        + (carried.length ? `${carried.map(c => c.name).join("、")}を担いで帰った（報酬は無い）` : "報酬は無い"));
     // 戦闘中に略奪した金貨も確定しない。無傷で持ち帰れるなら、退くのが常に正解になる。
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
     if (lootGold > 0) notes.push(`略奪した ${lootGold}G は戦場へ置いてきた`);
@@ -2114,12 +2164,15 @@ const Game = {
 
     st.turn += 1;
     st.missionOffers = [];
-    st.retreatCount = (st.retreatCount || 0) + 1;
-    st.phase = "result";
+    // 押し返されたのは撤退ではない。退いた回数（軍風の材料）には数えない。
+    if (!lostOnPoints) st.retreatCount = (st.retreatCount || 0) + 1;
+    // 判定負けでも建て直せなければ再起へ（担いで帰っても名簿が空なら同じこと）。
+    st.phase = this.canRebuild() ? "result" : "defeat";
 
     st.lastBattle = {
       victory: false,
-      retreated: true,
+      retreated: !lostOnPoints,
+      lostOnPoints,
       unlocked,
       missionKind: stageData.missionKind,
       missionTitle: stageData.missionTitle,
@@ -2164,9 +2217,24 @@ const Game = {
     st.mercenaries = [];
     st.mercenaryOffers = [];
 
-    this.genApplicants();
+    if (st.phase === "result") this.genApplicants();
     this.save();
     return st.phase;
+  },
+
+  // 全滅の印。**battle.js の戻り値にはこの鍵が無く、タイムラインの result イベントにだけ載る。**
+  // "player"（味方が全滅）／"enemy"（敵が全滅）／null（判定決着）。
+  wipeOf(result) {
+    const event = ((result && result.timeline) || []).find(e => e.type === "result");
+    return (event && event.wipe) || null;
+  },
+
+  // 建て直せるか。名簿に誰か残っていれば続く（留守番だけでも続く）。
+  // 名簿が空でも、応募者を1人雇う金があれば続く。**どちらも無いときだけ再起を提示する。**
+  canRebuild() {
+    const st = this.state;
+    if (st.roster.length > 0) return true;
+    return st.gold >= this.hireCost();
   },
 
   // 負傷は次の1戦だけ。戦闘が一つ決着するたびに1つ減らす（勝利・敗北・撤退を問わない）。

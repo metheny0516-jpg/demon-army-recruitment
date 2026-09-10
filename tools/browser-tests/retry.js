@@ -21,7 +21,13 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
     Game.state.stage = 8;
     Game.state.conquest = 7;
     Game.state.turn = 8;
-    Game.state.roster.forEach(m => { m.hp=5; m.atk=1; m.def=0; });
+    Game.state.roster.forEach(m => { m.hp=5; m.atk=1; m.def=0; m.salary = 1; });
+    // 再起が出るのは「全滅して名簿が空、雇う金も無い」ときだけになった（再建の仕様）。
+    // 全員を出撃させて全滅させ、給与を払ったあと紹介料（4G）に届かない所持金にする。
+    Game.state.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+    Game.state.roster = Game.state.roster.filter(m => Game.state.activeUids.includes(m.uid));
+    Game.state.hiresLeft = 0;
+    Game.state.gold = Game.state.roster.length;   // 給与を払うと 0G になる
     Game.state.phase='formation'; App.render();
   });
   await page.click('[data-action="deploy"]');
@@ -59,7 +65,11 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
     Game.state.turn = 8;
     if(!Game.state.roster.length) Game.state.roster.push({uid:1,name:'囮',race:'スライム',job:'',hp:1,atk:1,def:0,spd:1,salary:1,loyalty:50,traits:[],tags:[],quote:'',unpaid:false});
     Game.state.activeUids = Game.state.roster.slice(0, 5).map(m => m.uid);
-    Game.state.roster.forEach(m => { m.hp=1; m.atk=1; m.def=0; });
+    // 2度目も「全滅して名簿が空、雇う金も無い」を作る（再建の仕様）
+    Game.state.roster = Game.state.roster.filter(m => Game.state.activeUids.includes(m.uid));
+    Game.state.roster.forEach(m => { m.hp=1; m.atk=1; m.def=0; m.salary=1; });
+    Game.state.hiresLeft = 0;
+    Game.state.gold = Game.state.roster.length;
     Game.state.phase='formation'; App.render();
   });
   await page.click('[data-action="deploy"]');
