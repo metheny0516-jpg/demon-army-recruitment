@@ -473,7 +473,7 @@ const TRAITS = {
   great_fireball: {
     name: "大火球",
     desc: "奇数ラウンドの攻撃時、別の敵全員にも本来の70%を与え、燃焼で次ラウンド開始時に最大HPの8%を削る",
-    skill: { species: "wizard", tier: 2, replaces: "fireball" },
+    skill: { species: "mage", tier: 2, replaces: "fireball" },
     lines: {
       unlock: ["火加減など、もう要りません", "術式が一段、ほどけました", "これは火球ではない。火の海です"],
       use: ["燃えなさい！", "避け場はありません", "火の雨をどうぞ！"]

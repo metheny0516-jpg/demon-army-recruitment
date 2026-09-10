@@ -152,5 +152,18 @@ const rounds = result => {
   assert(triggers(noWave, "tidal_wave").length === 0, "大波はHP半分未満では発動しない");
 }
 
+// 技の種族IDと置き換え元は、テンプレートと既存特性に実在すること（"wizard" と書いて魔法使いが永久に覚えない事故の再発防止）
+{
+  const T = vm.runInContext('TRAITS', ctx);
+  const templates = vm.runInContext('MONSTER_TEMPLATES', ctx);
+  const ids = new Set(templates.map(t => t.id).concat(["king_slime"]));
+  const skills = Object.entries(T).filter(([, t]) => t.skill && t.skill.tier === 2);
+  assert(skills.length === 11, '上位技は11種族ぶん');
+  for (const [id, t] of skills) {
+    assert(ids.has(t.skill.species), `${id} の species「${t.skill.species}」がテンプレートに実在する`);
+    assert(!!T[t.skill.replaces], `${id} の replaces「${t.skill.replaces}」が TRAITS に実在する`);
+  }
+}
+
 console.log(failed ? `\n${failed} 件失敗` : "\nすべて通過");
 process.exit(failed ? 1 : 0);
