@@ -42,9 +42,9 @@
 |---|---|
 | 略奪に勝つ | +2（既存） |
 | 鎮圧に勝つ | +1（既存） |
-| 進軍に勝つ | **+2**（今は 0。`missions.js` の `invade.alertDelta` を 2 に） |
+| 進軍に勝つ | **+2**（`COUNTERATTACK.invadeAlert`。run.js の決着処理で足す。`missions.js` の `invade.alertDelta` は 0 のまま＝データ層だけで挙動を変えない） |
 | 撤退・判定負け | +1（既存の撤退と同じ） |
-| **全滅** | **+3**（王国が「魔王軍は崩れた」と見る。再建して殴り続ける遊び方に反撃が先に来る） |
+| **全滅** | **+3**（`COUNTERATTACK.wipeAlert`。王国が「魔王軍は崩れた」と見る。再建して殴り続ける遊び方に反撃が先に来る） |
 | 城の接収 | +既存の `SEIZE_ALERT_COST` |
 | 防衛戦に勝つ | −`threshold`（0 まで） |
 | 防衛戦に負ける | −`threshold / 2`（荒らして満足して帰る） |
@@ -102,7 +102,7 @@
 ## 4. 契約（追加されるもの）
 
 - `src/data/counterattack.js`：`COUNTERATTACK = { threshold: 6, nearChance: 0.5, ransack: { facilityLevels: 1, foodRatio: 0.5, relics: 1 }, seize: { materials: 2, food: 2 } }`。`index.html` とテストの読み込み順は `missions.js` の後。
-- `MISSION_TYPES.defend`（`missions.js`）。`invade.alertDelta = 2`。
+- `MISSION_TYPES.defend`（`missions.js`）。`COUNTERATTACK.invadeAlert = 2` / `wipeAlert = 3`（run.js が読む）。
 - ラン状態：`st.counterattack`（2.1）、`st.heroCame`、`st.defenses = { won, lost }`、`st.ransackCount`、`st.plundered[]`、`st.renownBonus`。`migrateState` と `newRun` の両方に既定値（落とし穴）。
 - 関数：`Game.checkCounterattack()`（決着処理の最後）、`Game.ransack(notes)`、`Game.isDefenseBattle(stageData)`。
 - 魔界史 record：`clearedBy`、`defenses`、`cause: "城陥落"`。主要記録は増やさない。
