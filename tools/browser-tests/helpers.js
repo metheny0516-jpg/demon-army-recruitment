@@ -32,7 +32,9 @@ async function autoDismissMormo(page) {
       const aside = MormoScene.aside.bind(MormoScene);
       MormoScene.aside = function (options) {
         const box = aside(options);
-        queueMicrotask(() => box && box.querySelector('.mormo-aside-continue')?.click());
+        // 撤退の提案は「戦闘を再開」ではなく二択で出る。既定（続ける＝今までの挙動）を押す。
+        queueMicrotask(() => box && (box.querySelector('.mormo-aside-continue')
+          || box.querySelector('.mormo-aside-choice.primary'))?.click());
         return box;
       };
     };
@@ -50,7 +52,8 @@ async function silenceMormoFromNow(page) {
     const aside = MormoScene.aside.bind(MormoScene);
     MormoScene.aside = function (options) {
       const box = aside(options);
-      queueMicrotask(() => box && box.querySelector('.mormo-aside-continue')?.click());
+      queueMicrotask(() => box && (box.querySelector('.mormo-aside-continue')
+        || box.querySelector('.mormo-aside-choice.primary'))?.click());
       return box;
     };
     MormoScene.close();

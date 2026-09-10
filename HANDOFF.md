@@ -70,6 +70,17 @@
 - **A（battle.js）**：`retreat_offer` イベントと `result.retreatOffer`。契約は §2「撤退の提案」。
 - **B（run.js）**：`deploy()` を「計算」と「決着」に割った。
 - **C（UI）**：戦闘を止めてボタンを2つ出す。
+  - `MormoScene.aside` に `choices: [{label, value, primary}]` と `onChoose(value)` を追加。
+    渡すと「戦闘を再開」ボタンの代わりに二択になる。既定フォーカスは `primary`。
+  - `BattleScene.askRetreat(ev)` が提案の専用入口。`speakAside` と違って**必ず止まる**
+    （字幕へ落ちると選択肢ごと消える）。直前の一言が止まっていたら `closeAside()` で先に畳む。
+  - **`skip()` は答える前は提案の位置で止まる。** `skip()` は `render()` を通らない独自経路なので、
+    ここへ書かないと選択ごと飛ぶ。提案を出したまま `skip()` を呼んだ場合は何もしない
+    （`stop()` が一言ごと消してしまう）。
+  - `BattleScene.onRetreatChoice` を `UI.battle()` が挿す。BattleScene はゲーム状態を知らないまま。
+  - **`tools/browser-tests/helpers.js` の自動送りは `.mormo-aside-choice.primary` も押す。**
+    そうしないと既存のテストが提案の前で止まる（casualty など「紙の前衛＋頑丈な後衛」の編成は
+    そのまま提案の条件を満たす）。
 
 `run.js` の形（Bで変わったところ）：
 

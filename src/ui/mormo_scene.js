@@ -152,7 +152,11 @@ const MormoScene = {
         src="${U.esc(faceSrc)}" alt="${U.esc(faceName)}"></span>` : ""}
       <div class="mormo-aside-bubble"><b>${U.esc(faceName)}</b><p>${U.esc(String(options.text || ""))}</p>${
         options.note ? `<small class="mormo-aside-note">${U.esc(String(options.note))}</small>` : ""}
-        <button type="button" class="mormo-aside-continue">${U.esc(String(options.buttonLabel || "戦闘を再開 ▶"))}</button>
+        ${Array.isArray(options.choices) && options.choices.length
+          ? `<div class="mormo-aside-choices">${options.choices.map((c, i) =>
+            `<button type="button" class="mormo-aside-choice${c.primary ? " primary" : ""}"
+              data-choice="${U.esc(String(c.value))}" data-index="${i}">${U.esc(String(c.label))}</button>`).join("")}</div>`
+          : `<button type="button" class="mormo-aside-continue">${U.esc(String(options.buttonLabel || "戦闘を再開 ▶"))}</button>`}
       </div>`;
     const portrait = box.querySelector(".mormo-aside-portrait");
     // 画像が無い環境では枠ごと畳む（空の丸が残らないようにする）
@@ -160,6 +164,20 @@ const MormoScene = {
     host.appendChild(box);
     void box.offsetWidth;
     box.classList.add("show");
+    // 選択肢つきの一言（撤退の提案）。押した値を onChoose へ渡す。
+    // 既定フォーカスは primary（今までの挙動＝続ける）。
+    const choices = box.querySelectorAll(".mormo-aside-choice");
+    if (choices.length) {
+      for (const choice of choices) {
+        choice.addEventListener("click", () => {
+          if (!box.isConnected) return;
+          box.remove();
+          if (typeof options.onChoose === "function") options.onChoose(choice.dataset.choice);
+        }, { once: true });
+      }
+      const primary = box.querySelector(".mormo-aside-choice.primary") || choices[0];
+      primary.focus({ preventScroll: true });
+    }
     const button = box.querySelector(".mormo-aside-continue");
     if (button) {
       button.addEventListener("click", () => {

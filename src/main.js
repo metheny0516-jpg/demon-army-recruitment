@@ -256,7 +256,9 @@ const App = {
         return this.render();
 
       case "deploy": {
-        const out = Game.deploy();
+        // offerRetreat を渡すのは UI だけ。提案が出た戦闘では決着が保留され、
+        // BattleScene が「続ける／退く」を聞いてから Game.settleBattle() が決着させる。
+        const out = Game.deploy({ offerRetreat: true });
         if (!out) return;
         this.pendingBattle = out;
         return UI.battle(out.result, out.stageData);

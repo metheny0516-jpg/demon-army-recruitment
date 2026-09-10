@@ -319,6 +319,7 @@ button.wide { width: 100%; }
 .meta .salary { color: var(--gold); }
 .meta .loyal { color: var(--blue); }
 .meta .unpaid { color: var(--red); font-weight: bold; }
+.meta .injured { color: #e8b45c; font-weight: bold; }
 .department-tag {
   display: inline-flex;
   align-items: center;
@@ -528,6 +529,8 @@ button.wide { width: 100%; }
 .banner { border-radius: 12px; padding: 14px; text-align: center; margin-bottom: 12px; }
 .banner.win { background: linear-gradient(#2c5a3a, #1d3d28); border: 1px solid var(--green); }
 .banner.lose { background: linear-gradient(#5a2c2c, #3d1d1d); border: 1px solid var(--red); }
+/* 撤退は勝利でも敗北でもない第三の結末。赤でも緑でもない色にする */
+.banner.retreat { background: linear-gradient(#4a4433, #2c281e); border: 1px solid #b39a5e; }
 .banner h2 { margin: 0; }
 .notes { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
 .notes li { padding: 2px 0; }
@@ -944,6 +947,27 @@ button.wide { width: 100%; }
 }
 .mormo-aside-continue:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
 .mormo-aside-continue:hover { filter: brightness(1.12); }
+/* 撤退の提案：一言のまま二択を出す。既定は「続ける」（今までの挙動）なので、
+   そちらだけを明るくし、退くほうは同じ大きさで静かに置く。 */
+.mormo-aside-choices { display: flex; gap: 10px; margin-top: 16px; justify-content: flex-end; flex-wrap: wrap; }
+.mormo-aside-choice {
+  min-width: 160px;
+  padding: 12px 20px;
+  border: 1px solid #7d6a4a;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #3a3730, #24221d);
+  color: #efe4cb;
+  font: inherit; font-size: 16px; font-weight: 700; letter-spacing: .04em;
+  cursor: pointer;
+  box-shadow: 0 5px 16px rgba(0, 0, 0, .45);
+}
+.mormo-aside-choice.primary {
+  border-color: #e7bd68;
+  background: linear-gradient(180deg, #8f4c28, #66301f);
+  color: #fff2ce;
+}
+.mormo-aside-choice:focus-visible { outline: 3px solid #fff0a8; outline-offset: 3px; }
+.mormo-aside-choice:hover { filter: brightness(1.12); }
 @media (max-width: 700px) {
   /* 狭い画面では横並びだと吹き出しが細くなり、1行が数文字で折り返して読みにくい。
      顔を上、台詞を下の縦積みにして、台詞に画面幅をまるごと使わせる。 */
@@ -958,6 +982,8 @@ button.wide { width: 100%; }
     border-radius: 4px 16px 16px 16px;
   }
   .mormo-aside-continue { width: 100%; margin-top: 10px; padding: 11px 14px; font-size: 15px; }
+  .mormo-aside-choices { flex-direction: column; align-items: stretch; margin-top: 10px; }
+  .mormo-aside-choice { width: 100%; min-width: 0; padding: 11px 14px; font-size: 15px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .mormo-aside { transition: none; }

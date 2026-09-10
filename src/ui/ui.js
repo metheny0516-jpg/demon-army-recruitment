@@ -159,6 +159,8 @@ const UI = {
   monsterCard(m, opts) {
     opts = opts || {};
     const unpaid = m.unpaid ? `<span class="unpaid">給与未払い</span>` : "";
+    // 撤退で担いで帰った者。次の1戦だけ出撃できない（留守番としては働ける）
+    const injured = m.injured > 0 ? `<span class="injured">🩹 負傷（次の戦いまで）</span>` : "";
     const rank = Game.rankOf(m);
     const nextRank = Game.nextRank(m);
     const merit = m.merit || 0;
@@ -192,6 +194,7 @@ const UI = {
         <span class="merit">${meritText}</span>
         ${opts.resume ? "" : this.departmentTag(m)}
         ${unpaid}
+        ${injured}
       </div>
       ${this.aptitudeHtml(m)}
       ${opts.resume ? "" : `<div class="traits">${this.traitHtml(m.traits)}</div>`}
@@ -276,7 +279,7 @@ const UI = {
     const full = Game.state.activeUids.length >= Game.MAX_DEPLOY;
     return DEPARTMENT_ORDER.filter(id => id !== current).map(id => {
       const department = DEPARTMENTS[id];
-      const disabled = id === "combat" && full ? " disabled" : "";
+      const disabled = id === "combat" && (full || m.injured > 0) ? " disabled" : "";
       return `<button class="small department-button" data-action="assigndepartment"${disabled}
         data-uid="${m.uid}" data-department="${id}">${department.icon} ${U.esc(department.name)}へ</button>`;
     }).join("");
@@ -1161,6 +1164,9 @@ const UI = {
   battle(result, stageData) {
     // 描画はレンダラに委譲する。UIは戦闘の中身を知らない。
     this.set(BattleScene.shell(stageData));
+    // 撤退の答えを決着へ繋ぐ。BattleScene はゲーム状態を知らないままでよい。
+    // 保留されていない戦闘（提案が出なかった／開幕の防衛戦）では settleBattle が false を返すだけ。
+    BattleScene.onRetreatChoice = choice => Game.settleBattle(choice);
     BattleScene.play(result.timeline);
   },
 
@@ -1169,12 +1175,26 @@ const UI = {
     const b = st.lastBattle;
     const payrollReport = st.lastPayrollReport || {};
     const payrollPolicy = PAYROLL_POLICIES[payrollReport.policyId] || PAYROLL_POLICIES.regular;
-    this.set(`${this.hud()}
-      <div class="banner win">
+    // 退いた戦闘は勝利でも敗北でもない第三の結末。見出しだけを差し替える。
+    // **set() の第2引数で scene を明示すること。**見出し文字列から推定させると
+    // `.game-scene-report` が外れて画面が崩れる（部門を畳んだときに一度踏んだ）。
+    const retreated = !!b.retreated;
+    const carried = retreated
+      ? (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name) : [];
+    const banner = retreated
+      ? `<div class="banner retreat">
+        <h2>撤退</h2>
+        <div>${U.esc(b.army)} から退いた。${carried.length
+          ? `${U.esc(carried.join("、"))}は生きている。` : ""}報酬は無い。</div>
+        <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
+      </div>`
+      : `<div class="banner win">
         <h2>勝利！</h2>
         <div>${U.esc(b.army)} を撃退した</div>
         <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
-      </div>
+      </div>`;
+    this.set(`${this.hud()}
+      ${banner}
       ${Game.canSeizeStronghold() ? (() => {
         const q = Game.seizeQuote();
         return `<div class="panel seize-panel">
@@ -1214,7 +1234,7 @@ const UI = {
         <h3>現在の軍団</h3>
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
       </div>
-      <button class="primary wide" data-action="afterresult">次へ</button>`);
+      <button class="primary wide" data-action="afterresult">次へ</button>`, "report");
     if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
   },
 

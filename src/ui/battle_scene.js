@@ -67,7 +67,7 @@ const BattleScene = {
   PROTECTED_TYPES: new Set([
     "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
     "resource_gain", "resource_forfeit", "resource_consume", "momentum",
-    "overkill", "revive", "summon", "survive", "incident", "result"
+    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "result"
   ]),
 
   EFFECT_CLASSES: [
@@ -359,6 +359,9 @@ const BattleScene = {
     this.paused = false;
     this.mormoAwaiting = false;
     this.asideUsed = {};
+    this.retreatAnswered = false;
+    this.retreated = false;
+    this.resumeSkipAfterRetreat = false;
     this.resultPending = null;
     this.historySeen = new Set();
     const history = document.getElementById("chain-history-list");
@@ -816,6 +819,10 @@ const BattleScene = {
         this.shake();
         break;
       }
+      // 撤退の提案。ここだけは**必ず**止める（字幕へ落ちると選べなくなる）。
+      case "retreat_offer":
+        this.askRetreat(ev);
+        break;
       case "result":
         this.resolveBattle(ev);
         break;
@@ -1508,6 +1515,77 @@ const BattleScene = {
     return true;
   },
 
+  // 開いている一言を、続きを進めずに畳む。撤退の提案は「二重に止まらない」では困るので、
+  // 直前の一言（大食漢の一口など）が止めていたら先にこれで閉じる（仕様6節の落とし穴）。
+  closeAside() {
+    MormoScene.clearAside(document.getElementById("scene"));
+    this.mormoAwaiting = false;
+    this.setMormoControlsLocked(false);
+  },
+
+  // 「退きますか」。戦闘を止めて、ボタンを2つ出す。
+  // speakAside と違って**必ず止まる**入口である（字幕へ落とすと選択肢が消える）。
+  askRetreat(ev) {
+    if (this.retreatAnswered || this.finished) return false;
+    if (this.mormoAwaiting) this.closeAside();
+    this.mormoAwaiting = true;
+    this.paused = true;
+    this.setMormoControlsLocked(true, false);
+    const downed = (ev.downed || []).map(u => u.name);
+    const box = MormoScene.aside({
+      expression: "worried",
+      text: ev.text ? String(ev.text).replace(/^\s*モルモ「|」\s*$/g, "") : "退きますか",
+      note: "退けば倒れた者を担いで帰れる（戦死しない）。だが報酬は無く、征服も進まない。",
+      host: document.getElementById("scene"),
+      choices: [
+        { label: "⚔ 続ける", value: "continue", primary: true },
+        { label: "🏰 退く", value: "retreat" }
+      ],
+      onChoose: choice => this.answerRetreat(choice, downed)
+    });
+    if (!box) {
+      // 一言を出す場所が無い環境（試写室以外では起きない）。続行として扱う。
+      // ここで continueAfterMormo は呼ばない。止まっていないので、
+      // step() が今までどおり次を予約する（二重に進めない）。
+      this.mormoAwaiting = false;
+      this.paused = false;
+      this.setMormoControlsLocked(false);
+      this.retreatAnswered = true;
+      if (typeof this.onRetreatChoice === "function") this.onRetreatChoice("continue");
+      return false;
+    }
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+    return true;
+  },
+
+  answerRetreat(choice, downed) {
+    if (this.retreatAnswered) return;
+    this.retreatAnswered = true;
+    if (typeof this.onRetreatChoice === "function") this.onRetreatChoice(choice);
+    if (choice !== "retreat") {
+      // 「最後まで飛ばす」の途中で聞いた提案なら、答えたあとも飛ばし続ける。
+      if (this.resumeSkipAfterRetreat) {
+        this.resumeSkipAfterRetreat = false;
+        this.mormoAwaiting = false;
+        this.paused = false;
+        this.setMormoControlsLocked(false);
+        return this.skip();
+      }
+      return this.continueAfterMormo(false);
+    }
+    this.resumeSkipAfterRetreat = false;
+    // 退いた。ここから先の攻撃は起きなかったことになるので、描画もしない。
+    this.retreated = true;
+    this.mormoAwaiting = false;
+    this.setMormoControlsLocked(false);
+    this.index = this.timeline.length;
+    this.settleChain();
+    const who = (downed || []).join("、");
+    this.appendLog(`　魔王軍、撤退。${who ? `${who}を担いで` : ""}城へ戻った`, "result-lose");
+    this.showAction(`魔王軍、撤退。${who ? `${who}を担いで` : ""}城へ戻った`, 2600);
+    this.finish();
+  },
+
   setMormoControlsLocked(locked, wipe = false) {
     for (const id of ["speed-btn", "pause-btn", "next-btn"]) {
       const button = document.getElementById(id);
@@ -1841,6 +1919,10 @@ const BattleScene = {
   // 残りを一気に適用して終わらせる
   skip() {
     if (this.finished) return;
+    // 提案を出したまま飛ばそうとしたら何もしない。stop() が一言ごと消してしまい、
+    // 選択肢が無いまま戦闘だけが進む（＝答えずに続行したことになる）。
+    if (this.mormoAwaiting && !this.retreatAnswered
+      && this.timeline.some(e => e.type === "retreat_offer")) return;
     const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
     if (typeof Music !== "undefined") Music.suspend();
@@ -1853,6 +1935,31 @@ const BattleScene = {
       if (typeof Sound !== "undefined") {
         Sound.stopAll();
         Sound.cue("skip");
+      }
+    }
+    // 「最後まで飛ばす」も、提案に答える前は提案の位置で止まる。
+    // skip() は render() を通らない独自経路なので、ここへ書かないと選択ごと飛んでしまう。
+    if (!this.retreatAnswered) {
+      const offerAt = this.timeline.findIndex((e, i) => i >= this.index && e.type === "retreat_offer");
+      if (offerAt >= 0) {
+        while (this.index <= offerAt) {
+          const ev = this.timeline[this.index++];
+          if (ev.text) this.appendLog(ev.text, ev.cls);
+          if (ev.type === "summon") {
+            if (ev.late && this.units[ev.unit.id]) this.clearAbsent(this.units[ev.unit.id], ev.unit);
+            else this.addSummon(ev.unit);
+          }
+          const u = this.units[ev.toId] || this.units[ev.unitId];
+          if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
+          if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
+          if (ev.type === "revive" && u) this.setLife(u, false);
+          if (ev.type === "momentum") this.setMorale(ev.mult, 0);
+          if (ev.type === "synergy") this.countSynergy();
+        }
+        // 答えたら、通常再生へ戻さずに続きを飛ばす（飛ばすつもりで押したのだから）。
+        this.resumeSkipAfterRetreat = true;
+        this.askRetreat(this.timeline[offerAt]);
+        return;
       }
     }
     while (this.index < this.timeline.length) {
@@ -1872,7 +1979,7 @@ const BattleScene = {
       this.tellChain(ev, false);
     }
     const result = this.timeline.find(e => e.type === "result");
-    if (result) {
+    if (result && !this.retreated) {
       this.banner(result.victory);
       if (!announced) this.playSettleCue(result.victory);
     }
@@ -1908,7 +2015,8 @@ const BattleScene = {
     // これが「勝利のファンファーレが鳴らない」の3つ目の原因だった。
     const result = (this.timeline || []).find(e => e.type === "result");
     if (result && typeof Music !== "undefined" && typeof Game !== "undefined" && Game.state) {
-      const scene = result.victory ? "victory" : "defeat";
+      // 退いた戦闘は勝っても負けてもいない。勝てたはずの戦闘でも勝利曲は鳴らさない。
+      const scene = this.retreated ? "defeat" : result.victory ? "victory" : "defeat";
       const wait = Math.max(0, (this.settleCueUntil || 0) - Date.now());
       // 予約は this.timers ではなく専用の枠へ置く。this.timers は「まだ描画が残っている」
       // ことを表す枠で、スキップ直後に空であることを回帰テストが契約として見ているため。
