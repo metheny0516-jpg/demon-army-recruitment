@@ -9,6 +9,7 @@
 const TRAITS = {
   coward: {
     name: "卑怯者",
+    relic: "短刀",
     desc: "敵のHPが50%以下ならダメージ+50%",
     modDealt(ctx) {
       if (ctx.target.hp <= ctx.target.maxHp * 0.5) {
@@ -19,6 +20,7 @@ const TRAITS = {
   },
   pack: {
     name: "群れの本能",
+    relic: "遠吠え笛",
     desc: "生存中の同種族の味方1体につきダメージ+10%",
     modDealt(ctx) {
       const n = ctx.allies.filter(u => u.alive && u !== ctx.attacker && u.race === ctx.attacker.race).length;
@@ -30,6 +32,7 @@ const TRAITS = {
   },
   first_strike: {
     name: "先制",
+    relic: "鈴",
     desc: "ラウンド1のダメージ+30%",
     modDealt(ctx) {
       if (ctx.round === 1) {
@@ -40,6 +43,7 @@ const TRAITS = {
   },
   loyal_dog: {
     name: "忠犬",
+    relic: "首輪",
     desc: "忠誠80以上ならダメージ+30%",
     modDealt(ctx) {
       if ((ctx.attacker.loyalty ?? 0) >= 80) {
@@ -50,6 +54,7 @@ const TRAITS = {
   },
   brute: {
     name: "怪力",
+    relic: "こん棒",
     desc: "20%の確率でダメージ2倍",
     modDealt(ctx) {
       if (ctx.rng() < 0.2) {
@@ -60,6 +65,7 @@ const TRAITS = {
   },
   rage_unpaid: {
     name: "血の気",
+    relic: "請求書",
     desc: "給与が未払いだとダメージ+60%",
     modDealt(ctx) {
       if (ctx.attacker.unpaid) {
@@ -70,6 +76,7 @@ const TRAITS = {
   },
   pickpocket: {
     name: "追い剥ぎ",
+    relic: "巾着",
     desc: "自身が敵へ初めてダメージを与えたとき、勝利時に1Gを略奪",
     links: { emits: ["金貨獲得"], on: "自分が敵へ初めてダメージを与えたとき", once: true },
     postAttack(ctx) {
@@ -81,6 +88,7 @@ const TRAITS = {
   },
   greedy: {
     name: "強欲",
+    relic: "財布",
     desc: "味方が金貨獲得：威力70%で追撃（各人、同じ連鎖で1回）",
     links: { reacts: ["金貨獲得"], emits: ["追加攻撃"], on: "味方が金貨を得るたび（同じ連鎖で各1回）" },
     onTriggeredEvents(ctx) {
@@ -94,6 +102,7 @@ const TRAITS = {
   },
   big_eater: {
     name: "大食漢",
+    relic: "弁当箱",
     desc: "戦闘糧食を食べられた戦闘では与ダメージ+25%。敵を倒すと、その場で飯を食い始めることがある（次の一手が遅れる）",
     links: { reacts: ["食料消費"] },
     // 倒した敵が持っていた飯を食う。効くのは数値ではなく順番：次の行動を一回飛ばす。
@@ -128,21 +137,25 @@ const TRAITS = {
   },
   demon_cook: {
     name: "魔界料理人",
+    relic: "エプロン",
     desc: "戦闘糧食1消費につき、最も食欲旺盛な味方の与ダメージ+8%（最大80%）",
     links: { reacts: ["食料消費"], emits: ["食事強化"] }
   },
   starved: {
     name: "飢餓適応",
+    relic: "空の椀",
     desc: "3戦続けて飢えを生き延びた体。もう食料を消費しないが、最大HPは15%痩せた",
     links: { reacts: ["食料不足"], emits: ["食料0"] }
   },
   hunger_demon: {
     name: "飢餓の悪魔",
+    relic: "空き瓶",
     desc: "戦闘糧食で食料が0になった瞬間、全軍与ダメージ×2・被ダメージ+30%",
     links: { reacts: ["食料0"] }
   },
   tough_skin: {
     name: "硬皮",
+    relic: "うろこ",
     desc: "受けるダメージ-2（最低1）",
     modTaken(ctx) {
       return Math.max(1, ctx.dmg - 2);
@@ -150,6 +163,7 @@ const TRAITS = {
   },
   slime_body: {
     name: "粘体",
+    relic: "水袋",
     desc: "受けるダメージ-30%",
     modTaken(ctx) {
       return Math.max(1, Math.round(ctx.dmg * 0.7));
@@ -157,6 +171,7 @@ const TRAITS = {
   },
   regen: {
     name: "再生",
+    relic: "尻尾",
     desc: "ラウンド終了時、最大HPの10%回復",
     onRoundEnd(ctx) {
       const u = ctx.unit;
@@ -169,6 +184,7 @@ const TRAITS = {
   },
   bone: {
     name: "白骨",
+    relic: "肋骨",
     desc: "一度だけ致死ダメージをHP1で耐える",
     onLethal(ctx) {
       if (!ctx.unit.flags.boneUsed) {
@@ -181,6 +197,7 @@ const TRAITS = {
   },
   tenacity: {
     name: "執念",
+    relic: "遺髪",
     desc: "死亡後、ラウンド終了時に25%でHP30%で自力復活（1戦闘1回）",
     // 全滅した瞬間にも、敗北確定前の救済フックとしてだけ実行してよい。
     rescueOnWipe: true,
@@ -196,6 +213,7 @@ const TRAITS = {
   },
   fireball: {
     name: "火球",
+    relic: "杖",
     desc: "攻撃時、別の敵1体にも50%のダメージ（魔法結社で全体化）",
     postAttack(ctx) {
       const others = ctx.enemies.filter(u => u.alive && u !== ctx.target);
@@ -209,6 +227,7 @@ const TRAITS = {
   },
   necromancy: {
     name: "死霊術",
+    relic: "呪符",
     desc: "ラウンド終了時、死亡した味方1体をHP50%で復活（1戦闘1回。死の軍勢で全快に）",
     links: { reacts: ["味方死亡"], emits: ["蘇生", "アンデッド化"] },
     onRoundEnd(ctx) {
@@ -228,21 +247,25 @@ const TRAITS = {
   },
   gravekeeper: {
     name: "墓守",
+    relic: "墓標",
     desc: "味方が初めて死亡するたび魂を1獲得（召喚物を除く）",
     links: { reacts: ["味方死亡"], emits: ["魂獲得"] }
   },
   soul_harvest: {
     name: "魂の徴収",
+    relic: "香炉",
     desc: "味方の蘇生時、魂1を消費して生存中のアンデッド与ダメージ+20%（最大5回）",
     links: { reacts: ["蘇生", "召喚", "魂獲得"], emits: ["アンデッド強化"] }
   },
   chain_massacre: {
     name: "連鎖虐殺",
+    relic: "鎖",
     desc: "100%以上OVERKILL：余剰の30%→40%→50%を次の敵へ伝播（最大3体）",
     links: { reacts: ["OVERKILL"], emits: ["伝播攻撃"] }
   },
   mischief: {
     name: "悪戯",
+    relic: "悪戯玉",
     desc: "攻撃した敵の攻撃力を1下げる",
     postAttack(ctx) {
       if (ctx.target.alive && ctx.target.atk > 1) {
@@ -253,6 +276,7 @@ const TRAITS = {
   },
   guardian_prayer: {
     name: "回復の祈り",
+    relic: "数珠",
     desc: "ラウンド終了時、最もHP割合の低い味方をHPの15%回復",
     onRoundEnd(ctx) {
       const u = ctx.unit;
@@ -269,6 +293,7 @@ const TRAITS = {
   },
   hero_awaken: {
     name: "覚醒",
+    relic: "額当て",
     desc: "自身のHPが50%以下になると覚醒し、以後ダメージ+50%（1戦闘1回）",
     modDealt(ctx) {
       const u = ctx.attacker;
@@ -286,6 +311,7 @@ const TRAITS = {
   // 施設能力+15%のような数値にはしない（オーナー指示）。
   tinkerer: {
     name: "改造癖",
+    relic: "工具袋",
     desc: "任されたものを勝手に良くしようとする。留守番にいると糧食が樽で発酵し、戦闘で誰かが酔って遅刻する",
     // 応募者に付く確率（戦闘特性の traitPool とは別枠で独立に抽選。枠を奪って軍を弱くしない）と、
     // 留守番にいるときに「その戦闘の糧食が発酵している」確率。毎回なら癖ではなく税金になる。
@@ -323,6 +349,7 @@ const TRAITS = {
   // 開戦時に不在で、1〜2ラウンド遅れて summon イベントで到着する（battle.js の lateArrival フック）。
   drunkard: {
     name: "酒好き",
+    relic: "杯",
     desc: "開戦時、杯を置くのに手間取る。1〜2ラウンド遅れて戦場に着く",
     lateArrival(ctx) { return 1 + (ctx.rng() < 0.5 ? 1 : 0); },
     // 台詞。absent は開戦時にモルモが言う（本人は居ない）。arrive は本人が着いたときに言う。
@@ -367,6 +394,7 @@ const TRAITS = {
   // 候補。ロジック未実装（proposed）。付与もされない。台詞と「何が起きるか」の言葉だけを先に用意する。
   timid: {
     name: "怖がり",
+    relic: "盾",
     proposed: true,
     desc: "味方が倒れると逃げ出そうとする。誰かが引き留めれば踏みとどまる",
     lines: {
@@ -398,6 +426,7 @@ const TRAITS = {
   },
   show_off: {
     name: "見栄っ張り",
+    relic: "兜",
     proposed: true,
     desc: "開戦時、勝手に最前列へ出る。並びが崩れる",
     lines: {

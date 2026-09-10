@@ -422,3 +422,14 @@ const RECRUIT_BRIEFS = [
     match(t) { return Array.isArray(t.salary) && t.salary[0] <= 2; }
   }
 ];
+
+// 応募者生成のレベル依存係数。ここは定数を置くだけ（run.js 側で読み替えるのは別担当の仕事）。
+const MONSTER_RULES = {
+  // 応募者の能力倍率 1 + k×(level-1) の k。
+  // 現在は src/core/run.js:1043 に 0.12 がハードコードされている（synergies.js:38, tools/analysis-racecheck.js:14 にも同じ値の別用途の0.12がある）。
+  // node tools/sim.js でクリア率5〜50%に収まるよう調整すること。
+  applicantGrowth: 0.13,
+  // 魔王軍レベル ceil(turn × 係数)。現在は src/core/run.js:768 に 0.75 がハードコードされている。
+  // ターン経過に対する難度上昇の速さ。node tools/sim.js でクリア率5〜50%に収まるよう調整すること。
+  levelPerTurn: 0.5
+};
