@@ -112,6 +112,7 @@ const Game = {
       battleIncidentTotal: 0,
       // 撤退（2026-09-10）
       retreatCount: 0,
+      orderCount: 0,
       pendingBattle: null,
       // 全滅の回数（2026-09-10・再建）
       wipeCount: 0,
@@ -258,7 +259,7 @@ const Game = {
       feastPending: null, hungerStreak: 0,
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
-      retreatCount: 0, pendingBattle: null, wipeCount: 0,
+      retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0,
       // 王国の反撃（2026-09-10）
       counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
       ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false,
@@ -304,6 +305,7 @@ const Game = {
     if (st.phase === "battle" && st.pendingBattle) {
       const pending = st.pendingBattle;
       st.pendingBattle = null;
+      this.recordBattleResult(pending);
       this.settleContinue(pending);
     } else if (st.phase === "battle") {
       st.pendingBattle = null;
@@ -1897,44 +1899,39 @@ const Game = {
     const buildSnapshot = this.buildSnapshot(stageData);
     const buildChanges = this.buildChanges(st.lastBuildSnapshot, buildSnapshot);
     st.lastBuildSnapshot = buildSnapshot;
-    const result = Battle.simulate(playerUnits, enemyUnits,
-      { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks(),
-        synergyPool: this.synergyPool(), chainDefVersion: Chain.versionOf(st),
-        // 未決U1の既定：開幕3日間の防衛戦では退けない（城を明け渡す意味になるので、
-        // 防衛戦の撤退はLPの仕様と一緒に決める）。遠征では提案する。
-        noRetreatOffer: openingBattle });
-    // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
-    // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
-    if (kingMerged) this.addMergeSynergy(result, kingSyn);
-    this.recordDiscoveredSynergies(result);
-
-    // 最大戦力を記録（魔界史用）
-    st.maxPower = Math.max(st.maxPower, this.armyPower(this.activeRoster()));
-
-    // ラン全体の主要記録は最大CHAINと最大OVERKILLの2つだけ（設計憲法 第11節）。
-    // 勝敗を問わず更新する。再起で巻き戻したときはチェックポイントごと戻るのが正しい
-    // （やり直した歴史の記録は残さない）ので、ここに別のテレメトリは持たない。
-    const chainView = Chain.viewOf(result.timeline);
-    const recordedChain = Chain.versionOf(st) >= 2
-      ? chainView.maxDepth
-      : ((result.chainSummary && result.chainSummary.maxChain) || 0);
-    st.maxChain = Math.max(st.maxChain || 0, recordedChain);
-    st.maxOverkill = Math.max(st.maxOverkill || 0, (result.overkillSummary && result.overkillSummary.maxPercent) || 0);
-    // 「どの条件がどこへ繋がったか」の観測。KPI側で読むだけで、ラン状態には触らない
-    // （したがって再起で巻き戻しても消えない＝試した事実として残る）。
-    if (typeof KPI !== "undefined") KPI.battleFinished(result);
+    const simOptions = {
+      rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks(),
+      synergyPool: this.synergyPool(), chainDefVersion: Chain.versionOf(st),
+      // 未決U1の既定：開幕3日間の防衛戦では退けない（城を明け渡す意味になるので、
+      // 防衛戦の撤退はLPの仕様と一緒に決める）。遠征では提案する。
+      noRetreatOffer: openingBattle,
+      // 号令（UI だけ）。節目で止めて名指しで命じる。答えを受けたら同じ種で計算し直すので、
+      // 戦闘の入力（ユニットと選択肢）を計算前の姿で取っておく。sim・テストは今までどおり。
+      offerOrder: !!options.offerRetreat && !openingBattle,
+      seed: options.offerRetreat ? Math.floor(U.rand() * 2147483647) : undefined
+    };
+    const replay = simOptions.offerOrder ? {
+      playerUnits: JSON.parse(JSON.stringify(playerUnits)),
+      enemyUnits: JSON.parse(JSON.stringify(enemyUnits)),
+      options: JSON.parse(JSON.stringify(simOptions))
+    } : null;
+    const result = Battle.simulate(playerUnits, enemyUnits, simOptions);
 
     const pending = {
-      result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView,
+      result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView: null,
+      kingMerged, replay,
       // spotlight は「今回変えた人」の戦闘中IDを要る。playerUnits ごと持ち回ると
       // セーブが太るので、必要な対応だけをここで解いておく。
       highlightIds: playerUnits
         .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
         .map(u => u.id).filter(Boolean)
     };
-    // 退く道がある戦闘だけ、UI の求めに応じて決着を保留する。
+    // 号令の節目がある戦闘は、答えを聞くまで戦闘の中身が確定しない。記録（発見・最大CHAIN・KPI）は
+    // 確定してから取る（answerOrder）。それ以外はここで確定させる。
+    if (!(options.offerRetreat && result.orderOffer)) this.recordBattleResult(pending);
+    // 退く道か号令の節目がある戦闘だけ、UI の求めに応じて決着を保留する。
     // 保留中はラン状態を一切変えない（所持金・名簿・警戒度は答えを聞いてから動く）。
-    if (options.offerRetreat && result.retreatOffer) {
+    if (options.offerRetreat && (result.retreatOffer || result.orderOffer)) {
       st.pendingBattle = pending;
       st.phase = "battle";
       this.save();
@@ -1944,11 +1941,92 @@ const Game = {
     return { result, notes, stageData };
   },
 
+  // 戦闘の中身が確定したら一度だけ呼ぶ。シナジーの発見・最大戦力・最大CHAIN／OVERKILL・KPI。
+  // 号令で計算し直す戦闘では、答えを聞く前の結果で記録を取らない（起きなかった連鎖を刻まない）。
+  recordBattleResult(pending) {
+    const st = this.state;
+    const { result } = pending;
+    if (pending.recorded) return;
+    pending.recorded = true;
+    // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
+    // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
+    const kingSyn = SYNERGIES.find(s => s.id === "king_slime");
+    if (pending.kingMerged && kingSyn) this.addMergeSynergy(result, kingSyn);
+    this.recordDiscoveredSynergies(result);
+
+    // 最大戦力を記録（魔界史用）
+    st.maxPower = Math.max(st.maxPower, this.armyPower(this.activeRoster()));
+
+    // ラン全体の主要記録は最大CHAINと最大OVERKILLの2つだけ（設計憲法 第11節）。
+    // 勝敗を問わず更新する。再起で巻き戻したときはチェックポイントごと戻るのが正しい
+    // （やり直した歴史の記録は残さない）ので、ここに別のテレメトリは持たない。
+    const chainView = Chain.viewOf(result.timeline);
+    pending.chainView = chainView;
+    const recordedChain = Chain.versionOf(st) >= 2
+      ? chainView.maxDepth
+      : ((result.chainSummary && result.chainSummary.maxChain) || 0);
+    st.maxChain = Math.max(st.maxChain || 0, recordedChain);
+    st.maxOverkill = Math.max(st.maxOverkill || 0, (result.overkillSummary && result.overkillSummary.maxPercent) || 0);
+    // 「どの条件がどこへ繋がったか」の観測。KPI側で読むだけで、ラン状態には触らない
+    // （したがって再起で巻き戻しても消えない＝試した事実として残る）。
+    if (typeof KPI !== "undefined") KPI.battleFinished(result);
+  },
+
+  // 号令に答える。UI だけが呼ぶ。unitId が null／"none" なら任せる（計算済みの結末のまま）。
+  // 名指しなら同じ種・同じ入力で計算し直す。提案の手前までは同じ展開、そこから先だけ分岐する。
+  // 戻り値：新しいタイムライン（計算し直した場合）か null（変わらない場合）。
+  // 決着は、撤退の提案がまだ後に控えていなければここで行う（settleBattle と同じ二経路）。
+  answerOrder(unitId) {
+    const st = this.state;
+    const pending = st.pendingBattle;
+    if (!pending || !pending.result || !pending.result.orderOffer || pending.orderAnswered) return null;
+    pending.orderAnswered = true;
+    const offer = pending.result.orderOffer;
+    let changed = null;
+    const chosen = unitId && unitId !== "none" && offer.candidates.some(c => c.unitId === unitId) ? unitId : null;
+    if (chosen && pending.replay) {
+      const rp = pending.replay;
+      const playerUnits = JSON.parse(JSON.stringify(rp.playerUnits));
+      const enemyUnits = JSON.parse(JSON.stringify(rp.enemyUnits));
+      const options = Object.assign({}, rp.options, { orders: { [offer.round]: chosen } });
+      const result = Battle.simulate(playerUnits, enemyUnits, options);
+      // 前半が一致しないなら（乱数の消費が食い違った）、命じなかった結末を使う。黙って別の戦闘にしない。
+      const same = result.timeline.length > offer.index
+        && pending.result.timeline.slice(0, offer.index).every((e, i) => e.type === result.timeline[i].type);
+      if (same) {
+        pending.result = result;
+        pending.ordered = { unitId: chosen, round: offer.round };
+        changed = result.timeline;
+      }
+    }
+    this.recordBattleResult(pending);
+    st.orderCount = (st.orderCount || 0) + (chosen ? 1 : 0);
+    // 撤退の提案が号令より後に控えていれば、そちらの答えを待つ。
+    const retreatLater = pending.result.retreatOffer && pending.result.retreatOffer.index > offer.index && !pending.retreatAnswered;
+    if (!retreatLater) {
+      st.pendingBattle = null;
+      this.settleContinue(pending);
+    } else {
+      this.save();
+    }
+    return changed;
+  },
+
   // 撤退の提案に答える。UI だけが呼ぶ。戻り値は決着後のフェーズ名。
   settleBattle(choice) {
     const st = this.state;
     const pending = st.pendingBattle;
     if (!pending) return false;
+    if (choice !== "retreat") {
+      // 号令の節目が撤退の提案より後に控えていれば、続行の答えだけ覚えて決着は号令の答えを待つ。
+      const offer = pending.result && pending.result.orderOffer;
+      const retreat = pending.result && pending.result.retreatOffer;
+      if (offer && !pending.orderAnswered && retreat && offer.index > retreat.index) {
+        pending.retreatAnswered = true;
+        this.save();
+        return st.phase;
+      }
+    }
     st.pendingBattle = null;
     if (choice === "retreat") this.settleRetreat(pending);
     else this.settleContinue(pending);
@@ -1959,6 +2037,7 @@ const Game = {
   // 二つ持つと「テストは通るのに UI からだけ結果が違う」が起きる。
   settleContinue(pending) {
     const st = this.state;
+    this.recordBattleResult(pending);   // 号令で保留した戦闘はここで初めて確定する（済んでいれば何もしない）
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
     const goldBefore = st.gold;
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
@@ -2189,6 +2268,7 @@ const Game = {
   // 倒れていた軍団員は担いで帰る（戦死しない）が、報酬は無く、征服も進まない。
   settleRetreat(pending, options = {}) {
     const st = this.state;
+    this.recordBattleResult(pending);
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
     const goldBefore = st.gold;
     const lostOnPoints = !!options.lostOnPoints;
