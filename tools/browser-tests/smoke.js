@@ -56,9 +56,9 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
     if (restored !== before) throw new Error('最前列へ一発で戻せない');
   });
 
-  await step('生活部門へ配属', async () => {
-    await page.locator('.department-combat-section [data-action="assigndepartment"][data-department="life"]').first().click();
-    if (await page.locator('.department-life-section .card').count() !== 1) throw new Error('生活部門へ移動できない');
+  await step('留守番へ配属', async () => {
+    await page.locator('.department-combat-section [data-action="assigndepartment"][data-department="home"]').first().click();
+    if (await page.locator('.department-home-section .card').count() !== 1) throw new Error('生活部門へ移動できない');
     if (await page.locator('.department-combat-section .card').count() < 1) throw new Error('出撃隊が空になった');
   });
 

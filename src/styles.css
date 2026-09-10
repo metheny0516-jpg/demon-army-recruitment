@@ -329,7 +329,8 @@ button.wide { width: 100%; }
   font-size: 11px;
 }
 .department-combat { color: #efb1a4; }
-.department-construction { color: #d8b477; }
+.department-home { color: #9bd7ae; }
+.department-construction { color: #d8b477; }  /* 旧セーブ互換 */
 .department-life { color: #9bd7ae; }
 
 .traits { display: flex; flex-direction: column; gap: 4px; }
@@ -1274,8 +1275,10 @@ button.wide { width: 100%; }
   background: rgba(0, 0, 0, .12);
 }
 .department-combat-section { border-left-color: #bd6652; }
+.department-home-section { border-left-color: #5d9b70; }
 .department-construction-section { border-left-color: #c7964d; }
 .department-life-section { border-left-color: #5d9b70; }
+.home-work { font-size: 11px; color: var(--dim); margin-bottom: 4px; }
 .department-help { margin: -3px 0 9px; }
 .department-empty {
   grid-column: 1 / -1;

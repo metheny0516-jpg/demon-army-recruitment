@@ -198,7 +198,7 @@ const strategies = [
   {name:'中盤で精鋭に転換', kind:'pivot'},
   {name:'略奪4回→侵攻', kind:'greedy', mission:'raid'},
   {name:'慎重経営', kind:'greedy', mission:'careful'},
-  {name:'三部門均衡', kind:'greedy', mission:'careful', departments:'balanced'},
+  {name:'留守番2人', kind:'greedy', mission:'careful', departments:'balanced'},
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
 ];
 const N = Number(process.argv[2] || 400);

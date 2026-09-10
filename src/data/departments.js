@@ -1,34 +1,33 @@
-// 3部門の最小循環。数値はここに集め、進行ロジックやUIへ散らさない。
+// 部門は「出撃隊」と「留守番」の二つだけ（2026-09-10 オーナー決定）。
+// 旧3部門（戦闘／建設／生活）は留守番に畳んだ。プレイヤーの判断は
+// 「誰を戦場に出し、誰を城に残すか」の一つに集め、城に残った者は職と特性で勝手に働く。
+// 数値はここに集め、進行ロジックやUIへ散らさない。
 const DEPARTMENTS = {
   combat: {
     id: "combat",
     icon: "⚔",
-    name: "戦闘部門",
-    shortName: "戦闘",
+    name: "出撃隊",
+    shortName: "出撃",
     wageRate: 1,
     description: "勇者迎撃と遠征を担当。出撃隊だけが満額給与を受け取る。"
   },
-  construction: {
-    id: "construction",
-    icon: "🔨",
-    name: "建設・施設部門",
-    shortName: "建設",
+  home: {
+    id: "home",
+    icon: "🏰",
+    name: "留守番",
+    shortName: "留守",
     wageRate: 0.5,
     materialUse: 1,
-    description: "建材を施設進捗へ変える。部門手当は希望給与の半額。"
-  },
-  life: {
-    id: "life",
-    icon: "🍲",
-    name: "食料・生活部門",
-    shortName: "生活",
-    wageRate: 0.5,
     foodProduction: 2,
-    description: "食料を調達し、軍団の生活を支える。部門手当は希望給与の半額。"
+    description: "城に残り、職と特性に応じて食料の調達・施設の建設・経理・人事をする。手当は希望給与の半額。"
   }
 };
 
-const DEPARTMENT_ORDER = ["combat", "construction", "life"];
+// 旧セーブ・旧イベント・旧simが使う部門IDを留守番へ読み替える。
+const DEPARTMENT_ALIASES = { construction: "home", life: "home" };
+const DEPARTMENT_ID = id => DEPARTMENT_ALIASES[id] || id;
+
+const DEPARTMENT_ORDER = ["combat", "home"];
 
 // buildThreshold は累計建材投入数。施設効果は保存中の個体値を変えず、出撃時だけ加える。
 // レベルは「全員の数値」ではなく「大型Jokerが1戦闘に働ける回数」を表す。
@@ -47,7 +46,7 @@ const FACILITIES = [
     links: { reacts: ["金貨獲得"], emits: ["攻撃強化"], on: "予約金貨が3Gに届くたび" } },
   { id: "grand_kitchen", icon: "🍖", name: "巨大厨房", desc: "戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を(Lv.+1)倍化",
     links: { reacts: ["食料消費"], emits: ["食事強化"] } },
-  { id: "graveyard", icon: "🪦", name: "墓地", desc: "建設部門の死霊術師が、戦死者を骸骨従者として召喚（Lv.の体数まで）",
+  { id: "graveyard", icon: "🪦", name: "墓地", desc: "留守番の死霊術師が、戦死者を骸骨従者として召喚（Lv.の体数まで）",
     links: { reacts: ["味方死亡"], emits: ["召喚"] } }
 ];
 
@@ -176,15 +175,16 @@ const Aptitude = {
     return out;
   },
 
-  // 配属先で実際に効く値だけを取り出す。戦闘部門に居る会計士は給与を下げない
-  // （現場に出ている者は経理をしていない）ため、配置の判断がここで生まれる。
+  // 出撃しているか、城に残っているかで効く値が決まる。出撃隊に居る会計士は給与を下げない
+  // （現場に出ている者は経理をしていない）。留守番なら食料・建材・経理・人事の全部が効く。
   contribution(monster, departmentId) {
     const apt = this.of(monster);
+    const home = DEPARTMENT_ID(departmentId) !== "combat";
     return {
-      food: departmentId === "life" ? apt.food : 0,
-      material: departmentId === "construction" ? apt.material : 0,
-      wage: departmentId === "combat" ? 0 : apt.wage,
-      recruit: departmentId === "combat" ? 0 : apt.recruit,
+      food: home ? apt.food : 0,
+      material: home ? apt.material : 0,
+      wage: home ? apt.wage : 0,
+      recruit: home ? apt.recruit : 0,
       appetite: apt.appetite
     };
   }

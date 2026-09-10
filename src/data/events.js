@@ -163,7 +163,7 @@ const EVENTS = [
         }
       },
       {
-        label: "代表を生活部門の労務担当にする（給与+1G）",
+        label: "代表を留守番の労務担当にする（給与+1G）",
         apply(st, c) {
           Game.assignDepartment(c.actor.uid, "life");
           c.actor.salary += 1;
@@ -172,7 +172,7 @@ const EVENTS = [
           c.actor.loyalty = U.clamp(c.actor.loyalty + 30, 0, 100);
           for (const m of st.roster) if (m.uid !== c.actor.uid) m.loyalty = U.clamp(m.loyalty + 5, 0, 100);
           st.laborDispute = null;
-          return `${c.actor.name}を生活部門の労務担当へ異動。給与+1G、本人の忠誠+30、全員+5。\n`
+          return `${c.actor.name}を留守番の労務担当へ異動。給与+1G、本人の忠誠+30、全員+5。\n`
             + `戦力は一人減ったが、苦情の提出先が初めてできた。`;
         }
       },
@@ -468,14 +468,14 @@ const EVENTS = [
         }
       },
       {
-        label: "占拠犯を生活部門の炊事責任者にする（給与+1G）",
+        label: "占拠犯を留守番の炊事責任者にする（給与+1G）",
         apply(st, c) {
           Game.assignDepartment(c.actor.uid, "life");
           const food = Math.max(1, Aptitude.of(c.actor).food);
           c.actor.salary += 1;
           c.actor.loyalty = U.clamp(c.actor.loyalty + 15, 0, 100);
           st.food += food;
-          return `${c.actor.name}を生活部門へ異動した。給与+1G、忠誠+15、食料+${food}。\n`
+          return `${c.actor.name}を留守番の炊事責任者にした。給与+1G、忠誠+15、食料+${food}。\n`
             + `占拠犯が、そのまま食堂長になった。魔王軍ではよくある人事だ。`;
         }
       },
@@ -510,7 +510,7 @@ const EVENTS = [
       return { actor: U.pick(workers.filter(m => Aptitude.of(m).food === best)).uid };
     },
     text(st, c) {
-      return `${c.actor.name}が、生活部門で余った食料${st.food}個の処分伺いを持ってきた。\n`
+      return `${c.actor.name}が、留守番の調達で余った食料${st.food}個の処分伺いを持ってきた。\n`
         + `「備蓄に回しますか、皆で食べますか。それとも……地上では高く売れますヨ」`;
     },
     options: [
@@ -520,7 +520,7 @@ const EVENTS = [
         apply(st) {
           st.food -= 3;
           for (const m of st.roster) m.loyalty = U.clamp(m.loyalty + 10, 0, 100);
-          return `食料3を使って宴会を開いた。全員の忠誠+10。\n翌朝、戦闘部門の半分が食堂で寝ていた。`;
+          return `食料3を使って宴会を開いた。全員の忠誠+10。\n翌朝、出撃隊の半分が食堂で寝ていた。`;
         }
       },
       {
@@ -574,7 +574,7 @@ const EVENTS = [
           st.gold -= 3;
           c.actor.loyalty = U.clamp(c.actor.loyalty + 30, 0, 100);
           return `${c.actor.name}へ3Gを支給した。忠誠+30。\n`
-            + `建設部門では、次の工事の希望者が急に増えた。`;
+            + `留守番の間では、次の工事の希望者が急に増えた。`;
         }
       },
       {
@@ -711,14 +711,14 @@ const EVENTS = [
         }
       },
       {
-        label: "片方を建設部門へ異動する",
+        label: "片方を留守番へ回す",
         apply(st, c) {
           const moved = Aptitude.of(c.actor).material >= Aptitude.of(c.other).material ? c.actor : c.other;
           Game.assignDepartment(moved.uid, "construction");
           moved.loyalty = U.clamp(moved.loyalty - 5, 0, 100);
           const stayed = moved.uid === c.actor.uid ? c.other : c.actor;
           stayed.loyalty = U.clamp(stayed.loyalty + 8, 0, 100);
-          return `${moved.name}を建設部門へ異動した。本人の忠誠-5、残った${stayed.name}の忠誠+8。\n`
+          return `${moved.name}を留守番へ回した。本人の忠誠-5、残った${stayed.name}の忠誠+8。\n`
             + `廊下は静かになった。建設現場が騒がしくなった。`;
         }
       }
@@ -906,7 +906,7 @@ const EVENTS = [
         label: "捨てさせる",
         apply(st, c) {
           for (const m of Game.departmentRoster("life")) m.loyalty = U.clamp(m.loyalty - 5, 0, 100);
-          return `鍋は裏庭に空けられた。生活部門の忠誠-5。\n`
+          return `鍋は裏庭に空けられた。留守番の忠誠-5。\n`
             + `「せっかく、だいたのに……」と${c.actor.name}が縮んだ。土が煙を上げている。`;
         }
       }
@@ -1044,11 +1044,11 @@ const EVENTS = [
     },
     options: [
       {
-        label: "戦闘部門へ配属換えする",
+        label: "出撃隊へ配属換えする",
         apply(st, c) {
           c.actor.department = "combat";
           c.actor.loyalty = U.clamp(c.actor.loyalty + 10, 0, 100);
-          return `${c.actor.name}を戦闘部門へ移した。忠誠+10。\n`
+          return `${c.actor.name}を出撃隊へ移した。忠誠+10。\n`
             + `建材が減る分、前線の嫌がらせは増える。`;
         }
       },

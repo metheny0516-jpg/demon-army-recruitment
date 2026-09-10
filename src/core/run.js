@@ -278,6 +278,7 @@ const Game = {
     }
     for (const id of PAYROLL_POLICY_ORDER) st.payrollChoices[id] = Number(st.payrollChoices[id]) || 0;
     for (const m of [...st.roster, ...st.applicants]) {
+      m.department = DEPARTMENT_ID(m.department);  // 旧3部門（建設・生活）は留守番へ
       if (!DEPARTMENTS[m.department]) m.department = "combat";
       if (!Array.isArray(m.traits)) m.traits = [];
       if (m.tplId === "goblin" && !m.traits.includes("pickpocket")) m.traits.push("pickpocket");
@@ -337,11 +338,13 @@ const Game = {
   },
 
   departmentOf(monster) {
-    return DEPARTMENTS[monster && monster.department] || DEPARTMENTS.combat;
+    return DEPARTMENTS[DEPARTMENT_ID(monster && monster.department)] || DEPARTMENTS.combat;
   },
 
+  // 旧ID（construction / life）で呼ばれても留守番を返す。
   departmentRoster(id) {
-    return this.state.roster.filter(m => this.departmentOf(m).id === id);
+    const want = DEPARTMENT_ID(id);
+    return this.state.roster.filter(m => this.departmentOf(m).id === want);
   },
 
   // 軍団全体の部門適性の合計。UI・給与・部門処理はすべてここを通す。
@@ -564,7 +567,7 @@ const Game = {
     const id = facilityId || this.state.activeFacilityId;
     if (!id) return false;
     if (id === "extortion_ledger") return this.activeRoster().some(m => (m.job || "").includes("会計"));
-    if (id === "graveyard") return this.departmentRoster("construction").some(m => m.tplId === "necromancer");
+    if (id === "graveyard") return this.departmentRoster("home").some(m => m.tplId === "necromancer");
     if (id === "grand_kitchen") return true;
     return false;
   },
@@ -1330,6 +1333,7 @@ const Game = {
   assignDepartment(uid, departmentId) {
     const st = this.state;
     const monster = st.roster.find(m => m.uid === uid);
+    departmentId = DEPARTMENT_ID(departmentId);
     if (!monster || !DEPARTMENTS[departmentId]) return false;
     monster.department = departmentId;
     if (departmentId === "combat") {
@@ -1418,9 +1422,9 @@ const Game = {
     this.kpi("battleStarted", st, stageData);
     const enemyUnits = stageData.units.map(e => Battle.makeUnit(e, "enemy"));
 
-    // 改造癖の者が生活部門にいれば、糧食は樽で寝かされて発酵している。
+    // 改造癖の者が留守番にいれば、糧食は樽で寝かされて発酵している。
     // ここでは印を付けるだけ。誰が酔って遅刻するかは battle.js が決める（本人は出撃していない）。
-    const tinkerer = this.departmentRoster("life").find(m => (m.traits || []).includes("tinkerer")) || null;
+    const tinkerer = this.departmentRoster("home").find(m => (m.traits || []).includes("tinkerer")) || null;
     const fermentChance = (TRAITS.tinkerer && TRAITS.tinkerer.ferment && TRAITS.tinkerer.ferment.chance) || 0;
     const fermenter = tinkerer && U.chance(fermentChance) ? tinkerer : null;
     const rationContext = battleRations ? {
@@ -1628,8 +1632,9 @@ const Game = {
   // 生活は食料を生み、建設は備蓄建材を施設進捗へ変換する。
   processDepartments(mission, notes, dailyDay, battleRations) {
     const st = this.state;
-    const lifeWorkers = this.departmentRoster("life");
-    const builders = this.departmentRoster("construction");
+    // 留守番が食料も建材も担う（旧生活・建設の両方）
+    const lifeWorkers = this.departmentRoster("home");
+    const builders = lifeWorkers;
     const output = this.departmentOutput();
     const foodReward = Math.max(0, mission.foodReward || 0);
     const materialReward = Math.max(0, mission.materialReward || 0);
@@ -1704,17 +1709,17 @@ const Game = {
       lifeWorkers: lifeWorkers.length
     };
 
-    notes.push(`生活部門：食料 +${foodReward + foodProduced} / 消費 ${foodConsumed}（備蓄 ${st.food}／上限 ${this.foodCapacity()}）`);
+    notes.push(`留守番の調達：食料 +${foodReward + foodProduced} / 消費 ${foodConsumed}（備蓄 ${st.food}／上限 ${this.foodCapacity()}）`);
     if (output.wage > 0) notes.push(`経理部の働きで給与総額を ${output.wage}% 圧縮した`);
     if (foodShortage > 0) {
       notes.push(`食料不足 ${foodShortage}！ 軍団全員の忠誠${loyaltyDelta}`);
     } else if (lifeWorkers.length > 0) {
-      notes.push(`生活部門の温かい食事で軍団全員の忠誠+1`);
+      notes.push(`留守番の温かい食事で軍団全員の忠誠+1`);
     }
     if (salvage > 0) {
       notes.push(`供養代行：戦没者を弔い、墓石ぶんの建材 +${salvage} を得た……`);
     }
-    notes.push(`建設部門：建材 +${materialReward} / 投入 ${materialUsed}`
+    notes.push(`留守番の建設：建材 +${materialReward} / 投入 ${materialUsed}`
       + `（施工能力 ${buildCapacity}・備蓄 ${st.materials}）`);
     if (st.facilityLevel > beforeLevel) {
       const facility = this.facilityInfo();
@@ -1872,7 +1877,7 @@ const Game = {
       }
       const worst = this.applyUnpaidPenalty(paidRoster);
       st.lastPayrollReport = { policyId: policy.id, base: total, paid: 0, loyaltyDelta: -worst };
-      notes.push(`魔王命令により給与・部門手当${total}Gを意図的に未払い。勤務者の忠誠が最大 ${worst} 下がった`);
+      notes.push(`魔王命令により給与・留守手当${total}Gを意図的に未払い。勤務者の忠誠が最大 ${worst} 下がった`);
       return;
     }
     const payable = policy.id === "advance" ? Math.ceil(total * policy.costRate) : total;
@@ -1887,7 +1892,7 @@ const Game = {
         m.loyalty = U.clamp(m.loyalty + loyaltyGain, 0, 100);
       }
       st.lastPayrollReport = { policyId: policy.id, base: total, paid: payable, loyaltyDelta: loyaltyGain };
-      notes.push(`給与・部門手当 ${payable}G を支払った（所持金 ${st.gold}G）勤務者の忠誠+${loyaltyGain}`);
+      notes.push(`給与・留守手当 ${payable}G を支払った（所持金 ${st.gold}G）勤務者の忠誠+${loyaltyGain}`);
     } else {
       // 連続で未払いにするほど痛手が大きくなる。固定値だと8戦のランでは
       // 忠誠0に届かず、離脱の脅しが空砲になっていた（実測 300ラン中1回）。
@@ -1903,7 +1908,7 @@ const Game = {
         worst = this.applyUnpaidPenalty(paidRoster);
       }
       st.lastPayrollReport = { policyId: policy.id, base: total, paid: 0, loyaltyDelta: -worst, insufficient: true };
-      notes.push(`金庫が足りない！ 給与・部門手当${total}G が未払いに……勤務者の忠誠が最大 ${worst} 下がった`);
+      notes.push(`金庫が足りない！ 給与・留守手当${total}G が未払いに……勤務者の忠誠が最大 ${worst} 下がった`);
     }
   },
 
@@ -1980,7 +1985,7 @@ const Game = {
         m.loyalty = U.clamp(m.loyalty + 8, 0, 100);
       }
       st.lastPayrollReport = { policyId: policy.id, base: quote.base, paid: quote.cost, loyaltyDelta: 8 };
-      notes.push(`給与・部門手当を ${quote.cost}G で前払い・厚遇した（所持金 ${st.gold}G）勤務者の忠誠+8`);
+      notes.push(`給与・留守手当を ${quote.cost}G で前払い・厚遇した（所持金 ${st.gold}G）勤務者の忠誠+8`);
     } else if (policy.id === "withhold") {
       for (const m of workers) m.unpaid = true;
       st.lastPayrollReport = { policyId: policy.id, base: quote.base, paid: 0, loyaltyDelta: 0, pending: true };
@@ -2379,7 +2384,7 @@ const Game = {
       case "loyalty_dept": {
         const members = this.departmentRoster(debt.dept);
         for (const m of members) loyalty(m, debt.amount);
-        const name = (DEPARTMENTS[debt.dept] || {}).name || debt.dept;
+        const name = (DEPARTMENTS[DEPARTMENT_ID(debt.dept)] || {}).name || debt.dept;
         return `${head}${name}${members.length}名の忠誠 ${debt.amount > 0 ? "+" : ""}${debt.amount}`;
       }
       case "loyalty_one":

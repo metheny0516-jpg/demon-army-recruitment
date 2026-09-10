@@ -50,7 +50,7 @@ const UI = {
     const scene = sceneHint || (html.includes("title-screen") ? "title"
       : html.includes('id="scene"') ? "battle"
       : html.includes("応募者面接") ? "recruit"
-      : html.includes("部門編成") ? "formation"
+      : html.includes("出撃と留守番") || html.includes("部門編成") ? "formation"
       : html.includes("作戦会議") ? "mission"
       : html.includes("魔界史") ? "history"
       : "report");
@@ -117,7 +117,7 @@ const UI = {
   applicantConnections(m) {
     const facility = Game.activeFacility();
     const active = Game.activeRoster();
-    const builders = Game.departmentRoster("construction");
+    const builders = Game.departmentRoster("home");
     const appetiteByUid = {};
     for (const unit of active.concat(m)) appetiteByUid[unit.uid] = Aptitude.of(unit).appetite;
     const activeAccountant = active.some(unit => (unit.job || "").includes("会計"));
@@ -279,11 +279,24 @@ const UI = {
     }).join("");
   },
 
+  // 留守番の札に「城で何をしているか」を一行で出す。置いた結果が目に見えないと迷う（オーナー方針）。
+  homeWork(m) {
+    const c = Aptitude.contribution(m, "home");
+    const parts = [];
+    if (c.food) parts.push(`🍲 食料+${c.food}`);
+    if (c.material) parts.push(`🔨 建材+${c.material}`);
+    if (c.wage) parts.push(`📒 給与-${c.wage}%`);
+    if (c.recruit) parts.push(`📋 応募+${c.recruit}`);
+    const traits = m.traits || [];
+    if (traits.includes("tinkerer")) parts.push("🛢 樽で何か寝かせている");
+    if (m.tplId === "necromancer" && Game.state.activeFacilityId === "graveyard") parts.push("🪦 墓地を守る");
+    return parts.length ? parts.map(U.esc).join("　") : "手持ち無沙汰";
+  },
+
   departmentSummary() {
     const st = Game.state;
     const combat = Game.departmentRoster("combat").length;
-    const builders = Game.departmentRoster("construction").length;
-    const life = Game.departmentRoster("life").length;
+    const home = Game.departmentRoster("home").length;
     const facility = Game.facilityInfo();
     const next = FACILITY_LEVELS[st.facilityLevel + 1];
     const buildText = next
@@ -293,14 +306,13 @@ const UI = {
     const foodNeed = Game.foodNeed();
     const balance = output.food - foodNeed;
     return `<div class="department-overview">
-      <div><b>⚔ ${combat}</b><span>戦闘所属</span></div>
-      <div><b>🔨 ${builders}</b><span>建設所属</span></div>
-      <div><b>🍲 ${life}</b><span>生活所属</span></div>
+      <div><b>⚔ ${combat}</b><span>出撃隊（控え含む）</span></div>
+      <div><b>🏰 ${home}</b><span>留守番</span></div>
       <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
       <div class="${balance < 0 && st.food < -balance ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `赤字 ${-balance}（備蓄 ${st.food} であと${Math.floor(st.food / -balance)}戦）` : `余剰 +${balance}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）`}</span></div>
       <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
-      ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>経理部の圧縮</span></div>` : ""}
-      ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>人事部の集客</span></div>` : ""}
+      ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>留守番の経理</span></div>` : ""}
+      ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>留守番の人事</span></div>` : ""}
     </div>`;
   },
 
@@ -1007,7 +1019,7 @@ const UI = {
     const st = Game.state;
     const current = Game.activeFacility();
     const active = Game.activeRoster();
-    const builders = Game.departmentRoster("construction");
+    const builders = Game.departmentRoster("home");
     const statusOf = f => {
       if (f.id === "extortion_ledger") {
         const n = active.filter(m => (m.job || "").includes("会計")).length;
@@ -1021,7 +1033,7 @@ const UI = {
           : "不足：大食漢か魔界料理人を出撃隊へ配置";
       }
       const n = builders.filter(m => m.tplId === "necromancer").length;
-      return n ? `発火可能：建設部門の死霊術師 ${n}名` : "不足：死霊術師を建設部門へ配置";
+      return n ? `発火可能：留守番の死霊術師 ${n}名` : "不足：死霊術師を留守番へ配置";
     };
     const cards = FACILITIES.map((f, i) => `<div class="mission-card facility-blueprint" data-plan="${i + 1}">
       <div class="blueprint-stamp">設計案 ${i + 1}</div>
@@ -1047,8 +1059,8 @@ const UI = {
     const activeIds = new Set(st.activeUids);
     const combatMembers = Game.departmentRoster("combat");
     const reserves = combatMembers.filter(m => !activeIds.has(m.uid));
-    const builders = Game.departmentRoster("construction");
-    const lifeWorkers = Game.departmentRoster("life");
+    const builders = Game.departmentRoster("home");
+    const homeWorkers = builders;
     const activeCards = active.map((m, i) => this.monsterCard(m, {
       badge: i === 0 ? "最前列（狙われやすい）" : `${i + 1}番目`,
       footer: `<div class="card-actions">
@@ -1072,14 +1084,11 @@ const UI = {
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
       </div>`
     })).join("");
-    const builderCards = builders.map(m => this.monsterCard(m, {
-      badge: `建設手当 ${Math.max(1, Math.ceil(m.salary * DEPARTMENTS.construction.wageRate))}G`,
-      footer: `<div class="card-actions"><div class="row tight">${this.departmentButtons(m, "construction")}</div>
-        <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
-    })).join("");
-    const lifeCards = lifeWorkers.map(m => this.monsterCard(m, {
-      badge: `生活手当 ${Math.max(1, Math.ceil(m.salary * DEPARTMENTS.life.wageRate))}G`,
-      footer: `<div class="card-actions"><div class="row tight">${this.departmentButtons(m, "life")}</div>
+    const homeCards = homeWorkers.map(m => this.monsterCard(m, {
+      badge: `留守手当 ${Math.max(1, Math.ceil(m.salary * DEPARTMENTS.home.wageRate))}G`,
+      footer: `<div class="card-actions">
+        <div class="home-work">${this.homeWork(m)}</div>
+        <div class="row tight">${this.departmentButtons(m, "home")}</div>
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
     })).join("");
     const empty = active.length === 0;
@@ -1115,8 +1124,8 @@ const UI = {
       <div class="formation-layout">
       <aside class="formation-briefing">
       <div class="panel formation-heading">
-        <h2>${opening ? `📅 ${st.day}日目：${deadline}` : "🏢 部門編成"} <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || (opening ? "準備日" : "作戦未選択"))}</span></h2>
-        <div class="muted">${opening ? "配置と給与方針は翌日も維持される。変えたい所だけ直し、業務終了で日次決算を行う。" : "戦闘は最大5体。建設・生活は戦場に出ない代わりに、勝利後の資源循環を担当する。部門手当は希望給与の半額。"}</div>
+        <h2>${opening ? `📅 ${st.day}日目：${deadline}` : "🏰 出撃と留守番"} <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || (opening ? "準備日" : "作戦未選択"))}</span></h2>
+        <div class="muted">${opening ? "配置と給与方針は翌日も維持される。変えたい所だけ直し、業務終了で日次決算を行う。" : "出撃は最大5体。城に残した者は職と特性で勝手に働く（食料の調達、建材の投入、経理、人事）。留守手当は希望給与の半額。"}</div>
         ${this.departmentSummary()}
       </div>
       ${opening ? "" : `<div class="panel"><b>🍖 戦闘糧食 ${rations.consumed}/${rations.need}</b>
@@ -1138,19 +1147,17 @@ const UI = {
       ${this.payrollPanel()}
       ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
-      ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 戦闘部門から最低1体を選べ。</div>` : ""}
+      ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 控えか留守番から最低1体を出せ。</div>` : ""}
       </aside>
       <section class="formation-board" aria-label="魔王軍の配置盤">
       <div class="formation-board-title"><span>魔王軍配置盤</span><small>札を動かし、今日の働き場所を決める</small></div>
-      <div class="army-section department-section department-combat-section"><h3>⚔ 戦闘部門・出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
-      <div class="army-section reserve-section"><h3>⚔ 戦闘部門・控え ${reserves.length}</h3>
-        <div class="cards">${reserveCards || `<div class="muted">戦闘部門の控えはいない</div>`}</div></div>
-      <div class="army-section department-section department-construction-section"><h3>🔨 建設・施設部門 ${builders.length}</h3>
-        <div class="muted department-help">勝利後、施工能力のぶんだけ備蓄建材を投入する。能力は種族と前職で決まる（オーガの重量物運搬は桁が違う）。施設効果は次の出撃隊全員に付く。</div>
-        <div class="cards">${builderCards || `<div class="department-empty">建材はあっても、働く者がいなければ城は育たない。</div>`}</div></div>
-      <div class="army-section department-section department-life-section"><h3>🍲 食料・生活部門 ${lifeWorkers.length}</h3>
-        <div class="muted department-help">ここに置いた者だけが調達する。食う量は種族ごとに違い（3口＝食料1）、アンデッドは何も食べない。足りれば軍団全員の忠誠も少し上がる。</div>
-        <div class="cards">${lifeCards || `<div class="department-empty">現在は自炊。食料が尽きれば全員の忠誠が下がる。</div>`}</div></div>
+      <div class="army-section department-section department-combat-section"><h3>⚔ 出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
+      <div class="army-section reserve-section"><h3>⚔ 出撃隊の控え ${reserves.length}</h3>
+        <div class="muted department-help">出番待ち。給与は出ないが城の仕事もしない。</div>
+        <div class="cards">${reserveCards || `<div class="muted">控えはいない</div>`}</div></div>
+      <div class="army-section department-section department-home-section"><h3>🏰 留守番 ${homeWorkers.length}</h3>
+        <div class="muted department-help">城に残った者は職と特性で勝手に働く。食料を調達し（食う量は種族ごとに違い、アンデッドは食べない）、建材を施設へ投入し、会計なら給与を、人事なら応募者を動かす。足りれば軍団全員の忠誠も少し上がる。</div>
+        <div class="cards">${homeCards || `<div class="department-empty">留守番はいない。現在は自炊、城も育たない。</div>`}</div></div>
       </section>
       <aside class="formation-intel">
       <div class="formation-intel-title"><span>参謀卓</span><small>発火予測・敵情</small></div>

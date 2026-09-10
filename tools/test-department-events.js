@@ -112,8 +112,8 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
   assert(ev.check(st), '食料不足から食堂占拠が候補になる');
   assert(ev.cast(st).actor === 1, '最も大食いの戦闘要員が食堂を占拠する');
   resolve('kitchen_takeover', 1);
-  assert(st.roster[0].department === 'life' && !st.activeUids.includes(1),
-    '占拠犯を生活部門へ異動すると出撃隊から外れる');
+  assert(st.roster[0].department === 'home' && !st.activeUids.includes(1),
+    '占拠犯を留守番へ異動すると出撃隊から外れる（旧ID life は home に読み替え）');
   assert(st.roster[0].salary === 7 && st.food > 0, '炊事責任者への異動は給与と食料に返る');
 }
 
