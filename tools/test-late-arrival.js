@@ -22,8 +22,16 @@ const mk = (name, traits, side, extra) => Battle.makeUnit(Object.assign({ uid: n
   const t = r.timeline;
   const start = t.find(e => e.type === 'battle_start');
   assert(!start.player.some(u => u.id === late.id), '開戦の並びに遅刻者はいない');
+  assert(Array.isArray(start.absent) && start.absent.some(u => u.id === late.id && u.late), 'battle_start.absent に遅刻者が入る');
+  const absentLine = t.find(e => e.type === 'dialogue' && e.late && e.unitId === late.id);
+  assert(!!absentLine && absentLine.name === 'モルモ' && absentLine.quote.includes('ガロ'), '開戦時にモルモが不在を言う（名前入り）');
+  assert(t.indexOf(absentLine) < t.findIndex(e => e.type === 'round_start'), '不在の一言はラウンド1より前');
+  const selfLine = t.find(e => e.type === 'dialogue' && e.late && e.offstage && e.unitId === late.id);
+  assert(!!selfLine && selfLine.name === late.name && vm.runInContext('TRAITS.drunkard.lines.absentSelf', ctx).includes(selfLine.quote),
+    '本人が戦場の外から一言言う（プールから）');
+  assert(t.indexOf(absentLine) < t.indexOf(selfLine), 'モルモが先、本人が後');
   assert(start.player.some(u => u.id === wall.id), '他の味方は普通に並ぶ');
-  assert(!t.some(e => e.type === 'dialogue' && e.unitId === late.id), '遅刻者は開戦の口上を言わない');
+  assert(!t.some(e => e.type === 'dialogue' && e.unitId === late.id && !e.late), '遅刻者は開戦の口上（introQuote）を言わない');
   const arrive = t.find(e => e.type === 'summon' && e.late && e.unit.id === late.id);
   assert(!!arrive, '遅刻者は late 付きの summon で到着する');
   const arriveIdx = t.indexOf(arrive);
@@ -34,6 +42,8 @@ const mk = (name, traits, side, extra) => Battle.makeUnit(Object.assign({ uid: n
     '到着前は攻撃もされず、攻撃もしない');
   assert(t.slice(arriveIdx).some(e => e.type === 'attack' && e.fromId === late.id), '到着後は普通に攻撃する');
   assert(arrive.unit.summoned === false && arrive.unit.late === true, '到着スナップは召喚物ではなく late 印を持つ');
+  const pool = vm.runInContext('TRAITS.drunkard.lines.arrive', ctx);
+  assert(pool.includes(arrive.quote), '到着の台詞は特性のプールから出る');
   const c = r.contribution.find(x => x.uid === 'ガロ');
   assert(!!c && c.late === 1, '戦果に遅刻ラウンド数が残る（召喚物として弾かれない）');
   assert(r.contribution.find(x => x.uid === 'ガンツ').late === 0, '遅刻していない者は 0');

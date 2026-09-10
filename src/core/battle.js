@@ -99,7 +99,7 @@ const Battle = {
         const tr = TRAITS[tid];
         if (!tr || !tr.lateArrival) continue;
         const rounds = Math.max(0, Math.floor(tr.lateArrival({ unit: u, rng: U.rand }) || 0));
-        if (rounds > 0) { u.flags.late = rounds; u.flags.absent = true; }
+        if (rounds > 0) { u.flags.late = rounds; u.flags.absent = true; u.flags.lateTrait = tid; }
       }
     }
 
@@ -259,7 +259,7 @@ const Battle = {
       return event;
     };
 
-    emit("battle_start", { player: playerUnits.filter(onField).map(snap),
+    emit("battle_start", { absent: playerUnits.filter(u => u.flags.absent).map(snap), player: playerUnits.filter(onField).map(snap),
       enemy: enemyUnits.map(snap)
     });
     let feastTrigger = null;
@@ -333,6 +333,25 @@ const Battle = {
         unitId: u.id, name: u.name, side: u.side, quote: u.introQuote,
         emphasis: 2, text: `${u.name}「${u.introQuote}」`, cls: "dialogue"
       });
+    }
+    // 遅刻者の不在を、開戦時に明示する。本人は居ないのでモルモが言う。
+    for (const u of playerUnits) {
+      if (!u.flags.absent) continue;
+      const lines = (TRAITS[u.flags.lateTrait] || {}).lines;
+      const pool = (lines && lines.absent) || ["{name}殿がいません！"];
+      const quote = U.pick(pool).replace(/\{name\}/g, u.name);
+      emit("dialogue", {
+        unitId: u.id, name: "モルモ", side: "player", quote, late: true,
+        emphasis: 2, text: `モルモ「${quote}」`, cls: "dialogue"
+      });
+      // 本人は戦場にいないが、声だけは届く。
+      if (lines && lines.absentSelf && lines.absentSelf.length) {
+        const self = U.pick(lines.absentSelf);
+        emit("dialogue", {
+          unitId: u.id, name: u.name, side: "player", quote: self, late: true, offstage: true,
+          emphasis: 2, text: `${u.name}「${self}」（戦場の外から）`, cls: "dialogue"
+        });
+      }
     }
     for (const s of activeSyn) {
       // merge型（キングスライム合体）は「合体した戦闘」でだけ run.js がイベントを差し込む。
@@ -682,9 +701,11 @@ const Battle = {
         if (!u.flags.absent || round <= u.flags.late) continue;
         u.flags.absent = false;
         u.flags.arrivedRound = round;
+        const lines = (TRAITS[u.flags.lateTrait] || {}).lines;
+        const quote = U.pick((lines && lines.arrive) || ["……遅れた"]);
         emit("summon", {
-          sourceUnitId: null, unit: snap(u), late: true, emphasis: 2,
-          text: `　${u.name}が遅れて到着「……杯を置いてきた」`, cls: "revive"
+          sourceUnitId: null, unit: snap(u), late: true, quote, emphasis: 2,
+          text: `　${u.name}が遅れて到着「${quote}」`, cls: "revive"
         });
       }
 

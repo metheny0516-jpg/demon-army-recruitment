@@ -66,6 +66,10 @@
 .game-scene-battle .battlefield .bu-name { margin: 0 0 3px; font: 700 11px/1.3 sans-serif; background: #101019c9; border-radius: 3px; }
 .battlefield .bu-hp { width: 78%; margin: 0 auto; }
 .battlefield .bu.dead { opacity: .45; filter: grayscale(.8); transform: none; }
+/* 遅刻中。居ないことが見える薄い枠。着いたら外れる */
+.battlefield .bu.absent { opacity: .28; filter: grayscale(1); }
+.battlefield .bu.absent .bu-actor { animation: none; }
+.battlefield .bu.absent .bu-state { color: #ffd479; }
 .battlefield .bu.dead .bu-actor { animation: none; }
 .game-scene-battle .battlefield .bu.hit,
 .game-scene-battle .battlefield .bu.hit-big { animation: none; }

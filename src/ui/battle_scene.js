@@ -292,6 +292,16 @@ const BattleScene = {
     if (scene) scene.style.minHeight = count > 5 ? `${count * 83 + 175}px` : "";
   },
 
+  // 遅刻者の到着。薄い枠を外して戦場に立たせる。通常再生（render）と早送り（skip）の両方から呼ぶ。
+  // skip は render を通らない独自経路なので、ここを共通にしないと「飛ばしたときだけ枠が残る」。
+  clearAbsent(u, snap) {
+    u.absent = false;
+    u.el.classList.remove("absent");
+    this.setLife(u, false);
+    if (snap) this.setHp(u, snap.hp, snap.maxHp);
+    return u;
+  },
+
   addSummon(data) {
     if (!data || this.units[data.id]) return null;
     const band = document.getElementById(data.side === "player" ? "band-player" : "band-enemy");
@@ -311,13 +321,14 @@ const BattleScene = {
     this.setPose(u, dead ? "fallen" : "idle");
   },
 
-  arrival(u, kind) {
+  arrival(u, kind, ev) {
     this.clearFocus();
+    const rise = kind === "summon" || kind === "late";
     u.el.classList.remove("revive-rise", "summon-rise");
-    u.el.classList.add(kind === "summon" ? "summon-rise" : "revive-rise");
-    const life = this.visualDuration(kind === "summon" ? 820 : 700);
+    u.el.classList.add(rise ? "summon-rise" : "revive-rise");
+    const life = this.visualDuration(rise ? 820 : 700);
     u.el.style.setProperty("--arrival-duration", `${life}ms`);
-    this.animateActor(u, kind === "summon" ? [
+    this.animateActor(u, rise ? [
       { opacity: 0, transform: "translateY(22px) scale(.6)" },
       { opacity: 1, transform: "translateY(-5px) scale(1.08)", offset: .7 },
       { opacity: 1, transform: "translateY(0) scale(1)" }
@@ -326,9 +337,14 @@ const BattleScene = {
       { opacity: 1, transform: "translateY(-8px) scaleY(1.04)", offset: .6 },
       { opacity: 1, transform: "translateY(0) scaleY(1)" }
     ], life);
-    this.float(u, kind === "summon" ? "召喚！" : "復活！", "heal");
-    this.showAction(`${u.name}が${kind === "summon" ? "参戦！" : "復活！"}`, 1000);
-    this.unitVfx(u, "revive", kind === "summon" ? "summon-glow" : "", 2);
+    if (kind === "late") {
+      this.float(u, "到着！", "heal");
+      this.showAction(ev && ev.quote ? `${u.name}が遅れて到着「${ev.quote}」` : `${u.name}が遅れて到着！`, 1700);
+    } else {
+      this.float(u, kind === "summon" ? "召喚！" : "復活！", "heal");
+      this.showAction(`${u.name}が${kind === "summon" ? "参戦！" : "復活！"}`, 1000);
+    }
+    this.unitVfx(u, "revive", rise ? "summon-glow" : "", 2);
     this.timers.push(setTimeout(() => u.el.classList.remove("revive-rise", "summon-rise"), life));
   },
 
@@ -583,12 +599,25 @@ const BattleScene = {
     }
 
     switch (ev.type) {
-      case "battle_start":
+      case "battle_start": {
+        // 遅刻者は薄い枠として最初から見せる。着いたらこの枠に入る（末尾に足さない）。
+        const band = document.getElementById("band-player");
+        for (const u of ev.absent || []) {
+          if (!band || this.units[u.id]) continue;
+          band.insertAdjacentHTML("beforeend", this.unitHtml(u));
+          this.registerUnit({ ...u, summoned: false });
+          const p = this.units[u.id];
+          p.absent = true;
+          p.el.classList.add("absent");
+          const label = p.el.querySelector(".bu-state");
+          if (label) label.textContent = "遅刻中";
+        }
         this.synergyNames = [];
         this.setMorale(1, 0);
         this.showForecast(true);
         if (this.isFinalBattle) this.battleIntro();
         break;
+      }
       case "round_start":
         // ラウンドが変わったら、伸びていた鎖はそこで締める
         this.settleChain();
@@ -626,8 +655,12 @@ const BattleScene = {
         break;
       }
       case "summon": {
+        if (ev.late && this.units[ev.unit.id]) {
+          this.arrival(this.clearAbsent(this.units[ev.unit.id], ev.unit), "late", ev);
+          break;
+        }
         const summoned = this.addSummon(ev.unit);
-        if (summoned) this.arrival(summoned, "summon");
+        if (summoned) this.arrival(summoned, ev.late ? "late" : "summon", ev);
         break;
       }
       case "heal": {
@@ -1777,7 +1810,10 @@ const BattleScene = {
     while (this.index < this.timeline.length) {
       const ev = this.timeline[this.index++];
       if (ev.text) this.appendLog(ev.text, ev.cls);
-      if (ev.type === "summon") this.addSummon(ev.unit);
+      if (ev.type === "summon") {
+        if (ev.late && this.units[ev.unit.id]) this.clearAbsent(this.units[ev.unit.id], ev.unit);
+        else this.addSummon(ev.unit);
+      }
       const u = this.units[ev.toId] || this.units[ev.unitId];
       if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
       if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
