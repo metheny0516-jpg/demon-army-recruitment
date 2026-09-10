@@ -1016,6 +1016,10 @@ const Game = {
       if (!traits.includes(extra)) traits.push(extra);
     }
     if (job.includes("料理人") && !traits.includes("demon_cook")) traits.push("demon_cook");
+    // 癖（改造癖など）は戦闘特性の枠とは別に独立で付ける。traitPool に混ぜると戦闘特性を薄めて軍が弱くなる
+    // （sim で15戦略中14が下がった）。
+    const quirk = TRAITS.tinkerer && TRAITS.tinkerer.quirk;
+    if (quirk && quirk.species.includes(tpl.id) && U.chance(quirk.chance) && !traits.includes("tinkerer")) traits.push("tinkerer");
     return {
       uid: st.uidSeq++,
       tplId: tpl.id,
@@ -1414,8 +1418,15 @@ const Game = {
     this.kpi("battleStarted", st, stageData);
     const enemyUnits = stageData.units.map(e => Battle.makeUnit(e, "enemy"));
 
+    // 改造癖の者が生活部門にいれば、糧食は樽で寝かされて発酵している。
+    // ここでは印を付けるだけ。誰が酔って遅刻するかは battle.js が決める（本人は出撃していない）。
+    const tinkerer = this.departmentRoster("life").find(m => (m.traits || []).includes("tinkerer")) || null;
+    const fermentChance = (TRAITS.tinkerer && TRAITS.tinkerer.ferment && TRAITS.tinkerer.ferment.chance) || 0;
+    const fermenter = tinkerer && U.chance(fermentChance) ? tinkerer : null;
     const rationContext = battleRations ? {
       ...battleRations,
+      fermentedBy: fermenter ? fermenter.uid : null,
+      fermentedByName: fermenter ? fermenter.name : null,
       cookUid: playerUnits.find(u => u.traits.includes("demon_cook"))?.uid || null,
       bigEaterUids: playerUnits.filter(u => u.traits.includes("big_eater")).map(u => u.uid),
       hungerUid: playerUnits.find(u => u.traits.includes("hunger_demon"))?.uid || null,
