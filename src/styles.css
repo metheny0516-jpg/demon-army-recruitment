@@ -346,6 +346,29 @@ button.wide { width: 100%; }
   font-size: 12px;
 }
 .trait b { color: var(--purple); }
+.trait-relic { color: var(--dim); font-size: 11px; font-weight: normal; }
+
+/* ── 継承（遺物・縁・軍団史） ─────────────────── */
+.relic-chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0; }
+.relic-chip {
+  display: inline-flex; align-items: center; gap: 3px;
+  background: #3b2f1a; border: 1px solid #7a5a24; color: #e2c084;
+  border-radius: 999px; padding: 1px 8px; font-size: 11px;
+}
+.bond-note {
+  font-size: 12px; color: #d8b477; margin: 2px 0;
+}
+.second-gen { color: var(--dim); font-size: 11px; }
+.army-history-line { margin: 4px 0 8px; }
+.vault-panel .relic-row {
+  border-top: 1px dashed var(--line);
+  padding: 8px 0;
+}
+.vault-panel .relic-row:first-of-type { border-top: none; }
+.vault-panel .relic-name { font-size: 14px; }
+.departed-list { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
+.departed-list h4 { margin: 0 0 6px; font-size: 13px; color: var(--dim); }
+.departed-row { font-size: 12px; color: var(--dim); padding: 2px 0; }
 .quote {
   font-size: 12px;
   color: var(--dim);

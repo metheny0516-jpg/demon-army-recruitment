@@ -53,13 +53,25 @@ const App = {
         : "前の戦果を手がかりに、組み合わせを試しましょう。\n能力の条件を作れそうな仲間はいますか？"),
         { kicker: "出撃前の人事", title: "宰相モルモ" });
     }
+    const culture = Game.armyCulture();
+    const cultureLine = culture ? `\nうちの軍風は『${culture}』デス。無理はなさらず。` : "";
     this.report(injured.length || foodRisk ? "worried" : "report",
       `${mission ? `作戦は「${mission.missionTitle}」に決まりました。` : "作戦を承りました。"}\n`
       + injuredLine
       + (foodRisk
         ? "食料が心細いデス。出撃隊だけでなく、留守番の顔ぶれも見直してくださいネ。"
-        : "誰を戦わせ、誰に城と暮らしを任せるか――魔王様、最後の人事をお願いします！"),
+        : "誰を戦わせ、誰に城と暮らしを任せるか――魔王様、最後の人事をお願いします！")
+      + cultureLine,
       { kicker: "作戦決定", title: "宰相モルモ・出撃前報告" });
+  },
+
+  // 縁の応募者が混ざっているとき、モルモがそれとなく漏らす一言（仕様4.2）。
+  bondNote() {
+    const applicant = ((Game.state && Game.state.applicants) || []).find(m => m.bond);
+    if (!applicant) return "";
+    const relic = applicant.relicId ? Game.relicOf(applicant.relicId) : null;
+    return `\n……この者、${applicant.bond.name}殿の話ばかりしますネ。`
+      + (relic ? `\n${applicant.bond.name}殿の${relic.name}を持っていマス。どこで拾ったのやら。` : "");
   },
 
   battleReport() {
@@ -315,7 +327,7 @@ const App = {
               : "この魔王軍の歩みは、次の世代のために魔界史へ残しますネ。",
             { kicker: "最終報告", title: "宰相モルモ" });
         }
-        return this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。",
+        return this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
           { kicker: "次期採用報告", title: "宰相モルモ" });
 
       case "eventpick":
@@ -327,14 +339,22 @@ const App = {
       case "eventdone":
         Game.nextRecruit();
         this.render();
-        return this.report("welcome", "城内も落ち着きました。次の応募者を面接しましょう！",
+        return this.report("welcome", "城内も落ち着きました。次の応募者を面接しましょう！" + this.bondNote(),
           { kicker: "人事再開", title: "宰相モルモ" });
 
       case "nextrecruit":
         Game.nextRecruit();
         this.render();
-        return this.report("welcome", "次の応募者をお連れしました。今の軍団に足りない役割を探しましょう！",
+        return this.report("welcome", "次の応募者をお連れしました。今の軍団に足りない役割を探しましょう！" + this.bondNote(),
           { kicker: "採用報告", title: "宰相モルモ" });
+
+      case "giverelic":
+        Game.giveRelic(data.relic, Number(data.uid));
+        return this.render();
+
+      case "storerelic":
+        Game.storeRelic(data.relic);
+        return this.render();
 
       case "retry":
         Game.retry();

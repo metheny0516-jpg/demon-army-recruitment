@@ -78,6 +78,7 @@ const UI = {
     const fb = Game.foodBalance();
     return `<div class="hud">
       <span>第 <b>${st.generation}</b> 代魔王軍</span>
+      <span class="army-level">魔王軍 <b>Lv.${Game.armyLevel()}</b></span>
       ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
       <span>作戦 <b>${st.turn}</b></span>
       <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
@@ -93,12 +94,34 @@ const UI = {
     </div>`;
   },
 
-  traitHtml(ids) {
+  // relicByTrait: { traitId: 遺物名 }。遺物由来の特性には「（遺物名）」を添える。
+  traitHtml(ids, relicByTrait) {
+    relicByTrait = relicByTrait || {};
     return ids.map(id => {
       const t = TRAITS[id];
       if (!t) return "";
-      return `<div class="trait"><b>${U.esc(t.name)}</b>：${U.esc(t.desc)}</div>`;
+      const relicName = relicByTrait[id];
+      return `<div class="trait"><b>${U.esc(t.name)}</b>${relicName ? `<span class="trait-relic">（${U.esc(relicName)}）</span>` : ""}：${U.esc(t.desc)}</div>`;
     }).join("");
+  },
+
+  // その者が持つ遺物一覧（蔵にある品ではなく、いま所持している品）。
+  memberRelics(m) {
+    const ids = (m.relicIds && m.relicIds.length) ? m.relicIds : (m.relicId ? [m.relicId] : []);
+    return ids.map(id => Game.relicOf(id)).filter(Boolean);
+  },
+
+  relicByTraitOf(m) {
+    const map = {};
+    for (const r of this.memberRelics(m)) map[r.traitId] = r.name;
+    return map;
+  },
+
+  // 遺物を持った縁の者だけ、職名の後ろへ「表示だけ」の二代目を添える（job 自体は変えない）。
+  secondGenLabel(m) {
+    if (!m.bond) return "";
+    const has = this.memberRelics(m).some(r => r.from && r.from.name === m.bond.name);
+    return has ? `（二代目${U.esc(m.bond.name)}）` : "";
   },
 
   // 履歴書欄。採用画面だけで出す（編成画面はスクロールが長くなるため省く）
@@ -168,17 +191,27 @@ const UI = {
     const legacy = m.legacy
       ? `<div class="general-ability">📜 第${m.legacy.generation}代・殿堂入り人材の再応募（戦功と階級は新任扱い）</div>`
       : "";
+    const relicByTrait = this.relicByTraitOf(m);
+    const relics = this.memberRelics(m);
+    const relicChips = relics.length
+      ? `<div class="relic-chips">${relics.map(r => `<span class="relic-chip">🏺 ${U.esc(r.name)}</span>`).join("")}</div>` : "";
+    // 面接の札だけの印（採用前の応募者）：縁の印と、持って来た遺物
+    const bondNote = (opts.resume && m.bond) ? `<div class="bond-note">🕯 ${U.esc(m.bond.name)}の縁</div>` : "";
+    const broughtRelic = (opts.resume && m.relicId) ? Game.relicOf(m.relicId) : null;
+    const broughtNote = broughtRelic ? `<div class="bond-note">🏺 ${U.esc(broughtRelic.name)}を持って来た</div>` : "";
+    const secondGen = this.secondGenLabel(m);
     return `<div class="card">
       <div class="card-head">
         ${this.avatarHtml(m, opts.resume ? "photo" : "")}
         <div class="card-identity">
           <div class="card-name">${U.esc(m.name)} <span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span></div>
-          <div class="card-job">${U.esc(m.race)} / ${U.esc(m.job)}</div>
+          <div class="card-job">${U.esc(m.race)} / ${U.esc(m.job)}${secondGen ? ` <span class="second-gen">${secondGen}</span>` : ""}</div>
         </div>
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
       </div>
+      ${bondNote}${broughtNote}
       ${legacy}
-      ${opts.resume ? `<div class="traits">${this.traitHtml(m.traits)}</div>
+      ${opts.resume ? `<div class="traits">${this.traitHtml(m.traits, relicByTrait)}</div>
         ${this.applicantConnections(m)}
         ${opts.footer || ""}
         ${this.resumeHtml(m)}` : ""}
@@ -196,8 +229,9 @@ const UI = {
         ${unpaid}
         ${injured}
       </div>
+      ${opts.resume ? "" : relicChips}
       ${this.aptitudeHtml(m)}
-      ${opts.resume ? "" : `<div class="traits">${this.traitHtml(m.traits)}</div>`}
+      ${opts.resume ? "" : `<div class="traits">${this.traitHtml(m.traits, relicByTrait)}</div>`}
       ${rank.id === "general" ? `<div class="general-ability">⚔ 将軍の号令：出撃中、味方全員の与ダメージ+15%</div>` : ""}
       ${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}
       ${opts.resume ? "" : (opts.footer || "")}
@@ -297,6 +331,51 @@ const UI = {
     if (traits.includes("tinkerer")) parts.push("🛢 樽で何か寝かせている");
     if (m.tplId === "necromancer" && Game.state.activeFacilityId === "graveyard") parts.push("🪦 墓地を守る");
     return parts.length ? parts.map(U.esc).join("　") : "手持ち無沙汰";
+  },
+
+  RELIC_CAUSE_JA: { fallen: "戦死", fired: "解雇", deserted: "逃亡", retired: "引退" },
+
+  // 「これまでに何人去ったか」を面接画面の上に一行で見せる（4.4）。文化は表示のみ。
+  armyHistoryLine() {
+    const departed = Game.state.departed || [];
+    if (!departed.length) return "";
+    const last = departed[departed.length - 1];
+    const causeJa = this.RELIC_CAUSE_JA[last.cause] || last.cause;
+    const army = last.army ? `、${U.esc(last.army)}` : "";
+    const culture = Game.armyCulture();
+    return `<div class="army-history-line muted">これまでに ${departed.length}人が去った。
+      最後は ${U.esc(last.name)}（${U.esc(causeJa)}${army}）。${culture ? `軍風は『${U.esc(culture)}』` : ""}</div>`;
+  },
+
+  // 蔵：離脱者が残した遺物の受け渡し。魔王が決裁する（自動では渡さない）。
+  vaultPanel() {
+    const st = Game.state;
+    const relics = st.relics || [];
+    if (!relics.length) return "";
+    const rows = relics.map(r => {
+      const trait = TRAITS[r.traitId];
+      const holder = r.holderUid !== null ? st.roster.find(m => m.uid === r.holderUid) : null;
+      const causeJa = this.RELIC_CAUSE_JA[r.from.cause] || r.from.cause;
+      const candidates = st.roster.filter(m => m.uid !== r.holderUid);
+      const options = candidates.map(m => `<option value="${m.uid}">${U.esc(m.name)}</option>`).join("");
+      const giveButton = candidates.length ? `
+        <select class="relic-target" onchange="this.nextElementSibling.dataset.uid=this.value">${options}</select>
+        <button class="small" data-action="giverelic" data-relic="${r.id}" data-uid="${candidates[0].uid}">渡す</button>` : "";
+      return `<div class="relic-row">
+        <div class="relic-name">🏺 <b>${U.esc(r.name)}</b></div>
+        <div class="muted">${U.esc(r.from.name)}（${U.esc(r.from.race)}）の${U.esc(causeJa)}の品。
+          宿る特性：${U.esc(trait ? trait.name : "？")}</div>
+        <div class="muted">${holder ? `いま ${U.esc(holder.name)} が所持` : "蔵にある"}</div>
+        <div class="row tight">
+          ${giveButton}
+          ${holder ? `<button class="small" data-action="storerelic" data-relic="${r.id}">蔵に戻す</button>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+    return `<div class="panel vault-panel"><h3>🏺 蔵</h3>
+      <div class="muted">離脱した者が残した品。宿った癖が誰かに移る。自動では渡らない。</div>
+      ${rows}
+    </div>`;
   },
 
   departmentSummary() {
@@ -928,7 +1007,8 @@ const UI = {
     this.set(`${this.hud()}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
-        ${st.generation === 1 && st.turn <= 2 ? `<p class="first-guide">モルモ：${st.roster.length ? "「今の軍団との接続」は、仲間の能力とつながる手がかりデス。" : "まずは能力の発動条件を一つ見てみましょう。どんな仲間がいれば活かせそうですか？"}</p>` : ""}
+        ${this.armyHistoryLine()}
+        ${st.generation === 1 && st.turn <= 2 ?`<p class="first-guide">モルモ：${st.roster.length ? "「今の軍団との接続」は、仲間の能力とつながる手がかりデス。" : "まずは能力の発動条件を一つ見てみましょう。どんな仲間がいれば活かせそうですか？"}</p>` : ""}
         <div class="muted">${
           st.turn === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
           : st.hiresLeft > 1 ? `先の戦いで欠員が出た。${st.hiresLeft}名まで補充できる。`
@@ -1142,6 +1222,7 @@ const UI = {
       ${this.payrollPanel()}
       ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
+      ${this.vaultPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 留守番から最低1体を出せ。</div>` : ""}
       </aside>
       <section class="formation-board" aria-label="魔王軍の配置盤">
@@ -1515,6 +1596,14 @@ const UI = {
           ${r.retriesUsed ? `<dt>再起</dt><dd>${r.retriesUsed}回</dd>` : ""}
           ${r.fallenTotal ? `<dt>戦没者</dt><dd>${r.fallenTotal}名</dd>` : ""}
         </dl>
+        ${(r.departed && r.departed.length) ? `<div class="departed-list">
+          <h4>去った者たち</h4>
+          ${r.departed.map(d => `<div class="departed-row">
+            ${this.icon(d.race)} ${U.esc(d.name)}（${U.esc(d.race)}）
+            ${U.esc(this.RELIC_CAUSE_JA[d.cause] || d.cause)}${d.army ? `・${U.esc(d.army)}` : ""}
+            ・${d.battles}戦${d.wins}勝${d.relicName ? `　🏺 ${U.esc(d.relicName)}` : ""}
+          </div>`).join("")}
+        </div>` : ""}
       </div>`).join("");
     this.set(`<div class="panel">
         <h2>📖 魔界史</h2>

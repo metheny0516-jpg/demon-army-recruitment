@@ -44,6 +44,10 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
       await page.locator('[data-action="skip"]').click(); await page.waitForTimeout(100);
     } else if (await page.locator('[data-action="hire"]:not([disabled])').count()) {
       await page.locator('[data-action="hire"]:not([disabled])').first().click(); await page.waitForTimeout(100);
+    } else if (await page.locator('[data-action="choosefacility"]').count()) {
+      // 施設が完成すると選択画面が挟まる。ここを抜けないとループが止まり、
+      // 「30戦まで粘る」が実際には粘れない（応募者が強くなって施設が早く育つほど当たる）。
+      await page.locator('[data-action="choosefacility"]').first().click(); await page.waitForTimeout(100);
     } else break;
   }
   ok(fired, 'ハプニング画面が表示された');
