@@ -29,7 +29,7 @@
 //   resource_forfeit { sourceId,resource,amount,label }  条件喪失による予約没収
 //   note         { }                                特性の発動などテキストのみ
 //   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
-//   order_offer  { round, candidates:[{unitId,name,skillId,skillName,label,note}], answered? }
+//   order_offer  { round, candidates:[{unitId,name,skillId,skillName,label,note,cost,spirit}], unready:[...], answered? }
 //                                                  号令の節目。options.offerOrder のときだけ、1戦闘1回
 //   order_exec   { unitId, name, skillId, skillName, label, quote }  号令の実行（次ラウンド冒頭、本人が真っ先に動く）
 //   result       { victory, reversal }              reversal=総HP3割以下から勝った
@@ -79,6 +79,8 @@ const Battle = {
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
       introQuote: m.introQuote || "",
+      // 気合（号令の限定）。名簿の値を写す。無ければ null＝制限なし（傭兵・テストの直作り）。
+      spirit: (m.spirit === undefined || m.spirit === null) ? null : Number(m.spirit),
       mods: {
         dmgMult: m.battleDmgMult || 1,
         takenMult: m.battleTakenMult || 1,
@@ -103,17 +105,27 @@ const Battle = {
 
   // 号令の候補：戦場にいる軍団員（傭兵・召喚物を除く）で、号令できる特性（order）を持つ者。
   // 一人に複数あれば最初の一つ。最大3人（選択肢を読める数に絞る）。
+  // 気合（unit.spirit）が技の cost に足りない者は候補に出ない（unready に回す）。null は制限なし。
   orderCandidates(playerUnits) {
-    const out = [];
+    return this.orderRoster(playerUnits).ready;
+  },
+  orderRoster(playerUnits) {
+    const ready = [], unready = [];
     for (const u of playerUnits) {
       if (!u.alive || u.flags.absent || u.flags.summoned || u.flags.mercenary) continue;
       const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
       if (!skillId) continue;
       const tr = TRAITS[skillId];
-      out.push({ unitId: u.id, name: u.name, skillId, skillName: tr.name, label: tr.order.label, note: tr.order.note || "" });
-      if (out.length >= 3) break;
+      const cost = Math.max(0, Number(tr.order.cost) || 0);
+      const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
+      if (spirit !== null && spirit < cost) {
+        unready.push({ unitId: u.id, name: u.name, skillId, skillName: tr.name, spirit, cost });
+        continue;
+      }
+      if (ready.length >= 3) continue;
+      ready.push({ unitId: u.id, name: u.name, skillId, skillName: tr.name, label: tr.order.label, note: tr.order.note || "", cost, spirit });
     }
-    return out;
+    return { ready, unready };
   },
 
   _simulate(playerUnits, enemyUnits, options) {
@@ -980,12 +992,13 @@ const Battle = {
         && !(retreatOffer && retreatOffer.round === round)) {
         const turned = all().filter(u => !u.alive).length > deadAtRoundStart
           || playerUnits.some(u => onField(u) && !u.flags.summoned && u.hp <= u.maxHp * 0.5);
-        const candidates = turned ? this.orderCandidates(playerUnits) : [];
+        const roster = turned ? this.orderRoster(playerUnits) : { ready: [], unready: [] };
+        const candidates = roster.ready;
         if (candidates.length) {
           const answered = orders[round] || null;
           const names = candidates.map(c => `${c.name}の【${c.skillName}】`).join("、");
           const event = emit("order_offer", {
-            round, candidates, answered, emphasis: 3,
+            round, candidates, unready: roster.unready, answered, emphasis: 3,
             enemies: enemyUnits.filter(onField).map(snap),
             text: `　モルモ「魔王様、号令を。${names}が出せます」`, cls: "mormo"
           });

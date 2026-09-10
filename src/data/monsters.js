@@ -434,5 +434,8 @@ const MONSTER_RULES = {
   levelPerTurn: 0.5,
   // 叩き上げ：終盤（魔王軍レベル5以上）に来た低ティア（tier1）の伸び率の掛け算。
   // k（applicantGrowth）は難度そのもののつまみなので、ティア格差はこちらで詰める。
-  lowTierVeteranMult: 1.7
+  lowTierVeteranMult: 1.7,
+  // 気合（号令の限定）。人に付く。採用時 start、出撃して決着で +perBattle、留守番で決着を迎えると +perHomeTurn、上限 max。
+  // 号令は TRAITS[id].order.cost を引く。仕様: docs/SPEC_SPIRIT_AND_ENEMY_GROWTH_2026-09-10.md
+  spirit: { start: 1, max: 3, perBattle: 1, perHomeTurn: 2 }
 };

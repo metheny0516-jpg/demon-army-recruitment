@@ -113,3 +113,8 @@ const ENEMY_STAGES = [
     ]
   }
 ];
+
+// 敵の成長（2026-09-10）。通常作戦の敵の段階は征服度だけで決まり、時間では上がらない。
+// 同じ段階で戦うたびに「慣れ」で能力が familiarityPerFight ずつ上がる（familiarityCap 回まで）。
+// 時間の圧力は警戒度＝王国の反撃で払う。仕様: docs/SPEC_SPIRIT_AND_ENEMY_GROWTH_2026-09-10.md
+const ENEMY_GROWTH = { familiarityPerFight: 0.04, familiarityCap: 5 };

@@ -34,7 +34,7 @@ const TRAITS = {
     name: "先制",
     relic: "鈴",
     desc: "ラウンド1のダメージ+30%",
-    order: { label: "先制を仕掛けろ", note: "ラウンドに関係なく先制が乗り、真っ先に動く" },
+    order: { label: "先制を仕掛けろ", cost: 1, note: "ラウンドに関係なく先制が乗り、真っ先に動く" },
     lines: { order: ["はいっ、参ります！", "一番槍、いただきます！", "誰より早く！"] },
     modDealt(ctx) {
       if (ctx.round === 1 || ctx.ordered) {
@@ -60,7 +60,7 @@ const TRAITS = {
     desc: "20%の確率でダメージ2倍",
     // 号令（戦闘中の個人への指示）。魔王が名指しで命じると、次の一撃で技が必ず出る。
     // 条件の代わりに代償を払う（号令の共通規則は battle.js：与ダメ+50%、次の手番は息切れ）。
-    order: { label: "怪力を出せ", note: "次の一撃が必ず怪力になる" },
+    order: { label: "怪力を出せ", cost: 1, note: "次の一撃が必ず怪力になる" },
     lines: { order: ["おうよ！", "任せろ、魔王様！", "潰す！"] },
     modDealt(ctx) {
       if (ctx.ordered || ctx.rng() < 0.2) {
@@ -221,7 +221,7 @@ const TRAITS = {
     name: "火球",
     relic: "杖",
     desc: "攻撃時、別の敵1体にも50%のダメージ（魔法結社で全体化）",
-    order: { label: "火球を放て", note: "次の火球が敵全体に広がる" },
+    order: { label: "火球を放て", cost: 1, note: "次の火球が敵全体に広がる" },
     lines: { order: ["承知しました", "詠唱、省きます", "火を、お届けします"] },
     postAttack(ctx) {
       const others = ctx.enemies.filter(u => u.alive && u !== ctx.target);
@@ -275,7 +275,7 @@ const TRAITS = {
     name: "悪戯",
     relic: "悪戯玉",
     desc: "攻撃した敵の攻撃力を1下げる",
-    order: { label: "悪戯を仕込め", note: "次の悪戯で相手の攻撃力を3下げる" },
+    order: { label: "悪戯を仕込め", cost: 1, note: "次の悪戯で相手の攻撃力を3下げる" },
     lines: { order: ["ひひっ、任せてよ", "いいの？ 本気でやるよ", "ちょっと痛いかもね"] },
     postAttack(ctx) {
       if (ctx.target.alive && ctx.target.atk > 1) {
@@ -506,7 +506,7 @@ const TRAITS = {
     name: "ぶちかまし",
     desc: "敵が3体以上立っているとき、攻撃が敵全体に本来の70%で及ぶ。本人も与えた合計の10%を反動で受ける",
     skill: { species: "ogre", tier: 2, replaces: "brute" },
-    order: { label: "ぶちかませ", note: "敵の数に関係なく、次の一撃が全体に及ぶ" },
+    order: { label: "ぶちかませ", cost: 3, note: "敵の数に関係なく、次の一撃が全体に及ぶ" },
     lines: {
       unlock: ["……体が、覚えた", "次は全部まとめてだ", "壁ごと押し通る"],
       use: ["どけぇッ！", "まとめて潰す！", "道を開けろ！"],
@@ -528,7 +528,7 @@ const TRAITS = {
     name: "大火球",
     desc: "奇数ラウンドの攻撃時、別の敵全員にも本来の70%を与え、燃焼で次ラウンド開始時に最大HPの8%を削る",
     skill: { species: "mage", tier: 2, replaces: "fireball" },
-    order: { label: "大火球を放て", note: "偶数ラウンドでも大火球が出る" },
+    order: { label: "大火球を放て", cost: 3, note: "偶数ラウンドでも大火球が出る" },
     lines: {
       unlock: ["火加減など、もう要りません", "術式が一段、ほどけました", "これは火球ではない。火の海です"],
       use: ["燃えなさい！", "避け場はありません", "火の雨をどうぞ！"],
@@ -549,7 +549,7 @@ const TRAITS = {
     name: "血の雄叫び",
     desc: "自分の攻撃で敵を倒した直後、もう一撃を放つ（1ラウンド1回）",
     skill: { species: "orc", tier: 2, replaces: "brute" },
-    order: { label: "吠えろ", note: "倒せなくても、もう一撃が出る" },
+    order: { label: "吠えろ", cost: 3, note: "倒せなくても、もう一撃が出る" },
     lines: {
       unlock: ["まだ足りん。もっと寄越せ", "倒れたなら次だ", "喉が勝手に吠えやがる"],
       use: ["次だァ！", "まだ終わってねえ！", "血が騒ぐ！"],
@@ -567,7 +567,7 @@ const TRAITS = {
     name: "集団戦法",
     desc: "出撃中のゴブリンが3体以上いるとき、自分の攻撃がゴブリン数−2回追加で当たる（各50%）",
     skill: { species: "goblin", tier: 2, replaces: "pickpocket" },
-    order: { label: "囲め", note: "ゴブリンが少なくても集団戦法が出る" },
+    order: { label: "囲め", cost: 2, note: "ゴブリンが少なくても集団戦法が出る" },
     lines: {
       unlock: ["一人で盗るより、みんなで囲むっす", "数えられる仲間が増えたっす", "合図、覚えたっすよ"],
       use: ["囲むっす！", "今っす、みんな！", "一発じゃ帰さないっすよ！"],
@@ -588,7 +588,7 @@ const TRAITS = {
     name: "疾風",
     desc: "ラウンド1〜2は先制の与ダメージ+30%が続き、ラウンド1は必ず最初に動く",
     skill: { species: "kobold", tier: 2, replaces: "first_strike" },
-    order: { label: "疾風で駆けろ", note: "ラウンドに関係なく疾風が乗り、真っ先に動く" },
+    order: { label: "疾風で駆けろ", cost: 2, note: "ラウンドに関係なく疾風が乗り、真っ先に動く" },
     lines: {
       unlock: ["風より先に参ります！", "二歩目まで、もう見えています！", "先陣の務め、承知しました！"],
       use: ["先に参ります！", "風の道、確保！", "遅れません、魔王様！"],

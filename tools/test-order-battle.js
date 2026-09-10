@@ -137,6 +137,25 @@ const offersOf = r => r.timeline.filter(e => e.type === 'order_offer');
   }
 }
 
+// 9. 気合：技の cost に足りない者は候補に出ず unready に回る。null は制限なし。全員足りなければ提案なし
+{
+  const a = mk('A', ['great_fireball'], 'player', { spirit: 1 });   // cost 3 に足りない
+  const b = mk('B', ['brute'], 'player', { spirit: 1 });            // cost 1
+  const c = mk('C', ['brute'], 'player');                          // spirit 無し＝制限なし
+  const r = Battle.orderRoster([a, b, c].map((u, i) => (u.id = 'p' + i, u)));
+  assert(r.ready.length === 2 && r.ready[0].name === 'B' && r.ready[1].name === 'C', '足りる者と制限なしの者が候補');
+  assert(r.unready.length === 1 && r.unready[0].name === 'A' && r.unready[0].cost === 3 && r.unready[0].spirit === 1, '足りない者は unready');
+  assert(r.ready[0].cost === 1 && r.ready[0].spirit === 1, '候補に cost と spirit が載る');
+  const weak = mk('ヨワシ', [], 'player', { hp: 20, atk: 4, def: 0, spd: 9 });
+  const orc = mk('ガロ', ['brute'], 'player', { hp: 300, atk: 12, def: 6, spd: 4, spirit: 0 });
+  const foe = mk('勇者', [], 'enemy', { race: '人間', hp: 700, atk: 30, def: 4, spd: 7 });
+  const foe2 = mk('従者', [], 'enemy', { race: '人間', hp: 200, atk: 8, def: 2, spd: 3 });
+  const rr = Battle.simulate([weak, orc], [foe, foe2], { rations: rations(), seed: 42, offerOrder: true });
+  assert(offersOf(rr).length === 0, '号令できる者が全員気合不足なら提案は出ない');
+  const costs = Object.keys(TRAITS).filter(id => TRAITS[id].order).map(id => TRAITS[id].order.cost);
+  assert(costs.every(c => Number.isInteger(c) && c >= 1 && c <= 3), 'cost は 1〜3 の整数');
+}
+
 // 8. 台詞と定義の形：order を持つ特性は lines.order を3本以上、28文字以内、数字なし
 {
   const ids = Object.keys(TRAITS).filter(id => TRAITS[id].order);
