@@ -1088,7 +1088,9 @@ const Game = {
     const brief = this.activeBrief();
     const weights = MONSTER_TEMPLATES.map(t => {
       let w;
-      if (t.tier === 1) w = level <= 3 ? 6 : 2;
+      // 低ティアはレベル5以上で来ること自体が珍しくなる（2 → 1）。
+      // 珍しくするのは「来たときに歴戦の顔をしている」ための下ごしらえ。
+      if (t.tier === 1) w = level <= 3 ? 6 : (level <= 4 ? 2 : 1);
       else if (t.tier === 2) w = level <= 2 ? 2 : 5;
       else w = level <= 2 ? 0.5 : (level <= 4 ? 2 : 5);
       if (favored.has(t.id)) w *= 3;
@@ -1115,7 +1117,13 @@ const Game = {
     // 敵は段階1→4でHP約2.7倍になるのに応募者は1.36倍しか伸びず、
     // 中盤に来た新人がそのまま使えなかった（オーナー指摘）。
     const growth = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.applicantGrowth) || 0.22;
-    const scale = 1 + growth * (level - 1);
+    // 叩き上げ：終盤に来た低ティアは、伸び率が1.5倍。
+    // 平均ごと持ち上げる（k を上げる）とゲームが易しくなるだけで、低ティアは相対的に弱いまま
+    // だった（前回の計測。Lv8のコボルトが敵1体の57%）。**格差のつまみは k とは別に置く。**
+    // 数値の理屈ではなく「ここまで生き延びた奴だけが今さら来る」という理由付きの伸び。
+    const veteranMult = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.lowTierVeteranMult) || 1.7;
+    const veteran = tpl.tier === 1 && level >= this.VETERAN_LEVEL;
+    const scale = 1 + growth * (level - 1) * (veteran ? veteranMult : 1);
     const vary = v => Math.max(1, Math.round(v * scale * (0.85 + U.rand() * 0.3)));
     const job = U.pick(tpl.jobs);
     const traits = (tpl.fixedTraits || [tpl.fixedTrait]).filter(Boolean).slice();
@@ -1131,6 +1139,9 @@ const Game = {
     return {
       uid: st.uidSeq++,
       tplId: tpl.id,
+      // 叩き上げの印（表示用）。札の「🎖 歴戦」とモルモの一言だけが読む。
+      // 縁の者になった場合は志望理由を bond 側が上書きする（縁のほうが具体的な理由なので）。
+      veteran,
       name: this.uniqueName(tpl.names),
       race: tpl.race,
       job,
@@ -1144,7 +1155,9 @@ const Game = {
       tags: tpl.tags.slice(),
       quote: U.pick(tpl.quotes),
       prevJob: U.pick(tpl.prevJobs),
-      motive: U.pick(tpl.motives),
+      // 叩き上げには専用の志望理由。「なぜ今さらこの種族が来るのか」の理由を持たせる。
+      motive: veteran && typeof VETERAN_MOTIVES !== "undefined" && VETERAN_MOTIVES.length
+        ? U.pick(VETERAN_MOTIVES) : U.pick(tpl.motives),
       flaw: U.pick(tpl.flaws),
       unpaid: false,
       department: "combat",
@@ -1454,6 +1467,9 @@ const Game = {
   // ランの戦闘数は 7〜13。6戦は「ランの半ばまで生きた者」には遅すぎて、
   // 序盤の離脱では蔵が一度も出ないままだった（オーナー試遊。未決U1の見直し）。
   NOTABLE_BATTLES: 4,
+
+  // このレベル以上で来た低ティア（tier1）は「叩き上げ」。出現は珍しくなり、伸びは1.5倍。
+  VETERAN_LEVEL: 5,
   mintRelic(monster, entry) {
     const st = this.state;
     const rank = entry.rankId || "soldier";

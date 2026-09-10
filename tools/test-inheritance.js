@@ -18,6 +18,7 @@ vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 const Game = vm.runInContext('Game', ctx);
 const TRAITS = vm.runInContext('TRAITS', ctx);
+const VETERAN_MOTIVES = vm.runInContext('VETERAN_MOTIVES', ctx);
 let failed = 0;
 const assert = (c, m) => { if (c) console.log(`✓ ${m}`); else { failed++; console.log(`✗ ${m}`); } };
 const fix = (src) => vm.runInContext(src, ctx);
@@ -254,7 +255,34 @@ resetRng();
     `征服が同じでもターンが進めば敵が強い（${hp(early)} → ${hp(late)}）`);
 }
 
-// 10. 旧セーブ
+// 10. 叩き上げ：終盤に来た低ティアは伸びが速い・歴戦の印
+{
+  const st = freshRun([member(750, 'ダレカ')], [750]);
+  const power = m => m.hp + m.atk * 6 + m.def * 4 + m.spd * 2;
+  const avg = (level, tplId) => {
+    st.conquest = level - 1; st.turn = 1;
+    let sum = 0;
+    for (let i = 0; i < 300; i++) sum += power(Game.rollApplicant(tplId));
+    return sum / 300;
+  };
+  // tier1（コボルト）はレベル5以上で伸びが速くなる。tier3（術師）は変わらない
+  const koboldLow = avg(4, 'kobold'), koboldHigh = avg(8, 'kobold');
+  const necroLow = avg(4, 'necromancer'), necroHigh = avg(8, 'necromancer');
+  const koboldRatio = koboldHigh / koboldLow, necroRatio = necroHigh / necroLow;
+  assert(koboldRatio > necroRatio,
+    `Lv4→8 で低ティアのほうが伸びる（コボルト ×${koboldRatio.toFixed(2)} / 術師 ×${necroRatio.toFixed(2)}）`);
+  st.conquest = 7; st.turn = 1;
+  const late = Game.rollApplicant('kobold');
+  assert(late.veteran === true, 'レベル8で来た低ティアに歴戦の印が付く');
+  assert(typeof VETERAN_MOTIVES !== "undefined" && VETERAN_MOTIVES.includes(late.motive),
+    `志望理由が叩き上げのプールから出る（${late.motive}）`);
+  st.conquest = 0; st.turn = 1;
+  const early = Game.rollApplicant('kobold');
+  assert(!early.veteran, '序盤に来た低ティアには印が付かない（珍しくないので）');
+  const highTier = (() => { st.conquest = 7; st.turn = 1; return Game.rollApplicant('necromancer'); })();
+  assert(!highTier.veteran, '終盤でも高ティアには印が付かない');
+}
+// 11. 旧セーブ
 {
   Game.newRun();
   const st = Game.state;

@@ -367,6 +367,7 @@ button.wide { width: 100%; }
 .vault-panel .relic-row:first-of-type { border-top: none; }
 .vault-panel .relic-name { font-size: 14px; }
 /* ラン中の「去った者たち」。押すと開く（画面を増やさない） */
+.veteran-note { color: #d8b45c; }
 .departed-panel { margin-top: 8px; }
 .departed-panel > summary { cursor: pointer; list-style: none; }
 .departed-panel > summary::-webkit-details-marker { display: none; }

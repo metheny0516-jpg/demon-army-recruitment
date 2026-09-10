@@ -199,6 +199,9 @@ const UI = {
     const bondNote = (opts.resume && m.bond) ? `<div class="bond-note">🕯 ${U.esc(m.bond.name)}の縁</div>` : "";
     const broughtRelic = (opts.resume && m.relicId) ? Game.relicOf(m.relicId) : null;
     const broughtNote = broughtRelic ? `<div class="bond-note">🏺 ${U.esc(broughtRelic.name)}を持って来た</div>` : "";
+    // 叩き上げ：終盤に来た低ティア。数字ではなく「生き延びてきた顔」として見せる。
+    const veteranNote = (opts.resume && m.veteran)
+      ? `<div class="bond-note veteran-note">🎖 歴戦</div>` : "";
     const secondGen = this.secondGenLabel(m);
     return `<div class="card">
       <div class="card-head">
@@ -209,7 +212,7 @@ const UI = {
         </div>
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
       </div>
-      ${bondNote}${broughtNote}
+      ${veteranNote}${bondNote}${broughtNote}
       ${legacy}
       ${opts.resume ? `<div class="traits">${this.traitHtml(m.traits, relicByTrait)}</div>
         ${this.applicantConnections(m)}

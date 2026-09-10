@@ -431,5 +431,8 @@ const MONSTER_RULES = {
   applicantGrowth: 0.13,
   // 魔王軍レベル ceil(turn × 係数)。現在は src/core/run.js:768 に 0.75 がハードコードされている。
   // ターン経過に対する難度上昇の速さ。node tools/sim.js でクリア率5〜50%に収まるよう調整すること。
-  levelPerTurn: 0.5
+  levelPerTurn: 0.5,
+  // 叩き上げ：終盤（魔王軍レベル5以上）に来た低ティア（tier1）の伸び率の掛け算。
+  // k（applicantGrowth）は難度そのもののつまみなので、ティア格差はこちらで詰める。
+  lowTierVeteranMult: 1.7
 };

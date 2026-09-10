@@ -104,6 +104,24 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   }));
   ok(reportSeen.includes('ガロ') && reportSeen.includes('話ばかり'), `モルモの一言に故人の名: "${reportSeen}"`);
 
+  console.log('▼ 叩き上げ（終盤に来た低ティア）');
+  await page.evaluate(() => {
+    Game.state.conquest = 7; Game.state.turn = 1;
+    Game.genApplicants();
+    // 必ず1人は低ティアを混ぜる（重みが下がっているので偶然に頼らない）
+    Game.state.applicants[0] = Game.rollApplicant('kobold');
+    Game.state.phase = 'recruit'; App.render();
+  });
+  await page.waitForTimeout(80);
+  ok((await page.locator('.veteran-note').count()) >= 1, '終盤に来た低ティアの札に「🎖 歴戦」が出る');
+  const vetText = await page.locator('.veteran-note').first().textContent();
+  ok(/歴戦/.test(vetText), `印の中身: "${vetText.trim()}"`);
+  const vetMotive = await page.evaluate(() => {
+    const m = Game.state.applicants.find(a => a.veteran);
+    return m ? { motive: m.motive, inPool: VETERAN_MOTIVES.includes(m.motive) } : null;
+  });
+  ok(vetMotive && vetMotive.inPool, `志望理由が叩き上げのプールから出る: "${vetMotive && vetMotive.motive}"`);
+
   console.log('▼ 蔵は空でも出る（誰かが去っていれば）');
   await page.evaluate(() => {
     Game.state.relics = [];                 // 品は何も残っていない

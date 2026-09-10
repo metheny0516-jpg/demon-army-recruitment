@@ -67,10 +67,15 @@ const App = {
 
   // 縁の応募者が混ざっているとき、モルモがそれとなく漏らす一言（仕様4.2）。
   bondNote() {
-    const applicant = ((Game.state && Game.state.applicants) || []).find(m => m.bond);
-    if (!applicant) return "";
+    const applicants = (Game.state && Game.state.applicants) || [];
+    // 叩き上げ：終盤に来た低ティア。数字は出さず、顔つきの話にする。
+    const veteran = applicants.find(m => m.veteran);
+    const veteranLine = veteran ? `\n${veteran.name}殿、小柄ですが歴戦の顔デス。` : "";
+    const applicant = applicants.find(m => m.bond);
+    if (!applicant) return veteranLine;
     const relic = applicant.relicId ? Game.relicOf(applicant.relicId) : null;
-    return `\n……この者、${applicant.bond.name}殿の話ばかりしますネ。`
+    return veteranLine
+      + `\n……この者、${applicant.bond.name}殿の話ばかりしますネ。`
       + (relic ? `\n${applicant.bond.name}殿の${relic.name}を持っていマス。どこで拾ったのやら。` : "");
   },
 
