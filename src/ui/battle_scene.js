@@ -46,7 +46,8 @@ const BattleScene = {
     battle_start: 500, round_start: 1150, synergy: 1650, synergy_trigger: 1050, facility_trigger: 1250,
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
     heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
-    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200
+    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200,
+    order_offer: 1200, order_exec: 1600
   },
   // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
   ANSWER_READ_MS: 2200,
@@ -67,7 +68,7 @@ const BattleScene = {
   PROTECTED_TYPES: new Set([
     "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
     "resource_gain", "resource_forfeit", "resource_consume", "momentum",
-    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "result"
+    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_offer", "order_exec", "result"
   ]),
 
   EFFECT_CLASSES: [
@@ -363,6 +364,8 @@ const BattleScene = {
     this.retreatAnswered = false;
     this.retreated = false;
     this.resumeSkipAfterRetreat = false;
+    this.orderAnswered = false;
+    this.resumeSkipAfterOrder = false;
     this.resultPending = null;
     this.historySeen = new Set();
     const history = document.getElementById("chain-history-list");
@@ -824,6 +827,23 @@ const BattleScene = {
       case "retreat_offer":
         this.askRetreat(ev);
         break;
+      // 号令の節目。撤退の提案と同じく**必ず**止める。
+      case "order_offer":
+        this.askOrder(ev);
+        break;
+      // 号令の実行。魔王の一声と本人の返事。止めない（直前に選んだばかり）。
+      case "order_exec": {
+        const u = this.units[ev.unitId];
+        this.clearFocus();
+        if (u) {
+          u.el.classList.add("acting");
+          this.float(u, "号令", "guard");
+        }
+        this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」　${ev.name}「${ev.quote}」`, 1600);
+        this.flash(1);
+        this.pulse("order");
+        break;
+      }
       case "result":
         this.resolveBattle(ev);
         break;
@@ -1587,6 +1607,72 @@ const BattleScene = {
     this.finish();
   },
 
+  // 「号令を」。戦闘を止めて、名指しのボタン（最大3）と「任せる」を出す。
+  // 既定は「任せる」（今までの挙動＝命じない）。テストの自動送りも既定を押す。
+  askOrder(ev) {
+    if (this.orderAnswered || this.finished) return false;
+    if (this.mormoAwaiting) this.closeAside();
+    this.mormoAwaiting = true;
+    this.paused = true;
+    this.setMormoControlsLocked(true, false);
+    const candidates = ev.candidates || [];
+    const box = MormoScene.aside({
+      expression: "report",
+      text: ev.text ? String(ev.text).replace(/^\s*モルモ「|」\s*$/g, "") : "号令を",
+      note: `${candidates.map(c => `${c.name}：${c.note}`).join("。")}。命じた者は次に真っ先に動いて技を必ず出す（与ダメ+50%）が、その次の手番は息が上がって動けない。`,
+      host: document.getElementById("scene"),
+      choices: [
+        ...candidates.map(c => ({ label: `📣 ${c.name}「${c.label}」`, value: c.unitId })),
+        { label: "任せる", value: "none", primary: true }
+      ],
+      onChoose: choice => this.answerOrder(choice)
+    });
+    if (!box) {
+      this.mormoAwaiting = false;
+      this.paused = false;
+      this.setMormoControlsLocked(false);
+      this.orderAnswered = true;
+      if (typeof this.onOrderChoice === "function") this.onOrderChoice("none");
+      return false;
+    }
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+    return true;
+  },
+
+  answerOrder(choice) {
+    if (this.orderAnswered) return;
+    this.orderAnswered = true;
+    // run.js が同じ種で計算し直したタイムラインを返す（任せたなら null）。
+    // 提案の手前までは同じなので、今の位置からそのまま続きを再生できる。
+    const next = typeof this.onOrderChoice === "function" ? this.onOrderChoice(choice) : null;
+    if (Array.isArray(next) && next.length > this.index) this.swapTimeline(next);
+    if (this.resumeSkipAfterOrder) {
+      this.resumeSkipAfterOrder = false;
+      this.mormoAwaiting = false;
+      this.paused = false;
+      this.setMormoControlsLocked(false);
+      return this.skip();
+    }
+    return this.continueAfterMormo(false);
+  },
+
+  // 再生中のタイムラインを差し替える（号令のあと）。手前は一致している前提なので、
+  // 位置（index）と盤面はそのまま。尺の計画と因果の索引だけ作り直す。
+  swapTimeline(next) {
+    this.timeline = next;
+    this.eventById = new Map(next.filter(e => e.eventId).map(e => [e.eventId, e]));
+    this.prepareChainView(next);
+    this.chainAnswer = this.pickChainAnswer(next);
+    this.pacing = this.plan(next);
+    this.mormoAside = this.pickMormoAside(next);
+  },
+
+  // まだ答えていない提案（撤退／号令）が、今の位置より先にあるか。
+  pendingOfferAt() {
+    return this.timeline.findIndex((e, i) => i >= this.index
+      && ((e.type === "retreat_offer" && !this.retreatAnswered) || (e.type === "order_offer" && !this.orderAnswered)));
+  },
+
   setMormoControlsLocked(locked, wipe = false) {
     for (const id of ["speed-btn", "pause-btn", "next-btn"]) {
       const button = document.getElementById(id);
@@ -1922,8 +2008,8 @@ const BattleScene = {
     if (this.finished) return;
     // 提案を出したまま飛ばそうとしたら何もしない。stop() が一言ごと消してしまい、
     // 選択肢が無いまま戦闘だけが進む（＝答えずに続行したことになる）。
-    if (this.mormoAwaiting && !this.retreatAnswered
-      && this.timeline.some(e => e.type === "retreat_offer")) return;
+    if (this.mormoAwaiting && ((!this.retreatAnswered && this.timeline.some(e => e.type === "retreat_offer"))
+      || (!this.orderAnswered && this.timeline.some(e => e.type === "order_offer")))) return;
     const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
     if (typeof Music !== "undefined") Music.suspend();
@@ -1940,8 +2026,8 @@ const BattleScene = {
     }
     // 「最後まで飛ばす」も、提案に答える前は提案の位置で止まる。
     // skip() は render() を通らない独自経路なので、ここへ書かないと選択ごと飛んでしまう。
-    if (!this.retreatAnswered) {
-      const offerAt = this.timeline.findIndex((e, i) => i >= this.index && e.type === "retreat_offer");
+    {
+      const offerAt = this.pendingOfferAt();
       if (offerAt >= 0) {
         while (this.index <= offerAt) {
           const ev = this.timeline[this.index++];
@@ -1958,8 +2044,14 @@ const BattleScene = {
           if (ev.type === "synergy") this.countSynergy();
         }
         // 答えたら、通常再生へ戻さずに続きを飛ばす（飛ばすつもりで押したのだから）。
-        this.resumeSkipAfterRetreat = true;
-        this.askRetreat(this.timeline[offerAt]);
+        const offer = this.timeline[offerAt];
+        if (offer.type === "order_offer") {
+          this.resumeSkipAfterOrder = true;
+          this.askOrder(offer);
+        } else {
+          this.resumeSkipAfterRetreat = true;
+          this.askRetreat(offer);
+        }
         return;
       }
     }

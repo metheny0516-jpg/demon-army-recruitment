@@ -31,7 +31,7 @@
 //   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
 //   order_offer  { round, candidates:[{unitId,name,skillId,skillName,label,note}], answered? }
 //                                                  号令の節目。options.offerOrder のときだけ、1戦闘1回
-//   order_exec   { unitId, name, skillId, skillName, quote }  号令の実行（次ラウンド冒頭、本人が真っ先に動く）
+//   order_exec   { unitId, name, skillId, skillName, label, quote }  号令の実行（次ラウンド冒頭、本人が真っ先に動く）
 //   result       { victory, reversal }              reversal=総HP3割以下から勝った
 // ───────────────────────────────────────────────────────
 const Battle = {
@@ -881,7 +881,7 @@ const Battle = {
           const tr = TRAITS[cand.skillId] || {};
           const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
           emit("order_exec", {
-            unitId: unit.id, name: unit.name, skillId: cand.skillId, skillName: cand.skillName, quote, emphasis: 3,
+            unitId: unit.id, name: unit.name, skillId: cand.skillId, skillName: cand.skillName, label: cand.label, quote, emphasis: 3,
             text: `　魔王「${unit.name}、${cand.label}！」 ${unit.name}「${quote}」`, cls: "order"
           });
         }

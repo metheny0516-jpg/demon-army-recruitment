@@ -1377,6 +1377,8 @@ const UI = {
     // 撤退の答えを決着へ繋ぐ。BattleScene はゲーム状態を知らないままでよい。
     // 保留されていない戦闘（提案が出なかった／開幕の防衛戦）では settleBattle が false を返すだけ。
     BattleScene.onRetreatChoice = choice => Game.settleBattle(choice);
+    // 号令の答え。名指しなら run.js が同じ種で計算し直した新しいタイムラインを返し、描画側が差し替える。
+    BattleScene.onOrderChoice = unitId => Game.answerOrder(unitId);
     BattleScene.play(result.timeline);
   },
 

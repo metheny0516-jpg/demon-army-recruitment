@@ -541,6 +541,7 @@ button.wide { width: 100%; }
 .log .dmg { color: #d8d0ea; }
 .log .trait { color: var(--purple); }
 .log .synergy { color: #ffd479; font-weight: bold; }
+.log .order { color: #ffd479; font-weight: bold; }
 .log .death { color: var(--red); }
 .log .overkill { color: #ff9b54; font-weight: bold; }
 .log .revive { color: var(--green); }
