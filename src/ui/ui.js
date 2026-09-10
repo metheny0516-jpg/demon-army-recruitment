@@ -94,6 +94,28 @@ const UI = {
     </div>`;
   },
 
+  // 種族技（TRAITS[id].skill）が1段目・上位技のどちらかを判定する。
+  // 上位技は skill.tier === 2 を自分で持つが、1段目は自分に skill を持たない（旧データのまま）。
+  // だから「誰かの skill.replaces に指されているか」も見る。id をベタ書きしない。
+  skillReplacedIds() {
+    if (this._skillReplacedIds) return this._skillReplacedIds;
+    const set = new Set();
+    if (typeof TRAITS !== "undefined") {
+      for (const id in TRAITS) {
+        const s = TRAITS[id] && TRAITS[id].skill;
+        if (s && s.replaces) set.add(s.replaces);
+      }
+    }
+    this._skillReplacedIds = set;
+    return set;
+  },
+  isSkillTrait(id) {
+    const t = typeof TRAITS !== "undefined" ? TRAITS[id] : null;
+    if (!t) return false;
+    if (t.skill) return true;
+    return this.skillReplacedIds().has(id);
+  },
+
   // relicByTrait: { traitId: 遺物名 }。遺物由来の特性には「（遺物名）」を添える。
   traitHtml(ids, relicByTrait) {
     relicByTrait = relicByTrait || {};
@@ -101,8 +123,42 @@ const UI = {
       const t = TRAITS[id];
       if (!t) return "";
       const relicName = relicByTrait[id];
-      return `<div class="trait"><b>${U.esc(t.name)}</b>${relicName ? `<span class="trait-relic">（${U.esc(relicName)}）</span>` : ""}：${U.esc(t.desc)}</div>`;
+      const skillMark = this.isSkillTrait(id) ? `<span class="skill-mark" title="種族技">🗡</span>` : "";
+      return `<div class="trait">${skillMark}<b>${U.esc(t.name)}</b>${relicName ? `<span class="trait-relic">（${U.esc(relicName)}）</span>` : ""}：${U.esc(t.desc)}</div>`;
     }).join("");
+  },
+
+  // 面接の応募者札：まだ覚えていない上位技を「6戦で【…】」とだけ示す（数値は出さない）。
+  // Game.nextSkillFor が使える環境ではそれを使い、無ければ traits から自力で引く
+  // （fallback は Game.nextSkillFor と同じロジックを保つこと。二か所で仕様を分けない）。
+  nextSkillNote(m) {
+    if (!m || m.mercenary) return "";
+    let skill = null;
+    if (typeof Game !== "undefined" && typeof Game.nextSkillFor === "function") {
+      skill = Game.nextSkillFor(m);
+    } else if (typeof TRAITS !== "undefined") {
+      const traits = m.traits || [];
+      const alreadyTier2 = traits.some(id => TRAITS[id] && TRAITS[id].skill && TRAITS[id].skill.tier === 2);
+      if (!alreadyTier2) {
+        for (const id of traits) {
+          const found = Object.keys(TRAITS).find(key => {
+            const s = TRAITS[key].skill;
+            return s && s.tier === 2 && s.replaces === id;
+          });
+          if (found) { skill = TRAITS[found]; break; }
+        }
+      }
+    }
+    if (!skill) return "";
+    const battles = (typeof SKILL_RULES !== "undefined" && SKILL_RULES.unlockBattles) || 6;
+    return `<div class="skill-hint">🗡 ${battles}戦で【${U.esc(skill.name)}】</div>`;
+  },
+
+  // 名簿の戦歴。0戦の者（応募直後）には出さない。伸び幅は出さない（伸びた後の値だけ）。
+  recordNote(m) {
+    const r = m && m.record;
+    if (!r || !r.battles) return "";
+    return `<div class="record-note">戦歴 ${r.battles}戦${r.wins || 0}勝</div>`;
   },
 
   // その者が持つ遺物一覧（蔵にある品ではなく、いま所持している品）。
@@ -215,6 +271,7 @@ const UI = {
       ${veteranNote}${bondNote}${broughtNote}
       ${legacy}
       ${opts.resume ? `<div class="traits">${this.traitHtml(m.traits, relicByTrait)}</div>
+        ${this.nextSkillNote(m)}
         ${this.applicantConnections(m)}
         ${opts.footer || ""}
         ${this.resumeHtml(m)}` : ""}
@@ -232,6 +289,7 @@ const UI = {
         ${unpaid}
         ${injured}
       </div>
+      ${opts.resume ? "" : this.recordNote(m)}
       ${opts.resume ? "" : relicChips}
       ${this.aptitudeHtml(m)}
       ${opts.resume ? "" : `<div class="traits">${this.traitHtml(m.traits, relicByTrait)}</div>`}
@@ -1295,6 +1353,21 @@ const UI = {
     BattleScene.play(result.timeline);
   },
 
+  // 結果画面の「技を覚えた」見せ場。notes にも同じ文が入るので、こちらは本人の一言を主役にする
+  // （notes 側の1文と読み比べさせない。数値は出さない）。旧セーブ・技を覚えなかった戦いでは
+  // lastBattle.unlocked が無いので何も出さない。
+  skillUnlockPanel(b) {
+    const list = b && Array.isArray(b.unlocked) ? b.unlocked : [];
+    if (!list.length) return "";
+    return `<div class="panel skill-unlock-panel">
+      <h3>🗡 新しい技を覚えた</h3>
+      ${list.map(u => `<div class="skill-unlock-row">
+        <div><b>${U.esc(u.name)}</b>が【${U.esc(u.skillName)}】を覚えた</div>
+        <div class="quote">「${U.esc(u.quote)}」</div>
+      </div>`).join("")}
+    </div>`;
+  },
+
   result() {
     const st = Game.state;
     const b = st.lastBattle;
@@ -1322,6 +1395,7 @@ const UI = {
       </div>`;
     this.set(`${this.hud()}
       ${banner}
+      ${this.skillUnlockPanel(b)}
       ${Game.canSeizeStronghold() ? (() => {
         const q = Game.seizeQuote();
         return `<div class="panel seize-panel">
