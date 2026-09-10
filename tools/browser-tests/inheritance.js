@@ -78,6 +78,16 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     App.render();
   });
   ok((await page.locator('.army-history-line').count()) === 1, '面接画面に軍団史の1行がある');
+  // 押すと「去った者たち」が開く（魔界史を待たずにラン中に読める）
+  ok((await page.locator('.departed-panel').count()) >= 1, '軍団史の行が開ける一覧になっている');
+  ok(!(await page.locator('.departed-panel .departed-row').first().isVisible()),
+    '既定では畳まれている（面接の邪魔をしない）');
+  await page.locator('.departed-panel > summary').first().click();
+  await page.waitForTimeout(80);
+  const openedText = await page.locator('.departed-panel .departed-row').first().textContent();
+  ok(/ガロ/.test(openedText) && /戦死/.test(openedText) && /8戦/.test(openedText),
+    `開くと去った者の戦歴が読める: "${openedText.trim()}"`);
+  ok(/ガロの杯/.test(openedText), '残した遺物の名も読める');
   const historyText = await page.locator('.army-history-line').textContent();
   ok(historyText.includes('ガロ') && historyText.includes('戦死'), `軍団史の中身: "${historyText.trim()}"`);
   ok((await page.locator('.bond-note').count()) >= 1, '縁の印（🕯）が札に出る');
@@ -93,6 +103,24 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     setTimeout(() => resolve(''), 500);
   }));
   ok(reportSeen.includes('ガロ') && reportSeen.includes('話ばかり'), `モルモの一言に故人の名: "${reportSeen}"`);
+
+  console.log('▼ 蔵は空でも出る（誰かが去っていれば）');
+  await page.evaluate(() => {
+    Game.state.relics = [];                 // 品は何も残っていない
+    Game.state.departed = [{ uid: 900, name: '無名', race: 'コボルト', tplId: 'kobold',
+      job: '兵', traits: [], rankId: 'soldier', merit: 0, cause: 'deserted', day: 1, turn: 2,
+      army: null, record: { battles: 2, wins: 0, downed: 0, carried: 0, late: 0, ate: 0 }, relicId: null }];
+    Game.state.phase = 'formation'; App.render();
+  });
+  await page.waitForTimeout(80);
+  ok((await page.locator('.vault-panel').count()) === 1, '遺物が1つも無くても蔵パネルは出る');
+  const emptyVault = await page.locator('.vault-panel').textContent();
+  ok(/蔵は空/.test(emptyVault) && /無名/.test(emptyVault),
+    `空の蔵が誰が何も残さなかったかを言う: "${emptyVault.replace(/\s+/g, ' ').trim().slice(0, 60)}"`);
+  ok((await page.locator('.vault-panel .departed-panel').count()) === 1, '蔵からも去った者たちへ行ける');
+  await page.evaluate(() => { Game.state.departed = []; App.render(); });
+  await page.waitForTimeout(80);
+  ok((await page.locator('.vault-panel').count()) === 0, '誰も去っていなければ蔵は出ない（最初から邪魔しない）');
 
   console.log('▼ 魔界史：去った者たち');
   await page.evaluate(() => {

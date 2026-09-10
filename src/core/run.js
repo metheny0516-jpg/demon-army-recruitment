@@ -1451,7 +1451,9 @@ const Game = {
 
   // 目立った者だけが遺物を残す。無名のまま消えた者は履歴だけ。
   // 「クビにした奴の斧が倉庫に残っている」も物語なので、解雇・逃亡でも残す。
-  NOTABLE_BATTLES: 6,
+  // ランの戦闘数は 7〜13。6戦は「ランの半ばまで生きた者」には遅すぎて、
+  // 序盤の離脱では蔵が一度も出ないままだった（オーナー試遊。未決U1の見直し）。
+  NOTABLE_BATTLES: 4,
   mintRelic(monster, entry) {
     const st = this.state;
     const rank = entry.rankId || "soldier";

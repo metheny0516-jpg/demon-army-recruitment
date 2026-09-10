@@ -343,15 +343,51 @@ const UI = {
     const causeJa = this.RELIC_CAUSE_JA[last.cause] || last.cause;
     const army = last.army ? `、${U.esc(last.army)}` : "";
     const culture = Game.armyCulture();
-    return `<div class="army-history-line muted">これまでに ${departed.length}人が去った。
-      最後は ${U.esc(last.name)}（${U.esc(causeJa)}${army}）。${culture ? `軍風は『${U.esc(culture)}』` : ""}</div>`;
+    // 押すと「去った者たち」が開く。魔界史（ラン終了）まで待たないと読めなかった。
+    return this.departedPanel(`<span class="army-history-line">これまでに ${departed.length}人が去った。
+      最後は ${U.esc(last.name)}（${U.esc(causeJa)}${army}）。${
+        culture ? `軍風は『${U.esc(culture)}』` : ""}</span>`);
+  },
+
+  // ラン中の「去った者たち」。魔界史（ラン終了）まで待たずに、いま読める。
+  // <details> にしてあるのは、画面を増やさずにその場で開けるため
+  // （新しい phase を足すと UI.set() の scene 推定と戻り先の管理が要る）。
+  departedPanel(summaryHtml) {
+    const departed = Game.state.departed || [];
+    if (!departed.length) return "";
+    const relics = Game.state.relics || [];
+    const rows = departed.map(d => {
+      const causeJa = this.RELIC_CAUSE_JA[d.cause] || d.cause;
+      const relic = d.relicId ? relics.find(r => r.id === d.relicId) : null;
+      const rec = d.record || {};
+      return `<div class="departed-row">
+        ${this.icon(d.race)} ${U.esc(d.name)}（${U.esc(d.race)}）
+        ${U.esc(causeJa)}${d.army ? `・${U.esc(d.army)}` : ""}
+        ・${rec.battles || 0}戦${rec.wins || 0}勝${rec.carried ? `・担がれ${rec.carried}回` : ""}
+        ${relic ? `　🏺 ${U.esc(relic.name)}` : ""}
+      </div>`;
+    }).join("");
+    return `<details class="departed-panel"><summary>${summaryHtml
+      || `<span class="muted">これまでに ${departed.length}人が去った</span>`}</summary>
+      <div class="departed-list">${rows}</div></details>`;
   },
 
   // 蔵：離脱者が残した遺物の受け渡し。魔王が決裁する（自動では渡さない）。
+  // **誰かが去っていれば、遺物が1つも無くても出す。** 何も出ないと
+  // 「蔵はどこだ」になる（オーナー試遊で発覚）。空の蔵も軍団史の一部。
   vaultPanel() {
     const st = Game.state;
     const relics = st.relics || [];
-    if (!relics.length) return "";
+    const departed = st.departed || [];
+    if (!relics.length) {
+      if (!departed.length) return "";
+      const last = departed[departed.length - 1];
+      return `<div class="panel vault-panel"><h3>🏺 蔵</h3>
+        <div class="muted">蔵は空。${U.esc(last.name)}は何も残さなかった。</div>
+        <div class="muted">品を残すのは、名の通った者だけ（4戦以上／昇進済み／担がれて帰った経験）。</div>
+        ${this.departedPanel()}
+      </div>`;
+    }
     const rows = relics.map(r => {
       const trait = TRAITS[r.traitId];
       const holder = r.holderUid !== null ? st.roster.find(m => m.uid === r.holderUid) : null;
@@ -375,6 +411,7 @@ const UI = {
     return `<div class="panel vault-panel"><h3>🏺 蔵</h3>
       <div class="muted">離脱した者が残した品。宿った癖が誰かに移る。自動では渡らない。</div>
       ${rows}
+      ${this.departedPanel()}
     </div>`;
   },
 

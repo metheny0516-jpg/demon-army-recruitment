@@ -366,6 +366,13 @@ button.wide { width: 100%; }
 }
 .vault-panel .relic-row:first-of-type { border-top: none; }
 .vault-panel .relic-name { font-size: 14px; }
+/* ラン中の「去った者たち」。押すと開く（画面を増やさない） */
+.departed-panel { margin-top: 8px; }
+.departed-panel > summary { cursor: pointer; list-style: none; }
+.departed-panel > summary::-webkit-details-marker { display: none; }
+.departed-panel > summary::before { content: "▸ "; color: var(--muted, #9a8f7a); }
+.departed-panel[open] > summary::before { content: "▾ "; }
+.departed-panel > summary:hover { filter: brightness(1.15); }
 .departed-list { margin-top: 10px; border-top: 1px dashed var(--line); padding-top: 8px; }
 .departed-list h4 { margin: 0 0 6px; font-size: 13px; color: var(--dim); }
 .departed-row { font-size: 12px; color: var(--dim); padding: 2px 0; }

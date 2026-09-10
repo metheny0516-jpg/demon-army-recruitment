@@ -112,10 +112,10 @@ resetRng();
   const st = freshRun(paperAndTank(), [101, 102]);
   const veteran = st.roster.find(m => m.uid === 101);
   veteran.traits = ['drunkard'];
-  veteran.record = { battles: 6, wins: 4, downed: 1, carried: 0, late: 2, ate: 0 };
+  veteran.record = { battles: 4, wins: 4, downed: 1, carried: 0, late: 2, ate: 0 };
   Game.fire(101);
   const relic = (st.relics || [])[0];
-  assert(!!relic, '6戦以上の者は遺物を残す');
+  assert(!!relic, '4戦以上の者は遺物を残す');
   assert(!!relic && relic.traitId === 'drunkard', '宿るのは種族固有でない特性（酒好き）');
   assert(!!relic && relic.name === `ヨワシの${TRAITS.drunkard.relic}`, `名前は「{名}の{名詞}」（${relic && relic.name}）`);
   assert(!!relic && relic.holderUid === null, '誰も持っていなければ蔵にある');
@@ -123,10 +123,11 @@ resetRng();
   assert(!!gone && gone.relicId === relic.id, '履歴が遺物を指す');
 }
 {
+  // 閾値は4戦（ランの戦闘数7〜13に対して6は遅く、序盤の離脱で蔵が一度も出なかった）
   const st = freshRun([member(301, '無名', { traits: ['drunkard'] })], [301]);
-  st.roster[0].record = { battles: 5, wins: 1, downed: 0, carried: 0, late: 0, ate: 0 };
+  st.roster[0].record = { battles: 3, wins: 1, downed: 0, carried: 0, late: 0, ate: 0 };
   Game.fire(301);
-  assert((st.relics || []).length === 0, '兵卒で5戦の者は遺物を残さない');
+  assert((st.relics || []).length === 0, '兵卒で3戦の者は遺物を残さない');
   assert(st.departed.some(d => d.name === '無名'), 'それでも履歴は残る');
 }
 {
