@@ -106,27 +106,45 @@ const App = {
         : `現在、食料${st.food}・建材${st.materials}・施設Lv.${st.facilityLevel}デス。`;
     // 撤退は勝利ではない。phase === "result" を勝利と決めつけると
     // 「退いたのに撃退しました！」というウソの報告になる（オーナー試遊で発覚）。
-    if (b.wiped) {
-      return this.report("worried",
-        `${b.army}に……全員、戻りませんでした。\n${st.roster.length ? "城の者で、立て直しましょう。" : "募集を、かけ直しましょう。"}`,
-        { kicker: "壊滅・勤務報告", title: "宰相モルモ" });
-    }
-    if (b.lostOnPoints) {
+    // 防衛戦の勝敗は、既定の「撃退しました！」より必ず先に見る（同じ穴）。
+    let mExpression, mText, mKicker;
+    if (b.defense) {
+      if (b.defended) {
+        mExpression = "joy";
+        mText = `守りましたデス！ 王国は当分おとなしいはず\n${workText}`;
+        mKicker = "防衛戦・勤務報告";
+      } else {
+        mExpression = "worried";
+        mText = `……蔵が、荒らされました\n${workText}`;
+        mKicker = "防衛戦・勤務報告";
+      }
+    } else if (b.wiped) {
+      mExpression = "worried";
+      mText = `${b.army}に……全員、戻りませんでした。\n${st.roster.length ? "城の者で、立て直しましょう。" : "募集を、かけ直しましょう。"}`;
+      mKicker = "壊滅・勤務報告";
+    } else if (b.lostOnPoints) {
       const carried = (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name);
-      return this.report("worried",
-        `押し返されました。${carried.length ? `${carried.join("、")}殿は担いで戻りました。` : ""}\n${workText}`,
-        { kicker: "敗走・勤務報告", title: "宰相モルモ" });
-    }
-    if (b.retreated) {
+      mExpression = "worried";
+      mText = `押し返されました。${carried.length ? `${carried.join("、")}殿は担いで戻りました。` : ""}\n${workText}`;
+      mKicker = "敗走・勤務報告";
+    } else if (b.retreated) {
       const carried = (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name);
-      return this.report("worried",
-        `${b.army}から退きました。${carried.length ? `${carried.join("、")}は生きています。` : ""}`
-        + `報酬はありません。\n${workText}`,
-        { kicker: "撤退・勤務報告", title: "宰相モルモ" });
+      mExpression = "worried";
+      mText = `${b.army}から退きました。${carried.length ? `${carried.join("、")}は生きています。` : ""}`
+        + `報酬はありません。\n${workText}`;
+      mKicker = "撤退・勤務報告";
+    } else {
+      mExpression = expression;
+      mText = `${b.army}を撃退しました！ 戦果を確認してください。\n${workText}`;
+      mKicker = "戦闘・勤務報告";
     }
-    this.report(expression,
-      `${b.army}を撃退しました！ 戦果を確認してください。\n${workText}`,
-      { kicker: "戦闘・勤務報告", title: "宰相モルモ" });
+    // 予告は既存の分岐すべての後に付け足す。ここで一度だけ report する。
+    if (st.counterattack && st.counterattack.pending) {
+      mText += st.counterattack.kind === "hero"
+        ? "\n魔王様。……勇者です。こちらへ来マス"
+        : "\n魔王様、王国が討伐隊を出しました。次は、こちらへ来マス";
+    }
+    this.report(mExpression, mText, { kicker: mKicker, title: "宰相モルモ" });
   },
 
   render() {

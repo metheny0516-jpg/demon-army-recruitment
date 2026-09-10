@@ -82,7 +82,7 @@ const UI = {
       ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
       <span>作戦 <b>${st.turn}</b></span>
       <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
-      <span>警戒度 <b>${st.alert}</b></span>
+      <span>警戒度 <b>${st.alert}</b>${this.counterattackGauge()}</span>
       <span class="gold">所持金 <b>${st.gold}G</b></span>
       <span class="food">食料 <b>${st.food}</b><small class="${fb.delta < 0 ? "food-warn" : "food-ok"}"> 調達${fb.produce} / 消費${fb.need} = ${fb.delta >= 0 ? "+" : ""}${fb.delta}</small></span>
       <span class="materials">建材 <b>${st.materials}</b></span>
@@ -92,6 +92,22 @@ const UI = {
       <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
       <span class="muted">${U.esc(sd.region)}</span>
     </div>`;
+  },
+
+  // 反撃までのゲージ。数字は出さない（警戒度の数値は既にHUDに出ている）。
+  // 予約済みなら討伐隊（勇者）の到来を告げる小さな札に差し替える。
+  counterattackGauge() {
+    const st = Game.state;
+    if (typeof COUNTERATTACK === "undefined") return "";
+    if (st.counterattack && st.counterattack.pending) {
+      const label = st.counterattack.kind === "hero" ? "勇者が向かっている" : "討伐隊が向かっている";
+      return `<span class="counterattack-tag incoming">⚔ ${U.esc(label)}</span>`;
+    }
+    const threshold = COUNTERATTACK.threshold;
+    const ratio = Math.max(0, Math.min(1, (st.alert || 0) / threshold));
+    const near = (st.alert || 0) >= threshold - 1;
+    return `<span class="counterattack-gauge${near ? " near" : ""}" title="王国の反撃までの目安">
+      <span class="counterattack-gauge-fill" style="width:${Math.round(ratio * 100)}%"></span></span>`;
   },
 
   // 種族技（TRAITS[id].skill）が1段目・上位技のどちらかを判定する。
@@ -1185,21 +1201,29 @@ const UI = {
         <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
       </div>`;
     }).join("");
+    // 反撃予約中は defend 一択になる。作戦会議の見出しをそれに合わせ、
+    // 一択のときに意味がないボタン（面接へ戻る等）は出さない。
+    const forced = offers.length === 1 && offers[0].missionKind === "defend";
+    const isHero = forced && offers[0].baseStage === 8;
+    const heading = forced
+      ? (isHero ? "勇者アレン一行が城へ向かっている" : `${offers[0].army}が城へ向かっている`)
+      : "🗺 作戦会議";
     this.set(`${this.hud()}
       <div class="mission-warroom">
       <header class="mission-warroom-head">
       <div class="panel mission-briefing">
-        <h2>🗺 作戦会議</h2>
-        <div class="muted">略奪と鎮圧は軍団を整える寄り道、王国侵攻は最終決戦を近づける。
-          建設担当がいれば、どの作戦でも勝利後に備蓄建材を施設へ投入する。</div>
+        <h2>${forced ? "🛡" : ""} ${U.esc(heading)}</h2>
+        <div class="muted">${forced
+          ? "迎え撃つほかない。面接と編成で備えよ。"
+          : "略奪と鎮圧は軍団を整える寄り道、王国侵攻は最終決戦を近づける。建設担当がいれば、どの作戦でも勝利後に備蓄建材を施設へ投入する。"}</div>
       </div>
       <div class="panel mission-assets"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
       </header>
-      <div class="mission-map-label"><span>王国周辺作戦図</span><small>三本の進軍路から、次の一手を選ぶ</small></div>
+      <div class="mission-map-label"><span>王国周辺作戦図</span><small>${forced ? "迎撃準備" : "三本の進軍路から、次の一手を選ぶ"}</small></div>
       <div class="mission-grid mission-routes">${cards}</div>
       <div class="spacer"></div>
-      <button class="wide ghost mission-return" data-action="backrecruit">← 面接・軍団確認へ戻る</button>
-      </div>`);
+      ${forced ? "" : `<button class="wide ghost mission-return" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`}
+      </div>`, "mission");
   },
 
   facility() {
@@ -1386,7 +1410,27 @@ const UI = {
       ? (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name) : [];
     const fallen = wiped ? (b.fallen || []).map(f => f.name) : [];
     const relicsLeft = wiped ? (b.relicsLeft || []) : [];
-    const banner = wiped
+    const banner = b.defense && b.defended
+      ? `<div class="banner win">
+        <h2>城を守った</h2>
+        <div>${U.esc(b.army)}を退けた。押収した建材・食料は蔵に収まっている。</div>
+        <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
+      </div>`
+      : b.defense && b.ransacked
+      ? `<div class="banner rout">
+        <h2>城が荒らされた</h2>
+        <div>${U.esc(b.army)}に城を荒らされた。${carried.length
+          ? `${U.esc(carried.join("、"))}は担いで戻った。` : ""}</div>
+        <ul class="notes">
+          ${(b.ransacked.facilityBefore !== undefined && b.ransacked.facilityAfter !== undefined)
+            ? `<li>施設Lv${b.ransacked.facilityBefore}→${b.ransacked.facilityAfter}</li>` : ""}
+          ${(b.ransacked.foodBefore !== undefined && b.ransacked.foodAfter !== undefined)
+            ? `<li>食料 ${b.ransacked.foodBefore}→${b.ransacked.foodAfter}</li>` : ""}
+          ${b.ransacked.relic ? `<li>${U.esc(b.ransacked.relic)}を奪われた</li>` : ""}
+          ${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}
+        </ul>
+      </div>`
+      : wiped
       ? `<div class="banner wipe">
         <h2>全滅</h2>
         <div>${U.esc(b.army)}に敗れた。${fallen.length ? `${U.esc(fallen.join("、"))}は戻らなかった。` : ""}</div>

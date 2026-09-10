@@ -166,7 +166,8 @@ const BattleScene = {
 
   // 骨組みのHTML。ui.js から差し込む。
   shell(stageData) {
-    this.isFinalBattle = stageData.missionKind === "invade" && stageData.baseStage === Game.MAX_CONQUEST;
+    // 防衛の勇者戦でも最終戦の演出を出す（仕様：baseStage===8 だけを見る）。
+    this.isFinalBattle = stageData.baseStage === Game.MAX_CONQUEST;
     if (typeof Music !== "undefined") Music.update(Game.state, { scene: this.isFinalBattle ? "final" : "battle" });
     const sceneClass = this.isFinalBattle ? "scene battlefield final-battle" : "scene battlefield";
     return `

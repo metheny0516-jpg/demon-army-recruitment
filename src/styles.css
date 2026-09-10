@@ -111,6 +111,33 @@ button.wide { width: 100%; }
 .hud .food, .mission-economy .food { color: #8ed9a6; }
 .hud .materials, .mission-economy .materials { color: #9fc5e8; }
 
+/* 反撃までのゲージ。数字は出さず、幅だけで見せる。 */
+.counterattack-gauge {
+  display: inline-block;
+  width: 40px;
+  height: 8px;
+  margin-left: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.counterattack-gauge-fill {
+  display: block;
+  height: 100%;
+  background: #9fc5e8;
+  transition: width 0.3s;
+}
+.counterattack-gauge.near .counterattack-gauge-fill { background: #e06c6c; }
+.counterattack-tag.incoming {
+  margin-left: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: rgba(224, 108, 108, 0.25);
+  color: #e06c6c;
+}
+
 /* モルモの報告はメニューの部品ではなく、場面転換そのものとして前面に出す。 */
 .mormo-speaking { overflow: hidden; }
 .mormo-scene {
