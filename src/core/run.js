@@ -2258,6 +2258,10 @@ const Game = {
     } else if (st.phase === "defeat" && !this.canRetry()) {
       st.phase = "gameover";
       this.endRun(false);
+    } else if (st.phase === "gameover") {
+      // 城陥落（勇者の防衛戦で全滅）。記録を確定しないまま gameover 画面へ行くと st.record が無くて落ちる
+      // （autoplay がまれに踏んだ）。settleRetreat 側は自分で endRun している。
+      this.endRun(false);
     } else {
       this.save();
     }

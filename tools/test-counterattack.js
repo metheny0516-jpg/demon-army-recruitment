@@ -227,5 +227,18 @@ function fightDefense(st) {
   assert(Array.isArray(st.plundered) && st.ransackCount === 0, 'plundered / ransackCount が入る');
 }
 
+// 13. 城陥落（勇者の防衛戦で全滅）は記録を確定してから gameover になる（st.record が無いと画面が落ちる）
+{
+  const st = freshRun([paper(951, 'カミ')], [951], { gold: 0 });
+  st.counterattack = { pending: true, kind: 'hero', armyName: '勇者一行' };
+  Game.prepareMissions(true);
+  const defend = st.missionOffers.findIndex(m => m.missionKind === 'defend');
+  assert(defend >= 0, '（前提）勇者の防衛戦が予約されている');
+  Game.selectMission(defend); st.phase = 'formation';
+  Game.deploy();
+  assert(st.phase === 'gameover' && st.castleFell === true, `城陥落で gameover（${st.phase}）`);
+  assert(!!st.record && st.record.cleared === false, '記録が確定している（gameover 画面が読む st.record がある）');
+}
+
 console.log(failed ? `\n${failed} 件失敗` : '\n全件通過');
 process.exit(failed ? 1 : 0);
