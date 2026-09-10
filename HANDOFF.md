@@ -21,6 +21,30 @@
 
 ## 0. 次チャットの開始点（2026-09-03）
 
+### 現在：号令——戦闘の中に魔王の手番を作った（2026-09-10 深夜・Claude／オーナー試遊待ち）
+
+試遊の言葉：「連打して次の展開やってた」「淡々と戦闘をする繰り返し。バトルに味気がほしい」。
+見立て：テキストRPGの宿命ではなく、**戦闘の中にプレイヤーの手番が無い**こと。オーナー選択は「個人への指示」。
+仕様と契約は `docs/SPEC_ORDER_2026-09-10.md`。§2 にも契約を足した。
+
+- **何が起きるか**：戦況が動いたラウンド（誰かが倒れた／味方が半分以下）の終わりに一度だけ止まり、
+  モルモ「魔王様、号令を。ガロの【怪力】が出せます」→ 名指し（最大3人）か「任せる」。
+  名指しした者は次ラウンドの冒頭で真っ先に動き、技の条件を飛ばして必ず出す（与ダメ+50%）。その次の手番は息切れで動かない。
+- **仕組み**：`U.rand` を唯一の乱数入口にし `U.seeded` を足した。UI の戦闘は種つきで計算し、名指しなら
+  **同じ種・同じ入力で計算し直す**（提案の手前まで一致、そこから分岐）。エンジンは「先に全部計算する」構造のまま。
+  引数なし `deploy()`・sim は今までどおり（提案も出ない、乱数も Math.random のまま）。
+- **号令できる技**：怪力・火球・先制・悪戯・ぶちかまし・大火球・血の雄叫び・集団戦法・疾風（受け身の技は対象外）。
+- コミット：`19c3df2`（battle/util/traits）、`0a4dbf8`（run.js）、UI は次のコミット（battle_scene/ui/styles/browser-tests/order.js）。
+  テスト：node `test-order-battle`（26）・`test-order-run`（21）、browser `order.js`（18）、run-all 全通過。
+- **見る点（試遊）**：止まったとき「誰に命じるか」で迷ったか。命じた結果が見えたか（本人の返事・息切れ）。
+  毎戦同じ場所で止まって作業になっていないか（→ 未決U1）。代償が軽すぎないか（→ U2）。
+- **同時に直したバグ**：進軍に勝っても警戒度が上がっていなかった（`8d79df1`。反撃B が `COUNTERATTACK.invadeAlert` を
+  読み忘れ、作戦票の alertDelta が 0 のままだった）。直後の sim 50：最強優先 90%／略奪4回→侵攻 92%／留守番2人 94%
+  （攻めた0・待った47）。時計が速くなると防衛戦が増え、押収と名声で得をする構図はレビューの見立てどおり。
+  難度は試遊後に判断（変えていない）。`test-chain-measure-retry` はこの影響でまた落ちる（Opus の採番上限の票で直る）。
+- **もう一つ直したバグ**：勇者の防衛戦で全滅（城陥落）すると記録を確定せずに gameover 画面へ行き、`st.record` が無くて落ちた
+  （autoplay がまれに踏んだ）。`settleContinue` 末尾で gameover なら `endRun(false)`。`test-counterattack` 13番。
+
 ### 現在：部門を「出撃隊」と「留守番」の二つに畳み、控えも廃止した（2026-09-10・Claude／オーナー試遊待ち）
 
 オーナー決定（2026-09-10）：3部門（戦闘／建設／生活）は廃止。**プレイヤーの判断は「誰を戦場に出し、誰を城に残すか」の一つだけ。**
@@ -2737,6 +2761,30 @@ KPIが実際より少なく出る。
   `simulate()` は提案を出しても止まらず最後まで計算する（＝続けた場合の結末）。
   **`U.rand` / `U.chance` / `U.pick` を新たに呼ばない**こと。呼ぶと sim の数字が全部ずれる。
   回帰は `tools/test-retreat-battle.js` の9番（提案あり／なしで `attack` 列と `contribution` が完全一致）。
+
+### 号令（2026-09-10・Claude）── 戦闘の中の魔王の手番
+
+仕様は `docs/SPEC_ORDER_2026-09-10.md`。契約の要点：
+
+- **`U.rand` が唯一の乱数入口**（`pick` / `chance` / `randInt` はこれを通る）。`U.seeded(seed)` は mulberry32。
+  `Battle.simulate(p, e, { seed })` は `U.rand` を差し替えて計算し、終わったら戻す。種を渡さなければ Math.random。
+- **`order_offer`**（`options.offerOrder` のときだけ、1戦闘1回、`emphasis 3`, `cls "mormo"`）
+  `{ round, candidates:[{unitId,name,skillId,skillName,label,note}], answered, enemies }`。
+  出す位置はラウンドの終わり、**撤退の提案のあと、勝敗判定の前**。撤退の提案と同じラウンドには出さない。
+  条件：このラウンドに誰かが倒れた／味方の軍団員が最大HPの半分以下、敵が残っている、候補がいる。
+  候補は `Battle.orderCandidates()`（軍団員で `order` を持つ特性を持つ者。傭兵・召喚物・不在は除く。最大3人）。
+- **`options.orders[round] = unitId`** で次ラウンド冒頭に **`order_exec`** `{ unitId, name, skillId, skillName, label, quote }`。
+  本人は行動順の先頭、`ctx.ordered = true`（特性が条件を飛ばす）、与ダメ×1.5、`notes` に「号令」。
+  代償は `flags.winded`（次の手番に `note { unitId, winded: true }` を出して動かない）。
+- **提案イベントは答えの有無に関わらず同じ位置に出す**（`answered` だけ違う）。提案の手前で乱数を余計に消費しない。
+  回帰は `tools/test-order-battle.js` の4番（手前一致）。
+- **run.js**：`deploy({ offerRetreat })` が `offerOrder` と種を渡し、`pending.replay` に計算前の入力を JSON で取る。
+  `Game.answerOrder(unitId)` → 名指しなら計算し直して新しいタイムラインを返す（任せるなら `null`）。
+  `Game.recordBattleResult(pending)` は発見・最大戦力・最大CHAIN／OVERKILL・KPI を**確定後に一度だけ**取る（冪等。
+  `settleContinue` / `settleRetreat` / ロード時の保留決着の先頭でも呼ぶ）。`settleBattle("continue")` は号令が後に控えていれば
+  答えだけ覚えて待つ。決着経路は二つのまま。
+- **描画**：`askOrder` は撤退と同じく必ず止める。既定（primary）は「任せる」なので `helpers.js` の自動送りで既存テストは変わらない。
+  名指し後は `swapTimeline(next)` で尺の計画と因果の索引だけ作り直す（位置と盤面はそのまま）。`skip()` は `pendingOfferAt()` で止まる。
 
 ### 継承と魔王軍レベル（2026-09-10・Claude）── 人は消えるが、残したものは消えない
 
