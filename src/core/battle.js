@@ -102,6 +102,23 @@ const Battle = {
         if (rounds > 0) { u.flags.late = rounds; u.flags.absent = true; u.flags.lateTrait = tid; }
       }
     }
+    // 発酵した糧食（改造癖の者が生活部門で樽に寝かせた）。食べた者の一人が酔って遅刻する。
+    // 本人（改造癖）は戦場にいない。任せた仕事の結果が、ここで初めて戦闘の順番に出る。
+    {
+      const r = options.rations;
+      if (r && r.fermentedBy != null && r.consumed > 0) {
+        const eaters = playerUnits.filter(u => !u.flags.absent && !u.tags.includes("undead"));
+        const bigEaters = eaters.filter(u => u.traits.includes("big_eater"));
+        const victim = (bigEaters.length ? U.pick(bigEaters) : (eaters.length ? U.pick(eaters) : null));
+        if (victim) {
+          victim.flags.late = 1;
+          victim.flags.absent = true;
+          victim.flags.lateTrait = "tinkerer";
+          victim.flags.lateBy = r.fermentedByName || "誰か";
+          victim.flags.lateCause = "fermented_rations";
+        }
+      }
+    }
 
     const timeline = [];
     let nextEventId = 1;
@@ -339,7 +356,7 @@ const Battle = {
       if (!u.flags.absent) continue;
       const lines = (TRAITS[u.flags.lateTrait] || {}).lines;
       const pool = (lines && lines.absent) || ["{name}殿がいません！"];
-      const quote = U.pick(pool).replace(/\{name\}/g, u.name);
+      const quote = U.pick(pool).replace(/\{name\}/g, u.name).replace(/\{by\}/g, u.flags.lateBy || "誰か");
       emit("dialogue", {
         unitId: u.id, name: "モルモ", side: "player", quote, late: true,
         emphasis: 2, text: `モルモ「${quote}」`, cls: "dialogue"
@@ -594,7 +611,8 @@ const Battle = {
         const line = U.pick(TRAITS.big_eater.lines.eat);
         const trig = emitCausal("trait_trigger", {
           sourceId: unit.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 2,
-          text: `　${unit.name}の【大食漢】「${line}」 その場で食べ始めた`, cls: "trait"
+          note: "倒した相手の携行食を食べ始めた。次の手番は動かない。少し回復する",
+          text: `　${unit.name}の【大食漢】「${line}」 ${target.name}の携行食を食べ始めた（次の手番は動かない）`, cls: "trait"
         }, applied.deathEvent);
         const heal = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * eater.healRate));
         if (heal > 0) {
@@ -737,8 +755,8 @@ const Battle = {
           unit.flags.stuffed = false;
           const line = U.pick(TRAITS.big_eater.lines.busy);
           emit("trait_trigger", {
-            sourceId: unit.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 1,
-            text: `　${unit.name}「${line}」 まだ食べている`, cls: "trait"
+            sourceId: unit.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 1, busy: true,
+            text: `　${unit.name}「${line}」 食事中でこの手番は動かない`, cls: "trait"
           });
           continue;
         }
@@ -1109,6 +1127,7 @@ const Battle = {
         id: u.id, uid: u.uid, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
         mercenary: !!u.flags.mercenary,   // 金で雇った一時要員。戦功・欠員・戦没者に数えない
         late: u.flags.late || 0,          // 遅刻したラウンド数。0なら開戦から居た
+        lateCause: u.flags.lateCause || (u.flags.late ? u.flags.lateTrait : null),  // 何で遅れたか（酒好き／発酵糧食）
         unpaid: !!u.unpaid, dealt, taken, kills,
         overkillCount: overkills.length,
         maxOverkill: overkills.reduce((max, event) => Math.max(max, event.percent || 0), 0),

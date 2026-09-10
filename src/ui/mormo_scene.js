@@ -150,7 +150,8 @@ const MormoScene = {
     const faceName = speaker ? speaker.name : "宰相モルモ";
     box.innerHTML = `${faceSrc ? `<span class="mormo-aside-face"><img class="mormo-aside-portrait"
         src="${U.esc(faceSrc)}" alt="${U.esc(faceName)}"></span>` : ""}
-      <div class="mormo-aside-bubble"><b>${U.esc(faceName)}</b><p>${U.esc(String(options.text || ""))}</p>
+      <div class="mormo-aside-bubble"><b>${U.esc(faceName)}</b><p>${U.esc(String(options.text || ""))}</p>${
+        options.note ? `<small class="mormo-aside-note">${U.esc(String(options.note))}</small>` : ""}
         <button type="button" class="mormo-aside-continue">${U.esc(String(options.buttonLabel || "戦闘を再開 ▶"))}</button>
       </div>`;
     const portrait = box.querySelector(".mormo-aside-portrait");

@@ -19,7 +19,7 @@ const foes = [1, 2, 3, 4].map(i => mk('見習い' + i, [], 'enemy', { hp: 5, atk
 const r = Battle.simulate([ogre], foes);
 const t = r.timeline;
 const eats = t.filter(e => e.type === 'trait_trigger' && e.traitId === 'big_eater' && /食べ始めた/.test(e.text));
-const busy = t.filter(e => e.type === 'trait_trigger' && e.traitId === 'big_eater' && /まだ食べている/.test(e.text));
+const busy = t.filter(e => e.type === 'trait_trigger' && e.traitId === 'big_eater' && e.busy);
 assert(eats.length >= 1, '敵を倒すと、その場で食べ始める');
 const pool = vm.runInContext('TRAITS.big_eater.lines.eat', ctx);
 assert(eats.every(e => pool.includes(e.quote)), '台詞はプールから出る');
@@ -31,7 +31,8 @@ const firstEat = t.indexOf(eats[0]);
 const nextRound = t.findIndex((e, i) => i > firstEat && e.type === 'round_start');
 const roundAfter = t.findIndex((e, i) => i > nextRound && e.type === 'round_start');
 const slice = t.slice(nextRound, roundAfter > 0 ? roundAfter : t.length);
-assert(slice.some(e => e.type === 'trait_trigger' && /まだ食べている/.test(e.text)), '次のラウンドは「まだ食べている」');
+assert(slice.some(e => e.type === 'trait_trigger' && e.busy), '次のラウンドは食事中で動かない（busy）');
+  assert(eats.every(e => /携行食/.test(e.text) && e.note), '食べる対象（携行食）と結果（note）が明示される');
 assert(!slice.some(e => e.type === 'attack' && e.fromId === ogre.id), 'その間は攻撃しない（順番に効く）');
 assert(eats.length <= 2, '1戦闘で食べるのは2回まで');
 assert(busy.length === eats.length, '食べた回数だけ、動かない手番がある');

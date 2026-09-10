@@ -754,9 +754,13 @@ const BattleScene = {
         this.clearFocus();
         if (u) u.el.classList.add("acting");
         const propagating = ev.traitId === "overload" || ev.traitId === "chain_massacre";
-        if (ev.quote && u && ev.traitId === "big_eater" && !this.asideUsed.big_eater
-          && this.speakAside({ speaker: { name: u.name, src: this.unitPortraitSrc(u) }, text: ev.quote })) {
+        if (ev.quote && u && ev.traitId === "big_eater" && !ev.busy && !this.asideUsed.big_eater
+          && this.speakAside({ speaker: { name: u.name, src: this.unitPortraitSrc(u) }, text: ev.quote, note: ev.note })) {
           this.asideUsed.big_eater = true;
+        } else if (ev.busy && u) {
+          // 飛んだ手番。何が起きているか本人にも浮かせる
+          this.float(u, "食事中", "guard");
+          this.showAction(`${u.name}「${ev.quote}」（食事中で動けない）`, 1400);
         } else this.showAction(propagating
           ? `【${ev.name}】連鎖${ev.propagationDepth || 1}段目！　余剰の${ev.ratio || 35}%が流れ込む`
           : ev.quote ? `${u ? u.name : ""}「${ev.quote}」` : `【${ev.name}】発動！`, ev.quote ? 1400 : 1000);
@@ -1488,6 +1492,7 @@ const BattleScene = {
     const box = MormoScene.aside({
       expression: options.expression || "report",
       text: options.text,
+      note: options.note || null,
       speaker: options.speaker || null,
       host: document.getElementById("scene"),
       buttonLabel: options.buttonLabel || "戦闘を再開 ▶",

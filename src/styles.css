@@ -910,6 +910,8 @@ button.wide { width: 100%; }
   object-fit: cover; object-position: top center;
 }
 .mormo-aside-unit .mormo-aside-bubble b { color: #ffd9a0; }
+/* 一言の下に、何が起きたかを一行で。台詞より小さく、読める大きさに */
+.mormo-aside-note { display: block; margin-top: 10px; font-size: 15px; line-height: 1.6; color: #d9c7a3; opacity: .9; }
 .mormo-aside-bubble {
   flex: 1 1 auto;
   margin: 0; padding: 20px 24px;
