@@ -2295,6 +2295,26 @@ KPIが実際より少なく出る。
   両経路から呼ぶこと。最初の実装は render 側だけで、「飛ばしたときだけ遅刻中の枠が残る」バグになった（テストが検出）。
 - 検証：`node tools/test-late-arrival.js` ／ `tools/browser-tests/late-arrival.js`。
 
+### 撤退の提案（2026-09-10・Claude）── オートバトルに一度だけ入るプレイヤーの判断
+
+仕様は `docs/SPEC_RETREAT_2026-09-10.md`。battle.js 側の契約はこれだけ。
+
+- **`retreat_offer` イベント**（1戦闘1回、`emphasis: 3`, `cls: "mormo"`）。
+  `{ round, downed: Snap[], standing: Snap[], enemies: Snap[], text }`。
+  出す条件はラウンドの終わり（`resolveRecoveryHooks(false)` と暴食の宴のあと、勝敗判定の前）に
+  **軍団員（`flags.summoned` でない味方）が倒れたまま／敵が全滅していない／立っている軍団員が1人以上**。
+  「立っている」は `alive` ではなく **`onField`**（遅刻で不在の者は数えない）。
+  蘇生でラウンド終了時に立っていれば、そのラウンドでは出ない。
+- **`result.retreatOffer`** = `{ index, round, contribution }`、無ければ `null`。
+  `index` は timeline 内の位置。`contribution` は**既存の `summarizeContribution()` をそのまま提案時点で呼んだもの**で、
+  軍団員の行だけ `survived: true` に上書きし、倒れていた者へ `injured: true` を足す（担いで帰る＝戦死しない）。
+  傭兵・召喚物は今までどおり。**二か所で別々に組まないこと。**
+- **`options.noRetreatOffer`**（真なら提案を出さない）。開幕の防衛戦（未決U1の既定＝提案しない）で run.js が渡す。
+- `retreat_offer` は `permanent` / `reversal` と同じ**重要度の印**である。
+  `simulate()` は提案を出しても止まらず最後まで計算する（＝続けた場合の結末）。
+  **`U.rand` / `U.chance` / `U.pick` を新たに呼ばない**こと。呼ぶと sim の数字が全部ずれる。
+  回帰は `tools/test-retreat-battle.js` の9番（提案あり／なしで `attack` 列と `contribution` が完全一致）。
+
 ## 3. 落とし穴（私が実際に踏んだもの）
 
 同じ轍を踏まないように。全部実際に起きた。
