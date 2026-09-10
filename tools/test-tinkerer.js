@@ -61,5 +61,21 @@ const rations = (extra) => Object.assign({ consumed: 3, need: 3, shortage: 0, em
   assert(start.absent.length === 1 && start.absent[0].id === orc.id, '既に酒で遅れている者は、発酵の方では選ばれない（絶対に来る者がいなくても進行不能にはならない）');
   assert(typeof r.victory === 'boolean', '決着は付く');
 }
+// 6. 暴食の宴（feastUid）の大食漢が発酵で離席していたら、1ラウンド目の追加行動もしない
+//    （オーナー試遊：二人とも遅刻なのに、透明のオーガが敵を殴っていた）
+{
+  const ogre = mk('ボグマ', ['big_eater'], 'player', { race: 'オーガ' });
+  const orc = mk('ガロ', ['drunkard'], 'player');
+  const foe = mk('かかし', [], 'enemy', { hp: 500, atk: 1, spd: 1 });
+  const r = Battle.simulate([orc, ogre], [foe], { rations: rations({ consumed: 6, fermentedBy: 99, fermentedByName: 'グド', bigEaterUids: ['ボグマ'], feastUid: 'ボグマ' }) });
+  const t = r.timeline;
+  const start = t.find(e => e.type === 'battle_start');
+  assert(start.absent.some(u => u.id === ogre.id), '大食漢は発酵で離席している');
+  const arrive = t.findIndex(e => e.type === 'summon' && e.late && e.unit.id === ogre.id);
+  const firstHit = t.findIndex(e => e.type === 'attack' && e.fromId === ogre.id);
+  assert(!t.some(e => e.type === 'trait_trigger' && e.traitId === 'glutton_feast'), '離席中なら「暴食の宴」も告げない');
+  assert(firstHit === -1 || (arrive !== -1 && firstHit > arrive), '離席中の大食漢は到着前に攻撃しない');
+}
+
 console.log(failed ? `\n${failed} 件失敗` : '\nすべて通過');
 process.exit(failed ? 1 : 0);

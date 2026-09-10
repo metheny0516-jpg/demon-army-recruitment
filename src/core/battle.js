@@ -339,7 +339,7 @@ const Battle = {
           text: `　${hunger.name}の【飢餓の悪魔】 備蓄が尽き、全軍が飢えて暴走！`, cls: "trait" }, rationEvent);
       }
       const feast = byUid(rations.feastUid);
-      if (feast && rations.consumed >= 4) {
+      if (feast && rations.consumed >= 4 && !feast.flags.absent) {  // 酔って離席中なら宴は無い
         feastTrigger = emitCausal("trait_trigger", { sourceId: feast.id, traitId: "glutton_feast", name: "暴食の宴", emphasis: 2,
           text: `　【暴食の宴】 ${feast.name}が食後の追加行動を狙う`, cls: "trait" }, rationEvent);
       }
@@ -782,7 +782,8 @@ const Battle = {
       resolveRecoveryHooks(false, null);
 
       if (round === 1 && feastTrigger) {
-        const feastUnit = playerUnits.find(u => u.id === feastTrigger.sourceId && u.alive);
+        // 離席中（遅刻・発酵で酔った）の者は宴にも出ない。alive だけ見ると透明のまま殴りに行く（オーナー試遊で発覚）
+        const feastUnit = playerUnits.find(u => u.id === feastTrigger.sourceId && onField(u));
         if (feastUnit && !wiped(enemyUnits)) {
           act(feastUnit, playerUnits, enemyUnits, round, {
             mult: 1, parentEvent: feastTrigger, label: "暴食の宴", isExtra: true
