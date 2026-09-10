@@ -207,6 +207,39 @@ const Battle = {
     // 戦場にいる者。開戦時に不在（遅刻）の者は生きていても狙えず、動けず、数に入らない。
     const onField = u => u.alive && !u.flags.absent;
 
+    // 種族技の発動は既存の trait_trigger で記録する。技を持たない編成では呼ばず、乱数も消費しない。
+    const skillTrigger = (unit, traitId, parent) => {
+      const trait = TRAITS[traitId] || {};
+      const lines = trait.lines && trait.lines.use;
+      const quote = lines && lines.length ? U.pick(lines) : "";
+      return emitCausal("trait_trigger", {
+        sourceId: unit.id, traitId, name: trait.name || traitId, quote, emphasis: 2,
+        text: `　${unit.name}の【${trait.name || traitId}】${quote ? `「${quote}」` : ""}`, cls: "trait"
+      }, parent || null);
+    };
+
+    const summonUnit = (source, spec, parent) => {
+      const sideUnits = source.side === "player" ? playerUnits : enemyUnits;
+      const unit = Battle.makeUnit({
+        uid: null, tplId: spec.tplId || source.tplId, name: spec.name || `${source.name}の分身`,
+        race: spec.race || source.race, icon: source.icon, job: spec.job || source.job,
+        hp: Math.max(1, spec.maxHp || source.maxHp), atk: Math.max(1, spec.atk || source.atk),
+        def: Math.max(0, spec.def ?? source.def), spd: spec.spd || source.spd,
+        salary: 0, loyalty: source.loyalty, traits: spec.traits || [], tags: spec.tags || source.tags
+      }, source.side);
+      unit.id = `${source.side === "player" ? "ps" : "es"}${nextSummonId++}`;
+      unit.maxHp = Math.max(1, spec.maxHp || source.maxHp);
+      unit.hp = Math.max(1, Math.min(unit.maxHp, spec.hp ?? unit.maxHp));
+      unit.flags.summoned = true;
+      sideUnits.push(unit);
+      const event = emitCausal("summon", {
+        sourceUnitId: source.id, unit: snap(unit), emphasis: 2,
+        text: `　${unit.name}が現れた！`, cls: "revive"
+      }, parent || null);
+      reactToUndeadArrival(unit, event);
+      return event;
+    };
+
     // シナジー適用（merge型は出撃時に処理済み）
     // 発火条件は出撃5枠の外まで数える（options.synergyPool＝軍団全体）。
     // 効果は出撃したユニットにしか乗らないので、控えが戦うわけではない。
@@ -396,6 +429,25 @@ const Battle = {
         opts.traits = [...(opts.traits || []), `CHAIN ${multiplierDepth} ×${chainMult.toFixed(2)}`];
       }
       let dmg = Math.max(1, Math.round(amount * target.mods.takenMult));
+      // 味方が受ける直前の肩代わり。敵対攻撃だけに限り、最初に数値を返した者へ当たり先を替える。
+      if (!opts.incident && attacker.side !== target.side) {
+        const ally = target;
+        const guards = (ally.side === "player" ? playerUnits : enemyUnits).filter(u => onField(u) && u !== ally);
+        for (const unit of guards) {
+          for (const tid of unit.traits) {
+            const tr = TRAITS[tid];
+            if (!tr || !tr.onAllyHit) continue;
+            const redirected = tr.onAllyHit({ unit, ally, attacker, dmg, round, log: note });
+            if (typeof redirected !== "number" || redirected < 0) continue;
+            const trigger = skillTrigger(unit, tid, opts.parentEvent || null);
+            target = unit;
+            dmg = Math.max(1, Math.round(redirected * target.mods.takenMult));
+            opts.parentEvent = trigger;
+            break;
+          }
+          if (target !== ally) break;
+        }
+      }
       for (const tid of target.traits) {
         const tr = TRAITS[tid];
         if (tr && tr.modTaken) dmg = tr.modTaken({ unit: target, attacker, dmg });
@@ -403,14 +455,17 @@ const Battle = {
       const hpBefore = target.hp;
       target.hp -= dmg;
 
-      let dead = false, survived = false;
+      let dead = false, survived = false, survival = null, summons = [];
       if (target.hp <= 0) {
         for (const tid of target.traits) {
           const tr = TRAITS[tid];
-          if (tr && tr.onLethal && tr.onLethal({ unit: target, log: note })) { survived = true; break; }
+          if (!tr || !tr.onLethal) continue;
+          const result = tr.onLethal({ unit: target, log: note, summon: spec => summons.push(spec),
+            trigger: traitId => skillTrigger(target, traitId, opts.parentEvent || null) });
+          if (result === true || result?.survive) { survived = true; survival = result; break; }
         }
         if (survived) {
-          target.hp = 1;
+          target.hp = Math.max(1, survival?.hp ?? 1);
         } else {
           target.alive = false;
           target.hp = 0;
@@ -477,6 +532,7 @@ const Battle = {
       if (survived) {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
       }
+      for (const spec of summons) summonUnit(target, spec, damageEvent);
       let deathEvent = null;
       if (dead) {
         deathEvent = emitCausal("death", {
@@ -621,8 +677,10 @@ const Battle = {
         }
       }
       const post = {
-        attacker: unit, target, dmg, enemies, log: note, pick: U.pick,
-        dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg,
+        attacker: unit, target, dmg, enemies, allies, round, onField, log: note, pick: U.pick,
+        trigger: traitId => skillTrigger(unit, traitId, applied.event),
+        dealRaw: (a, t, d, label, parentEvent) => applyDamage(a, t, d, "splash", { label, parentEvent: parentEvent || applied.event }).dmg,
+        extraAction: (parentEvent, label) => act(unit, allies, enemies, round, { parentEvent, label, isExtra: true }),
         gainResource: (resource, value, label) => {
           const event = gainBattleResource(unit, resource, value, label, applied.event);
           triggeredEvents.push(event);
@@ -701,7 +759,16 @@ const Battle = {
         for (const tid of unit.traits) {
           const tr = TRAITS[tid];
           if (!tr || !tr.onRoundEnd || (rescueOnly && !tr.rescueOnWipe)) continue;
-          tr.onRoundEnd({ unit, allies, enemies, log: note, rng: U.rand });
+          tr.onRoundEnd({ unit, allies, enemies, round, onField, log: note, rng: U.rand,
+            trigger: traitId => skillTrigger(unit, traitId, null),
+            dealRaw: (attacker, target, dmg, label, parentEvent) => applyDamage(attacker, target, dmg, "splash", { label, parentEvent }).dmg,
+            moveEnemyBack: target => {
+              const i = enemies.indexOf(target);
+              const next = i >= 0 ? enemies.findIndex((u, n) => n > i && onField(u)) : -1;
+              if (i >= 0 && next >= 0) [enemies[i], enemies[next]] = [enemies[next], enemies[i]];
+              return next >= 0;
+            }
+          });
         }
       }
       for (const s of before) {
@@ -749,9 +816,23 @@ const Battle = {
         });
       }
 
+      // 大火球の燃焼は「次ラウンド開始時」にだけ解決する。flag に残した発動イベントを
+      // 親にするので、燃焼も元の一発の因果列として描画・戦果に残る。
+      for (const target of all().filter(u => onField(u) && u.flags.burn && u.flags.burn.at <= round)) {
+        const burn = target.flags.burn;
+        delete target.flags.burn;
+        applyDamage(burn.source, target, Math.ceil(target.maxHp * 0.08), "splash", {
+          label: "燃焼", parentEvent: burn.parentEvent || null
+        });
+      }
+
       const order = all()
         .filter(onField)
         .sort((a, b) => b.spd - a.spd || (U.chance(0.5) ? -1 : 1));
+      if (round === 1) {
+        const gale = order.find(unit => unit.traits.includes("gale"));
+        if (gale) { order.splice(order.indexOf(gale), 1); order.unshift(gale); }
+      }
       let rescuedThisRound = false;
       for (const unit of order) {
         if (!unit.alive) continue;
@@ -1144,9 +1225,11 @@ const Battle = {
   summarizeContribution(timeline, playerUnits) {
     const hits = timeline.filter(e => (e.type === "attack" || e.type === "splash") && e.label !== "仲間割れ");
     return playerUnits.filter(u => !u.flags.summoned).map(u => {
-      const dealt = hits.filter(e => e.fromId === u.id).reduce((s, e) => s + e.dmg, 0);
+      // 反動のような自傷は「受けたダメージ」には残すが、与ダメージ／撃破には足さない。
+      // 自分を殴った量でMVPになるのは戦果として嘘になる。
+      const dealt = hits.filter(e => e.fromId === u.id && e.toId !== u.id).reduce((s, e) => s + e.dmg, 0);
       const taken = hits.filter(e => e.toId === u.id).reduce((s, e) => s + e.dmg, 0);
-      const kills = hits.filter(e => e.fromId === u.id && e.dead).length;
+      const kills = hits.filter(e => e.fromId === u.id && e.toId !== u.id && e.dead).length;
       const overkills = timeline.filter(e => e.type === "overkill" && e.fromId === u.id);
       const died = timeline.some(e => e.type === "death" && e.unitId === u.id);
       // 火力以外の働き。人物へ確実に帰属できるイベントだけを数え、

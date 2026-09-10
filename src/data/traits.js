@@ -445,5 +445,199 @@ const TRAITS = {
         "ああっ、{name}殿が目立つ方へ行きました！"
       ]
     }
+  },
+
+  // ── 種族技 tier 2 ──────────────────────────────────────
+  // フック本体は battle.js 側の対応と同時に追加する。ここでは置換契約と、
+  // プレイヤーへ見せる効果・台詞を先に定義して、既存特性には触れない。
+  ogre_charge: {
+    name: "ぶちかまし",
+    desc: "敵が3体以上立っているとき、攻撃が敵全体に本来の70%で及ぶ。本人も与えた合計の10%を反動で受ける",
+    skill: { species: "ogre", tier: 2, replaces: "brute" },
+    lines: {
+      unlock: ["……体が、覚えた", "次は全部まとめてだ", "壁ごと押し通る"],
+      use: ["どけぇッ！", "まとめて潰す！", "道を開けろ！"]
+    },
+    modDealt(ctx) {
+      if (ctx.enemies.filter(u => u.alive && !u.flags.absent).length >= 3) ctx.mult *= 0.7;
+    },
+    postAttack(ctx) {
+      const targets = ctx.enemies.filter(u => u.alive && !u.flags.absent && u !== ctx.target);
+      if (targets.length < 2) return;
+      const trigger = ctx.trigger("ogre_charge");
+      let total = ctx.dmg;
+      for (const target of targets) total += ctx.dealRaw(ctx.attacker, target, ctx.dmg, "ぶちかまし", trigger);
+      ctx.dealRaw(ctx.attacker, ctx.attacker, Math.max(1, Math.round(total * 0.1)), "反動", trigger);
+    }
+  },
+  great_fireball: {
+    name: "大火球",
+    desc: "奇数ラウンドの攻撃時、別の敵全員にも本来の70%を与え、燃焼で次ラウンド開始時に最大HPの8%を削る",
+    skill: { species: "wizard", tier: 2, replaces: "fireball" },
+    lines: {
+      unlock: ["火加減など、もう要りません", "術式が一段、ほどけました", "これは火球ではない。火の海です"],
+      use: ["燃えなさい！", "避け場はありません", "火の雨をどうぞ！"]
+    },
+    postAttack(ctx) {
+      if (ctx.round % 2 !== 1) return;
+      const targets = ctx.enemies.filter(u => u.alive && !u.flags.absent && u !== ctx.target);
+      if (!targets.length) return;
+      const trigger = ctx.trigger("great_fireball");
+      for (const target of targets) {
+        ctx.dealRaw(ctx.attacker, target, Math.round(ctx.dmg * 0.7), "大火球", trigger);
+        target.flags.burn = { source: ctx.attacker, parentEvent: trigger, at: ctx.round + 1 };
+      }
+    }
+  },
+  blood_howl: {
+    name: "血の雄叫び",
+    desc: "自分の攻撃で敵を倒した直後、もう一撃を放つ（1ラウンド1回）",
+    skill: { species: "orc", tier: 2, replaces: "brute" },
+    lines: {
+      unlock: ["まだ足りん。もっと寄越せ", "倒れたなら次だ", "喉が勝手に吠えやがる"],
+      use: ["次だァ！", "まだ終わってねえ！", "血が騒ぐ！"]
+    },
+    postAttack(ctx) {
+      if (!ctx.target.alive && ctx.attacker.flags.bloodHowlRound !== ctx.round && ctx.enemies.some(ctx.onField)) {
+        ctx.attacker.flags.bloodHowlRound = ctx.round;
+        const trigger = ctx.trigger("blood_howl");
+        ctx.extraAction(trigger, "血の雄叫び");
+      }
+    }
+  },
+  goblin_tactics: {
+    name: "集団戦法",
+    desc: "出撃中のゴブリンが3体以上いるとき、自分の攻撃がゴブリン数−2回追加で当たる（各50%）",
+    skill: { species: "goblin", tier: 2, replaces: "pickpocket" },
+    lines: {
+      unlock: ["一人で盗るより、みんなで囲むっす", "数えられる仲間が増えたっす", "合図、覚えたっすよ"],
+      use: ["囲むっす！", "今っす、みんな！", "一発じゃ帰さないっすよ！"]
+    },
+    postAttack(ctx) {
+      const count = ctx.allies.filter(u => ctx.onField(u) && u.race === "ゴブリン").length;
+      if (count < 3) return;
+      const trigger = ctx.trigger("goblin_tactics");
+      for (let i = 0; i < count - 2; i++) {
+        const target = ctx.enemies.find(ctx.onField);
+        if (!target) break;
+        ctx.dealRaw(ctx.attacker, target, Math.round(ctx.dmg * 0.5), "集団戦法", trigger);
+      }
+    }
+  },
+  gale: {
+    name: "疾風",
+    desc: "ラウンド1〜2は先制の与ダメージ+30%が続き、ラウンド1は必ず最初に動く",
+    skill: { species: "kobold", tier: 2, replaces: "first_strike" },
+    lines: {
+      unlock: ["風より先に参ります！", "二歩目まで、もう見えています！", "先陣の務め、承知しました！"],
+      use: ["先に参ります！", "風の道、確保！", "遅れません、魔王様！"]
+    },
+    modDealt(ctx) {
+      if (ctx.round <= 2) { ctx.mult *= 1.3; ctx.notes.push("疾風"); }
+    },
+    postAttack(ctx) {
+      if (ctx.round <= 2) ctx.trigger("gale");
+    }
+  },
+  split: {
+    name: "分裂",
+    desc: "致死ダメージを受けたとき（1戦闘1回）、HP40%の自分とHP40%の分身に分かれる",
+    skill: { species: "slime", tier: 2, replaces: "slime_body" },
+    lines: {
+      unlock: ["ふたつに……なれる", "いたいの、わけられる", "まだ、ひとりじゃない"],
+      use: ["われる……！", "こっちも、いる", "ふたつで、がんばる"]
+    },
+    onLethal(ctx) {
+      if (ctx.unit.flags.splitUsed) return false;
+      ctx.unit.flags.splitUsed = true;
+      ctx.trigger("split");
+      const hp = Math.max(1, Math.round(ctx.unit.maxHp * 0.4));
+      ctx.summon({ name: `${ctx.unit.name}の分身`, hp, maxHp: ctx.unit.maxHp, atk: ctx.unit.atk, def: ctx.unit.def, spd: ctx.unit.spd, traits: [], tags: ctx.unit.tags.slice() });
+      return { survive: true, hp };
+    }
+  },
+  bone_wall: {
+    name: "骨の壁",
+    desc: "味方が攻撃を受けるとき、最初の一撃を肩代わりし、自分が60%のダメージで受ける（1ラウンド1回）",
+    skill: { species: "skeleton", tier: 2, replaces: "bone" },
+    lines: {
+      unlock: ["骨は、壁にもなれましょう", "この身、盾としてお使いください", "砕ける順番を、選べるようになりました"],
+      use: ["こちらで受けますぞ！", "お下がりください！", "骨の壁、展開！"]
+    },
+    onAllyHit(ctx) {
+      if (ctx.unit.flags.boneWallRound === ctx.round) return null;
+      ctx.unit.flags.boneWallRound = ctx.round;
+      return ctx.dmg * 0.6;
+    }
+  },
+  decay: {
+    name: "腐敗",
+    desc: "自分の攻撃が当たると、相手の攻撃力を2下げる。倒れて戻ったあとは3下げる",
+    skill: { species: "zombie", tier: 2, replaces: "tenacity" },
+    lines: {
+      unlock: ["さわると……くさる……", "もどったあと……もっと、くさい", "からだ……まだ、つかえる"],
+      use: ["くさって……", "さわった……", "におい……うつる……"]
+    },
+    postAttack(ctx) {
+      if (!ctx.target.alive || ctx.target.atk <= 1) return;
+      const amount = ctx.attacker.flags.wasRevived ? 3 : 2;
+      ctx.target.atk = Math.max(1, ctx.target.atk - amount);
+      ctx.trigger("decay");
+    }
+  },
+  fire_play: {
+    name: "火遊び",
+    desc: "ラウンド開始時、敵が2体以上いれば敵の先頭を一つ後ろへ下げる（1戦闘2回）",
+    skill: { species: "imp", tier: 2, replaces: "mischief" },
+    lines: {
+      unlock: ["火をつける場所が分かってきました！", "ちょっと押すだけで、列は崩れますよ", "遊びがいのある火種です"],
+      use: ["前、どいてくださいな！", "熱っ、あぶなっ！", "順番、変わりましたねぇ？"]
+    },
+    onRoundEnd(ctx) {
+      if ((ctx.unit.flags.firePlayCount || 0) >= 2 || ctx.enemies.filter(ctx.onField).length < 2) return;
+      if (ctx.moveEnemyBack(ctx.enemies.find(ctx.onField))) {
+        ctx.unit.flags.firePlayCount = (ctx.unit.flags.firePlayCount || 0) + 1;
+        ctx.trigger("fire_play");
+      }
+    }
+  },
+  grand_summon: {
+    name: "大召集",
+    desc: "ラウンド終了時、倒れた味方が2体以上いれば、2体までをHP50%で蘇生する（1戦闘1回）",
+    skill: { species: "necromancer", tier: 2, replaces: "necromancy" },
+    lines: {
+      unlock: ["欠員が多いほど、呼びやすいのです", "二名様まで、再雇用を承ります", "死者の名簿が、少し広がりました"],
+      use: ["皆様、お戻りを", "二名まで起きてください", "臨時招集です"]
+    },
+    onRoundEnd(ctx) {
+      if (ctx.unit.flags.grandSummonUsed || !ctx.unit.alive) return;
+      const dead = ctx.allies.filter(u => !u.alive).slice(0, 2);
+      if (dead.length < 2) return;
+      ctx.unit.flags.grandSummonUsed = true;
+      ctx.trigger("grand_summon");
+      for (const target of dead) {
+        target.alive = true;
+        target.hp = Math.max(1, Math.round(target.maxHp * 0.5));
+        if (!target.tags.includes("undead")) target.tags.push("undead");
+        target.flags.reviveSourceId = ctx.unit.id;
+        target.flags.reviveTraitId = "grand_summon";
+      }
+    }
+  },
+  tidal_wave: {
+    name: "大波",
+    desc: "自分のHPが50%以上のとき、攻撃が敵全体に本来の50%で及ぶ",
+    skill: { species: "king_slime", tier: 2, replaces: "slime_body" },
+    lines: {
+      unlock: ["おおきく……ゆれる", "みんなのぶん、ひろがる", "王さまの、なみ……"],
+      use: ["のむ……よ", "おおなみ……！", "まとめて、ぷるるる……！"]
+    },
+    postAttack(ctx) {
+      if (ctx.attacker.hp < ctx.attacker.maxHp * 0.5) return;
+      const targets = ctx.enemies.filter(u => u.alive && !u.flags.absent && u !== ctx.target);
+      if (!targets.length) return;
+      const trigger = ctx.trigger("tidal_wave");
+      for (const target of targets) ctx.dealRaw(ctx.attacker, target, Math.round(ctx.dmg * 0.5), "大波", trigger);
+    }
   }
 };
