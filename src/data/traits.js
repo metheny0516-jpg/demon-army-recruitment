@@ -447,6 +447,48 @@ const TRAITS = {
     }
   },
 
+  // ── 経験で身に付く共通特性 ─────────────────────────────
+  // 付与判定は後続の run.js が earned を読む。応募者プールへは絶対に入れない。
+  hardy: {
+    name: "頑丈",
+    relic: "胸当て",
+    desc: "受けるダメージ-15%",
+    earned: { counter: "battles", at: 8, unless: "downed" },
+    lines: { earned: ["まだ、倒れる気がしない", "傷の数だけ、立ち方を覚えた", "このくらいなら平気だ"] },
+    modTaken(ctx) {
+      return Math.max(1, Math.round(ctx.dmg * 0.85));
+    }
+  },
+  die_hard: {
+    name: "しぶとい",
+    relic: "お守り",
+    desc: "一度だけ致死ダメージをHP1で耐える",
+    earned: { counter: "downed", at: 2 },
+    lines: { earned: ["まだ、帰る番じゃない", "倒れ方だけは覚えた", "今度は、起き上がれる"] },
+    onLethal(ctx) {
+      if (ctx.unit.flags.dieHardUsed) return false;
+      ctx.unit.flags.dieHardUsed = true;
+      ctx.log(`　${ctx.unit.name}の【しぶとい】 まだ立てる！ HP1で耐えた`, "trait");
+      return true;
+    }
+  },
+  carried_before: {
+    name: "担がれ慣れ",
+    relic: "担架の布",
+    desc: "撤退で担がれても負傷しない",
+    earned: { counter: "carried", at: 1 },
+    injuryFree: true,
+    lines: { earned: ["担がれるなら、もう慣れた", "次は自分で帰るつもりだ", "運ばれ方にも、こつがある"] }
+  },
+  castle_keeper: {
+    name: "城の主",
+    relic: "鍵束",
+    desc: "留守番のとき食料の調達+1",
+    earned: { counter: "homeStays", at: 5 },
+    homeFood: 1,
+    lines: { earned: ["城の音で、腹が減る刻が分かる", "留守は任せろ。火も見ている", "この城の勝手は、もう知ってる"] }
+  },
+
   // ── 種族技 tier 2 ──────────────────────────────────────
   // フック本体は battle.js 側の対応と同時に追加する。ここでは置換契約と、
   // プレイヤーへ見せる効果・台詞を先に定義して、既存特性には触れない。
