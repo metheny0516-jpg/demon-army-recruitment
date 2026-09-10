@@ -113,6 +113,7 @@ const Game = {
       // 撤退（2026-09-10）
       retreatCount: 0,
       orderCount: 0,
+      stageFights: {},          // 敵の慣れ：段階ごとに戦った回数（通常作戦のみ）
       pendingBattle: null,
       // 全滅の回数（2026-09-10・再建）
       wipeCount: 0,
@@ -259,7 +260,7 @@ const Game = {
       feastPending: null, hungerStreak: 0,
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
-      retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0,
+      retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {},
       // 王国の反撃（2026-09-10）
       counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
       ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false,
@@ -297,7 +298,9 @@ const Game = {
       this.memberRecord(m);            // record が無い者に record.battles++ すると落ちる
       this.baseOf(m);                  // base が無い旧セーブは現在値を基礎値にする
       if (!m.skillTier) m.skillTier = (m.traits || []).some(id => ((TRAITS[id] || {}).skill || {}).tier === 2) ? 2 : 1;
+      if (typeof m.spirit !== "number") m.spirit = this.spiritRules().start;   // 気合（2026-09-10）。旧セーブには無い
     }
+    if (!st.stageFights || typeof st.stageFights !== "object") st.stageFights = {};
     if (!Array.isArray(st.departed)) st.departed = [];
     if (!Array.isArray(st.relics)) st.relics = [];
     // 答える前の戦闘が保存されていたら、続行として決着させる。
@@ -865,13 +868,16 @@ const Game = {
     // 敵も魔王軍レベルに連動する（仕様2.3）。征服段階だけで引いていた頃は、
     // 略奪を繰り返せば応募者だけ強くして敵を据え置きにできた。
     // 征服段階は「どこまで攻め落としたか（クリア判定）」の意味だけ残す。
-    let baseIndex = U.clamp(this.armyLevel() - 1 + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1);
+    // 通常作戦の敵の段階は**征服度だけ**で決める（2026-09-10）。時間では上がらない。
+    // 時間の圧力は警戒度＝王国の反撃（防衛戦は下で魔王軍レベル基準に置き換える）。
+    let baseIndex = U.clamp(st.conquest + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1);
     // 防衛戦（王国の反撃）。討伐隊は段階7（聖騎士団）まで。勇者は段階8で固定。
     const counter = type.id === "defend" ? (st.counterattack || {}) : null;
     if (counter) {
+      // 討伐隊は時間で厚くなる（魔王軍レベル基準）。段階7（聖騎士団）まで。勇者は段階8で固定。
       baseIndex = counter.kind === "hero"
         ? ENEMY_STAGES.length - 1
-        : Math.min(baseIndex, ENEMY_STAGES.length - 2);
+        : Math.min(U.clamp(this.armyLevel() - 1 + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1), ENEMY_STAGES.length - 2);
     }
     const base = ENEMY_STAGES[baseIndex];
     const formations = [
@@ -882,7 +888,9 @@ const Game = {
     // 大軍は選抜の自由度が高いぶん敵にも察知される。隠し補正にせず
     // mission.armyPressure として作戦カードへ渡し、解雇・維持の判断材料にする。
     const armyPressure = Math.min(6, Math.max(0, st.roster.length - this.MAX_DEPLOY) * 2);
-    const scale = type.enemyMult * (1 + st.alert * 0.02) * (1 + armyPressure / 100);
+    // 慣れ：同じ段階で戦うほど王国はその辺りの守りを固める（上限あり）。防衛戦には掛けない。
+    const familiarity = counter ? 0 : this.familiarityOf(baseIndex);
+    const scale = type.enemyMult * (1 + st.alert * 0.02) * (1 + armyPressure / 100) * (1 + familiarity / 100);
     const stat = (value, min) => Math.max(min, Math.round(value * scale));
     const units = formation.units.map((unit, index) => ({
       ...unit,
@@ -922,6 +930,7 @@ const Game = {
       foodReward: type.foodReward || 0,
       materialReward: type.materialReward || 0,
       armyPressure,
+      familiarity,
       baseStage: base.stage,
       formationId: formation.id,
       formationName: formation.name,
@@ -1463,6 +1472,7 @@ const Game = {
     this.memberRecord(m);
     this.baseOf(m);                  // 採用時の値を控える（昇進の boost を含まない基礎値）
     if (!m.skillTier) m.skillTier = 1;
+    if (typeof m.spirit !== "number") m.spirit = this.spiritRules().start;
     if (!Array.isArray(m.relicIds)) m.relicIds = [];
     // 縁の者が「持って来た」遺物は、採用した時点で本人の物になる（4.2）。
     // それ以外の受け渡しは編成画面の蔵で魔王が決裁する（自動では渡さない）。
@@ -1727,6 +1737,18 @@ const Game = {
   // **settleContinue と settleRetreat の両方から呼ぶ。** deploy() の途中に書くと
   // 引数なし呼び出し（sim・テスト）と UI 経由（offerRetreat）で結果がずれる。
   // retreated のときは contribution が提案時点のもの（担がれた者に injured）。
+  // 気合（号令の限定）の規則。data に置く（MONSTER_RULES.spirit）。
+  spiritRules() {
+    const r = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit) || {};
+    return { start: r.start ?? 1, max: r.max ?? 3, perBattle: r.perBattle ?? 1, perHomeTurn: r.perHomeTurn ?? 2 };
+  },
+  gainSpirit(monster, amount) {
+    if (!monster) return;
+    const rules = this.spiritRules();
+    const before = typeof monster.spirit === "number" ? monster.spirit : rules.start;
+    monster.spirit = U.clamp(before + amount, 0, rules.max);
+  },
+
   tallyBattleRecords(contribution, won) {
     const st = this.state;
     for (const row of contribution || []) {
@@ -1734,6 +1756,8 @@ const Game = {
       const monster = st.roster.find(m => m.uid === row.uid);
       if (!monster) continue;              // 既に戦死で名簿から消えた者は数えない
       const record = this.memberRecord(monster);
+      // 出撃して決着を迎えた者は気合が +1（戦死者はここに来る前に名簿から消えている）。
+      this.gainSpirit(monster, this.spiritRules().perBattle);
       record.battles += 1;
       if (won) record.wins += 1;
       if (row.survived === false || row.injured) record.downed += 1;
@@ -1997,6 +2021,11 @@ const Game = {
         pending.result = result;
         pending.ordered = { unitId: chosen, round: offer.round };
         changed = result.timeline;
+        // 気合を引く。名指しした瞬間に払う（決着で出撃の +1 が戻るので実質 cost−1）。
+        const cand = offer.candidates.find(c => c.unitId === chosen);
+        const unit = rp.playerUnits.find(u => u.id === chosen);
+        const monster = unit && unit.uid != null ? st.roster.find(m => m.uid === unit.uid) : null;
+        if (monster && cand && typeof monster.spirit === "number") monster.spirit = Math.max(0, monster.spirit - (cand.cost || 0));
       }
     }
     this.recordBattleResult(pending);
@@ -2047,6 +2076,7 @@ const Game = {
     if (!result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
+    this.recordStageFight(stageData);
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
     let wipedFallen = null, wipedRelics = null;
@@ -2286,6 +2316,7 @@ const Game = {
     const carried = contribution.filter(c => c.injured && !c.mercenary);
     // 個人カウンタは名簿が動く前に進める（引退・戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(contribution, false);
+    this.recordStageFight(stageData);
     // 退いた戦いも1戦。出撃はした（仕様2.2）。
     const unlocked = this.trainSurvivors(contribution, notes);
     // 「今回担がれた時点で、まだ前の負傷が明けていなかった者」＝引退。
@@ -2436,6 +2467,28 @@ const Game = {
     return (event && event.wipe) || null;
   },
 
+  // ── 敵の慣れ ───────────────────────────────
+  enemyGrowthRules() {
+    const r = (typeof ENEMY_GROWTH !== "undefined" && ENEMY_GROWTH) || {};
+    return { perFight: r.familiarityPerFight ?? 0.04, cap: r.familiarityCap ?? 5 };
+  },
+  // 段階（0始まりの index）で戦った回数から、敵能力の上乗せ（%）。
+  familiarityOf(stageIndex) {
+    const st = this.state;
+    const rules = this.enemyGrowthRules();
+    const fights = Math.min(rules.cap, Number((st.stageFights || {})[stageIndex]) || 0);
+    return Math.round(fights * rules.perFight * 100);
+  },
+  // 決着ごとに呼ぶ。通常作戦だけ数える（防衛戦は王国側の都合で来るので数えない）。
+  recordStageFight(stageData) {
+    const st = this.state;
+    if (!stageData || this.isDefenseBattle(stageData) || stageData.baseStage === undefined) return;
+    if (!st.stageFights || typeof st.stageFights !== "object") st.stageFights = {};
+    const index = Number(stageData.baseStage) - 1;
+    if (!(index >= 0)) return;
+    st.stageFights[index] = (st.stageFights[index] || 0) + 1;
+  },
+
   // ── 王国の反撃 ─────────────────────────────
   counterRules() {
     const rules = (typeof COUNTERATTACK !== "undefined" && COUNTERATTACK) || {};
@@ -2556,6 +2609,8 @@ const Game = {
     // 留守番が食料も建材も担う（旧生活・建設の両方）
     const lifeWorkers = this.departmentRoster("home");
     const builders = lifeWorkers;
+    // 留守番は休んで気合を整える（出撃者の +1 は tallyBattleRecords）。開幕の日割りでは足さない。
+    if (dailyDay === undefined) for (const m of lifeWorkers) this.gainSpirit(m, this.spiritRules().perHomeTurn);
     const output = this.departmentOutput();
     const foodReward = Math.max(0, mission.foodReward || 0);
     const materialReward = Math.max(0, mission.materialReward || 0);

@@ -243,16 +243,16 @@ resetRng();
   assert(Game.armyLevel() === Game.campaignLevel(), 'armyLevel は campaignLevel の別名');
   st.conquest = 5; st.turn = 1;
   assert(Game.armyLevel() === 6, '征服が進んでいればそちらが効く');
-  // 敵は征服ではなくレベルで引く
+  // 通常作戦の敵は**征服度**で引く（2026-09-10 敵の成長の作り替え。時間では強くならない）。
+  // 時間の圧力は防衛戦（魔王軍レベル基準）が払う。詳細は test-enemy-growth.js。
   const types = vm.runInContext('MISSION_TYPES', ctx);
   const invade = types.find(t => t.id === 'invade');
   st.conquest = 0; st.turn = 16;
   const late = Game.buildMission(invade);
   st.conquest = 0; st.turn = 1;
   const early = Game.buildMission(invade);
-  const hp = m => m.units.reduce((s, u) => s + u.hp, 0);
-  assert(hp(late) > hp(early),
-    `征服が同じでもターンが進めば敵が強い（${hp(early)} → ${hp(late)}）`);
+  assert(late.baseStage === early.baseStage,
+    `征服が同じならターンが進んでも通常作戦の敵の段階は同じ（${early.baseStage} / ${late.baseStage}）`);
 }
 
 // 10. 叩き上げ：終盤に来た低ティアは伸びが速い・歴戦の印
