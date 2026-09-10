@@ -356,7 +356,7 @@ const Game = {
     }
     this.syncDepartments();
     st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
-    st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
+    st.stage = Math.min(this.MAX_CONQUEST, Math.floor(st.conquest) + 1); // 旧イベントとの互換用
     for (const m of [...st.roster, ...st.applicants]) {
       m.unpaid = !!m.unpaid;
       m.unpaidStreak = m.unpaidStreak || 0;
@@ -367,7 +367,7 @@ const Game = {
 
   stageData() {
     if (this.state.selectedMission) return this.state.selectedMission;
-    return ENEMY_STAGES[Math.min(this.state.conquest, ENEMY_STAGES.length - 1)];
+    return ENEMY_STAGES[Math.min(Math.floor(this.state.conquest), ENEMY_STAGES.length - 1)];
   },
 
   salaryTotal() {
@@ -812,7 +812,7 @@ const Game = {
     // ターン側の係数は data に置く（MONSTER_RULES.levelPerTurn）。0.75 のままだと
     // ターン10で最終段階に達し、敵を連動させたときに征服2で聖騎士団が来る。
     const perTurn = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.levelPerTurn) || 0.5;
-    return U.clamp(Math.max(st.conquest + 1, Math.ceil(st.turn * perTurn)), 1, ENEMY_STAGES.length);
+    return U.clamp(Math.max(Math.floor(st.conquest) + 1, Math.ceil(st.turn * perTurn)), 1, ENEMY_STAGES.length);
   },
 
   // 魔王軍レベル。campaignLevel() の別名で、中身は同じ一つの値。
@@ -2011,7 +2011,7 @@ const Game = {
       }
       st.battlesWon += 1;
       if (!openingBattle) st.turn += 1;
-      st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
+      st.stage = Math.min(this.MAX_CONQUEST, Math.floor(st.conquest) + 1); // 旧イベントとの互換用
       st.missionOffers = [];
       if (openingBattle && st.day < this.OPENING_DAYS) {
         st.expeditionUsedToday = true;

@@ -69,7 +69,7 @@ const MISSION_TYPES = [
     foodReward: 0,
     materialReward: 1,
     alertDelta: 0,   // 反撃Bで COUNTERATTACK.invadeAlert（2）を run.js が読む。データ層だけで挙動を変えない
-    conquestDelta: 1,
+    conquestDelta: 0.5,
     loyaltyDelta: 0,
     difficulty: "高"
   }

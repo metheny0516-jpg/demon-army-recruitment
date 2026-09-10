@@ -3,7 +3,7 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
                'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -250,12 +250,17 @@ const kpiOut = (() => {
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 const skillTriggerTotals = {};
+const aggregate = { runs: 0, cleared: 0, battles: 0, wipes: 0, defenses: 0, byConquest: 0, byDefense: 0 };
 for (const s of strategies) {
   const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
   const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
+  aggregate.runs += N;
+  aggregate.cleared += res.filter(r => r.cleared).length;
+  aggregate.battles += stats.battles;
+  aggregate.wipes += stats.wipes || 0;
   const facility = (res.reduce((a,r)=>a+(r.facilityLevel||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
@@ -273,6 +278,9 @@ for (const s of strategies) {
   {
     const d = stats.defense || { won: 0, lost: 0, ransack: 0, fall: 0, byConquest: 0, byDefense: 0 };
     const total = d.won + d.lost;
+    aggregate.defenses += total;
+    aggregate.byConquest += d.byConquest;
+    aggregate.byDefense += d.byDefense;
     console.log(`  防衛戦 ${total}回（勝ち ${d.won} 負け ${d.lost}${total ? `＝勝率 ${(d.won / total * 100).toFixed(0)}%` : ""}）`
       + `／荒らされた ${d.ransack}回／城陥落 ${d.fall}／クリア内訳 攻めた ${d.byConquest}・待った ${d.byDefense}`);
   }
@@ -310,6 +318,11 @@ for (const s of strategies) {
 
 console.log(`\n種族技の発動（全戦略・全ラン合計、0回=条件が厳しすぎる可能性）:`);
 console.log('  ' + tier2SkillIds.map(id => `${TRAITS[id].name} ${skillTriggerTotals[id] || 0}`).join('　'));
+console.log(`\n総計（${aggregate.runs}ラン）: クリア率 ${(aggregate.cleared / aggregate.runs * 100).toFixed(1)}%`
+  + `／平均戦闘数 ${(aggregate.battles / aggregate.runs).toFixed(2)}`
+  + `／全滅/ラン ${(aggregate.wipes / aggregate.runs).toFixed(2)}`
+  + `／防衛戦/ラン ${(aggregate.defenses / aggregate.runs).toFixed(2)}`
+  + `／クリア内訳 攻めた ${aggregate.byConquest}・待った ${aggregate.byDefense}`);
 
 if (kpiOut) {
   fs.writeFileSync(kpiOut, JSON.stringify(kpiDump, null, 2));
