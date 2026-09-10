@@ -550,7 +550,7 @@ function depthParity(n) {
 const power = m => m.hp + m.atk * 3 + m.def * 2 + m.spd;
 
 function deployOrder(Game, st) {
-  const best = Game.departmentRoster('combat').slice()
+  const best = Game.state.roster.slice()
     .sort((a, b) => power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
   best.sort((a, b) => b.hp - a.hp);
   st.activeUids = best.map(m => m.uid);

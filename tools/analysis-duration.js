@@ -43,7 +43,7 @@ for (let run = 0; run < 200; run++) {
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') {
-      const best = Game.departmentRoster('combat').slice().sort((a, b) => power(b) - power(a))
+      const best = Game.state.roster.slice().sort((a, b) => power(b) - power(a))
         .slice(0, Game.MAX_DEPLOY);
       st.activeUids = best.map(m => m.uid);
       Game.setPayrollPolicy('regular');
@@ -55,7 +55,7 @@ for (let run = 0; run < 200; run++) {
       Game.selectMission(invade >= 0 ? invade : 0);
     }
     if (st.phase === 'formation') {
-      st.activeUids = Game.departmentRoster('combat').slice().sort((a, b) => power(b) - power(a))
+      st.activeUids = Game.state.roster.slice().sort((a, b) => power(b) - power(a))
         .slice(0, Game.MAX_DEPLOY).map(m => m.uid);
       const out = Game.deploy();
       if (!out) break;

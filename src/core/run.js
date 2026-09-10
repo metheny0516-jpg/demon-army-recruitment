@@ -166,7 +166,7 @@ const Game = {
     this.endRun(false);
   },
 
-  save() { Storage.saveRun(this.state); },
+  save() { this.syncDepartments(); Storage.saveRun(this.state); },
   load() {
     const s = Storage.loadRun();
     if (!s || typeof s !== "object") return false;
@@ -286,12 +286,15 @@ const Game = {
       if (m.tplId === "necromancer" && !m.traits.includes("gravekeeper")) m.traits.push("gravekeeper");
       if ((m.job || "").includes("料理人") && !m.traits.includes("demon_cook")) m.traits.push("demon_cook");
     }
-    const rosterIds = new Set(st.roster.filter(m => m.department === "combat").map(m => m.uid));
+    // 出撃隊（activeUids）に入っていない者は全員留守番。「控え」は無い（2026-09-10 オーナー決定）。
+    const rosterIds = new Set(st.roster.map(m => m.uid));
     st.activeUids = st.activeUids.filter((uid, i, ids) => rosterIds.has(uid) && ids.indexOf(uid) === i)
       .slice(0, this.MAX_DEPLOY);
     if (st.activeUids.length === 0 && st.roster.length) {
-      st.activeUids = st.roster.filter(m => m.department === "combat").slice(0, this.MAX_DEPLOY).map(m => m.uid);
+      const preferred = st.roster.filter(m => m.department === "combat");
+      st.activeUids = (preferred.length ? preferred : st.roster).slice(0, this.MAX_DEPLOY).map(m => m.uid);
     }
+    this.syncDepartments();
     st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
     st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1); // 旧イベントとの互換用
     for (const m of [...st.roster, ...st.applicants]) {
@@ -337,8 +340,19 @@ const Game = {
     return true;
   },
 
+  // 部門は出撃隊（activeUids）から導出する。出撃していれば出撃隊、それ以外は全員留守番。
+  // monster.department は保存・KPI・旧コード互換のための写しで、syncDepartments() が揃える。
   departmentOf(monster) {
-    return DEPARTMENTS[DEPARTMENT_ID(monster && monster.department)] || DEPARTMENTS.combat;
+    if (!monster) return DEPARTMENTS.combat;
+    const st = this.state;
+    const active = st && Array.isArray(st.activeUids) && st.activeUids.includes(monster.uid);
+    return active ? DEPARTMENTS.combat : DEPARTMENTS.home;
+  },
+
+  syncDepartments() {
+    const st = this.state;
+    if (!st || !Array.isArray(st.roster)) return;
+    for (const m of st.roster) m.department = this.departmentOf(m).id;
   },
 
   // 旧ID（construction / life）で呼ばれても留守番を返す。
@@ -1314,10 +1328,11 @@ const Game = {
     this.save();
   },
 
+  // 出撃隊と留守番の往復。外せば留守番、入れれば出撃隊（枠が無ければ失敗）。
   toggleDeploy(uid) {
     const st = this.state;
     const monster = st.roster.find(m => m.uid === uid);
-    if (!monster || this.departmentOf(monster).id !== "combat") return false;
+    if (!monster) return false;
     const index = st.activeUids.indexOf(uid);
     if (index >= 0) {
       st.activeUids.splice(index, 1);
@@ -1325,6 +1340,7 @@ const Game = {
       if (st.activeUids.length >= this.MAX_DEPLOY) return false;
       st.activeUids.push(uid);
     }
+    this.syncDepartments();
     this.save();
     this.kpi("formationChanged");
     return true;
@@ -1335,12 +1351,15 @@ const Game = {
     const monster = st.roster.find(m => m.uid === uid);
     departmentId = DEPARTMENT_ID(departmentId);
     if (!monster || !DEPARTMENTS[departmentId]) return false;
-    monster.department = departmentId;
     if (departmentId === "combat") {
-      if (!st.activeUids.includes(uid) && st.activeUids.length < this.MAX_DEPLOY) st.activeUids.push(uid);
+      if (!st.activeUids.includes(uid)) {
+        if (st.activeUids.length >= this.MAX_DEPLOY) return false;
+        st.activeUids.push(uid);
+      }
     } else {
       st.activeUids = st.activeUids.filter(id => id !== uid);
     }
+    this.syncDepartments();
     this.save();
     this.kpi("formationChanged");
     return true;

@@ -37,7 +37,7 @@ assert(KPI.current.quickRetry === false, '最初のランは「60秒以内の再
 // ── 2. ビルド試行は「前戦から変わった戦闘」だけ ────────────────
 const st = Game.state;
 while (st.applicants.length && st.roster.length < 3 && Game.canHire()) Game.hire(0);
-st.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+st.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
 const stage = { missionKind: 'invade' };
 assert(KPI.battleStarted(st, stage) === true, '初戦は必ずビルド試行として数える');
 assert(KPI.battleStarted(st, stage) === false, '同じ編成の連戦は試行に数えない');
@@ -84,7 +84,7 @@ target.traits = traitsBefore;
     if (run.phase === 'mission') Game.selectMission(0);
   }
   if (run.phase === 'preparation') {
-    run.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+    run.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
     if (run.day < Game.OPENING_DAYS) Game.advanceDay(run.day); else Game.prepareOpeningBattle('invade');
   }
   const before = KPI.current.buildAttempts;
@@ -97,7 +97,7 @@ Game.newRun();
 {
   const run = Game.state;
   while (run.hiresLeft > 0 && run.applicants.length && run.roster.length < 3 && Game.canHire()) Game.hire(0);
-  run.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+  run.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
   KPI.battleStarted(run, { missionKind: 'invade' });
   KPI.battleStarted(run, { missionKind: 'invade' });
 }

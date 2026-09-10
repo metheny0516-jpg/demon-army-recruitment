@@ -115,7 +115,7 @@ function formUp(st, strat) {
     if (st.roster.length > Game.MAX_DEPLOY && spare[0]) Game.assignDepartment(spare[0].uid, 'life');
     if (st.roster.length > Game.MAX_DEPLOY + 1 && spare[1]) Game.assignDepartment(spare[1].uid, 'construction');
   }
-  let pool = Game.departmentRoster('combat').slice();
+  let pool = Game.state.roster.slice();
   if (strat.kind === 'connect') {
     // 支援役を優先して枠へ入れ、残りを強い順で埋める
     const support = pool.filter(m => has(m,'necromancy') || has(m,'demon_cook') || has(m,'greedy'));

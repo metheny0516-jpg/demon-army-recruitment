@@ -271,11 +271,14 @@ const UI = {
     return `<span class="department-tag department-${department.id}">${department.icon} ${U.esc(department.shortName)}</span>`;
   },
 
+  // 出撃隊⇄留守番の往復ボタン。出撃枠が埋まっていれば「出撃隊へ」は押せない。
   departmentButtons(m, current) {
+    const full = Game.state.activeUids.length >= Game.MAX_DEPLOY;
     return DEPARTMENT_ORDER.filter(id => id !== current).map(id => {
       const department = DEPARTMENTS[id];
-      return `<button class="small department-button" data-action="assigndepartment"
-        data-uid="${m.uid}" data-department="${id}">${department.icon} ${U.esc(department.shortName)}へ</button>`;
+      const disabled = id === "combat" && full ? " disabled" : "";
+      return `<button class="small department-button" data-action="assigndepartment"${disabled}
+        data-uid="${m.uid}" data-department="${id}">${department.icon} ${U.esc(department.name)}へ</button>`;
     }).join("");
   },
 
@@ -306,7 +309,7 @@ const UI = {
     const foodNeed = Game.foodNeed();
     const balance = output.food - foodNeed;
     return `<div class="department-overview">
-      <div><b>⚔ ${combat}</b><span>出撃隊（控え含む）</span></div>
+      <div><b>⚔ ${combat}</b><span>出撃隊</span></div>
       <div><b>🏰 ${home}</b><span>留守番</span></div>
       <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
       <div class="${balance < 0 && st.food < -balance ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `赤字 ${-balance}（備蓄 ${st.food} であと${Math.floor(st.food / -balance)}戦）` : `余剰 +${balance}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）`}</span></div>
@@ -1057,8 +1060,6 @@ const UI = {
     const preparation = opening && st.phase === "preparation";
     const active = Game.activeRoster();
     const activeIds = new Set(st.activeUids);
-    const combatMembers = Game.departmentRoster("combat");
-    const reserves = combatMembers.filter(m => !activeIds.has(m.uid));
     const builders = Game.departmentRoster("home");
     const homeWorkers = builders;
     const activeCards = active.map((m, i) => this.monsterCard(m, {
@@ -1068,20 +1069,8 @@ const UI = {
           <button class="small" data-action="up" data-uid="${m.uid}" ${i === 0 ? "disabled" : ""}>▲ 前へ</button>
           <button class="small" data-action="front" data-uid="${m.uid}" ${i === 0 ? "disabled" : ""}>⏫ 最前列へ</button>
           <button class="small" data-action="down" data-uid="${m.uid}" ${i === active.length - 1 ? "disabled" : ""}>▼ 後ろへ</button>
-          <button class="small" data-action="toggledeploy" data-uid="${m.uid}">控えへ</button>
         </div>
         <div class="row tight">${this.departmentButtons(m, "combat")}</div>
-      </div>`
-    })).join("");
-    const reserveCards = reserves.map(m => this.monsterCard(m, {
-      badge: "控え（給与0G）",
-      footer: `<div class="card-actions">
-        <div class="row tight">
-          <button class="small primary" data-action="toggledeploy" data-uid="${m.uid}"
-            ${active.length >= Game.MAX_DEPLOY ? "disabled" : ""}>出撃隊へ</button>
-          ${this.departmentButtons(m, "combat")}
-        </div>
-        <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
       </div>`
     })).join("");
     const homeCards = homeWorkers.map(m => this.monsterCard(m, {
@@ -1147,14 +1136,11 @@ const UI = {
       ${this.payrollPanel()}
       ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
-      ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 控えか留守番から最低1体を出せ。</div>` : ""}
+      ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 留守番から最低1体を出せ。</div>` : ""}
       </aside>
       <section class="formation-board" aria-label="魔王軍の配置盤">
       <div class="formation-board-title"><span>魔王軍配置盤</span><small>札を動かし、今日の働き場所を決める</small></div>
       <div class="army-section department-section department-combat-section"><h3>⚔ 出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
-      <div class="army-section reserve-section"><h3>⚔ 出撃隊の控え ${reserves.length}</h3>
-        <div class="muted department-help">出番待ち。給与は出ないが城の仕事もしない。</div>
-        <div class="cards">${reserveCards || `<div class="muted">控えはいない</div>`}</div></div>
       <div class="army-section department-section department-home-section"><h3>🏰 留守番 ${homeWorkers.length}</h3>
         <div class="muted department-help">城に残った者は職と特性で勝手に働く。食料を調達し（食う量は種族ごとに違い、アンデッドは食べない）、建材を施設へ投入し、会計なら給与を、人事なら応募者を動かす。足りれば軍団全員の忠誠も少し上がる。</div>
         <div class="cards">${homeCards || `<div class="department-empty">留守番はいない。現在は自炊、城も育たない。</div>`}</div></div>

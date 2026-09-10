@@ -127,9 +127,9 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
   st.lastDepartmentReport = { foodShortage: 0, foodProduced: 5, facilityBefore: 0, facilityAfter: 0 };
   const ev = event('surplus_rations');
   assert(ev.check(st), '生活部門が余剰食料を作ると活用事件が候補になる');
-  st.roster[1].department = 'combat';
-  assert(!ev.check(st), '生活部門が空なら余剰食料事件は起きない');
-  st.roster[1].department = 'life';
+  Game.assignDepartment(2, 'combat');
+  assert(!ev.check(st), '留守番が空なら余剰食料事件は起きない');
+  Game.assignDepartment(2, 'home');
   const beforeGold = st.gold, beforeLoyalty = st.roster[1].loyalty;
   resolve('surplus_rations', 1);
   assert(st.food === 4 && st.gold === beforeGold + 5, '余剰食料をGへ変換できる');

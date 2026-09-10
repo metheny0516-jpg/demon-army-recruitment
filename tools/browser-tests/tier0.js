@@ -20,9 +20,9 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   // 20px以上離れていること」という不変条件そのものを測る。
   // 並び替え同士（前へ／後ろへ）が近いのは押し間違えても取り返せるので対象外。
   console.log('▼ 誤タップ対策（編成画面）');
-  // 控えのカードにだけ「解雇」が出る。最も危険な組み合わせ（解雇 ↔ 出撃隊へ）を
-  // 画面に出すため、1体を控えに落としてから測る。
-  await page.locator('[data-action="toggledeploy"]').first().click();
+  // 留守番のカードにだけ「解雇」が出る。最も危険な組み合わせ（解雇 ↔ 出撃隊へ）を
+  // 画面に出すため、1体を留守番へ回してから測る。
+  await page.locator('[data-action="assigndepartment"][data-department="home"]').first().click();
   await page.waitForTimeout(120);
   const geo = await page.evaluate(() => {
     const vis = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
@@ -65,8 +65,8 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   ok(found && !hint.includes('職業'), `「職業」への言及なし（職業条件のシナジーは実在しないため）`);
   console.log(`    現在の文言: ${hint.split('\n').slice(1).join(' ').slice(0,60)}`);
 
-  // 控えに落とした1体を出撃隊へ戻す
-  await page.locator('.reserve-section [data-action="toggledeploy"]:not([disabled])').first().click();
+  // 留守番へ回した1体を出撃隊へ戻す
+  await page.locator('.department-home-section [data-action="assigndepartment"][data-department="combat"]:not([disabled])').first().click();
   await page.waitForTimeout(120);
 
   // ── 1) 決着バナーとVS帯の重なり ──

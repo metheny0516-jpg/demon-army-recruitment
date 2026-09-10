@@ -103,9 +103,10 @@ assert(st.activeUids[0] === 1, '出撃隊へ戻すと空き枠へ自動選抜');
 const accountant = { uid: 4, tplId: 'goblin', name: '帳簿', race: 'ゴブリン', job: '会計係（どんぶり勘定）',
   hp: 10, atk: 1, def: 1, spd: 1, salary: 4, loyalty: 60, traits: [], tags: [], department: 'combat' };
 st.roster.push(accountant);
-assert(Game.wageDiscount() === 0, '戦闘部門に置いた会計係は経理をしない');
+Game.assignDepartment(4, 'combat');
+assert(Game.wageDiscount() === 0, '出撃させた会計係は経理をしない');
 Game.assignDepartment(4, 'life');
-assert(Game.wageDiscount() === 15, '生活部門へ回すと給与総額が15%下がる');
+assert(Game.wageDiscount() === 15, '留守番に回すと給与総額が15%下がる');
 
 const hr = { uid: 5, tplId: 'necromancer', name: '人事', race: '死霊術師', job: '人事担当（死者）',
   hp: 10, atk: 1, def: 1, spd: 1, salary: 4, loyalty: 60, traits: [], tags: [], department: 'life' };

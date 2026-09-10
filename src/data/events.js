@@ -1046,9 +1046,9 @@ const EVENTS = [
       {
         label: "出撃隊へ配属換えする",
         apply(st, c) {
-          c.actor.department = "combat";
+          const moved = Game.assignDepartment(c.actor.uid, "combat");
           c.actor.loyalty = U.clamp(c.actor.loyalty + 10, 0, 100);
-          return `${c.actor.name}を出撃隊へ移した。忠誠+10。\n`
+          return `${c.actor.name}を出撃隊へ${moved ? "移した" : "移そうとしたが枠が無い。次の編成で入れてやれ"}。忠誠+10。\n`
             + `建材が減る分、前線の嫌がらせは増える。`;
         }
       },

@@ -33,14 +33,14 @@ assert(Game.moveDeployedToFront(4) && Game.state.activeUids.join(',') === '4,1,2
 assert(Game.moveDeployedToFront(4) === false && Game.state.activeUids.join(',') === '4,1,2,3,5',
   'すでに最前列なら並びを変えない');
 Game.state.activeUids = [1, 2, 3, 4, 5];
-assert(Game.salaryTotal() === 15, '給与は出撃5体分だけで控えは0G');
+assert(Game.salaryTotal() === 15 + 5 * 2, '給与は出撃5体が満額、残り5体は留守番として半額手当（控えは無い）');
 st.gold = 100;
 Game.paySalaries([]);
-assert(st.roster.find(m => m.uid === 1).loyalty === 72 && st.roster.find(m => m.uid === 6).loyalty === 70,
-  '給与支払いと忠誠上昇は出撃隊だけが対象');
+assert(st.roster.find(m => m.uid === 1).loyalty === 72 && st.roster.find(m => m.uid === 6).loyalty === 72,
+  '給与支払いと忠誠上昇は出撃隊と留守番の両方（控えは無く、残った者は働いている）');
 assert(!Game.toggleDeploy(6), '満員の出撃隊へ6体目を追加できない');
 Game.toggleDeploy(5);
-assert(Game.toggleDeploy(6) && Game.activeRoster().map(m => m.uid).join(',') === '1,2,3,4,6', '控えとの入れ替え');
+assert(Game.toggleDeploy(6) && Game.activeRoster().map(m => m.uid).join(',') === '1,2,3,4,6', '留守番との入れ替え');
 Game.processCasualties([{ uid: 2, name: '兵2', race: 'ゴブリン', survived: false }], []);
 assert(!st.roster.some(m => m.uid === 2) && !st.activeUids.includes(2), '戦死者を軍団と出撃隊の両方から除外');
 st.phase = 'mission';

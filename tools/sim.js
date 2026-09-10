@@ -103,13 +103,13 @@ function runOnce(strat, stats){
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') {
+      // 出撃隊に入らない者は全員留守番（控えは無い）。「留守番2人」は弱い2人を出撃候補から外す
+      let pool = st.roster.slice();
       if (strat.departments === 'balanced' && st.roster.length >= 3) {
-        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
-        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
-        Game.assignDepartment(support[0].uid, 'life');
-        Game.assignDepartment(support[1].uid, 'construction');
+        const support = st.roster.slice().sort((a,b)=> power(a) - power(b)).slice(0, 2).map(m => m.uid);
+        pool = pool.filter(m => !support.includes(m.uid));
       }
-      const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
+      const best = pool.sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);
       st.activeUids = best.map(m => m.uid);
       Game.setPayrollPolicy('regular');
@@ -129,13 +129,13 @@ function runOnce(strat, stats){
       Game.selectMission(index >= 0 ? index : 2);
     }
     if (st.phase === 'formation') {
+      // 出撃隊に入らない者は全員留守番（控えは無い）。「留守番2人」は弱い2人を出撃候補から外す
+      let pool = st.roster.slice();
       if (strat.departments === 'balanced' && st.roster.length >= 3) {
-        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
-        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
-        Game.assignDepartment(support[0].uid, 'life');
-        Game.assignDepartment(support[1].uid, 'construction');
+        const support = st.roster.slice().sort((a,b)=> power(a) - power(b)).slice(0, 2).map(m => m.uid);
+        pool = pool.filter(m => !support.includes(m.uid));
       }
-      const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
+      const best = pool.sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);                // 強い5体を選び、HP高い順に前へ
       st.activeUids = best.map(m => m.uid);
       let payroll = 'regular';

@@ -32,7 +32,7 @@ const ready = (gold) => {
   st.applicants = [];
   Game.prepareMissions(true);
   Game.selectMission(st.missionOffers.findIndex(m => m.missionKind === 'invade'));
-  st.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+  st.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
   st.gold = gold;
   return st;
 };

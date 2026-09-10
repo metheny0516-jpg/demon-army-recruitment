@@ -50,12 +50,12 @@ Game.newRun();
       else Game.skipHire();
     }
     if (st.phase === 'preparation') {
-      st.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+      st.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
       if (st.day < Game.OPENING_DAYS) Game.advanceDay(st.day); else Game.prepareOpeningBattle('invade');
     }
     if (st.phase === 'mission') Game.selectMission(0);
     if (st.phase === 'formation') {
-      st.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+      st.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
       const out = Game.deploy();
       if (!out) break;
       battles++;

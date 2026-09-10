@@ -54,7 +54,7 @@ console.log('▼ 採用・出撃・入れ替え');
   assert(d.hired.map(x => x.name).join() === '新顔のゴブ四', '前回の軍団にいなかった人は「採用」');
   assert(d.deployed.map(x => x.name).join() === '控えのゴブ三', '控えから出した人は「出撃」');
   assert(d.benched.map(x => x.name).join() === 'ゴブ次', '外した人も分かる');
-  assert(d.changedUids.sort().join() === '3,4', '今回動かした人は採用と出撃の2人');
+  assert(d.changedUids.sort().join() === '2,3,4', '今回動かした人は採用・出撃・留守番へ回した3人（外した者は留守番に変わる）');
 }
 
 console.log('▼ 顔ぶれが同じでも並び順が変われば配置を変えたと分かる');

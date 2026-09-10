@@ -43,7 +43,7 @@ function playUntilBattle() {
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') {
-      const best = Game.departmentRoster('combat').slice()
+      const best = Game.state.roster.slice()
         .sort((a, b) => power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       st.activeUids = best.map(m => m.uid);
       if (st.day < Game.OPENING_DAYS) Game.advanceDay(st.day);
@@ -54,13 +54,14 @@ function playUntilBattle() {
       Game.selectMission(i >= 0 ? i : 0);
     }
     if (st.phase === 'formation') {
-      const best = Game.departmentRoster('combat').slice()
+      const best = Game.state.roster.slice()
         .sort((a, b) => power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       st.activeUids = best.map(m => m.uid);
       if (!Game.deploy()) break;
       // 1段だけの経路では「帰属が一致する」の検査にならない。結合と宣言者を含む
       // 2段以上の代表経路が出るまで探す。
       const v = st.lastBattle && st.lastBattle.chainView;
+      if (v) seenDepths.push(v.maxDepth || 0);
       if (v && v.deepest && v.deepest.steps.length >= 2
         && v.deepest.steps.some(s => s.declaredBy)) return true;
     }
@@ -72,8 +73,9 @@ function playUntilBattle() {
   return false;
 }
 let found = false;
+let seenDepths = [];
 for (let attempt = 0; attempt < 80 && !found; attempt++) {
-  store = {}; seed = 1000 + attempt * 7919;
+  store = {}; seed = 1000 + attempt * 7919; seenDepths = [];
   Game.newRun();
   found = playUntilBattle();
 }
@@ -143,8 +145,9 @@ assert(Game.state.chainDefVersion === 2,
   '切替後に始めた新規ランの記録値は V2');
 assert(view.defVersion === Game.state.chainDefVersion,
   'API出力契約の版と新規ランの記録版がV2で揃う');
-assert(Game.state.maxChain === view.maxDepth,
-  '新規V2ランの maxChain は正規化済み maxDepth を記録する');
+// maxChain はラン通算の最大値。今回の戦果が最深とは限らない（前の戦闘で3段が出ていることがある）。
+assert(Game.state.maxChain >= view.maxDepth && Game.state.maxChain === Math.max(...seenDepths),
+  '新規V2ランの maxChain は、各戦闘の正規化済み maxDepth のラン通算最大を記録する');
 
 // ── 5. 再起で対応する戦果へ戻る ────────────────────────
 // チェックポイント時点の戦果（＝いまの lastBattle）を控え、別の戦果で上書きしてから戻す。
