@@ -1105,6 +1105,9 @@ const UI = {
     this.set(`${this.hud()}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
+        ${(st.roster.length === 0 && st.wipeCount)
+          ? `<div class="muted wipe-rebuild-line">軍団は全滅した。ここから建て直す。${
+              (st.relics || []).length ? `　🏺 蔵に ${st.relics.length}品` : ""}</div>` : ""}
         ${this.armyHistoryLine()}
         ${st.generation === 1 && st.turn <= 2 ?`<p class="first-guide">モルモ：${st.roster.length ? "「今の軍団との接続」は、仲間の能力とつながる手がかりデス。" : "まずは能力の発動条件を一つ見てみましょう。どんな仲間がいれば活かせそうですか？"}</p>` : ""}
         <div class="muted">${
@@ -1377,9 +1380,33 @@ const UI = {
     // **set() の第2引数で scene を明示すること。**見出し文字列から推定させると
     // `.game-scene-report` が外れて画面が崩れる（部門を畳んだときに一度踏んだ）。
     const retreated = !!b.retreated;
-    const carried = retreated
+    const wiped = !!b.wiped;
+    const lostOnPoints = !!b.lostOnPoints;
+    const carried = (retreated || lostOnPoints)
       ? (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name) : [];
-    const banner = retreated
+    const fallen = wiped ? (b.fallen || []).map(f => f.name) : [];
+    const relicsLeft = wiped ? (b.relicsLeft || []) : [];
+    const banner = wiped
+      ? `<div class="banner wipe">
+        <h2>全滅</h2>
+        <div>${U.esc(b.army)}に敗れた。${fallen.length ? `${U.esc(fallen.join("、"))}は戻らなかった。` : ""}</div>
+        <div>${[
+          st.roster.length ? `城には ${st.roster.length}人が残っている` : "",
+          relicsLeft.map(r => `${U.esc(r.name)}が蔵に残った`).join("、"),
+          !st.roster.length ? `城に残る者はいない。金庫に ${st.gold}G` : ""
+        ].filter(Boolean).join("　")}</div>
+        <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
+      </div>`
+      : lostOnPoints
+      ? `<div class="banner rout">
+        <h2>敗走</h2>
+        <div>${U.esc(b.army)}に押し返された。${carried.length
+          ? `${U.esc(carried.join("、"))}は担いで戻った。` : ""}報酬は無い。</div>
+        ${carried.length ? `<div class="retreat-injured">🩹 ${U.esc(carried.join("、"))}は負傷。
+          次の戦いは出られない（留守番として働く）</div>` : ""}
+        <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
+      </div>`
+      : retreated
       ? `<div class="banner retreat">
         <h2>撤退</h2>
         <div>${U.esc(b.army)} から退いた。${carried.length
@@ -1395,6 +1422,9 @@ const UI = {
       </div>`;
     this.set(`${this.hud()}
       ${banner}
+      ${/* 敗因メモ（ニアミス）は「どこまで届いたか」を残す。全滅と敗走のときだけ出す。
+           再起画面がほぼ出なくなった（再建の仕様）ので、ここに無いと二度と読まれない。 */
+        (wiped || b.lostOnPoints) ? this.nearMissPanel(b.nearMiss) : ""}
       ${this.skillUnlockPanel(b)}
       ${Game.canSeizeStronghold() ? (() => {
         const q = Game.seizeQuote();
@@ -1455,9 +1485,10 @@ const UI = {
       ${this.facilityPanel(b)}
       ${this.contributionPanel(b.contribution)}
       <div class="panel">
-        <h3>まだ終わりではない</h3>
+        <h3>全員を失い、金庫も空だ</h3>
         <div class="muted">
-          第${st.turn}作戦の採用面接まで時を巻き戻せる。応募者と作戦を選び直し、並べ直せ。<br>
+          時を巻き戻すか、この歩みを魔界史に刻むか。<br>
+          巻き戻せば第${st.turn}作戦の採用面接まで戻る。応募者と作戦を選び直し、並べ直せ。<br>
           ただし軍の立て直しには金がかかる：所持金 <b class="gold">${goldNow}G → ${goldAfter}G</b><br>
           この機会は<b>このランで1度きり</b>だ。
         </div>

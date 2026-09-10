@@ -93,7 +93,7 @@ const App = {
     }
     if (st.phase === "defeat") {
       return this.report("panic",
-        `${b.army}に敗北しました……！\nですが、まだ一度だけ時を巻き戻せます。編成を変えて再起しましょう、魔王様！`,
+        `${b.army}に敗れ、軍も金庫も空になりました……！\nですが、まだ一度だけ時を巻き戻せます。魔王様、いかがいたしましょう！`,
         { kicker: "緊急戦況報告", title: "宰相モルモ" });
     }
     const work = st.lastDepartmentReport || {};
@@ -106,6 +106,17 @@ const App = {
         : `現在、食料${st.food}・建材${st.materials}・施設Lv.${st.facilityLevel}デス。`;
     // 撤退は勝利ではない。phase === "result" を勝利と決めつけると
     // 「退いたのに撃退しました！」というウソの報告になる（オーナー試遊で発覚）。
+    if (b.wiped) {
+      return this.report("worried",
+        `${b.army}に……全員、戻りませんでした。\n${st.roster.length ? "城の者で、立て直しましょう。" : "募集を、かけ直しましょう。"}`,
+        { kicker: "壊滅・勤務報告", title: "宰相モルモ" });
+    }
+    if (b.lostOnPoints) {
+      const carried = (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name);
+      return this.report("worried",
+        `押し返されました。${carried.length ? `${carried.join("、")}殿は担いで戻りました。` : ""}\n${workText}`,
+        { kicker: "敗走・勤務報告", title: "宰相モルモ" });
+    }
     if (b.retreated) {
       const carried = (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name);
       return this.report("worried",

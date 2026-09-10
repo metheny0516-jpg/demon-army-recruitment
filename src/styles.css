@@ -574,6 +574,10 @@ button.wide { width: 100%; }
 .banner.lose { background: linear-gradient(#5a2c2c, #3d1d1d); border: 1px solid var(--red); }
 /* 撤退は勝利でも敗北でもない第三の結末。赤でも緑でもない色にする */
 .banner.retreat { background: linear-gradient(#4a4433, #2c281e); border: 1px solid #b39a5e; }
+/* 全滅は勝利でも撤退でもない。敗北よりさらに暗く、黒に近い色にする */
+.banner.wipe { background: linear-gradient(#2b2020, #16100f); border: 1px solid #6e3a3a; }
+/* 敗走（判定負け）は撤退と同じ扱いなので、撤退に近いが少し赤みを足す */
+.banner.rout { background: linear-gradient(#4a3033, #2c1e20); border: 1px solid #b3705e; }
 .banner h2 { margin: 0; }
 .notes { margin: 10px 0 0; padding: 0; list-style: none; font-size: 13px; }
 .notes li { padding: 2px 0; }
