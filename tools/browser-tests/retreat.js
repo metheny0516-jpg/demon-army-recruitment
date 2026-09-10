@@ -11,7 +11,11 @@ async function autoDismissAsidesExceptRetreat(page) {
     const patch = () => {
       if (typeof MormoScene === "undefined" || !MormoScene.show) return setTimeout(patch, 5);
       const show = MormoScene.show.bind(MormoScene);
-      MormoScene.show = function (o) { show(o); this.close(); };
+      window.__reports = [];
+      MormoScene.show = function (o) {
+        window.__reports.push({ text: o.text, kicker: o.kicker, expression: o.expression });
+        show(o); this.close();
+      };
       const aside = MormoScene.aside.bind(MormoScene);
       window.__asides = [];
       MormoScene.aside = function (o) {
@@ -128,9 +132,16 @@ const COUNT_ATTACKS = () => {
   ok(/撤退/.test(afterRetreat.log), '戦況記録に撤退の一行が残る');
   ok(!afterRetreat.banner, '勝敗の決着表示は出ない（勝っても負けてもいない）');
 
-  console.log('▼ 結果画面');
+  console.log('▼ 撤退のあとのモルモ報告（勝ったと言わない）');
+  await page.evaluate(() => { window.__reports = []; });
   await page.click('[data-action="afterbattle"]');
   await page.waitForTimeout(200);
+  const said = await page.evaluate(() => window.__reports.map(r => r.text).join(' / '));
+  ok(!/撃退しました/.test(said), `退いたのに「撃退しました」と言わない（${said.slice(0, 60)}）`);
+  ok(/退きました/.test(said) && /報酬はありません/.test(said), '「退きました」「報酬はありません」と報告する');
+  ok(/捨て駒A/.test(said), '担いで帰った者の名前が出る');
+
+  console.log('▼ 結果画面');
   const report = await page.evaluate(() => ({
     heading: (document.querySelector('.banner h2') || {}).textContent,
     body: (document.querySelector('.banner div') || {}).textContent || '',
@@ -141,6 +152,8 @@ const COUNT_ATTACKS = () => {
   ok(report.heading === '撤退', `結果画面の見出しが「撤退」（${report.heading}）`);
   ok(/捨て駒A/.test(report.body) && /報酬は無い/.test(report.body), `本文に生きている者と「報酬は無い」（${report.body}）`);
   ok(report.scene === 'report', `scene は report のまま（${report.scene}）`);
+  ok(await page.locator('.retreat-injured').count() === 1, '結果画面に「負傷。次の戦いは出られない」の一行が出る');
+  ok(/捨て駒A/.test(await page.locator('.retreat-injured').innerText()), 'その一行に負傷者の名前が入る');
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retreat-result.png', fullPage: true });
 
   console.log('▼ 編成画面：負傷者は出撃できない');
@@ -156,6 +169,17 @@ const COUNT_ATTACKS = () => {
   });
   ok(formation.badge, '負傷バッジが札に出る');
   ok(formation.canDeploy === false && formation.canAssign === false, '負傷者は出撃隊へ入れられない');
+  ok(await page.locator('.injured-note').count() === 1, '出撃隊の見出しの横に「負傷で1名出られない」が出る');
+
+  console.log('▼ 出撃前のモルモ報告が負傷に触れる');
+  const preDeploy = await page.evaluate(() => {
+    window.__reports = [];
+    App.formationReport();
+    return window.__reports.map(r => r.text).join(' / ');
+  });
+  ok(/包帯の身/.test(preDeploy) && /捨て駒A/.test(preDeploy),
+    `出撃前の報告で負傷者に触れる（${preDeploy.slice(0, 60)}）`);
+  ok(!/生活部門/.test(preDeploy), '廃止した「生活部門」の言い方が残っていない');
 
   console.log('▼ 提案が出ない戦闘では止まらない（今までどおり）');
   await page.evaluate(() => { Game.newRun(); });

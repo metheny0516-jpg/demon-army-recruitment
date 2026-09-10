@@ -41,16 +41,23 @@ const App = {
     const st = Game.state;
     const mission = st && st.selectedMission;
     const foodRisk = st && st.food <= Game.foodNeed();
+    // 包帯の身の者がいれば必ず言う。編成画面で枠が空いている理由が分からないと、
+    // 「なぜか出せない」だけが残る（オーナー試遊で発覚）。序盤の案内より先に組み立てる
+    // ――撤退は1戦目にも起きるので、案内の回だけ黙るわけにはいかない。
+    const injured = ((st && st.roster) || []).filter(m => m.injured > 0);
+    const injuredLine = injured.length
+      ? `${injured.map(m => m.name).join("、")}殿は包帯の身デス。今日は城で。\n` : "";
     if (st && st.generation === 1 && st.turn <= 2) {
-      return this.report("report", st.turn === 1
+      return this.report(injured.length ? "worried" : "report", injuredLine + (st.turn === 1
         ? "並び順が配置デス。先頭ほど狙われやすくなります。\n誰に攻撃を受けてもらうか、能力を見ながら決めてくださいネ。"
-        : "前の戦果を手がかりに、組み合わせを試しましょう。\n能力の条件を作れそうな仲間はいますか？",
+        : "前の戦果を手がかりに、組み合わせを試しましょう。\n能力の条件を作れそうな仲間はいますか？"),
         { kicker: "出撃前の人事", title: "宰相モルモ" });
     }
-    this.report(foodRisk ? "worried" : "report",
+    this.report(injured.length || foodRisk ? "worried" : "report",
       `${mission ? `作戦は「${mission.missionTitle}」に決まりました。` : "作戦を承りました。"}\n`
+      + injuredLine
       + (foodRisk
-        ? "食料が心細いデス。出撃隊だけでなく、生活部門の配属も見直してくださいネ。"
+        ? "食料が心細いデス。出撃隊だけでなく、留守番の顔ぶれも見直してくださいネ。"
         : "誰を戦わせ、誰に城と暮らしを任せるか――魔王様、最後の人事をお願いします！"),
       { kicker: "作戦決定", title: "宰相モルモ・出撃前報告" });
   },
@@ -80,6 +87,15 @@ const App = {
       : work.facilityAfter > work.facilityBefore
         ? `さらに施設が完成！ ${Game.facilityInfo().name}が次の出撃隊を支えます！`
         : `現在、食料${st.food}・建材${st.materials}・施設Lv.${st.facilityLevel}デス。`;
+    // 撤退は勝利ではない。phase === "result" を勝利と決めつけると
+    // 「退いたのに撃退しました！」というウソの報告になる（オーナー試遊で発覚）。
+    if (b.retreated) {
+      const carried = (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name);
+      return this.report("worried",
+        `${b.army}から退きました。${carried.length ? `${carried.join("、")}は生きています。` : ""}`
+        + `報酬はありません。\n${workText}`,
+        { kicker: "撤退・勤務報告", title: "宰相モルモ" });
+    }
     this.report(expression,
       `${b.army}を撃退しました！ 戦果を確認してください。\n${workText}`,
       { kicker: "戦闘・勤務報告", title: "宰相モルモ" });

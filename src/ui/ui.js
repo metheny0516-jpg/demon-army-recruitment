@@ -1084,6 +1084,9 @@ const UI = {
         <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button></div>`
     })).join("");
     const empty = active.length === 0;
+    // 枠が空いている理由を出撃隊の見出しの横に出す。バッジは留守番の札にしか無いので、
+    // 「なぜか出せない」だけが残っていた（オーナー試遊で発覚）。
+    const injuredCount = st.roster.filter(m => m.injured > 0).length;
     const payroll = Game.payrollPolicy();
     const payrollQuote = Game.payrollQuote();
     const rations = Game.battleRationQuote();
@@ -1143,7 +1146,8 @@ const UI = {
       </aside>
       <section class="formation-board" aria-label="魔王軍の配置盤">
       <div class="formation-board-title"><span>魔王軍配置盤</span><small>札を動かし、今日の働き場所を決める</small></div>
-      <div class="army-section department-section department-combat-section"><h3>⚔ 出撃隊 ${active.length}/${Game.MAX_DEPLOY}</h3><div class="cards">${activeCards}</div></div>
+      <div class="army-section department-section department-combat-section"><h3>⚔ 出撃隊 ${active.length}/${Game.MAX_DEPLOY}${
+        injuredCount ? `<span class="injured-note">🩹 負傷で${injuredCount}名出られない</span>` : ""}</h3><div class="cards">${activeCards}</div></div>
       <div class="army-section department-section department-home-section"><h3>🏰 留守番 ${homeWorkers.length}</h3>
         <div class="muted department-help">城に残った者は職と特性で勝手に働く。食料を調達し（食う量は種族ごとに違い、アンデッドは食べない）、建材を施設へ投入し、会計なら給与を、人事なら応募者を動かす。足りれば軍団全員の忠誠も少し上がる。</div>
         <div class="cards">${homeCards || `<div class="department-empty">留守番はいない。現在は自炊、城も育たない。</div>`}</div></div>
@@ -1186,6 +1190,8 @@ const UI = {
         <h2>撤退</h2>
         <div>${U.esc(b.army)} から退いた。${carried.length
           ? `${U.esc(carried.join("、"))}は生きている。` : ""}報酬は無い。</div>
+        ${carried.length ? `<div class="retreat-injured">🩹 ${U.esc(carried.join("、"))}は負傷。
+          次の戦いは出られない（留守番として働く）</div>` : ""}
         <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
       </div>`
       : `<div class="banner win">

@@ -320,6 +320,9 @@ button.wide { width: 100%; }
 .meta .loyal { color: var(--blue); }
 .meta .unpaid { color: var(--red); font-weight: bold; }
 .meta .injured { color: #e8b45c; font-weight: bold; }
+/* 負傷で枠が埋まらない理由を、出撃隊の見出しと撤退の結果画面に出す */
+.injured-note { margin-left: 10px; font-size: 12px; font-weight: normal; color: #e8b45c; }
+.retreat-injured { margin-top: 8px; color: #e8b45c; font-size: 13px; }
 .department-tag {
   display: inline-flex;
   align-items: center;
