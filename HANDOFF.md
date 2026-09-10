@@ -2528,6 +2528,30 @@ KPIが実際より少なく出る。
   ファイル一覧の両方**。run.js 側は `typeof BOND_MOTIVES` で守ってあるので、足し忘れても落ちはしないが
   志望理由が既定のままになる。
 
+### 種族技（2026-09-10・CodeX／戦闘フックBまで完了）── 上位技は条件を満たしたときだけ起きる
+
+- `src/data/skills.js` の **`SKILL_RULES`** は `{ unlockBattles: 6, growthPerBattle: 0.025,
+  growthCapBattles: 12 }`。`traits.js` の後に読む。解放・小成長・保存はまだC（`run.js`）なので、
+  現時点の既存名簿へは自動で技を付けない。
+- tier 2 の `TRAITS.*.skill` は `{ species, tier: 2, replaces }`。`lines.unlock` は結果画面用、
+  `lines.use` は戦闘の既存 `trait_trigger.quote` 用。11技は `ogre_charge` / `great_fireball` /
+  `blood_howl` / `goblin_tactics` / `gale` / `split` / `bone_wall` / `decay` / `fire_play` /
+  `grand_summon` / `tidal_wave`。**敵には技を付与しない**（Cでの解放も応募者のみ）。
+- 新フック **`onAllyHit({ unit, ally, attacker, dmg, round, log })`**：敵対ダメージの直前、
+  同陣営で戦場に立つ者を順に見る。最初に0以上の数値を返した特性が肩代わり先となり、返り値が
+  実ダメージ（`bone_wall` は60%）。肩代わり元は無傷。`incident` の仲間割れには発火させない。
+  行動・対象・人数の判定には **`onField`** を使う。
+- スキル用の `trait_trigger` は既存イベントで、`sourceId / traitId / name / quote` を持つ。
+  大火球の燃焼は flag に元の発動イベントを持ち、**次ラウンド開始時**にその子 `splash { label:"燃焼" }`
+  として解決する。新イベント種別は増やさない。
+- `split` の `onLethal` は `{ survive: true, hp }` と `ctx.summon(spec)` を返せる。battle.js が
+  `summon` イベントと戦闘専用ユニットを作る。既存の `true`（HP1で耐える）との互換を守ること。
+- `gale` は既存の速度ソートを先に済ませてから、ラウンド1の技持ちを先頭へ移す。
+  これで技無し編成に乱数消費を足さない。`fire_play` はラウンド終了時に敵配列の先頭と次の生存者を
+  入れ替え、次ラウンドの標的順だけを変える（最大2回）。
+- 回帰は `node tools/test-skills-battle.js`（24件）と既存Node全件。Cで解放を接続したら、
+  `tools/sim.js` の読み込み列へ `skills.js` を足し、仕様5.1の4条件×3回と技別発動集計を実施する。
+
 ## 3. 落とし穴（私が実際に踏んだもの）
 
 同じ轍を踏まないように。全部実際に起きた。

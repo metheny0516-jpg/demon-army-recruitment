@@ -457,6 +457,17 @@ const TRAITS = {
     lines: {
       unlock: ["……体が、覚えた", "次は全部まとめてだ", "壁ごと押し通る"],
       use: ["どけぇッ！", "まとめて潰す！", "道を開けろ！"]
+    },
+    modDealt(ctx) {
+      if (ctx.enemies.filter(u => u.alive && !u.flags.absent).length >= 3) ctx.mult *= 0.7;
+    },
+    postAttack(ctx) {
+      const targets = ctx.enemies.filter(u => u.alive && !u.flags.absent && u !== ctx.target);
+      if (targets.length < 2) return;
+      const trigger = ctx.trigger("ogre_charge");
+      let total = ctx.dmg;
+      for (const target of targets) total += ctx.dealRaw(ctx.attacker, target, ctx.dmg, "ぶちかまし", trigger);
+      ctx.dealRaw(ctx.attacker, ctx.attacker, Math.max(1, Math.round(total * 0.1)), "反動", trigger);
     }
   },
   great_fireball: {
@@ -466,6 +477,16 @@ const TRAITS = {
     lines: {
       unlock: ["火加減など、もう要りません", "術式が一段、ほどけました", "これは火球ではない。火の海です"],
       use: ["燃えなさい！", "避け場はありません", "火の雨をどうぞ！"]
+    },
+    postAttack(ctx) {
+      if (ctx.round % 2 !== 1) return;
+      const targets = ctx.enemies.filter(u => u.alive && !u.flags.absent && u !== ctx.target);
+      if (!targets.length) return;
+      const trigger = ctx.trigger("great_fireball");
+      for (const target of targets) {
+        ctx.dealRaw(ctx.attacker, target, Math.round(ctx.dmg * 0.7), "大火球", trigger);
+        target.flags.burn = { source: ctx.attacker, parentEvent: trigger, at: ctx.round + 1 };
+      }
     }
   },
   blood_howl: {
@@ -475,6 +496,13 @@ const TRAITS = {
     lines: {
       unlock: ["まだ足りん。もっと寄越せ", "倒れたなら次だ", "喉が勝手に吠えやがる"],
       use: ["次だァ！", "まだ終わってねえ！", "血が騒ぐ！"]
+    },
+    postAttack(ctx) {
+      if (!ctx.target.alive && ctx.attacker.flags.bloodHowlRound !== ctx.round && ctx.enemies.some(ctx.onField)) {
+        ctx.attacker.flags.bloodHowlRound = ctx.round;
+        const trigger = ctx.trigger("blood_howl");
+        ctx.extraAction(trigger, "血の雄叫び");
+      }
     }
   },
   goblin_tactics: {
@@ -484,6 +512,16 @@ const TRAITS = {
     lines: {
       unlock: ["一人で盗るより、みんなで囲むっす", "数えられる仲間が増えたっす", "合図、覚えたっすよ"],
       use: ["囲むっす！", "今っす、みんな！", "一発じゃ帰さないっすよ！"]
+    },
+    postAttack(ctx) {
+      const count = ctx.allies.filter(u => ctx.onField(u) && u.race === "ゴブリン").length;
+      if (count < 3) return;
+      const trigger = ctx.trigger("goblin_tactics");
+      for (let i = 0; i < count - 2; i++) {
+        const target = ctx.enemies.find(ctx.onField);
+        if (!target) break;
+        ctx.dealRaw(ctx.attacker, target, Math.round(ctx.dmg * 0.5), "集団戦法", trigger);
+      }
     }
   },
   gale: {
@@ -493,6 +531,12 @@ const TRAITS = {
     lines: {
       unlock: ["風より先に参ります！", "二歩目まで、もう見えています！", "先陣の務め、承知しました！"],
       use: ["先に参ります！", "風の道、確保！", "遅れません、魔王様！"]
+    },
+    modDealt(ctx) {
+      if (ctx.round <= 2) { ctx.mult *= 1.3; ctx.notes.push("疾風"); }
+    },
+    postAttack(ctx) {
+      if (ctx.round <= 2) ctx.trigger("gale");
     }
   },
   split: {
@@ -502,6 +546,14 @@ const TRAITS = {
     lines: {
       unlock: ["ふたつに……なれる", "いたいの、わけられる", "まだ、ひとりじゃない"],
       use: ["われる……！", "こっちも、いる", "ふたつで、がんばる"]
+    },
+    onLethal(ctx) {
+      if (ctx.unit.flags.splitUsed) return false;
+      ctx.unit.flags.splitUsed = true;
+      ctx.trigger("split");
+      const hp = Math.max(1, Math.round(ctx.unit.maxHp * 0.4));
+      ctx.summon({ name: `${ctx.unit.name}の分身`, hp, maxHp: ctx.unit.maxHp, atk: ctx.unit.atk, def: ctx.unit.def, spd: ctx.unit.spd, traits: [], tags: ctx.unit.tags.slice() });
+      return { survive: true, hp };
     }
   },
   bone_wall: {
@@ -511,6 +563,11 @@ const TRAITS = {
     lines: {
       unlock: ["骨は、壁にもなれましょう", "この身、盾としてお使いください", "砕ける順番を、選べるようになりました"],
       use: ["こちらで受けますぞ！", "お下がりください！", "骨の壁、展開！"]
+    },
+    onAllyHit(ctx) {
+      if (ctx.unit.flags.boneWallRound === ctx.round) return null;
+      ctx.unit.flags.boneWallRound = ctx.round;
+      return ctx.dmg * 0.6;
     }
   },
   decay: {
@@ -520,6 +577,12 @@ const TRAITS = {
     lines: {
       unlock: ["さわると……くさる……", "もどったあと……もっと、くさい", "からだ……まだ、つかえる"],
       use: ["くさって……", "さわった……", "におい……うつる……"]
+    },
+    postAttack(ctx) {
+      if (!ctx.target.alive || ctx.target.atk <= 1) return;
+      const amount = ctx.attacker.flags.wasRevived ? 3 : 2;
+      ctx.target.atk = Math.max(1, ctx.target.atk - amount);
+      ctx.trigger("decay");
     }
   },
   fire_play: {
@@ -529,6 +592,13 @@ const TRAITS = {
     lines: {
       unlock: ["火をつける場所が分かってきました！", "ちょっと押すだけで、列は崩れますよ", "遊びがいのある火種です"],
       use: ["前、どいてくださいな！", "熱っ、あぶなっ！", "順番、変わりましたねぇ？"]
+    },
+    onRoundEnd(ctx) {
+      if ((ctx.unit.flags.firePlayCount || 0) >= 2 || ctx.enemies.filter(ctx.onField).length < 2) return;
+      if (ctx.moveEnemyBack(ctx.enemies.find(ctx.onField))) {
+        ctx.unit.flags.firePlayCount = (ctx.unit.flags.firePlayCount || 0) + 1;
+        ctx.trigger("fire_play");
+      }
     }
   },
   grand_summon: {
@@ -538,6 +608,20 @@ const TRAITS = {
     lines: {
       unlock: ["欠員が多いほど、呼びやすいのです", "二名様まで、再雇用を承ります", "死者の名簿が、少し広がりました"],
       use: ["皆様、お戻りを", "二名まで起きてください", "臨時招集です"]
+    },
+    onRoundEnd(ctx) {
+      if (ctx.unit.flags.grandSummonUsed || !ctx.unit.alive) return;
+      const dead = ctx.allies.filter(u => !u.alive).slice(0, 2);
+      if (dead.length < 2) return;
+      ctx.unit.flags.grandSummonUsed = true;
+      ctx.trigger("grand_summon");
+      for (const target of dead) {
+        target.alive = true;
+        target.hp = Math.max(1, Math.round(target.maxHp * 0.5));
+        if (!target.tags.includes("undead")) target.tags.push("undead");
+        target.flags.reviveSourceId = ctx.unit.id;
+        target.flags.reviveTraitId = "grand_summon";
+      }
     }
   },
   tidal_wave: {
@@ -547,6 +631,13 @@ const TRAITS = {
     lines: {
       unlock: ["おおきく……ゆれる", "みんなのぶん、ひろがる", "王さまの、なみ……"],
       use: ["のむ……よ", "おおなみ……！", "まとめて、ぷるるる……！"]
+    },
+    postAttack(ctx) {
+      if (ctx.attacker.hp < ctx.attacker.maxHp * 0.5) return;
+      const targets = ctx.enemies.filter(u => u.alive && !u.flags.absent && u !== ctx.target);
+      if (!targets.length) return;
+      const trigger = ctx.trigger("tidal_wave");
+      for (const target of targets) ctx.dealRaw(ctx.attacker, target, Math.round(ctx.dmg * 0.5), "大波", trigger);
     }
   }
 };
