@@ -115,6 +115,15 @@ const Game = {
       pendingBattle: null,
       // 全滅の回数（2026-09-10・再建）
       wipeCount: 0,
+      // 王国の反撃（2026-09-10）。開幕の値は newRun() の末尾で入れる。
+      counterattack: null,
+      heroCame: false,
+      defenses: { won: 0, lost: 0 },
+      ransackCount: 0,
+      plundered: [],
+      renownBonus: 0,
+      clearedBy: null,
+      castleFell: false,
       // 継承（2026-09-10）。永久離脱の履歴・蔵の品・次の面接に混ざる縁の者の予約。
       // **migrateState の defaults と両方に足すこと**（新規ランはこちらしか通らない）。
       departed: [],
@@ -123,6 +132,18 @@ const Game = {
       pendingBond: null,
       checkpoint: null
     };
+    // 仕様2.5「開幕の勇者襲来を最初の反撃にする」は**開幕3日間プロトタイプ限定**にした。
+    // 開幕モードは 2026-09-03 に撤廃されていて `openingPrototype` は常に false なので、
+    // ここは今のところ動かない。通常ループの1戦目をいきなり防衛戦にすると、
+    // 何もしていないのに討伐隊（段階+1）が来ることになり、「こちらの動きで警戒が溜まる」
+    // という時計の意味そのものが壊れる（既存テスト3本もそれで落ちた）。
+    // 開幕モードを復活させるなら、この分岐がそのまま最初の反撃になる。
+    if (this.state.openingPrototype) {
+      const rules = this.counterRules();
+      const stage = ENEMY_STAGES[0];
+      this.state.alert = rules.threshold;
+      this.state.counterattack = { pending: true, kind: "punitive", armyName: `${stage.army}討伐隊` };
+    }
     this.genApplicants();
     this.saveCheckpoint();
     this.save();
@@ -238,6 +259,9 @@ const Game = {
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
       retreatCount: 0, pendingBattle: null, wipeCount: 0,
+      // 王国の反撃（2026-09-10）
+      counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
+      ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false,
       // 継承（2026-09-10）。旧セーブには無い。departed は永久離脱の履歴、
       // relics は蔵の品、pendingBond は「次の面接に混ざる縁の者」の予約。
       departed: [], relics: [], relicSeq: 0, pendingBond: null,
@@ -812,13 +836,23 @@ const Game = {
   // ── 作戦会議 ────────────────────────────
   prepareMissions(force) {
     const st = this.state;
-    if (!force && Array.isArray(st.missionOffers) && st.missionOffers.length === MISSION_TYPES.length) {
+    // 王国の反撃が予約されていれば、次の作戦会議は「城を守る」一択。
+    // **作り直しの判断は「今出ている札が今の状況と合っているか」で行う。**
+    // 長さだけで判断していたので、予約が立った直後に3択のまま残ることがあった。
+    const pending = !!(st.counterattack && st.counterattack.pending);
+    const offers = st.missionOffers;
+    const stale = !Array.isArray(offers) || !offers.length
+      || (pending ? offers.some(m => m.missionKind !== "defend") || offers.length !== 1
+        : offers.length !== MISSION_TYPES.length || offers.some(m => m.missionKind === "defend"));
+    if (!force && !stale) {
       st.phase = "mission";
-      return st.missionOffers;
+      return offers;
     }
-    const previous = new Map((st.missionOffers || []).map(m => [m.missionKind, m.formationId]));
+    const previous = new Map((offers || []).map(m => [m.missionKind, m.formationId]));
     st.selectedMission = null;
-    st.missionOffers = MISSION_TYPES.map(type => this.buildMission(type, previous.get(type.id)));
+    st.missionOffers = pending
+      ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
+      : MISSION_TYPES.map(type => this.buildMission(type, previous.get(type.id)));
     st.phase = "mission";
     this.save();
     return st.missionOffers;
@@ -829,7 +863,14 @@ const Game = {
     // 敵も魔王軍レベルに連動する（仕様2.3）。征服段階だけで引いていた頃は、
     // 略奪を繰り返せば応募者だけ強くして敵を据え置きにできた。
     // 征服段階は「どこまで攻め落としたか（クリア判定）」の意味だけ残す。
-    const baseIndex = U.clamp(this.armyLevel() - 1 + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1);
+    let baseIndex = U.clamp(this.armyLevel() - 1 + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1);
+    // 防衛戦（王国の反撃）。討伐隊は段階7（聖騎士団）まで。勇者は段階8で固定。
+    const counter = type.id === "defend" ? (st.counterattack || {}) : null;
+    if (counter) {
+      baseIndex = counter.kind === "hero"
+        ? ENEMY_STAGES.length - 1
+        : Math.min(baseIndex, ENEMY_STAGES.length - 2);
+    }
     const base = ENEMY_STAGES[baseIndex];
     const formations = [
       { id: "standard", name: "基本隊列", hint: "王国軍の標準的な隊列。", units: base.units },
@@ -856,6 +897,10 @@ const Game = {
     const reward = Math.max(1, Math.round(base.reward * type.rewardMult) + payrollSupport + jitter);
     const variant = type.armies ? U.randInt(0, type.armies.length - 1) : 0;
     const isInvade = type.id === "invade";
+    // 討伐隊の名は段階表から作る（固有の敵を足すときは段階表に行を足すだけで済む）。
+    const defenseArmy = counter
+      ? (counter.kind === "hero" ? base.army : `${base.army}討伐隊`)
+      : null;
     return {
       stage: st.turn,
       missionKind: type.id,
@@ -864,8 +909,8 @@ const Game = {
       strategyHint: type.strategyHint,
       description: U.pick(type.descriptions),
       difficulty: type.difficulty,
-      army: isInvade ? base.army : type.armies[variant],
-      region: isInvade ? base.region : type.regions[variant],
+      army: defenseArmy || (isInvade ? base.army : type.armies[variant]),
+      region: counter ? "魔王城" : (isInvade ? base.region : type.regions[variant]),
       reward,
       alertDelta: type.alertDelta,
       conquestDelta: type.conquestDelta,
@@ -996,7 +1041,10 @@ const Game = {
   applicantCount() {
     const lesson = this.activeLesson();
     const bonus = lesson && lesson.extraApplicant ? 1 : 0;
-    return U.clamp(3 + this.departmentOutput().recruit + bonus, 3, 7);
+    // 討伐隊を退けた直後だけ、噂を聞いて1人多く来る。読んだら消える（1回きり）。
+    const renown = this.state.renownBonus ? 1 : 0;
+    if (renown) this.state.renownBonus = 0;
+    return U.clamp(3 + this.departmentOutput().recruit + bonus + renown, 3, 8);
   },
 
   genApplicants() {
@@ -1476,6 +1524,9 @@ const Game = {
 
   // このレベル以上で来た低ティア（tier1）は「叩き上げ」。出現は珍しくなり、伸びは1.5倍。
   VETERAN_LEVEL: 5,
+
+  // 全滅したときに上がる警戒度。負けの代償は「人」ではなく「時間と敵の圧力」で払わせる。
+  WIPE_ALERT: 3,
   mintRelic(monster, entry) {
     const st = this.state;
     const rank = entry.rankId || "soldier";
@@ -1918,13 +1969,34 @@ const Game = {
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
     let wipedFallen = null, wipedRelics = null;
+    // 防衛戦（王国の反撃）。勇者戦かどうかは段階で決まる。
+    const isDefense = this.isDefenseBattle(stageData);
+    const heroDefense = isDefense && (st.counterattack || {}).kind === "hero";
+    let defenseOutcome = null, castleFell = false;
     if (result.victory) {
       st.gold += stageData.reward + lootGold;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
       if (lootGold > 0) notes.push(`戦闘中の略奪 ${lootGold}G を確定（所持金 ${st.gold}G）`);
       this.processCasualties(result.contribution, notes);
       this.awardMerit(result.contribution, notes);
-      this.applyMissionOutcome(stageData, notes);
+      if (this.isDefenseBattle(stageData)) {
+        // 城を守った。報酬は無いが、討伐隊の荷を押収する。
+        const rules = this.counterRules();
+        st.alert = Math.max(0, st.alert - rules.threshold);
+        st.materials += rules.seize.materials;
+        st.food += rules.seize.food;
+        notes.push(`討伐隊を退けた。押収：建材 +${rules.seize.materials} / 食料 +${rules.seize.food}`);
+        notes.push(`王国の警戒がひとまず引いた（現在 ${st.alert}）`);
+        // 名が上がる。次の面接だけ応募者が1人増える。
+        st.renownBonus = 1;
+        st.defenses = st.defenses || { won: 0, lost: 0 };
+        st.defenses.won += 1;
+        defenseOutcome = { defended: true };
+        if (heroDefense) st.heroCame = true;
+        st.counterattack = null;
+      } else {
+        this.applyMissionOutcome(stageData, notes);
+      }
       if (openingBattle) {
         const foodReward = Math.max(0, stageData.foodReward || 0);
         const materialReward = Math.max(0, stageData.materialReward || 0);
@@ -1950,7 +2022,12 @@ const Game = {
         st.turn += 1;
         st.phase = "result";
         this.genApplicants();
+      } else if (heroDefense) {
+        // 魔王城で勇者を退けた。攻めた着地と同じ「クリア」だが、辿り方が違う。
+        st.clearedBy = "defense";
+        st.phase = "clear";
       } else if (st.conquest >= this.MAX_CONQUEST) {
+        st.clearedBy = "conquest";
         st.phase = "clear";   // 記録の確定は deploy() の末尾でまとめて行う
       } else {
         st.phase = "result";
@@ -1968,8 +2045,9 @@ const Game = {
       wipedRelics = relicsLeft;
       // 倒れる前の働きは残る。戦功は戦死者にも付く（昇進はもう意味が無いが記録は残る）。
       this.awardMerit(result.contribution, notes);
-      // 征服は進まない。だが敵に見つかった事実は残る（撤退と同じ）。
-      const alertDelta = Number(stageData.alertDelta) || 1;
+      // 征服は進まない。だが王国は「魔王軍は崩れた」と見る。
+      // 再建して殴り続ける遊び方に、反撃が先に来るようにする（設計判断 2026-09-10・案2＋4）。
+      const alertDelta = this.WIPE_ALERT;
       st.alert = Math.max(0, st.alert + alertDelta);
       notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
       // 留守番の仕事と手当は続く。城は落ちていない。
@@ -1979,12 +2057,25 @@ const Game = {
         this.paySalaries(notes);
         this.processDepartures(notes);
       }
+      if (this.isDefenseBattle(stageData)) {
+        defenseOutcome = { ransacked: this.ransack(notes) };
+        const rules = this.counterRules();
+        st.alert = Math.max(0, st.alert - Math.floor(rules.threshold / 2));
+        st.defenses = st.defenses || { won: 0, lost: 0 };
+        st.defenses.lost += 1;
+        st.counterattack = null;
+        if (heroDefense) { st.heroCame = true; castleFell = true; }
+      }
       st.turn += 1;
       st.missionOffers = [];
       st.wipeCount = (st.wipeCount || 0) + 1;
       // 再起（時の巻き戻し）は「軍団が空で、雇う金も無い」ときの最後の手段だけに縮めた。
       // それ以外の全滅は通常の流れへ戻り、面接で建て直す。
-      if (this.canRebuild()) {
+      if (castleFell) {
+        // 勇者に城を明け渡した。再建は無い。
+        st.phase = "gameover";
+        st.castleFell = true;
+      } else if (this.canRebuild()) {
         st.phase = "result";
         this.genApplicants();
       } else {
@@ -1998,6 +2089,10 @@ const Game = {
 
     st.lastBattle = {
       victory: result.victory,
+      // 防衛戦（王国の反撃）の結末（表示用）。
+      defense: isDefense,
+      defended: !!(defenseOutcome && defenseOutcome.defended),
+      ransacked: (defenseOutcome && defenseOutcome.ransacked) || null,
       // 出撃隊の全滅（表示用）。戻らなかった者と、蔵に残った品。
       wiped: !!wipedFallen,
       fallen: wipedFallen || [],
@@ -2072,6 +2167,8 @@ const Game = {
     st.mercenaryOffers = [];
 
     this.recoverInjuries();
+    // 王国の反撃の判定は決着の最後。予告は必ず1手番前になる（奇襲はしない）。
+    if (st.phase !== "clear" && st.phase !== "gameover") this.checkCounterattack();
 
     // 記録の確定とセーブの後始末は必ず最後に行う。先に endRun してから
     // save すると、消したはずのセーブが書き戻ってしまう。
@@ -2150,10 +2247,25 @@ const Game = {
       st.activeUids = st.activeUids.filter(uid => !retiring.includes(uid));
     }
     if (carried.length) this.syncDepartments();
-    // 征服は進まない。だが敵に見つかった事実は残る。
-    const alertDelta = Number(stageData.alertDelta) || 1;
-    st.alert = Math.max(0, st.alert + alertDelta);
-    notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
+    // 防衛戦から退く＝城を明け渡して山へ逃げる。人は連れて帰れるが、城は荒らされる。
+    const isDefense = this.isDefenseBattle(stageData);
+    const heroDefense = isDefense && (st.counterattack || {}).kind === "hero";
+    let defenseOutcome = null, castleFell = false;
+    if (isDefense) {
+      defenseOutcome = { ransacked: this.ransack(notes) };
+      const rules = this.counterRules();
+      st.alert = Math.max(0, st.alert - Math.floor(rules.threshold / 2));
+      notes.push(`王国は荒らして満足し、引き上げた（警戒 ${st.alert}）`);
+      st.defenses = st.defenses || { won: 0, lost: 0 };
+      st.defenses.lost += 1;
+      st.counterattack = null;
+      if (heroDefense) { st.heroCame = true; castleFell = true; }
+    } else {
+      // 征服は進まない。だが敵に見つかった事実は残る。
+      const alertDelta = Number(stageData.alertDelta) || 1;
+      st.alert = Math.max(0, st.alert + alertDelta);
+      notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
+    }
 
     // 留守番の仕事は戦場の結果と無関係。給与も払う
     // （撤退したから払わない、は「わざと退けば給与が浮く」抜け道になる）。
@@ -2166,13 +2278,18 @@ const Game = {
     st.missionOffers = [];
     // 押し返されたのは撤退ではない。退いた回数（軍風の材料）には数えない。
     if (!lostOnPoints) st.retreatCount = (st.retreatCount || 0) + 1;
-    // 判定負けでも建て直せなければ再起へ（担いで帰っても名簿が空なら同じこと）。
-    st.phase = this.canRebuild() ? "result" : "defeat";
+    // 勇者に城を明け渡したら終わり。再建は無い。
+    st.phase = castleFell ? "gameover"
+      : this.canRebuild() ? "result" : "defeat";
+    if (castleFell) st.castleFell = true;
 
     st.lastBattle = {
       victory: false,
       retreated: !lostOnPoints,
       lostOnPoints,
+      defense: isDefense,
+      defended: false,
+      ransacked: (defenseOutcome && defenseOutcome.ransacked) || null,
       unlocked,
       missionKind: stageData.missionKind,
       missionTitle: stageData.missionTitle,
@@ -2217,7 +2334,11 @@ const Game = {
     st.mercenaries = [];
     st.mercenaryOffers = [];
 
+    // 王国の反撃の判定は決着の最後（続行側と同じ場所）。
+    if (st.phase !== "gameover") this.checkCounterattack();
     if (st.phase === "result") this.genApplicants();
+    // 城陥落はここで終わる。deploy() の末尾を通らない経路なので、自分で記録を確定させる。
+    if (st.phase === "gameover") this.endRun(false);
     this.save();
     return st.phase;
   },
@@ -2227,6 +2348,77 @@ const Game = {
   wipeOf(result) {
     const event = ((result && result.timeline) || []).find(e => e.type === "result");
     return (event && event.wipe) || null;
+  },
+
+  // ── 王国の反撃 ─────────────────────────────
+  counterRules() {
+    const rules = (typeof COUNTERATTACK !== "undefined" && COUNTERATTACK) || {};
+    return {
+      threshold: rules.threshold !== undefined ? rules.threshold : 6,
+      nearChance: rules.nearChance !== undefined ? rules.nearChance : 0.5,
+      ransack: rules.ransack || { facilityLevels: 1, foodRatio: 0.5, relics: 1 },
+      seize: rules.seize || { materials: 2, food: 2 }
+    };
+  },
+
+  isDefenseBattle(stageData) {
+    return !!(stageData && stageData.missionKind === "defend");
+  },
+
+  // 決着処理の最後に呼ぶ。警戒が閾値に届けば討伐隊を予約する。
+  // 予告は必ず1手番前（奇襲はしない）。備える時間を作るのが目的なので、
+  // 予約中の面接・編成は通常どおり動く。
+  checkCounterattack() {
+    const st = this.state;
+    if (st.counterattack && st.counterattack.pending) return null;
+    const rules = this.counterRules();
+    const alert = st.alert || 0;
+    if (alert < rules.threshold - 1) return null;
+    if (alert < rules.threshold && !U.chance(rules.nearChance)) return null;
+    // 魔王軍レベルが上限に達していれば、来るのは討伐隊ではなく勇者。ラン中1回だけ。
+    const hero = this.armyLevel() >= ENEMY_STAGES.length && !st.heroCame;
+    if (!hero && st.heroCame) return null;   // 勇者を退けた後はもう来ない
+    const stage = hero
+      ? ENEMY_STAGES[ENEMY_STAGES.length - 1]
+      : ENEMY_STAGES[U.clamp(this.armyLevel(), 0, ENEMY_STAGES.length - 2)];
+    st.counterattack = {
+      pending: true,
+      kind: hero ? "hero" : "punitive",
+      armyName: hero ? stage.army : `${stage.army}討伐隊`
+    };
+    return st.counterattack;
+  },
+
+  // 城を守れなかった。**人は取らない**（それは戦場で決まっている）。
+  // 持っていかれるのは、積み上げたもの——施設・蓄え・蔵の品。
+  ransack(notes) {
+    const st = this.state;
+    const rules = this.counterRules().ransack;
+    const before = { facility: st.facilityLevel || 0, food: st.food || 0 };
+    if (st.facilityLevel > 0) {
+      st.facilityLevel = Math.max(0, st.facilityLevel - (rules.facilityLevels || 1));
+      // 進捗はその段階の入口まで戻す（次の1投入で上がり直すのは早すぎる）
+      st.buildProgress = (FACILITY_LEVELS[st.facilityLevel] || {}).buildThreshold || 0;
+      if (st.facilityLevel === 0) st.activeFacilityId = null;
+      notes.push(`城が荒らされた。施設レベル ${before.facility} → ${st.facilityLevel}`);
+    }
+    if (st.food > 0) {
+      st.food = Math.floor(st.food * (rules.foodRatio !== undefined ? rules.foodRatio : 0.5));
+      notes.push(`蓄えを持っていかれた。食料 ${before.food} → ${st.food}`);
+    }
+    // 蔵の品。誰かが持っている遺物は本人と一緒に戦場にあるので取られない。
+    let relic = null;
+    const stored = (st.relics || []).filter(r => r.holderUid === null);
+    for (let i = 0; i < (rules.relics || 0) && stored.length; i++) {
+      relic = stored.shift();
+      st.relics = st.relics.filter(r => r.id !== relic.id);
+      st.plundered = st.plundered || [];
+      st.plundered.push({ name: relic.name, turn: st.turn });
+      notes.push(`蔵から【${relic.name}】が持ち去られた`);
+    }
+    st.ransackCount = (st.ransackCount || 0) + 1;
+    return { facilityBefore: before.facility, facilityAfter: st.facilityLevel,
+      foodBefore: before.food, foodAfter: st.food, relic: relic ? relic.name : null };
   },
 
   // 建て直せるか。名簿に誰か残っていれば続く（留守番だけでも続く）。
@@ -2908,7 +3100,11 @@ const Game = {
       chainDefVersion: Chain.versionOf(st),
       mainRace,
       region: cleared ? "王都（制圧）" : finalMission.region,
-      cause: cleared ? "人間界を征服し引退" : `${finalMission.army}に敗北`,
+      cause: st.castleFell ? "城陥落"
+        : cleared ? "人間界を征服し引退" : `${finalMission.army}に敗北`,
+      // どう終わったか：攻めた（王都で勇者に勝つ）／待った（魔王城で勇者を退ける）。
+      clearedBy: cleared ? (st.clearedBy || "conquest") : null,
+      defenses: { ...(st.defenses || { won: 0, lost: 0 }) },
       retriesUsed: st.retriesUsed || 0,
       fallenTotal: st.fallenTotal || 0,
       fallenRoll: (st.fallenRoll || []).map(f => f.name),

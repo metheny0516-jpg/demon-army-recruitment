@@ -128,8 +128,13 @@ function runOnce(strat, stats){
         if (lowLoyalty && (st.missionCounts.suppress || 0) < 2) kind = 'suppress';
         else if (st.gold < salary + 5 && (st.missionCounts.raid || 0) < 4) kind = 'raid';
       }
-      const index = st.missionOffers.findIndex(m => m.missionKind === kind);
-      Game.selectMission(index >= 0 ? index : 2);
+      // 防衛戦（王国の反撃）は一択で来る。選ぶ余地は無いので、あればそれを受ける。
+      const defendIndex = st.missionOffers.findIndex(m => m.missionKind === 'defend');
+      if (defendIndex >= 0) Game.selectMission(defendIndex);
+      else {
+        const index = st.missionOffers.findIndex(m => m.missionKind === kind);
+        Game.selectMission(index >= 0 ? index : Math.min(2, st.missionOffers.length - 1));
+      }
     }
     if (st.phase === 'formation') {
       // 出撃隊に入らない者は全員留守番（控えは無い）。「留守番2人」は弱い2人を出撃候補から外す
@@ -200,7 +205,19 @@ function runOnce(strat, stats){
   if (!stats.emptyEnds) stats.emptyEnds = 0;
   stats.wipes += st.wipeCount || 0;
   if (!st.roster.length) stats.emptyEnds++;
-  return st.record || {};
+  // 王国の反撃の観測。旧実装ではどれも 0 になる。
+  if (!stats.defense) stats.defense = { won: 0, lost: 0, ransack: 0, fall: 0, byConquest: 0, byDefense: 0 };
+  const def = st.defenses || {};
+  stats.defense.won += def.won || 0;
+  stats.defense.lost += def.lost || 0;
+  stats.defense.ransack += st.ransackCount || 0;
+  const rec = st.record || {};
+  if (rec.cause === "城陥落") stats.defense.fall++;
+  if (rec.cleared) {
+    if (rec.clearedBy === "defense") stats.defense.byDefense++;
+    else stats.defense.byConquest++;
+  }
+  return rec;
 }
 
 const strategies = [
@@ -253,6 +270,12 @@ for (const s of strategies) {
   const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
   for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
   console.log(`  全滅 ${stats.wipes || 0}回／名簿が空で終わったラン ${stats.emptyEnds || 0}`);
+  {
+    const d = stats.defense || { won: 0, lost: 0, ransack: 0, fall: 0, byConquest: 0, byDefense: 0 };
+    const total = d.won + d.lost;
+    console.log(`  防衛戦 ${total}回（勝ち ${d.won} 負け ${d.lost}${total ? `＝勝率 ${(d.won / total * 100).toFixed(0)}%` : ""}）`
+      + `／荒らされた ${d.ransack}回／城陥落 ${d.fall}／クリア内訳 攻めた ${d.byConquest}・待った ${d.byDefense}`);
+  }
   console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}／拠点接収 ${stats.seizes}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
