@@ -136,16 +136,21 @@ const MormoScene = {
     if (!host) return null;
     this.clearAside(host);
     const expression = this.EXPRESSIONS.includes(options.expression) ? options.expression : "report";
+    // speaker を渡すと、モルモではなく本人が話す（遅刻したオークの「待たせたな」など）。
+    // 顔は本人の履歴書絵。無ければ枠ごと畳む。
+    const speaker = options.speaker || null;
     const box = document.createElement("div");
-    box.className = `mormo-aside mormo-aside-${expression}`;
+    box.className = `mormo-aside mormo-aside-${expression}${speaker ? " mormo-aside-unit" : ""}`;
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-modal", "true");
-    box.setAttribute("aria-label", "宰相モルモからの戦況報告");
+    box.setAttribute("aria-label", speaker ? `${speaker.name}の一言` : "宰相モルモからの戦況報告");
     // 立ち絵は512pxの全身像。丸く抜くと全身が縮んで表情が読めないので、
     // 枠で切り抜いて顔だけを見せる（オーナー試遊の指摘）。倍率と位置はCSS側。
-    box.innerHTML = `<span class="mormo-aside-face"><img class="mormo-aside-portrait"
-        src="assets/mormo/${expression}.webp" alt="宰相モルモ"></span>
-      <div class="mormo-aside-bubble"><b>宰相モルモ</b><p>${U.esc(String(options.text || ""))}</p>
+    const faceSrc = speaker ? speaker.src : `assets/mormo/${expression}.webp`;
+    const faceName = speaker ? speaker.name : "宰相モルモ";
+    box.innerHTML = `${faceSrc ? `<span class="mormo-aside-face"><img class="mormo-aside-portrait"
+        src="${U.esc(faceSrc)}" alt="${U.esc(faceName)}"></span>` : ""}
+      <div class="mormo-aside-bubble"><b>${U.esc(faceName)}</b><p>${U.esc(String(options.text || ""))}</p>
         <button type="button" class="mormo-aside-continue">${U.esc(String(options.buttonLabel || "戦闘を再開 ▶"))}</button>
       </div>`;
     const portrait = box.querySelector(".mormo-aside-portrait");

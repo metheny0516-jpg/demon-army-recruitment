@@ -358,6 +358,7 @@ const BattleScene = {
     this.finished = false;
     this.paused = false;
     this.mormoAwaiting = false;
+    this.asideUsed = {};
     this.resultPending = null;
     this.historySeen = new Set();
     const history = document.getElementById("chain-history-list");
@@ -627,6 +628,11 @@ const BattleScene = {
         const speaker = this.units[ev.unitId];
         this.clearFocus();
         if (speaker) speaker.el.classList.add("acting");
+        // 遅刻の二拍（モルモ→本人）は一瞬の字幕では読めないので、下半分の一言で止めて読ませる
+        if (ev.late) {
+          const who = ev.name === "モルモ" ? null : { name: ev.name, src: this.unitPortraitSrc(speaker) };
+          if (this.speakAside({ speaker: who, expression: "worried", text: ev.quote })) break;
+        }
         this.showAction(`${ev.name}「${ev.quote}」`, 1700);
         break;
       }
@@ -656,7 +662,10 @@ const BattleScene = {
       }
       case "summon": {
         if (ev.late && this.units[ev.unit.id]) {
-          this.arrival(this.clearAbsent(this.units[ev.unit.id], ev.unit), "late", ev);
+          const u = this.clearAbsent(this.units[ev.unit.id], ev.unit);
+          this.arrival(u, "late", ev);
+          // 到着の一言も止めて読ませる（試遊で「反映されていない気がする」＝次の字幕に消されていた）
+          if (ev.quote) this.speakAside({ speaker: { name: u.name, src: this.unitPortraitSrc(u) }, text: ev.quote });
           break;
         }
         const summoned = this.addSummon(ev.unit);
@@ -745,9 +754,12 @@ const BattleScene = {
         this.clearFocus();
         if (u) u.el.classList.add("acting");
         const propagating = ev.traitId === "overload" || ev.traitId === "chain_massacre";
-        this.showAction(propagating
+        if (ev.quote && u && ev.traitId === "big_eater" && !this.asideUsed.big_eater
+          && this.speakAside({ speaker: { name: u.name, src: this.unitPortraitSrc(u) }, text: ev.quote })) {
+          this.asideUsed.big_eater = true;
+        } else this.showAction(propagating
           ? `【${ev.name}】連鎖${ev.propagationDepth || 1}段目！　余剰の${ev.ratio || 35}%が流れ込む`
-          : `【${ev.name}】発動！`, 1000);
+          : ev.quote ? `${u ? u.name : ""}「${ev.quote}」` : `【${ev.name}】発動！`, ev.quote ? 1400 : 1000);
         this.pulse(ev.traitId);
         if (propagating) {
           this.flash(1);
@@ -1458,6 +1470,37 @@ const BattleScene = {
       return;
     }
     if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+  },
+
+  // 本人の履歴書絵。無ければ null（aside は枠を畳む）
+  unitPortraitSrc(u) {
+    if (!u || !u.tplId || typeof UI === "undefined" || !UI.hasPortrait(u.tplId)) return null;
+    return `${UI.PORTRAIT_DIR}${u.tplId}.png`;
+  },
+
+  // 下半分の一言で戦闘を止めて読ませる。モルモでも本人でも使う。
+  // すでに別の一言で止まっていれば false を返し、呼び手は字幕へ落とす（二重に止めて詰まらせない）。
+  speakAside(options) {
+    if (this.mormoAwaiting || this.finished) return false;
+    this.mormoAwaiting = true;
+    this.paused = true;
+    this.setMormoControlsLocked(true, false);
+    const box = MormoScene.aside({
+      expression: options.expression || "report",
+      text: options.text,
+      speaker: options.speaker || null,
+      host: document.getElementById("scene"),
+      buttonLabel: options.buttonLabel || "戦闘を再開 ▶",
+      onContinue: () => this.continueAfterMormo(false)
+    });
+    if (!box) {
+      this.mormoAwaiting = false;
+      this.paused = false;
+      this.setMormoControlsLocked(false);
+      return false;
+    }
+    if (typeof Sound !== "undefined" && !options.speaker) Sound.cue("mormo", { index: 2 });
+    return true;
   },
 
   setMormoControlsLocked(locked, wipe = false) {

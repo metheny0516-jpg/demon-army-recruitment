@@ -585,6 +585,23 @@ const Battle = {
         unit.flags.martyrGold = 2;
         triggeredEvents.push(gainBattleResource(unit, "gold", 2, "殉職手当", applied.deathEvent));
       }
+      // 大食漢：倒した相手の飯を、その場で食い始める。次の手番が飛ぶ。
+      const eater = TRAITS.big_eater && TRAITS.big_eater.eat;
+      if (eater && unit.side === "player" && applied.deathEvent && unit.traits.includes("big_eater")
+          && (unit.flags.ateCount || 0) < eater.maxPerBattle && U.chance(eater.chance)) {
+        unit.flags.ateCount = (unit.flags.ateCount || 0) + 1;
+        unit.flags.stuffed = true;
+        const line = U.pick(TRAITS.big_eater.lines.eat);
+        const trig = emitCausal("trait_trigger", {
+          sourceId: unit.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 2,
+          text: `　${unit.name}の【大食漢】「${line}」 その場で食べ始めた`, cls: "trait"
+        }, applied.deathEvent);
+        const heal = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * eater.healRate));
+        if (heal > 0) {
+          unit.hp += heal;
+          emitCausal("heal", { unitId: unit.id, amount: heal, hp: unit.hp, maxHp: unit.maxHp, emphasis: 1 }, trig);
+        }
+      }
       const post = {
         attacker: unit, target, dmg, enemies, log: note, pick: U.pick,
         dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg,
@@ -715,6 +732,16 @@ const Battle = {
       let rescuedThisRound = false;
       for (const unit of order) {
         if (!unit.alive) continue;
+        // 食べている最中は動かない。一回だけ。
+        if (unit.flags.stuffed) {
+          unit.flags.stuffed = false;
+          const line = U.pick(TRAITS.big_eater.lines.busy);
+          emit("trait_trigger", {
+            sourceId: unit.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 1,
+            text: `　${unit.name}「${line}」 まだ食べている`, cls: "trait"
+          });
+          continue;
+        }
         const allies = unit.side === "player" ? playerUnits : enemyUnits;
         const enemies = unit.side === "player" ? enemyUnits : playerUnits;
         act(unit, allies, enemies, round);
