@@ -29,6 +29,9 @@
 //   resource_forfeit { sourceId,resource,amount,label }  条件喪失による予約没収
 //   note         { }                                特性の発動などテキストのみ
 //   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
+//   order_offer  { round, candidates:[{unitId,name,skillId,skillName,label,note}], answered? }
+//                                                  号令の節目。options.offerOrder のときだけ、1戦闘1回
+//   order_exec   { unitId, name, skillId, skillName, quote }  号令の実行（次ラウンド冒頭、本人が真っ先に動く）
 //   result       { victory, reversal }              reversal=総HP3割以下から勝った
 // ───────────────────────────────────────────────────────
 const Battle = {
@@ -86,8 +89,34 @@ const Battle = {
     };
   },
 
+  // options.seed を渡すと乱数が決定的になる（同じ入力＋同じ種＝同じタイムライン）。
+  // 号令は「途中まで同じ展開のまま、指示のあとだけ分岐」させるために、同じ種で計算し直す。
+  // 種を渡さなければ今までどおり Math.random（sim・テストの既定は変わらない）。
   simulate(playerUnits, enemyUnits, options) {
     options = options || {};
+    if (options.seed === undefined || options.seed === null) return this._simulate(playerUnits, enemyUnits, options);
+    const prev = U.rand;
+    U.rand = U.seeded(options.seed);
+    try { return this._simulate(playerUnits, enemyUnits, options); }
+    finally { U.rand = prev; }
+  },
+
+  // 号令の候補：戦場にいる軍団員（傭兵・召喚物を除く）で、号令できる特性（order）を持つ者。
+  // 一人に複数あれば最初の一つ。最大3人（選択肢を読める数に絞る）。
+  orderCandidates(playerUnits) {
+    const out = [];
+    for (const u of playerUnits) {
+      if (!u.alive || u.flags.absent || u.flags.summoned || u.flags.mercenary) continue;
+      const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
+      if (!skillId) continue;
+      const tr = TRAITS[skillId];
+      out.push({ unitId: u.id, name: u.name, skillId, skillName: tr.name, label: tr.order.label, note: tr.order.note || "" });
+      if (out.length >= 3) break;
+    }
+    return out;
+  },
+
+  _simulate(playerUnits, enemyUnits, options) {
     // 保存済みランの版を正本にする。V1途中ランはアップデート後も旧倍率を維持する。
     const useV2ChainMultiplier = Number(options.chainDefVersion) >= 2;
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
@@ -613,14 +642,18 @@ const Battle = {
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = U.chance(0.6) ? living[0] : U.pick(living);
 
+      // 号令を受けた一撃。技の条件を飛ばし（特性側が ctx.ordered を読む）、与ダメ+50%。
+      // 追加行動（血の雄叫び・宴）には乗せない。代償は act() の最後で払う（次の手番は息切れ）。
+      const ordered = !!unit.flags.ordered && !actionOpts.isExtra;
       const ctx = {
         attacker: unit, target, allies, enemies, round,
-        mult: unit.mods.dmgMult, notes: [], rng: U.rand
+        mult: unit.mods.dmgMult, notes: [], rng: U.rand, ordered
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
         if (tr && tr.modDealt) tr.modDealt(ctx);
       }
+      if (ordered) { ctx.mult *= 1.5; ctx.notes.push("号令"); }
       const ledgerParent = unit.side === "player" ? ledgerBoost : null;
       if (ledgerParent) {
         ctx.mult *= 1.4;
@@ -677,7 +710,7 @@ const Battle = {
         }
       }
       const post = {
-        attacker: unit, target, dmg, enemies, allies, round, onField, log: note, pick: U.pick,
+        attacker: unit, target, dmg, enemies, allies, round, onField, log: note, pick: U.pick, ordered,
         trigger: traitId => skillTrigger(unit, traitId, applied.event),
         dealRaw: (a, t, d, label, parentEvent) => applyDamage(a, t, d, "splash", { label, parentEvent: parentEvent || applied.event }).dmg,
         extraAction: (parentEvent, label) => act(unit, allies, enemies, round, { parentEvent, label, isExtra: true }),
@@ -713,6 +746,8 @@ const Battle = {
           }
         }
       }
+      // 号令の代償。全力を出した次の手番は息が上がって動けない（大食漢の stuffed と同じ形）。
+      if (ordered) { unit.flags.ordered = false; unit.flags.winded = true; }
     };
 
     const wiped = us => us.every(u => !u.alive);
@@ -797,10 +832,17 @@ const Battle = {
     // simulate() はここで止まらず最後まで計算する＝「続けた場合の結末」を返す。
     // 止めるかどうかは run.js（settleBattle）と描画側の判断。
     let retreatOffer = null;
+    // 号令の節目。options.offerOrder のときだけ、1戦闘1回。提案の位置と候補を印として置く。
+    // 答え（options.orders[round] = unitId）があれば次ラウンド冒頭で実行する。
+    // 提案イベントは答えの有無に関わらず同じ位置に出す（同じ種で計算し直したとき、前半が一致するため）。
+    let orderOffer = null;
+    const orders = options.orders || {};
+    let orderExecuted = false;
 
     outer:
     for (round = 1; round <= this.MAX_ROUNDS; round++) {
       emit("round_start", { round, emphasis: 1, text: `── ラウンド ${round} ──`, cls: "round" });
+      const deadAtRoundStart = all().filter(u => !u.alive).length;
 
       // 遅刻者の到着。その場にいなかった者が、途中から戦場に立つ。
       // 味方が全員倒れたあとに一人で着くこともある。それはそれで、そういう戦いだったということ。
@@ -826,6 +868,24 @@ const Battle = {
         });
       }
 
+      // 号令の実行。前ラウンド末の提案に答えがあれば、本人を真っ先に動かす。
+      // 倒れていれば号令は空振り（何も起きない）。乱数はここでは消費しない（台詞は pick で1回だけ消費）。
+      let orderedUnit = null;
+      if (orderOffer && !orderExecuted && orderOffer.round === round - 1 && orders[orderOffer.round]) {
+        orderExecuted = true;
+        const cand = orderOffer.candidates.find(c => c.unitId === orders[orderOffer.round]);
+        const unit = cand ? playerUnits.find(u => u.id === cand.unitId) : null;
+        if (cand && unit && onField(unit)) {
+          unit.flags.ordered = true;
+          orderedUnit = unit;
+          const tr = TRAITS[cand.skillId] || {};
+          const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
+          emit("order_exec", {
+            unitId: unit.id, name: unit.name, skillId: cand.skillId, skillName: cand.skillName, quote, emphasis: 3,
+            text: `　魔王「${unit.name}、${cand.label}！」 ${unit.name}「${quote}」`, cls: "order"
+          });
+        }
+      }
       const order = all()
         .filter(onField)
         .sort((a, b) => b.spd - a.spd || (U.chance(0.5) ? -1 : 1));
@@ -833,9 +893,17 @@ const Battle = {
         const gale = order.find(unit => unit.traits.includes("gale"));
         if (gale) { order.splice(order.indexOf(gale), 1); order.unshift(gale); }
       }
+      if (orderedUnit) { order.splice(order.indexOf(orderedUnit), 1); order.unshift(orderedUnit); }
       let rescuedThisRound = false;
       for (const unit of order) {
         if (!unit.alive) continue;
+        // 号令の代償。息が上がった手番は動かない。一回だけ。
+        if (unit.flags.winded) {
+          unit.flags.winded = false;
+          emit("note", { unitId: unit.id, winded: true, emphasis: 1,
+            text: `　${unit.name}は息が上がっている（この手番は動かない）`, cls: "trait" });
+          continue;
+        }
         // 食べている最中は動かない。一回だけ。
         if (unit.flags.stuffed) {
           unit.flags.stuffed = false;
@@ -905,6 +973,26 @@ const Battle = {
         }
       }
 
+      // 号令の節目（1戦闘1回）。ラウンドの終わり、撤退の提案のあと、勝敗判定の前。
+      // 条件：戦況が動いた（このラウンドに誰かが倒れた／味方の誰かが半分を切っている）、
+      // 敵が残っている、候補がいる、同じラウンドに撤退の提案を出していない（二つ続けて聞かない）。
+      if (options.offerOrder && !orderOffer && !wiped(enemyUnits) && !wiped(playerUnits)
+        && !(retreatOffer && retreatOffer.round === round)) {
+        const turned = all().filter(u => !u.alive).length > deadAtRoundStart
+          || playerUnits.some(u => onField(u) && !u.flags.summoned && u.hp <= u.maxHp * 0.5);
+        const candidates = turned ? this.orderCandidates(playerUnits) : [];
+        if (candidates.length) {
+          const answered = orders[round] || null;
+          const names = candidates.map(c => `${c.name}の【${c.skillName}】`).join("、");
+          const event = emit("order_offer", {
+            round, candidates, answered, emphasis: 3,
+            enemies: enemyUnits.filter(onField).map(snap),
+            text: `　モルモ「魔王様、号令を。${names}が出せます」`, cls: "mormo"
+          });
+          orderOffer = { index: timeline.indexOf(event), round, candidates, answered };
+        }
+      }
+
       if (wiped(playerUnits) || wiped(enemyUnits)) break;
     }
 
@@ -951,6 +1039,8 @@ const Battle = {
       timeline,
       // 続けずに退く道があったか。無ければ null。勝敗・報酬・contribution には影響しない。
       retreatOffer,
+      // 号令の節目があったか（options.offerOrder のときだけ）。answered は答えの unitId か null。
+      orderOffer,
       // 旧来のテキストログ（タイムラインから導出）
       log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
       rounds: Math.min(round, this.MAX_ROUNDS),

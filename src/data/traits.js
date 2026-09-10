@@ -34,8 +34,10 @@ const TRAITS = {
     name: "先制",
     relic: "鈴",
     desc: "ラウンド1のダメージ+30%",
+    order: { label: "先制を仕掛けろ", note: "ラウンドに関係なく先制が乗り、真っ先に動く" },
+    lines: { order: ["はいっ、参ります！", "一番槍、いただきます！", "誰より早く！"] },
     modDealt(ctx) {
-      if (ctx.round === 1) {
+      if (ctx.round === 1 || ctx.ordered) {
         ctx.mult *= 1.3;
         ctx.notes.push("先制");
       }
@@ -56,8 +58,12 @@ const TRAITS = {
     name: "怪力",
     relic: "こん棒",
     desc: "20%の確率でダメージ2倍",
+    // 号令（戦闘中の個人への指示）。魔王が名指しで命じると、次の一撃で技が必ず出る。
+    // 条件の代わりに代償を払う（号令の共通規則は battle.js：与ダメ+50%、次の手番は息切れ）。
+    order: { label: "怪力を出せ", note: "次の一撃が必ず怪力になる" },
+    lines: { order: ["おうよ！", "任せろ、魔王様！", "潰す！"] },
     modDealt(ctx) {
-      if (ctx.rng() < 0.2) {
+      if (ctx.ordered || ctx.rng() < 0.2) {
         ctx.mult *= 2;
         ctx.notes.push("怪力");
       }
@@ -215,10 +221,12 @@ const TRAITS = {
     name: "火球",
     relic: "杖",
     desc: "攻撃時、別の敵1体にも50%のダメージ（魔法結社で全体化）",
+    order: { label: "火球を放て", note: "次の火球が敵全体に広がる" },
+    lines: { order: ["承知しました", "詠唱、省きます", "火を、お届けします"] },
     postAttack(ctx) {
       const others = ctx.enemies.filter(u => u.alive && u !== ctx.target);
       if (others.length === 0) return;
-      const targets = ctx.attacker.mods.fireballAll ? others : [ctx.pick(others)];
+      const targets = (ctx.attacker.mods.fireballAll || ctx.ordered) ? others : [ctx.pick(others)];
       for (const t of targets) {
         const d = Math.max(1, Math.round(ctx.dmg * 0.5));
         ctx.dealRaw(ctx.attacker, t, d, "火球");
@@ -267,9 +275,11 @@ const TRAITS = {
     name: "悪戯",
     relic: "悪戯玉",
     desc: "攻撃した敵の攻撃力を1下げる",
+    order: { label: "悪戯を仕込め", note: "次の悪戯で相手の攻撃力を3下げる" },
+    lines: { order: ["ひひっ、任せてよ", "いいの？ 本気でやるよ", "ちょっと痛いかもね"] },
     postAttack(ctx) {
       if (ctx.target.alive && ctx.target.atk > 1) {
-        ctx.target.atk -= 1;
+        ctx.target.atk = Math.max(1, ctx.target.atk - (ctx.ordered ? 3 : 1));
         ctx.log(`　${ctx.attacker.name}の【悪戯】 ${ctx.target.name}の攻撃力が下がった`, "trait");
       }
     }
@@ -496,16 +506,18 @@ const TRAITS = {
     name: "ぶちかまし",
     desc: "敵が3体以上立っているとき、攻撃が敵全体に本来の70%で及ぶ。本人も与えた合計の10%を反動で受ける",
     skill: { species: "ogre", tier: 2, replaces: "brute" },
+    order: { label: "ぶちかませ", note: "敵の数に関係なく、次の一撃が全体に及ぶ" },
     lines: {
       unlock: ["……体が、覚えた", "次は全部まとめてだ", "壁ごと押し通る"],
-      use: ["どけぇッ！", "まとめて潰す！", "道を開けろ！"]
+      use: ["どけぇッ！", "まとめて潰す！", "道を開けろ！"],
+      order: ["……行くぞ", "全部、まとめてだな", "壁ごと、だ"]
     },
     modDealt(ctx) {
-      if (ctx.enemies.filter(u => u.alive && !u.flags.absent).length >= 3) ctx.mult *= 0.7;
+      if (ctx.ordered || ctx.enemies.filter(u => u.alive && !u.flags.absent).length >= 3) ctx.mult *= 0.7;
     },
     postAttack(ctx) {
       const targets = ctx.enemies.filter(u => u.alive && !u.flags.absent && u !== ctx.target);
-      if (targets.length < 2) return;
+      if (targets.length < (ctx.ordered ? 1 : 2)) return;
       const trigger = ctx.trigger("ogre_charge");
       let total = ctx.dmg;
       for (const target of targets) total += ctx.dealRaw(ctx.attacker, target, ctx.dmg, "ぶちかまし", trigger);
@@ -516,12 +528,14 @@ const TRAITS = {
     name: "大火球",
     desc: "奇数ラウンドの攻撃時、別の敵全員にも本来の70%を与え、燃焼で次ラウンド開始時に最大HPの8%を削る",
     skill: { species: "mage", tier: 2, replaces: "fireball" },
+    order: { label: "大火球を放て", note: "偶数ラウンドでも大火球が出る" },
     lines: {
       unlock: ["火加減など、もう要りません", "術式が一段、ほどけました", "これは火球ではない。火の海です"],
-      use: ["燃えなさい！", "避け場はありません", "火の雨をどうぞ！"]
+      use: ["燃えなさい！", "避け場はありません", "火の雨をどうぞ！"],
+      order: ["お望みのままに", "火加減は、抜きで", "焼き払います"]
     },
     postAttack(ctx) {
-      if (ctx.round % 2 !== 1) return;
+      if (ctx.round % 2 !== 1 && !ctx.ordered) return;
       const targets = ctx.enemies.filter(u => u.alive && !u.flags.absent && u !== ctx.target);
       if (!targets.length) return;
       const trigger = ctx.trigger("great_fireball");
@@ -535,12 +549,14 @@ const TRAITS = {
     name: "血の雄叫び",
     desc: "自分の攻撃で敵を倒した直後、もう一撃を放つ（1ラウンド1回）",
     skill: { species: "orc", tier: 2, replaces: "brute" },
+    order: { label: "吠えろ", note: "倒せなくても、もう一撃が出る" },
     lines: {
       unlock: ["まだ足りん。もっと寄越せ", "倒れたなら次だ", "喉が勝手に吠えやがる"],
-      use: ["次だァ！", "まだ終わってねえ！", "血が騒ぐ！"]
+      use: ["次だァ！", "まだ終わってねえ！", "血が騒ぐ！"],
+      order: ["おうッ、吠えてやる！", "待ってたぜ、その号令！", "二度は言わせねえ！"]
     },
     postAttack(ctx) {
-      if (!ctx.target.alive && ctx.attacker.flags.bloodHowlRound !== ctx.round && ctx.enemies.some(ctx.onField)) {
+      if ((!ctx.target.alive || ctx.ordered) && ctx.attacker.flags.bloodHowlRound !== ctx.round && ctx.enemies.some(ctx.onField)) {
         ctx.attacker.flags.bloodHowlRound = ctx.round;
         const trigger = ctx.trigger("blood_howl");
         ctx.extraAction(trigger, "血の雄叫び");
@@ -551,15 +567,17 @@ const TRAITS = {
     name: "集団戦法",
     desc: "出撃中のゴブリンが3体以上いるとき、自分の攻撃がゴブリン数−2回追加で当たる（各50%）",
     skill: { species: "goblin", tier: 2, replaces: "pickpocket" },
+    order: { label: "囲め", note: "ゴブリンが少なくても集団戦法が出る" },
     lines: {
       unlock: ["一人で盗るより、みんなで囲むっす", "数えられる仲間が増えたっす", "合図、覚えたっすよ"],
-      use: ["囲むっす！", "今っす、みんな！", "一発じゃ帰さないっすよ！"]
+      use: ["囲むっす！", "今っす、みんな！", "一発じゃ帰さないっすよ！"],
+      order: ["合図、聞こえたっす！", "みんな、魔王様の号令っす！", "囲むっすよ、今っす！"]
     },
     postAttack(ctx) {
       const count = ctx.allies.filter(u => ctx.onField(u) && u.race === "ゴブリン").length;
-      if (count < 3) return;
+      if (count < 3 && !ctx.ordered) return;
       const trigger = ctx.trigger("goblin_tactics");
-      for (let i = 0; i < count - 2; i++) {
+      for (let i = 0; i < Math.max(ctx.ordered ? 1 : 0, count - 2); i++) {
         const target = ctx.enemies.find(ctx.onField);
         if (!target) break;
         ctx.dealRaw(ctx.attacker, target, Math.round(ctx.dmg * 0.5), "集団戦法", trigger);
@@ -570,15 +588,17 @@ const TRAITS = {
     name: "疾風",
     desc: "ラウンド1〜2は先制の与ダメージ+30%が続き、ラウンド1は必ず最初に動く",
     skill: { species: "kobold", tier: 2, replaces: "first_strike" },
+    order: { label: "疾風で駆けろ", note: "ラウンドに関係なく疾風が乗り、真っ先に動く" },
     lines: {
       unlock: ["風より先に参ります！", "二歩目まで、もう見えています！", "先陣の務め、承知しました！"],
-      use: ["先に参ります！", "風の道、確保！", "遅れません、魔王様！"]
+      use: ["先に参ります！", "風の道、確保！", "遅れません、魔王様！"],
+      order: ["風になります！", "号令、承りました！", "誰より先に、参ります！"]
     },
     modDealt(ctx) {
-      if (ctx.round <= 2) { ctx.mult *= 1.3; ctx.notes.push("疾風"); }
+      if (ctx.round <= 2 || ctx.ordered) { ctx.mult *= 1.3; ctx.notes.push("疾風"); }
     },
     postAttack(ctx) {
-      if (ctx.round <= 2) ctx.trigger("gale");
+      if (ctx.round <= 2 || ctx.ordered) ctx.trigger("gale");
     }
   },
   split: {
