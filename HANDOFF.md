@@ -59,6 +59,53 @@
 実装者は仕様書と HANDOFF §0・§2 だけを読んで始める。仕様から外れる判断はコミットメッセージに書く。
 その先の候補：戦闘不能とLPの二層 → 痕跡の記録。
 
+### 現在：撤退の判断を入れた（2026-09-10・Claude／オーナー試遊待ち）
+
+仕様は `docs/SPEC_RETREAT_2026-09-10.md`。**味方が初めて倒れたラウンドの終わりに、モルモが一度だけ
+戦闘を止めて「退きますか」と聞く。** 退けば倒れた者を担いで帰れる（戦死しない）が、報酬は無い。続ければ今まで通り。
+オートバトルにプレイヤーの判断が一回だけ入る。ここで作った「戦闘を途中で分岐させる形」は
+後の「戦闘不能とLPの二層」でも使う。
+
+3コミット（`run.js` と `battle.js` を同時に触らないルール）：
+- **A（battle.js）**：`retreat_offer` イベントと `result.retreatOffer`。契約は §2「撤退の提案」。
+- **B（run.js）**：`deploy()` を「計算」と「決着」に割った。
+- **C（UI）**：戦闘を止めてボタンを2つ出す。
+
+`run.js` の形（Bで変わったところ）：
+
+```
+Game.deploy(options = {})        // 引数なしは今までどおり：計算して即決着（sim・テスト59本の経路）
+                                 //   options.offerRetreat（UI だけが渡す）かつ retreatOffer があれば
+                                 //   st.pendingBattle へ決着材料を積み、st.phase = "battle" で止まる
+Game.settleBattle("continue"|"retreat")   // 保留を消費して決着。戻り値はフェーズ名。無ければ false
+Game.settleContinue(pending)     // 続行。**唯一の続行経路**。deploy() の即決着もここを通る
+Game.settleRetreat(pending)      // 撤退
+```
+
+- **続行の経路を二つ持たないこと。** 二つあると「テストは通るのに UI からだけ結果が違う」が起きる。
+  `tools/test-retreat-run.js` の3番が、引数なし `deploy()` と `settleBattle("continue")` の
+  所持金・名簿・ターン・フェーズ・勝敗・報酬の一致を検査している。
+- 保留中はラン状態を**一切**動かさない（所持金・名簿・警戒度・ターン・`lastBattle` すべて）。
+- **`st.phase === "battle"` のセーブは `migrateState()` が続行として決着させる**（同じ戦闘を二度見せない。
+  撤退の機会はリロードで取り直せない）。
+- 撤退の結末：報酬なし・略奪金貨も没収・`applyMissionOutcome` を呼ばない（征服は進まない）・
+  警戒度だけ `alertDelta`（無ければ+1）・**給与は払う**（払わないと「わざと退けば給与が浮く」抜け道になる）・
+  留守番の仕事とツケは今までどおり・戦功は提案時点の `contribution` で・`st.retreatCount` を+1・フェーズは `"result"`。
+- **負傷 `m.injured`**（新フィールド、旧セーブは0）。担いで帰った者は `injured = 1`。
+  出撃できない（`toggleDeploy` / `assignDepartment(uid,"combat")` が `false`）が留守番としては働く。
+  `activeUids` からは外す。戦闘が一つ決着するたびに `recoverInjuries()` が1減らす＝**次の1戦だけ休む**。
+- ラン状態へ増えたフィールド：`retreatCount` / `pendingBattle` / 名簿の `injured`（`migrateState` の defaults 済み）。
+
+未決（仕様書7節）は全部既定で進めた：
+**U1** 開幕3日間の防衛戦では提案しない（`deploy()` が `noRetreatOffer: openingBattle` を渡す）。
+**U2** 最終戦でも退ける。 **U3** 略奪金貨は没収。 **U4** 負傷は次の1戦だけ。
+
+`node tools/sim.js 50`：撤退は sim が使わない経路（`deploy()` を引数なしで呼ぶ）なので数字は動かない。
+実測は下の各コミットのメッセージ。
+
+**次にやること**：オーナーが撤退を試遊。「退くか、賭けるか」になっているか、
+負けが物語になっているかを見る。その先は戦闘不能とLPの二層 → 痕跡の記録。
+
 ### 現在：本編に《酒好き》の遅刻を入れた（2026-09-09 深夜・Claude／オーナー試遊待ち）
 
 **今日初めて本編に触った。** 隔離試作4本（勇者襲来v1→面接v2→tick→事件→10日間）の結論は

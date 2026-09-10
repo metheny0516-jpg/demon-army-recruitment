@@ -224,6 +224,9 @@ const Game = {
       lastPayrollReport: null,
       legacyReturn: null, legacyOffered: false, lessonId: null,
       feastPending: null, hungerStreak: 0,
+      // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
+      // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
+      retreatCount: 0, pendingBattle: null,
       debts: []
     };
     for (const [key, value] of Object.entries(defaults)) {
@@ -248,6 +251,19 @@ const Game = {
     if (!Array.isArray(st.discoveredSynergyIds)) st.discoveredSynergyIds = [];
     for (const m of st.roster) {
       if (m.tplId && !st.recruitedTplIds.includes(m.tplId)) st.recruitedTplIds.push(m.tplId);
+    }
+    for (const m of st.roster) {
+      if (!m.injured) m.injured = 0;   // 旧セーブに負傷は無い
+    }
+    // 答える前の戦闘が保存されていたら、続行として決着させる。
+    // 再生し直すと同じ戦闘を二度見ることになり、撤退の機会もリロードで取り直せてしまう。
+    if (st.phase === "battle" && st.pendingBattle) {
+      const pending = st.pendingBattle;
+      st.pendingBattle = null;
+      this.settleContinue(pending);
+    } else if (st.phase === "battle") {
+      st.pendingBattle = null;
+      st.phase = "formation";
     }
     st.day = Math.max(1, Number(st.day) || 1);
     st.dailySettledDay = Math.max(0, Number(st.dailySettledDay) || 0);
@@ -1338,6 +1354,7 @@ const Game = {
       st.activeUids.splice(index, 1);
     } else {
       if (st.activeUids.length >= this.MAX_DEPLOY) return false;
+      if (monster.injured > 0) return false;   // 負傷者は次の1戦だけ出撃できない
       st.activeUids.push(uid);
     }
     this.syncDepartments();
@@ -1354,6 +1371,7 @@ const Game = {
     if (departmentId === "combat") {
       if (!st.activeUids.includes(uid)) {
         if (st.activeUids.length >= this.MAX_DEPLOY) return false;
+        if (monster.injured > 0) return false;   // 負傷者は次の1戦だけ出撃できない
         st.activeUids.push(uid);
       }
     } else {
@@ -1395,7 +1413,11 @@ const Game = {
   },
 
   // ── 出撃と戦闘処理 ────────────────────────
-  deploy() {
+  // 引数なしの deploy() は今までどおり「シミュレーションして即決着」。
+  // sim.js とテストはこの経路を通るので、既定の挙動は変えないこと。
+  // options.offerRetreat を渡すのは UI だけ。撤退の提案が出た戦闘では決着を保留し、
+  // settleBattle("continue" | "retreat") が呼ばれるまで所持金も名簿も動かさない。
+  deploy(options = {}) {
     const st = this.state;
     if (this.activeRoster().length === 0) return null;
     const openingBattle = !!st.openingPrototype;
@@ -1472,7 +1494,10 @@ const Game = {
     st.lastBuildSnapshot = buildSnapshot;
     const result = Battle.simulate(playerUnits, enemyUnits,
       { rations: rationContext, extortionLedger, graveyard, facilityWorks: this.facilityWorks(),
-        synergyPool: this.synergyPool(), chainDefVersion: Chain.versionOf(st) });
+        synergyPool: this.synergyPool(), chainDefVersion: Chain.versionOf(st),
+        // 未決U1の既定：開幕3日間の防衛戦では退けない（城を明け渡す意味になるので、
+        // 防衛戦の撤退はLPの仕様と一緒に決める）。遠征では提案する。
+        noRetreatOffer: openingBattle });
     // 合体は simulate() の前に処理するため、そのままでは通常のシナジー判定に
     // 残らない。タイムラインへ戻すことで、ログ・カットイン・結果表示を揃える。
     if (kingMerged) this.addMergeSynergy(result, kingSyn);
@@ -1494,6 +1519,42 @@ const Game = {
     // （したがって再起で巻き戻しても消えない＝試した事実として残る）。
     if (typeof KPI !== "undefined") KPI.battleFinished(result);
 
+    const pending = {
+      result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView,
+      // spotlight は「今回変えた人」の戦闘中IDを要る。playerUnits ごと持ち回ると
+      // セーブが太るので、必要な対応だけをここで解いておく。
+      highlightIds: playerUnits
+        .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
+        .map(u => u.id).filter(Boolean)
+    };
+    // 退く道がある戦闘だけ、UI の求めに応じて決着を保留する。
+    // 保留中はラン状態を一切変えない（所持金・名簿・警戒度は答えを聞いてから動く）。
+    if (options.offerRetreat && result.retreatOffer) {
+      st.pendingBattle = pending;
+      st.phase = "battle";
+      this.save();
+      return { result, notes, stageData };
+    }
+    this.settleContinue(pending);
+    return { result, notes, stageData };
+  },
+
+  // 撤退の提案に答える。UI だけが呼ぶ。戻り値は決着後のフェーズ名。
+  settleBattle(choice) {
+    const st = this.state;
+    const pending = st.pendingBattle;
+    if (!pending) return false;
+    st.pendingBattle = null;
+    if (choice === "retreat") this.settleRetreat(pending);
+    else this.settleContinue(pending);
+    return st.phase;
+  },
+
+  // 続けた場合の決着。**これが唯一の続行経路**（引数なし deploy() もここを通る）。
+  // 二つ持つと「テストは通るのに UI からだけ結果が違う」が起きる。
+  settleContinue(pending) {
+    const st = this.state;
+    const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
     const goldBefore = st.gold;
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
     if (result.victory) {
@@ -1600,9 +1661,7 @@ const Game = {
       // 効かせるため、今回動かした人の**戦闘中ID**を渡す。対応表は simulate が id を
       // 埋めたあとの playerUnits から作る（battle.js のスナップショットは触らない）。
       spotlight: typeof Spotlight !== "undefined" ? Spotlight.of(result.timeline, {
-        highlightIds: playerUnits
-          .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
-          .map(u => u.id).filter(Boolean)
+        highlightIds: pending.highlightIds || []
       }) : null
     };
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, result.victory);
@@ -1614,6 +1673,8 @@ const Game = {
     st.mercenaries = [];
     st.mercenaryOffers = [];
 
+    this.recoverInjuries();
+
     // 記録の確定とセーブの後始末は必ず最後に行う。先に endRun してから
     // save すると、消したはずのセーブが書き戻ってしまう。
     if (st.phase === "clear") {
@@ -1624,7 +1685,120 @@ const Game = {
     } else {
       this.save();
     }
-    return { result, notes, stageData };
+    return st.phase;
+  },
+
+  // 退いた場合の決着。勝利でも敗北でもない第三の結末。
+  // 倒れていた軍団員は担いで帰る（戦死しない）が、報酬は無く、征服も進まない。
+  settleRetreat(pending) {
+    const st = this.state;
+    const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
+    const goldBefore = st.gold;
+    // 提案時点の戦果。倒れていた軍団員は survived: true / injured: true になっている。
+    const contribution = (result.retreatOffer && result.retreatOffer.contribution) || result.contribution;
+    const carried = contribution.filter(c => c.injured && !c.mercenary);
+    // この戦闘の決着ぶんの回復を先に済ませてから、今回担いで帰った者へ負傷を付ける。
+    this.recoverInjuries();
+
+    notes.push(`${stageData.army} から退いた。`
+      + (carried.length ? `${carried.map(c => c.name).join("、")}を担いで帰った（報酬は無い）`
+        : "報酬は無い"));
+    // 戦闘中に略奪した金貨も確定しない。無傷で持ち帰れるなら、退くのが常に正解になる。
+    const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
+    if (lootGold > 0) notes.push(`略奪した ${lootGold}G は戦場へ置いてきた`);
+
+    // 誰も欠けていないが、pendingVacancies / lastFallen をここで揃えておく
+    // （前の戦闘の戦没者が結果画面に残らないように）。
+    this.processCasualties(contribution, notes);
+    // 倒れる前の働きは残る。戦功は提案時点の contribution で数える。
+    this.awardMerit(contribution, notes);
+    // 担いで帰った者は次の1戦だけ休む。
+    for (const row of carried) {
+      const monster = st.roster.find(m => m.uid === row.uid);
+      if (monster) monster.injured = 1;   // 次の1戦だけ休む
+      // 負傷者は出撃隊から外す（次の編成画面で「出せない者が枠を塞いでいる」を作らない）
+      st.activeUids = st.activeUids.filter(uid => uid !== row.uid);
+    }
+    if (carried.length) this.syncDepartments();
+    // 征服は進まない。だが敵に見つかった事実は残る。
+    const alertDelta = Number(stageData.alertDelta) || 1;
+    st.alert = Math.max(0, st.alert + alertDelta);
+    notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
+
+    // 留守番の仕事は戦場の結果と無関係。給与も払う
+    // （撤退したから払わない、は「わざと退けば給与が浮く」抜け道になる）。
+    this.processDepartments(stageData, notes, undefined, battleRations);
+    this.paySalaries(notes);
+    this.processDepartures(notes);
+    this.settleDebts(notes);
+
+    st.turn += 1;
+    st.missionOffers = [];
+    st.retreatCount = (st.retreatCount || 0) + 1;
+    st.phase = "result";
+
+    st.lastBattle = {
+      victory: false,
+      retreated: true,
+      missionKind: stageData.missionKind,
+      missionTitle: stageData.missionTitle,
+      army: stageData.army,
+      region: stageData.region,
+      reward: 0,
+      lootGold: 0,
+      battleRations, mealPlan, goldBefore,
+      synergies: result.activeSynergies,
+      incidents: result.incidents || [],
+      notes,
+      logLength: result.log.length,
+      contribution: this.attachVoices(contribution, false),
+      nearMiss: result.nearMiss,
+      chainSummary: result.chainSummary,
+      chainView,
+      overkillSummary: result.overkillSummary,
+      momentumPeak: (result.timeline || []).reduce((max, e) =>
+        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
+      summonCount: result.summonCount || 0,
+      facility: (() => {
+        const info = this.facilityInfo();
+        const active = this.activeFacility();
+        return {
+          level: st.facilityLevel || 0, name: info.name, works: this.facilityWorks(),
+          hpMult: info.hpMult, defBonus: info.defBonus,
+          activeId: active ? active.id : null, activeName: active ? active.name : null
+        };
+      })(),
+      facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
+      deathChains: result.deathChains || [],
+      buildChanges: pending.buildChanges,
+      spotlight: typeof Spotlight !== "undefined" ? Spotlight.of(result.timeline, {
+        highlightIds: pending.highlightIds || []
+      }) : null
+    };
+    this.rememberSpotlight(st.lastBattle.spotlight, stageData, false);
+    st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
+    if ((st.mercenaries || []).length) {
+      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
+    }
+    st.mercenaries = [];
+    st.mercenaryOffers = [];
+
+    this.genApplicants();
+    this.save();
+    return st.phase;
+  },
+
+  // 負傷は次の1戦だけ。戦闘が一つ決着するたびに1つ減らす（勝利・敗北・撤退を問わない）。
+  recoverInjuries() {
+    for (const m of this.state.roster) {
+      if (m.injured) m.injured = Math.max(0, m.injured - 1);
+    }
+  },
+
+  // 負傷者は出撃できない。留守番としては働く（包帯を巻きながら帳簿は付けられる）。
+  isInjured(uid) {
+    const m = this.state.roster.find(x => x.uid === uid);
+    return !!(m && m.injured > 0);
   },
 
   applyMissionOutcome(mission, notes) {

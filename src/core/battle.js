@@ -725,6 +725,11 @@ const Battle = {
       return !wiped(rescued);
     };
     let round = 0;
+    // 撤退の提案。味方が初めて倒れたラウンドの終わりに一度だけ「重要度の印」として置く。
+    // 戦闘計算・乱数には一切関与しない（permanent / reversal と同じ性格）。
+    // simulate() はここで止まらず最後まで計算する＝「続けた場合の結末」を返す。
+    // 止めるかどうかは run.js（settleBattle）と描画側の判断。
+    let retreatOffer = null;
 
     outer:
     for (round = 1; round <= this.MAX_ROUNDS; round++) {
@@ -791,6 +796,34 @@ const Battle = {
         }
       }
 
+      // 撤退の提案（1戦闘1回）。ラウンドの終わり、勝敗判定の前。
+      // 条件：軍団員が倒れたまま立ち上がらなかった／敵が全滅していない／
+      // 立っている軍団員が1人以上（不在＝遅刻は「立っている」に数えない）。
+      if (!retreatOffer && !options.noRetreatOffer) {
+        const corps = playerUnits.filter(u => !u.flags.summoned);
+        const downed = corps.filter(u => !u.alive);
+        const standing = corps.filter(onField);
+        if (downed.length && standing.length && !wiped(enemyUnits)) {
+          const enemiesLeft = enemyUnits.filter(onField);
+          const who = downed.length > 1 ? `${downed[0].name}殿たち` : `${downed[0].name}殿`;
+          const line = `魔王様。${who}が倒れました。今なら担いで退けます。……敵は残り${enemiesLeft.length}`;
+          const event = emit("retreat_offer", {
+            round, emphasis: 3,
+            downed: downed.map(snap),
+            standing: standing.map(snap),
+            enemies: enemiesLeft.map(snap),
+            text: `　モルモ「${line}」`, cls: "mormo"
+          });
+          // 提案時点の戦果。終了時と同じ導出関数を使い、二か所で別々に組まない。
+          // 倒れていた軍団員は「担いで帰る」＝生存（負傷）。傭兵・召喚物は今までどおり。
+          const contribution = this.summarizeContribution(timeline, playerUnits).map(row => {
+            if (row.mercenary || row.survived) return row;
+            return { ...row, survived: true, injured: true };
+          });
+          retreatOffer = { index: timeline.indexOf(event), round, contribution };
+        }
+      }
+
       if (wiped(playerUnits) || wiped(enemyUnits)) break;
     }
 
@@ -835,6 +868,8 @@ const Battle = {
     return {
       victory,
       timeline,
+      // 続けずに退く道があったか。無ければ null。勝敗・報酬・contribution には影響しない。
+      retreatOffer,
       // 旧来のテキストログ（タイムラインから導出）
       log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
       rounds: Math.min(round, this.MAX_ROUNDS),
