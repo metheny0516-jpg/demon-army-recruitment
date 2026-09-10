@@ -109,6 +109,23 @@ const CLASSIFY = {
       case 'hunger_demon':   // 全軍の暴走
       case 'soul_harvest':   // アンデッド全員の強化
         return { role: 'effect', kind: 'trait:' + d.traitId };
+      // ── 種族技（tier 2）─────────────────────────
+      // 宣言：効果は直後の子（伝播ダメージ・追加行動・召喚・蘇生）が担う。
+      // 発動しても子が出なければ何も起きていないので0段。
+      case 'ogre_charge':     // ぶちかまし → 全体への dealRaw
+      case 'great_fireball':  // 大火球 → 別の敵全員への dealRaw
+      case 'blood_howl':      // 血の雄叫び → extraAction
+      case 'goblin_tactics':  // 集団戦法 → 追加の dealRaw
+      case 'tidal_wave':      // 大波 → 全体への dealRaw
+      case 'split':           // 分裂 → summon
+      case 'grand_summon':    // 大召集 → revive
+      case 'bone_wall':       // 骨の壁 → 肩代わりした一撃（子の attack が効果を担う）
+        return { role: 'declaration', kind: 'trait:' + d.traitId, selfEffect: false };
+      // それ自体が唯一の表現である実効果（同じ効果を担う別イベントが出ない）
+      case 'gale':            // 疾風。与ダメージ倍率と行動順
+      case 'decay':           // 腐敗。相手の攻撃力を下げる
+      case 'fire_play':       // 火遊び。敵の並びを入れ替える
+        return { role: 'effect', kind: 'trait:' + d.traitId };
       default: return null;  // 未分類 → 停止
     }
   },

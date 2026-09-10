@@ -268,6 +268,8 @@ const Game = {
       if (!m.injured) m.injured = 0;   // 旧セーブに負傷は無い
       if (!Array.isArray(m.relicIds)) m.relicIds = [];
       this.memberRecord(m);            // record が無い者に record.battles++ すると落ちる
+      this.baseOf(m);                  // base が無い旧セーブは現在値を基礎値にする
+      if (!m.skillTier) m.skillTier = (m.traits || []).some(id => ((TRAITS[id] || {}).skill || {}).tier === 2) ? 2 : 1;
     }
     if (!Array.isArray(st.departed)) st.departed = [];
     if (!Array.isArray(st.relics)) st.relics = [];
@@ -1405,6 +1407,8 @@ const Game = {
     }
     st.roster.push(m);
     this.memberRecord(m);
+    this.baseOf(m);                  // 採用時の値を控える（昇進の boost を含まない基礎値）
+    if (!m.skillTier) m.skillTier = 1;
     if (!Array.isArray(m.relicIds)) m.relicIds = [];
     // 縁の者が「持って来た」遺物は、採用した時点で本人の物になる（4.2）。
     // それ以外の受け渡しは編成画面の蔵で魔王が決裁する（自動では渡さない）。
@@ -1542,6 +1546,113 @@ const Game = {
     relic.granted = false;
     this.save();
     return true;
+  },
+
+  // ── 育成：種族技と小成長 ─────────────────────
+  // 出撃を重ねた者だけが育つ（留守番では伸びない）。経験値は持たず、出撃数がそのまま経験。
+  skillRules() {
+    const rules = (typeof SKILL_RULES !== "undefined" && SKILL_RULES) || {};
+    return {
+      unlockBattles: rules.unlockBattles !== undefined ? rules.unlockBattles : 6,
+      growthPerBattle: rules.growthPerBattle !== undefined ? rules.growthPerBattle : 0.025,
+      growthCapBattles: rules.growthCapBattles !== undefined ? rules.growthCapBattles : 12
+    };
+  },
+
+  // 採用時の値を控える。**昇進の boost は含めない**（含めると伸びが昇進に比例して膨らむ）。
+  // 旧セーブは現在値を base にする（それまでの伸びは既に現在値に入っている扱い）。
+  baseOf(monster) {
+    if (!monster.base) {
+      monster.base = { hp: monster.hp, atk: monster.atk, def: monster.def };
+      // 旧セーブの分の伸びは「もう入っている」ことにする。ここで 0 にすると、
+      // 次の決着で base からの伸びが丸ごと足されて古参が突然強くなる。
+      monster.grown = { hp: 0, atk: 0, def: 0 };
+    }
+    if (!monster.grown) monster.grown = { hp: 0, atk: 0, def: 0 };
+    return monster.base;
+  },
+
+  // 小成長。基礎値の 2.5%／戦、12戦で頭打ち（合計 +30%）。spd は伸びない。
+  //
+  // 仕様は「毎回 base から現在値を組み直す」だが、**差分だけを足す**形にした。
+  // 城内事件は HP を恒久的に減らす（`events.js` の負傷）ので、組み直すとその傷が
+  // 黙って治ってしまう。差分方式でも二重加算は起きない（積んだ量を `m.grown` が覚えている）。
+  applyGrowth(monster) {
+    if (!monster || monster.mercenary) return;
+    const rules = this.skillRules();
+    const base = this.baseOf(monster);
+    const battles = this.memberRecord(monster).battles || 0;
+    const steps = Math.min(battles, rules.growthCapBattles);
+    for (const key of ["hp", "atk", "def"]) {
+      const target = Math.round((base[key] || 0) * rules.growthPerBattle * steps);
+      const delta = target - (monster.grown[key] || 0);
+      if (!delta) continue;
+      monster[key] = Math.max(key === "def" ? 0 : 1, (monster[key] || 0) + delta);
+      monster.grown[key] = target;
+    }
+  },
+
+  // その者が次に覚える上位技。既に覚えている／技の無い種族なら null。
+  // 面接の札（「6戦で【…】」）も同じ関数を読む。**二か所で探さない。**
+  nextSkillFor(monster) {
+    if (!monster || monster.mercenary) return null;
+    const traits = monster.traits || [];
+    for (const id of traits) {
+      const skill = (TRAITS[id] || {}).skill;
+      if (skill && skill.tier === 2) return null;      // もう覚えている
+    }
+    // **種族で絞る。** 1段目は種族をまたいで共有されている
+    // （怪力＝オーガとオーク、粘体＝スライムとキングスライム）ので、
+    // `replaces` だけで引くとオークが「ぶちかまし」を覚える。
+    for (const id of traits) {
+      const candidates = Object.keys(TRAITS).filter(key => {
+        const skill = TRAITS[key].skill;
+        return skill && skill.tier === 2 && skill.replaces === id;
+      });
+      if (!candidates.length) continue;
+      const mine = candidates.find(key => TRAITS[key].skill.species === monster.tplId);
+      if (mine) return { id: mine, ...TRAITS[mine] };
+      // 種族が一致しない（テンプレートに無い1段目を遺物などで持っている）なら覚えない。
+      // 他種族の技を拾わせない。
+    }
+    return null;
+  },
+
+  // 上位技の解放。1段目（種族固有特性）が上位技に**置き換わる**。
+  // 遺物由来の特性・癖・共通特性はそのまま（replaces が指す id だけが消える）。
+  // 傭兵は育たない（金で雇った一時要員に軍団の経験は乗らない）。
+  checkSkillUnlock(monster, notes) {
+    if (!monster || monster.mercenary) return null;
+    const rules = this.skillRules();
+    if ((this.memberRecord(monster).battles || 0) < rules.unlockBattles) return null;
+    const skill = this.nextSkillFor(monster);
+    if (!skill) return null;
+    const replaced = skill.skill.replaces;
+    monster.traits = (monster.traits || []).filter(id => id !== replaced);
+    monster.traits.push(skill.id);
+    monster.skillTier = 2;
+    const quote = U.pick((skill.lines && skill.lines.unlock) || ["……体が、覚えた"]);
+    if (notes) notes.push(`${monster.name}が【${skill.name}】を覚えた`);
+    return { uid: monster.uid, name: monster.name, skillId: skill.id, skillName: skill.name, quote };
+  },
+
+  // 一戦の決着ごとに、出撃した者を育てる。
+  // **settleContinue と settleRetreat の両方から呼ぶ。** deploy() の途中に書くと
+  // 引数なし呼び出し（sim・テスト）と UI 経由（offerRetreat）で結果がずれる。
+  // 数えるのは contribution の uid（出撃した者だけ。留守番は育たない）。
+  trainSurvivors(contribution, notes) {
+    const st = this.state;
+    const unlocked = [];
+    for (const row of contribution || []) {
+      if (row.mercenary) continue;
+      if (row.survived === false) continue;      // この戦いで戦死した者は育たない
+      const monster = st.roster.find(m => m.uid === row.uid);
+      if (!monster) continue;
+      const gained = this.checkSkillUnlock(monster, notes);
+      if (gained) unlocked.push(gained);
+      this.applyGrowth(monster);
+    }
+    return unlocked;
   },
 
   // 個人カウンタ。痕跡の器（src/core/traces.js、別仕様）が入るまでのつなぎ。
@@ -1798,6 +1909,8 @@ const Game = {
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
+    // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
+    const unlocked = this.trainSurvivors(result.contribution, notes);
     if (result.victory) {
       st.gold += stageData.reward + lootGold;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
@@ -1847,6 +1960,8 @@ const Game = {
 
     st.lastBattle = {
       victory: result.victory,
+      // この戦いで技を覚えた者（表示用）。覚えた者がいない戦い・旧セーブには無い。
+      unlocked,
       missionKind: stageData.missionKind,
       missionTitle: stageData.missionTitle,
       army: stageData.army,
@@ -1940,6 +2055,8 @@ const Game = {
     const carried = contribution.filter(c => c.injured && !c.mercenary);
     // 個人カウンタは名簿が動く前に進める（引退・戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(contribution, false);
+    // 退いた戦いも1戦。出撃はした（仕様2.2）。
+    const unlocked = this.trainSurvivors(contribution, notes);
     // 「今回担がれた時点で、まだ前の負傷が明けていなかった者」＝引退。
     // recoverInjuries() の**前**に控えないと、回復済みの 0 しか見えなくなる。
     const stillInjured = new Set(carried.filter(c => {
@@ -2003,6 +2120,7 @@ const Game = {
     st.lastBattle = {
       victory: false,
       retreated: true,
+      unlocked,
       missionKind: stageData.missionKind,
       missionTitle: stageData.missionTitle,
       army: stageData.army,
@@ -2207,6 +2325,8 @@ const Game = {
   },
 
   promote(monster, rank, notes) {
+    // 昇進の boost は現在値へ直接かける（小成長とは別枠）。
+    // `m.base` と `m.grown` には触らない。触ると伸びが昇進に比例して膨らむ。
     const boost = rank.boost || {};
     monster.rankId = rank.id;
     monster.hp = Math.max(1, Math.round(monster.hp * (boost.hp || 1)));

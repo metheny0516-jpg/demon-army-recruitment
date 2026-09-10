@@ -3,7 +3,7 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
                'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -15,6 +15,9 @@ for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename
 const Game = vm.runInContext('Game', ctx);
 const KPI = vm.runInContext('KPI', ctx);
 const Synergy = vm.runInContext('Synergy', ctx);
+const TRAITS = vm.runInContext('TRAITS', ctx);
+// tier2の種族技（上位技）一覧。ベタ書きせず TRAITS から都度導出する
+const tier2SkillIds = Object.keys(TRAITS).filter(id => TRAITS[id].skill && TRAITS[id].skill.tier === 2);
 const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
 
 function chooseIndex(apps, roster, strat){
@@ -152,6 +155,17 @@ function runOnce(strat, stats){
       const stageNow = st.stage;
       const out = Game.deploy();
       if (!out) break;
+      // 種族技（tier2）の発動回数をタイムラインから数える。乱数は消費しない、集計のみ
+      // stats は他のハーネス（chain-v2-measure.js など）が自前で作って渡してくる。
+      // その stats に skillTriggers は無いので、ここで作る（無ければ数えない、にしない）。
+      if (out.result.timeline) {
+        if (!stats.skillTriggers) stats.skillTriggers = {};
+        for (const ev of out.result.timeline) {
+          if (ev.type === 'trait_trigger' && ev.traitId && tier2SkillIds.includes(ev.traitId)) {
+            stats.skillTriggers[ev.traitId] = (stats.skillTriggers[ev.traitId] || 0) + 1;
+          }
+        }
+      }
       stats.incidents += (out.result.incidents || []).length;
       if (st.lastDepartmentReport && st.lastDepartmentReport.foodShortage) stats.foodShortages++;
       if (st.roster.some(m => m.unpaid)) stats.unpaid++;
@@ -213,8 +227,9 @@ const kpiOut = (() => {
 // 比較フラグは run.js が hpMult を読まなくなり復元できないため削除した。
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
+const skillTriggerTotals = {};
 for (const s of strategies) {
-  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0 };
+  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -258,8 +273,14 @@ for (const s of strategies) {
       }
     }
   }
+  for (const id of tier2SkillIds) {
+    skillTriggerTotals[id] = (skillTriggerTotals[id] || 0) + (stats.skillTriggers[id] || 0);
+  }
   KPI.reset();
 }
+
+console.log(`\n種族技の発動（全戦略・全ラン合計、0回=条件が厳しすぎる可能性）:`);
+console.log('  ' + tier2SkillIds.map(id => `${TRAITS[id].name} ${skillTriggerTotals[id] || 0}`).join('　'));
 
 if (kpiOut) {
   fs.writeFileSync(kpiOut, JSON.stringify(kpiDump, null, 2));
