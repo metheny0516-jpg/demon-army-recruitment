@@ -159,23 +159,45 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
 
     // C: モバイル用DOMが入ったら、固定主ボタンと2行HUDを検査する。
     if (includesStage('C')) {
+      await page.setViewportSize({ width: 390, height: 844 });
       await page.evaluate(() => { Game.state.phase = 'mission'; Game.prepareMissions(true); App.render(); });
       await page.locator('[data-action="missionpick"]').first().click();
       const mobile = await page.evaluate(() => {
         const primary = document.querySelector('[data-action="deploy"]');
+        const dock = primary && primary.closest('.formation-actions');
         const rect = primary && primary.getBoundingClientRect();
+        const visible = el => {
+          const r = el.getBoundingClientRect(), style = getComputedStyle(el);
+          return r.width > 0 && r.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+        const rows = [...document.querySelectorAll('.hud-row')].filter(visible);
         return {
-          hudRows: document.querySelectorAll('.hud-row').length,
-          position: primary && getComputedStyle(primary).position,
-          inViewport: !!rect && rect.bottom <= innerHeight && rect.top >= 0,
+          hudRows: rows.length,
+          hudText: rows.map(row => row.innerText.replace(/\s+/g, ' ').trim()),
+          region: Game.stageData().region,
+          primaryPosition: primary && getComputedStyle(primary).position,
+          dockPosition: dock && getComputedStyle(dock).position,
+          rect: rect && { top: rect.top, bottom: rect.bottom },
+          viewportHeight: innerHeight,
+          inViewport: !!rect && rect.bottom <= innerHeight + 1 && rect.top >= -1,
           height: document.body.scrollHeight
         };
       });
-      check(mobile.hudRows === 2, `HUDが2行ではない: ${mobile.hudRows}`);
-      check(mobile.position === 'fixed' || await page.locator('.mobile-primary').count() > 0,
-        '幅390pxで主ボタンが固定されない');
-      check(mobile.inViewport, '幅390pxで「出撃する」が画面内に無い');
-      console.log(`  編成scrollHeight: 変更前 ${formationHeight}px / モバイル整理後 ${mobile.height}px`);
+      check(mobile.hudRows === 2, `HUDの見える行が2行ではない: ${mobile.hudRows}`);
+      const row1 = mobile.hudText[0] || '', row2 = mobile.hudText[1] || '';
+      check(['所持金', '食料', '建材'].every(label => row1.includes(label)),
+        `HUD 1行目に所持金・食料・建材が揃わない: ${row1}`);
+      check(['魔王軍', '王国攻略', '警戒', '🏰 城'].every(label => row2.includes(label)),
+        `HUD 2行目に魔王軍Lv・王国攻略・警戒・城が揃わない: ${row2}`);
+      const visibleHud = mobile.hudText.join(' ');
+      check(!['作戦 ', '給与・手当', '出撃 '].some(label => visibleHud.includes(label))
+        && !/軍団\s+\d+\//.test(visibleHud) && !visibleHud.includes(mobile.region),
+        `スマホHUDに記録へ移す項目が残る: ${visibleHud}`);
+      check(mobile.primaryPosition === 'fixed' || mobile.dockPosition === 'fixed',
+        `幅390pxで主ボタンが固定されない: button=${mobile.primaryPosition}, dock=${mobile.dockPosition}`);
+      check(mobile.inViewport, `幅390pxで「出撃する」が画面内に無い: ${JSON.stringify(mobile.rect)} / ${mobile.viewportHeight}px`);
+      const bBaseline = Number(process.env.CASTLE_B_FORMATION_HEIGHT) || formationHeight;
+      console.log(`  編成scrollHeight: B基準 ${bBaseline}px / Cスマホ ${mobile.height}px`);
     }
   }
 

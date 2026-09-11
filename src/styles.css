@@ -3330,3 +3330,69 @@ button.primary::first-letter { color: var(--gold); }
   padding-top: 4px;
 }
 .formation-actions .primary { min-width: min(260px, 100%); }
+
+/* PCでは従来どおり一続きの作戦卓。スマホだけ下の2行構成に切り替える。 */
+@media (min-width: 561px) {
+  .hud-row, .hud-extra { display: contents; }
+  .hud-row > span, .hud-extra > span {
+    padding: 3px 10px; border-right: 1px solid rgba(232,189,104,.16); white-space: nowrap;
+  }
+}
+
+/* ── スマホ：判断材料は2行、決定ボタンは常に親指の位置へ ── */
+@media (max-width: 560px) {
+  /* sceneEnter の transform が fixed の基準を本文に変えてしまうため、固定主操作の場面では外す。 */
+  .game-scene:has(.formation-actions .primary),
+  .game-scene:has([data-action="afterresult"]),
+  .game-scene:has(.formation-orders > .primary) { animation: none; transform: none; }
+
+  .hud {
+    display: grid; grid-template-columns: 1fr; gap: 3px;
+    padding: 5px 6px; font-size: 11px;
+  }
+  .hud-row {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 0; gap: 0; flex-wrap: wrap;
+  }
+  .hud-row > span,
+  .hud-row > button {
+    flex: 0 1 auto; min-width: 0; margin: 0; padding: 2px 6px;
+    border-right: 1px solid rgba(232, 189, 104, .16); white-space: nowrap;
+  }
+  .hud-row > :last-child { border-right: 0; }
+  .hud-row b { font-size: 12px; }
+  .hud-resources .food small { display: none; }
+  .hud-progress .counterattack-gauge { width: 30px; margin-left: 3px; }
+  .hud-progress .counterattack-tag { font-size: 9px; }
+  .hud-extra { display: none !important; }
+
+  /* 作戦は候補ごとに決定を持つため、札の下端で追従させる。 */
+  [data-action="missionpick"] {
+    position: sticky; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 20;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, .72);
+  }
+
+  /* 一画面に一つの主決定がある場面は、画面下へ固定する。 */
+  .formation-actions .primary,
+  [data-action="afterresult"],
+  .formation-orders > .primary {
+    position: fixed; left: 50%; bottom: 0; z-index: 45;
+    width: min(544px, calc(100vw - 16px)); min-width: 0;
+    margin: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    box-shadow: 0 -8px 22px rgba(8, 5, 8, .82);
+  }
+
+  /* 固定ボタンの高さぶん本文を延ばし、末尾の操作や文章を覆わない。 */
+  #app:has(.formation-actions .primary),
+  #app:has([data-action="afterresult"]),
+  #app:has(.formation-orders > .primary) {
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+  /* 通常フロー末尾の音量操作まで固定ボタンの上へスクロールできる余白。 */
+  #app:has(.formation-actions .primary) ~ .sound-control,
+  #app:has([data-action="afterresult"]) ~ .sound-control,
+  #app:has(.formation-orders > .primary) ~ .sound-control {
+    margin-bottom: calc(100px + env(safe-area-inset-bottom));
+  }
+}

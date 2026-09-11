@@ -83,21 +83,27 @@ const UI = {
     const recordsButton = ["recruit", "mission", "formation", "preparation", "result", "facility", "event"].includes(st.phase)
       ? `<button class="small hud-records" data-action="castle" data-tab="${U.esc(this.castleTab || "army")}">🏰 城</button>` : "";
     return `<div class="hud">
-      <span>第 <b>${st.generation}</b> 代魔王軍</span>
-      <span class="army-level">魔王軍 <b>Lv.${Game.armyLevel()}</b></span>
-      ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
-      <span>作戦 <b>${st.turn}</b></span>
-      <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
-      <span>警戒度 <b>${st.alert}</b>${this.counterattackGauge()}</span>
-      <span class="gold">所持金 <b>${st.gold}G</b></span>
-      <span class="food">食料 <b>${st.food}</b><small class="${fb.delta < 0 ? "food-warn" : "food-ok"}"> 調達${fb.produce} / 消費${fb.need} = ${fb.delta >= 0 ? "+" : ""}${fb.delta}</small></span>
-      <span class="materials">建材 <b>${st.materials}</b></span>
-      <span>施設 <b>Lv.${st.facilityLevel}${Game.activeFacility() ? ` ${U.esc(Game.activeFacility().name)}` : ""}</b></span>
-      <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
-      <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
-      <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
-      <span class="muted">${U.esc(sd.region)}</span>
-      ${recordsButton}
+      <div class="hud-row hud-resources">
+        <span class="gold">所持金 <b>${st.gold}G</b></span>
+        <span class="food">食料 <b>${st.food}</b><small class="${fb.delta < 0 ? "food-warn" : "food-ok"}"> 調達${fb.produce} / 消費${fb.need} = ${fb.delta >= 0 ? "+" : ""}${fb.delta}</small></span>
+        <span class="materials">建材 <b>${st.materials}</b></span>
+      </div>
+      <div class="hud-row hud-progress">
+        <span class="army-level">魔王軍 <b>Lv.${Game.armyLevel()}</b></span>
+        <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
+        <span>警戒度 <b>${st.alert}</b>${this.counterattackGauge()}</span>
+        ${recordsButton}
+      </div>
+      <div class="hud-extra">
+        <span>第 <b>${st.generation}</b> 代魔王軍</span>
+        ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
+        <span>作戦 <b>${st.turn}</b></span>
+        <span>施設 <b>Lv.${st.facilityLevel}${Game.activeFacility() ? ` ${U.esc(Game.activeFacility().name)}` : ""}</b></span>
+        <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
+        <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
+        <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
+        <span class="muted">${U.esc(sd.region)}</span>
+      </div>
     </div>`;
   },
 

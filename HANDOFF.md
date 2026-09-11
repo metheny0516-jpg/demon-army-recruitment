@@ -23,8 +23,11 @@
 
 ### 次のタスク（2026-09-11・仕様書あり）
 
-- **CodeX**：`docs/SPEC_CASTLE_MENU_2026-09-11.md` — 画面を「今やること」と「いつでも見るもの（城のメニュー：軍団／記録／参謀）」の二層に。
-  人物の詳細はタップで一つの画面に統一（採用時に既存メンバーが見える）。スマホは主ボタンを下に固定、HUD 2行。3コミット（A 詳細＋面接／B 城のメニュー／C スマホ）。
+- **完了（CodeX）**：`docs/SPEC_CASTLE_MENU_2026-09-11.md`。面接→作戦→編成→戦闘→結果の流れは変えず、常設情報を「🏰 城」へ分離。
+- 面接に現在の軍団一覧を追加し、応募者と軍団員は共通の `UI.memberDetail()` で詳しく読む。解雇は詳細と軍団札で確認を挟む。
+- 城は軍団／記録／参謀の3札。元の `st.phase` を変えずに開閉し、編成は軍団札と同じ名簿＋出撃操作を使う。
+- 560px以下はHUDを資源／進行の2行へ畳み、編成・結果・準備の主操作を下端へ固定。作戦3択は各札の下端へ追従。
+- `tools/browser-tests/castle.js`（A/B/C段階）をrun-allへ登録。1128px／390pxの面接・編成・城メニューを保存し、全回帰通過。
 - **設計済み**：勇者を退けたあと＝三幕構成 `docs/DESIGN_ACT2_2026-09-11.md`（第二幕「援軍」段階9〜14、第三幕「決戦」15〜18。
   どちらの着地からも次の幕へ。名簿・施設・伝承は持ち越し）。
 - 済み：**第二幕の中身**（Opus `d22f2e3`、`docs/SPEC_ACT2_CONTENT_2026-09-11.md`）。新種族3は `MONSTER_TEMPLATES_ACT2`、
@@ -2733,6 +2736,14 @@ kind は `TRACE_KINDS` の登録制（現在16種）。`record()` は未知kind�
 - `Game.journal(limit = 40)` は新しい順の痕跡を日ごとにまとめ、`[{ day, turn, lines: [{ seq, kind, text }] }]` を返す。
 - `UI.records()` と action `records` / `backrecords` は `st.phase` を変えず、`UI.set(html, "records")` で専用 scene を明示する。
 - `TRACE_KINDS` は `fired` / `deserted` / `retired` / `ordered` / `defended` / `ransacked` を含む。
+
+### 2-3c. 城のメニューと人物詳細のUI契約
+
+- HUDの常設入口は `data-action="castle"`（表示「🏰 城」）。`castle` / `castletab` / `backcastle` は `st.phase` を変更せず、`UI.castle()` は `UI.set(html, "castle")` を明示する。
+- 城の札は軍団／記録／参謀の3つだけ。編成の名簿は軍団札と `UI.memberRow()` を共有し、別DOMへ二重実装しない。
+- 人物は軍団員の `data-uid` または応募者の `data-index` から `UI.memberDetail()` を開く。詳細は `UI.set(html, "member")` を明示し、閉じると呼び出し元へ戻る。
+- `deploy` / `toggledeploy` / `up` / `down` / `front` / `fire` / `hire` のaction名とdata属性は互換契約。新しい画面でも変更しない。
+- 560px以下のHUDは、1行目＝所持金・食料・建材、2行目＝魔王軍Lv・王国攻略・警戒・城。その他の進行情報は記録札で読む。
 - `MORMO_LINES.journal` は kind ごとの日誌用文面を持ち、ゲーム上の数値は日誌本文へ出さない。
 
 ### 2-4. コンテンツはデータ追記だけで増える
