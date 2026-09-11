@@ -43,7 +43,8 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   await page.locator('[data-action="missionpick"]').first().click();
 
   // 実プレイで起きた状況の再現: 脆さを嫌ってゴブリン3体＋オーガ2体にした編成
-  const build = squad => page.evaluate(list => {
+  const build = async squad => {
+    await page.evaluate(list => {
     const template = id => MONSTER_TEMPLATES.find(t => t.id === id);
     const make = (id, uid, name) => {
       const t = template(id);
@@ -55,8 +56,11 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     Game.state.roster = list.map((id, i) => make(id, i + 1, id + (i + 1)));
     Game.state.activeUids = Game.state.roster.map(m => m.uid);
     App.render();
-    return document.querySelector('.panel .syn-list') ? document.body.innerText : document.body.innerText;
-  }, squad);
+    }, squad);
+    await page.locator('[data-action="castle"]').first().click();
+    await page.locator('[data-action="castletab"][data-tab="advisor"]').click();
+    return page.locator('[data-scene="castle"]').innerText();
+  };
 
   // 発火条件を軍団全体で数えるようにしたぶん、必要数は3→4体、刻みは15%→12%になった。
   const mixed = await build(['goblin', 'goblin', 'goblin', 'goblin', 'ogre']);

@@ -15,7 +15,7 @@ const path = require('node:path');
       assert.match(await page.evaluate(() => MormoScene.text), /先頭ほど/);
       await page.evaluate(() => MormoScene.close());
       await page.waitForTimeout(400);
-      const widths = await page.locator('.card-identity').evaluateAll(els => els.map(e => e.getBoundingClientRect().width));
+      const widths = await page.locator('.member-row-main').evaluateAll(els => els.map(e => e.getBoundingClientRect().width));
       assert.ok(widths.length && widths.every(w => w >= 100), JSON.stringify(widths));
       assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
       if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', `first-formation-${width}.png`), fullPage: true });

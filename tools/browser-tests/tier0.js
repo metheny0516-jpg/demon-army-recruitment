@@ -22,7 +22,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   console.log('▼ 誤タップ対策（編成画面）');
   // 留守番のカードにだけ「解雇」が出る。最も危険な組み合わせ（解雇 ↔ 出撃隊へ）を
   // 画面に出すため、1体を留守番へ回してから測る。
-  await page.locator('[data-action="assigndepartment"][data-department="home"]').first().click();
+  await page.locator('.member-row.active [data-action="toggledeploy"]').first().click();
   await page.waitForTimeout(120);
   const geo = await page.evaluate(() => {
     const vis = el => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
@@ -58,6 +58,8 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   // 戦闘後に測ると勝敗次第で画面が変わり（敗北なら魔界史へ）、パネルに辿り着けない
   // 回が混ざる。編成画面なら必ず出るので、戦う前のここで測る。
   console.log('▼ シナジーのヒント文');
+  await page.locator('[data-action="castle"]').first().click();
+  await page.locator('[data-action="castletab"][data-tab="advisor"]').click();
   const synPanel = page.locator('.panel').filter({ hasText: '発動中のシナジー' }).first();
   const found = await synPanel.count() > 0;
   ok(found, `シナジーパネルを表示できた（空テスト防止）`);
@@ -66,7 +68,8 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   console.log(`    現在の文言: ${hint.split('\n').slice(1).join(' ').slice(0,60)}`);
 
   // 留守番へ回した1体を出撃隊へ戻す
-  await page.locator('.department-home-section [data-action="assigndepartment"][data-department="combat"]:not([disabled])').first().click();
+  await page.locator('[data-action="backcastle"]').click();
+  await page.locator('.member-row.home [data-action="toggledeploy"]:not([disabled])').first().click();
   await page.waitForTimeout(120);
 
   // ── 1) 決着バナーとVS帯の重なり ──

@@ -23,6 +23,8 @@ async function formationWith(page, roster, deployed) {
     App.render();
   }, [roster, deployed]);
   await page.waitForTimeout(60);
+  await page.locator('[data-action="castle"]').first().click();
+  await page.locator('[data-action="castletab"][data-tab="advisor"]').click();
 }
 const panelText = page => page.locator('.chain-map').innerText();
 

@@ -37,10 +37,9 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     return true;
   });
   ok(setup, '検証用の名簿と遺物を用意した');
-  ok((await page.locator('.vault-panel').count()) === 1, '編成画面に蔵パネルが出る');
-  ok((await page.locator('.vault-panel .relic-row').count()) === 1, '蔵に遺物が1件表示される');
-
-  await page.click('.vault-panel [data-action="giverelic"]');
+  await page.locator('[data-action="member"][data-uid="801"]').evaluate(el => el.click());
+  ok((await page.locator('.member-detail [data-action="giverelic"]').count()) === 1, '人物詳細に蔵の遺物を渡す操作が出る');
+  await page.click('.member-detail [data-action="giverelic"]');
   await page.waitForTimeout(50);
   const afterGive = await page.evaluate(() => ({
     holderUid: Game.relicOf('relic_test1').holderUid,
@@ -50,9 +49,9 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   ok(afterGive.holderUid === 801, `遺物の持ち主が設定された (holderUid=${afterGive.holderUid})`);
   ok(afterGive.traits.includes('drunkard'), '持ち主に特性が付いた');
   ok(afterGive.relicIds.includes('relic_test1'), '持ち主の relicIds に載った');
-  ok((await page.locator('.card .relic-chip').count()) >= 1, '札に🏺の表示が出る');
-
-  await page.click('.vault-panel [data-action="storerelic"]');
+  await page.locator('[data-action="member"][data-uid="801"]').evaluate(el => el.click());
+  ok((await page.locator('.member-detail .relic-chip').count()) >= 1, '人物詳細に🏺の表示が出る');
+  await page.click('.member-detail [data-action="storerelic"]');
   await page.waitForTimeout(50);
   const afterStore = await page.evaluate(() => ({
     holderUid: Game.relicOf('relic_test1').holderUid,
@@ -131,14 +130,18 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     Game.state.phase = 'formation'; App.render();
   });
   await page.waitForTimeout(80);
+  await page.locator('[data-action="castle"]').first().click();
+  await page.locator('[data-action="castletab"][data-tab="records"]').click();
   ok((await page.locator('.vault-panel').count()) === 1, '遺物が1つも無くても蔵パネルは出る');
   const emptyVault = await page.locator('.vault-panel').textContent();
   ok(/蔵は空/.test(emptyVault) && /無名/.test(emptyVault),
     `空の蔵が誰が何も残さなかったかを言う: "${emptyVault.replace(/\s+/g, ' ').trim().slice(0, 60)}"`);
-  ok((await page.locator('.vault-panel .departed-panel').count()) === 1, '蔵からも去った者たちへ行ける');
+  ok((await page.locator('.records-departed .departed-panel').count()) === 1, '記録札から去った者たちへ行ける');
   await page.evaluate(() => { Game.state.departed = []; App.render(); });
   await page.waitForTimeout(80);
-  ok((await page.locator('.vault-panel').count()) === 0, '誰も去っていなければ蔵は出ない（最初から邪魔しない）');
+  await page.locator('[data-action="castle"]').first().click();
+  await page.locator('[data-action="castletab"][data-tab="records"]').click();
+  ok((await page.locator('.vault-panel').count()) === 1, '記録札では空の蔵も確認できる');
 
   console.log('▼ 魔界史：去った者たち');
   await page.evaluate(() => {

@@ -57,6 +57,8 @@ const { autoDismissMormo } = require('./helpers.js');
     Game.state.phase = 'formation';
     UI.formation();
   });
+  await page.locator('[data-action="castle"]').first().click();
+  await page.locator('[data-action="castletab"][data-tab="advisor"]').click();
   const deathText = await page.locator('text=💀 死亡反応').locator('..').innerText();
   if (!deathText.includes('本人が生存してラウンド終了') || !deathText.includes('ネルは最前列')) {
     throw new Error('死霊術本人の生存条件と最前列警告が読めない');

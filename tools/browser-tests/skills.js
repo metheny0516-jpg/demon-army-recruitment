@@ -30,16 +30,22 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     Game.state.phase = 'formation';
     App.render();
   });
-  const marks = await page.locator('.skill-mark').count();
-  ok(marks >= 2, `🗡が1段目・上位技の両方の札に出る（${marks}件）`);
-  const traitTexts = await page.locator('.trait').allTextContents();
-  ok(traitTexts.some(t => /怪力/.test(t)), '1段目（怪力）の特性行が出る');
-  ok(traitTexts.some(t => /ぶちかまし/.test(t)), '上位技（ぶちかまし）の特性行が出る');
+  const rowTexts = await page.locator('.member-row').allTextContents();
+  const marks = rowTexts.filter(t => t.includes('🗡')).length;
+  ok(marks >= 2, `🗡が1段目・上位技の両方の名簿行に出る（${marks}件）`);
+  const detailTexts = [];
+  for (const uid of [701, 702]) {
+    await page.locator(`[data-action="member"][data-uid="${uid}"]`).evaluate(el => el.click());
+    detailTexts.push(await page.locator('.member-detail').innerText());
+    await page.locator('[data-action="closemember"]').click();
+  }
+  ok(detailTexts.some(t => /怪力/.test(t)), '1段目（怪力）が人物詳細に出る');
+  ok(detailTexts.some(t => /ぶちかまし/.test(t)), '上位技（ぶちかまし）が人物詳細に出る');
 
   console.log('▼ 名簿の札：戦歴');
-  const recordTexts = await page.locator('.record-note').allTextContents();
-  ok(recordTexts.some(t => /3戦2勝/.test(t)), `3戦2勝の戦歴が出る（${recordTexts.join(' / ')}）`);
-  ok(recordTexts.some(t => /6戦4勝/.test(t)), `6戦4勝の戦歴が出る`);
+  const recordTexts = detailTexts;
+  ok(recordTexts.some(t => /3戦（2勝）/.test(t)), `3戦2勝の戦歴が出る（${recordTexts.join(' / ')}）`);
+  ok(recordTexts.some(t => /6戦（4勝）/.test(t)), `6戦4勝の戦歴が出る`);
   ok(!recordTexts.some(t => /\+/.test(t)), '伸び幅（+3など）は出さない');
 
   console.log('▼ 名簿の札：0戦の者には戦歴を出さない');
@@ -53,9 +59,11 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     Game.state.activeUids = Game.state.roster.map(m => m.uid);
     App.render();
   });
-  const cardsCount = await page.locator('.card').count();
-  const noteCount = await page.locator('.record-note').count();
-  ok(cardsCount === 3 && noteCount === 2, `0戦の者には戦歴が出ない（札${cardsCount} / 戦歴${noteCount}）`);
+  const cardsCount = await page.locator('.member-row').count();
+  await page.locator('[data-action="member"][data-uid="703"]').evaluate(el => el.click());
+  const rookieDetail = await page.locator('.member-detail').innerText();
+  ok(cardsCount === 3 && /出撃 0戦/.test(rookieDetail), `3人目の詳細は0戦と分かる（名簿${cardsCount}行）`);
+  await page.locator('[data-action="closemember"]').click();
 
   console.log('▼ 面接：応募者に「6戦で【…】」（数値は出さない）');
   await page.evaluate(() => {
@@ -78,7 +86,7 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     a.traits = ['ogre_charge'];
     App.render();
   });
-  const firstCardHint = await page.locator('.card').first().locator('.skill-hint').count();
+  const firstCardHint = await page.locator('.applicant-member').first().locator('.skill-hint').count();
   ok(firstCardHint === 0, '上位技を既に持つ応募者には「6戦で」を出さない');
 
   console.log('▼ 結果画面：技を覚えた本人の一言');

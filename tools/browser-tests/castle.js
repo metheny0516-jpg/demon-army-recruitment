@@ -76,16 +76,46 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     const missionPhase = await page.evaluate(() => Game.state.phase);
     check(await page.locator('[data-action="castle"]').count() > 0, '作戦会議に「城」入口が無い');
     if (await page.locator('[data-action="castle"]').count()) await page.locator('[data-action="castle"]').first().click();
-    check(await page.locator('.castle-screen').count() === 1, '城のメニューが開かない');
+    const castleScene = page.locator('[data-scene="castle"]');
+    check(await castleScene.count() === 1, '城のメニューが開かない');
     check(await page.locator('[data-action="castletab"]').count() === 3, '城の札が3つではない');
     check(await page.evaluate(() => Game.state.phase) === missionPhase, '城を開くと mission phase が変わる');
+
+    // 軍団札そのものから出撃/留守番・並び替え・解雇を行う。
+    const armyTab = page.locator('[data-action="castletab"][data-tab="army"]');
+    if (await armyTab.count()) await armyTab.click();
+    const beforeActive = await page.evaluate(() => [...Game.state.activeUids]);
+    const toggle = page.locator('[data-scene="castle"] [data-action="toggledeploy"]').first();
+    check(await toggle.count() > 0, '軍団札に出撃/留守番切替が無い');
+    if (await toggle.count()) await toggle.click();
+    const afterActive = await page.evaluate(() => [...Game.state.activeUids]);
+    check(JSON.stringify(beforeActive) !== JSON.stringify(afterActive), '軍団札の切替で activeUids が変わらない');
+
+    const reorder = page.locator('[data-scene="castle"] [data-action="down"]:not([disabled]), [data-scene="castle"] [data-action="up"]:not([disabled])').first();
+    check(await reorder.count() > 0, '軍団札に有効な並び替え操作が無い');
+    if (await reorder.count()) {
+      const beforeOrder = await page.evaluate(() => [...Game.state.activeUids]);
+      await reorder.click();
+      const afterOrder = await page.evaluate(() => [...Game.state.activeUids]);
+      check(JSON.stringify(beforeOrder) !== JSON.stringify(afterOrder), '軍団札の並び替えで activeUids が変わらない');
+    }
+
+    const rosterBeforeFire = await page.evaluate(() => Game.state.roster.length);
+    const fire = page.locator('[data-scene="castle"] [data-action="fire"]').last();
+    check(await fire.count() > 0, '軍団札に解雇操作が無い');
+    if (await fire.count() && rosterBeforeFire > 1) {
+      page.once('dialog', dialog => dialog.accept());
+      await fire.click();
+      check(await page.evaluate(() => Game.state.roster.length) === rosterBeforeFire - 1,
+        '軍団札の解雇確認後に roster が変わらない');
+    }
 
     for (const tab of ['army', 'records', 'advisor']) {
       const button = page.locator(`[data-action="castletab"][data-tab="${tab}"]`);
       check(await button.count() === 1, `城の ${tab} 札が無い`);
       if (await button.count()) await button.click();
       check(await page.evaluate(() => Game.state.phase) === missionPhase, `${tab} 札で phase が変わる`);
-      const text = await page.locator('.castle-screen').innerText();
+      const text = await castleScene.count() ? await castleScene.innerText() : '';
       if (tab === 'records') check(/日誌/.test(text) && /蔵/.test(text) && /去った者/.test(text) && /進行度/.test(text),
         '記録札に日誌・蔵・去った者・進行度が揃わない');
       if (tab === 'advisor') check(/シナジー/.test(text) && /施設/.test(text),
@@ -100,34 +130,6 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     const formationHeight = await page.evaluate(() => document.body.scrollHeight);
     check(await page.evaluate(() => Game.state.phase) === 'formation', '編成の前提を作れない');
     check(await page.locator('[data-action="deploy"]').count() === 1, '編成に「出撃する」が無い');
-    const beforeActive = await page.evaluate(() => [...Game.state.activeUids]);
-    const toggle = page.locator('[data-action="toggledeploy"]').first();
-    check(await toggle.count() > 0, '軍団札に出撃/留守番切替が無い');
-    if (await toggle.count()) await toggle.click();
-    const afterActive = await page.evaluate(() => [...Game.state.activeUids]);
-    check(JSON.stringify(beforeActive) !== JSON.stringify(afterActive), '切替で activeUids が変わらない');
-
-    // 戻せば並び替えも検査できる。解雇は最後の一人を避ける。
-    if (await page.locator('[data-action="toggledeploy"]').count()) await page.locator('[data-action="toggledeploy"]').first().click();
-    const reorder = page.locator('[data-action="down"]').first();
-    check(await reorder.count() > 0, '軍団札に並び替え操作が無い');
-    if (await reorder.count()) {
-      const beforeOrder = await page.evaluate(() => [...Game.state.activeUids]);
-      await reorder.click();
-      const afterOrder = await page.evaluate(() => [...Game.state.activeUids]);
-      check(beforeOrder.length < 2 || JSON.stringify(beforeOrder) !== JSON.stringify(afterOrder), '並び替えで activeUids が変わらない');
-    }
-
-    const rosterBeforeFire = await page.evaluate(() => Game.state.roster.length);
-    const fire = page.locator('[data-action="fire"]').last();
-    check(await fire.count() > 0, '軍団札に解雇操作が無い');
-    if (await fire.count() && rosterBeforeFire > 1) {
-      page.once('dialog', dialog => dialog.accept());
-      await fire.click();
-      check(await page.evaluate(() => Game.state.roster.length) === rosterBeforeFire - 1,
-        '解雇で roster が変わらない');
-    }
-
     // 編成から城へ入り戻っても formation のまま。
     if (await page.locator('[data-action="castle"]').count()) await page.locator('[data-action="castle"]').first().click();
     check(await page.evaluate(() => Game.state.phase) === 'formation', '編成から城を開くと phase が変わる');

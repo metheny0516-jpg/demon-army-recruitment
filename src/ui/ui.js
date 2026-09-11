@@ -2,6 +2,9 @@
 const UI = {
   root: null,
   recordsFrom: null,
+  castleFrom: null,
+  castleTab: "army",
+  memberFrom: null,
 
   RACE_ICON: {
     "ゴブリン": "👺", "オーク": "🐗", "スライム": "🟢", "コボルト": "🐕",
@@ -77,8 +80,8 @@ const UI = {
     const salary = Game.salaryTotal();
     const opening = st.openingPrototype;
     const fb = Game.foodBalance();
-    const recordsButton = ["recruit", "mission", "formation", "preparation", "result"].includes(st.phase)
-      ? `<button class="small hud-records" data-action="records">📖 城の記録</button>` : "";
+    const recordsButton = ["recruit", "mission", "formation", "preparation", "result", "facility", "event"].includes(st.phase)
+      ? `<button class="small hud-records" data-action="castle" data-tab="${U.esc(this.castleTab || "army")}">🏰 城</button>` : "";
     return `<div class="hud">
       <span>第 <b>${st.generation}</b> 代魔王軍</span>
       <span class="army-level">魔王軍 <b>Lv.${Game.armyLevel()}</b></span>
@@ -537,6 +540,112 @@ const UI = {
     </div>`, "records");
   },
 
+  journalPanelHtml() {
+    const journal = typeof Game.journal === "function" ? Game.journal() : [];
+    const body = journal.length ? journal.map(group => `<section class="journal-day">
+      <h3>${group.turn != null ? `第${U.esc(group.turn)}作戦のころ` : `${U.esc(group.day)}日目`}</h3>
+      <ul class="journal-lines">${group.lines.map(line => `<li data-kind="${U.esc(line.kind)}">${U.esc(line.text)}</li>`).join("")}</ul>
+      ${group.remark ? `<div class="journal-remark">モルモ「${U.esc(group.remark)}」</div>` : ""}
+    </section>`).join("") : `<div class="muted journal-empty">まだ何も書いていませんデス</div>`;
+    return `<section class="panel journal-panel"><h2>日誌</h2>${body}</section>`;
+  },
+
+  progressPanel() {
+    const st = Game.state;
+    const incoming = st.counterattack && st.counterattack.pending
+      ? (st.counterattack.kind === "hero" ? "勇者が城へ向かっている" : "討伐隊が城へ向かっている")
+      : "反撃の予告なし";
+    const hero = st.heroCame ? "勇者は来訪済み" : "勇者はまだ来ていない";
+    const lore = Object.values(st.skillLore || {}).map(id => TRAITS[id]).filter(Boolean);
+    return `<section class="panel castle-progress"><h2>進行度</h2><dl>
+      <dt>王国攻略</dt><dd>${st.conquest || 0}/${Game.MAX_CONQUEST}</dd>
+      <dt>魔王軍</dt><dd>Lv.${Game.armyLevel()}</dd>
+      <dt>警戒</dt><dd>${st.alert || 0} — ${U.esc(incoming)}</dd>
+      <dt>勇者</dt><dd>${U.esc(hero)}</dd>
+      <dt>城陥落</dt><dd>${st.castleFalls || 0}回</dd>
+      <dt>伝承で覚えた技</dt><dd>${lore.length ? lore.map(t => `【${U.esc(t.name)}】`).join("、") : "まだない"}</dd>
+    </dl></section>`;
+  },
+
+  armyPanel(options = {}) {
+    const st = Game.state;
+    const active = Game.activeRoster();
+    const activeSet = new Set(st.activeUids);
+    const home = st.roster.filter(m => !activeSet.has(m.uid));
+    const rows = (members, offset = 0) => members.map((m, i) => this.memberRow(m, {
+      controls: options.controls !== false,
+      index: i + offset,
+      total: members.length,
+      activeCount: active.length
+    })).join("");
+    const injured = st.roster.filter(m => m.injured > 0).length;
+    return `<div class="castle-army">
+      <section class="castle-panel"><h2>⚔ 出撃隊 ${active.length}/${Game.MAX_DEPLOY}${injured ? `<span class="injured-note">🩹 負傷で${injured}名出られない</span>` : ""}</h2>
+        <div class="member-rows">${rows(active) || `<div class="muted">出撃する者がいない。</div>`}</div></section>
+      <section class="castle-panel"><h2>🏰 留守番 ${home.length}</h2>
+        <div class="member-rows">${rows(home) || `<div class="muted">留守番はいない。</div>`}</div></section>
+    </div>`;
+  },
+
+  recordsCastlePanel() {
+    const departed = this.departedPanel();
+    return `<div class="castle-records">${this.journalPanelHtml()}
+      ${this.vaultPanel({ readOnly: true, includeDeparted: false })}
+      <section class="panel records-departed"><h2>去った者</h2>
+        ${departed || `<div class="muted">まだ誰も去っていません。</div>`}</section>
+      ${this.progressPanel()}</div>`;
+  },
+
+  advisorCastlePanel() {
+    const active = Game.activeRoster();
+    const necromancer = active.find(m => (m.traits || []).includes("necromancy"));
+    const deathHints = [
+      active.some(m => (m.traits || []).includes("gravekeeper")) ? "死亡→魂獲得" : "",
+      necromancer ? `《死霊術》：本人が生存してラウンド終了 → 倒れている味方1名を蘇生${active[0] && active[0].uid === necromancer.uid ? `。配置注意：${necromancer.name}は最前列` : ""}` : "",
+      active.some(m => (m.traits || []).includes("soul_harvest")) ? "蘇生→魂消費→アンデッド強化" : ""
+    ].filter(Boolean);
+    const deathPanel = deathHints.length ? `<section class="panel"><h2>💀 死亡反応</h2><div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div></section>` : "";
+    const facility = Game.facilityInfo();
+    const next = FACILITY_LEVELS[Game.state.facilityLevel + 1];
+    const facilityStatus = `<section class="panel castle-facility"><h2>施設</h2>
+      <div><b>Lv.${Game.state.facilityLevel} ${U.esc(facility.name)}</b></div>
+      <div class="muted">${facility.works ? `1戦闘に${facility.works}回稼働` : "大型施設はまだない"}</div>
+      <div class="muted">${next ? `次の施設まで建設進捗 ${Game.state.buildProgress || 0}/${next.buildThreshold}` : "施設は最大レベル"}</div></section>`;
+    return `<div class="castle-advisor">
+      ${this.chainMapPanel(active)}${this.synergyPanel(active)}${deathPanel}${facilityStatus}
+      ${Game.state.selectedMission ? this.enemyPreview() : `<section class="panel"><h2>敵情</h2><div class="muted">作戦を選ぶと敵情を確認できます。</div></section>`}
+    </div>`;
+  },
+
+  castle(tab = "army", options = {}) {
+    const allowed = ["army", "records", "advisor"];
+    tab = allowed.includes(tab) ? tab : "army";
+    if (!options.formation && this.root && this.root.dataset.scene !== "castle") this.castleFrom = Game.state.phase;
+    this.castleTab = tab;
+    let content = tab === "records" ? this.recordsCastlePanel()
+      : tab === "advisor" ? this.advisorCastlePanel() : this.armyPanel({ controls: true });
+    if (options.formation) content += `<div class="formation-decisions">
+      ${this.payrollPanel()}${this.debtPanel()}${this.feastPanel()}${this.mercenaryPanel()}
+      ${this.kingSlimePanel()}${this.vaultPanel()}
+    </div>`;
+    const tabs = options.formation ? "" : `<nav class="castle-tabs" aria-label="城のメニュー">
+      ${[["army", "軍団"], ["records", "記録"], ["advisor", "参謀"]].map(([id, label]) =>
+        `<button class="castle-tab${tab === id ? " active" : ""}" data-action="castletab" data-tab="${id}">${label}</button>`).join("")}
+    </nav>`;
+    const empty = Game.activeRoster().length === 0;
+    const payroll = Game.payrollQuote();
+    const formationActions = options.formation ? `<div class="formation-actions">
+      <button class="wide ghost" data-action="backmission">← 作戦会議へ戻る</button>
+      <button class="primary wide" data-action="deploy" ${empty || !payroll.affordable ? "disabled" : ""}>${U.esc(Game.payrollPolicy().name)}で出撃する</button>
+      ${Game.state.roster.length === 0 ? `<button class="wide ghost" data-action="title">タイトルへ戻る</button>` : ""}
+    </div>` : `<button class="wide ghost castle-back" data-action="backcastle">← 戻る</button>`;
+    this.set(`${this.hud()}<div class="castle-screen${options.formation ? " formation-shell" : ""}">
+      <header class="castle-header"><div><h1>${options.formation ? "編成" : "🏰 城のメニュー"}</h1>
+        <div class="muted">${options.formation ? "出撃する者と城に残る者を決める。詳しい作戦情報は城の参謀札へ。" : "いつでも見るものを、三つの札にまとめました。"}</div></div>${tabs}</header>
+      <main class="castle-content ${options.formation ? "formation-army" : ""}">${content}</main>${formationActions}
+    </div>`, options.formation ? "formation" : "castle");
+  },
+
   // 軍団のどこでも使う一行表示。操作を隠す面接でも、行そのものから同じ人物詳細へ入る。
   memberRow(m, opts) {
     opts = opts || {};
@@ -546,7 +655,8 @@ const UI = {
       .find(entry => entry.trait && this.isSkillTrait(entry.id));
     const marks = [
       m.injured > 0 ? `<span class="injured">🩹 負傷</span>` : "",
-      m.unpaid ? `<span class="unpaid">給与未払い</span>` : ""
+      m.unpaid ? `<span class="unpaid">給与未払い</span>` : "",
+      this.memberRelics(m).length ? `<span class="relic-chip">🏺 遺物</span>` : ""
     ].filter(Boolean).join("");
     const controls = opts.controls ? `<div class="member-row-actions">
       <button class="small" data-action="toggledeploy" data-uid="${m.uid}">${active ? "留守番へ" : "出撃隊へ"}</button>
@@ -567,6 +677,7 @@ const UI = {
   // 名簿と応募者で共用する人物詳細。呼び出し側は uid または applicantIndex の片方を渡す。
   memberDetail(uid, applicantIndex) {
     const st = Game.state;
+    this.memberFrom = this.root && this.root.dataset.scene;
     const index = applicantIndex === undefined || applicantIndex === null || applicantIndex === "" ? null : Number(applicantIndex);
     const applicant = index !== null && Number.isInteger(index) ? st.applicants[index] : null;
     const m = applicant || st.roster.find(unit => unit.uid === uid);
@@ -1388,6 +1499,8 @@ const UI = {
   formation() {
     const st = Game.state;
     const opening = st.openingPrototype;
+    // 通常の編成は城の「軍団」と同じ一覧を使う。開幕3日間だけは日次決裁を含む旧編成を保つ。
+    if (!opening) return this.castle("army", { formation: true });
     const preparation = opening && st.phase === "preparation";
     const active = Game.activeRoster();
     const activeIds = new Set(st.activeUids);
