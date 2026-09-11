@@ -2230,6 +2230,41 @@ button.primary::first-letter { color: var(--gold); }
   transform: rotate(-3deg);
 }
 
+/* 施設選択はスマホでは図面を一枚ずつ確実に読ませる。
+   築城現場の装飾を切るための overflow が、長い施設名・接続説明まで
+   クリップしないよう、狭い幅では余白を詰めてカード側を縮める。 */
+@media (max-width: 760px) {
+  .construction-yard {
+    padding: 12px 8px 20px;
+    overflow-x: clip;
+  }
+  .construction-crane {
+    right: -36px;
+    top: -40px;
+    font-size: 138px;
+  }
+  .construction-order {
+    margin-bottom: 14px;
+    padding: 10px;
+  }
+  .construction-label {
+    margin: 0 4px 10px;
+  }
+  .construction-plans {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .construction-plans .facility-blueprint {
+    min-width: 0;
+    padding: 12px;
+  }
+  .facility-blueprint h3,
+  .facility-blueprint p,
+  .facility-blueprint .mission-purpose span {
+    overflow-wrap: anywhere;
+  }
+}
+
 /* ハプニングは通常パネルではなく、モルモが机へ置いた緊急案件。 */
 .event-desk {
   position: relative;
