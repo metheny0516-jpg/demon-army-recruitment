@@ -249,8 +249,19 @@ const Battle = {
     const onField = u => u.alive && !u.flags.absent;
 
     // 種族技の発動は既存の trait_trigger で記録する。技を持たない編成では呼ばず、乱数も消費しない。
+    // 上位技の自動発動は autoLimit 回まで（既定は無制限）。号令で出した分は数えない。
+    // 数えるのは実際に発動した回（skillTrigger）。判定は act() のフック呼び出し前（modDealt / postAttack）。
+    const autoExhausted = (unit, traitId) => {
+      const tr = TRAITS[traitId];
+      if (!tr || !tr.autoLimit || unit.flags.ordered) return false;
+      return ((unit.flags.skillUses || {})[traitId] || 0) >= tr.autoLimit;
+    };
     const skillTrigger = (unit, traitId, parent) => {
       const trait = TRAITS[traitId] || {};
+      if (trait.autoLimit && !unit.flags.ordered) {
+        unit.flags.skillUses = unit.flags.skillUses || {};
+        unit.flags.skillUses[traitId] = (unit.flags.skillUses[traitId] || 0) + 1;
+      }
       const lines = trait.lines && trait.lines.use;
       const quote = lines && lines.length ? U.pick(lines) : "";
       return emitCausal("trait_trigger", {
@@ -663,7 +674,7 @@ const Battle = {
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
-        if (tr && tr.modDealt) tr.modDealt(ctx);
+        if (tr && tr.modDealt && !autoExhausted(unit, tid)) tr.modDealt(ctx);
       }
       if (ordered) { ctx.mult *= 1.5; ctx.notes.push("号令"); }
       const ledgerParent = unit.side === "player" ? ledgerBoost : null;
@@ -734,7 +745,7 @@ const Battle = {
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
-        if (tr && tr.postAttack && target) tr.postAttack(post);
+        if (tr && tr.postAttack && target && !autoExhausted(unit, tid)) tr.postAttack(post);
       }
       if (triggeredEvents.length) {
         // 金貨は軍団の成果。盗む役と反応する役を別の人材で組める。

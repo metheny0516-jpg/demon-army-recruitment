@@ -156,6 +156,39 @@ const offersOf = r => r.timeline.filter(e => e.type === 'order_offer');
   assert(costs.every(c => Number.isInteger(c) && c >= 1 && c <= 3), 'cost は 1〜3 の整数');
 }
 
+// 10. 上位技の自動発動は1戦闘1回。2回目以降は号令でだけ出る
+{
+  const build = (spirit) => ({
+    p: [mk('タンク', [], 'player', { hp: 900, atk: 3, def: 10, spd: 2 }), mk('ミラ', ['great_fireball'], 'player', { race: '魔族', hp: 400, atk: 6, def: 4, spd: 6, spirit })],
+    e: [mk('兵A', [], 'enemy', { race: '人間', hp: 600, atk: 6, def: 2, spd: 7 }), mk('兵B', [], 'enemy', { race: '人間', hp: 600, atk: 6, def: 2, spd: 3 })]
+  });
+  const s1 = build();
+  const r1 = Battle.simulate(s1.p, s1.e, { rations: rations(), seed: 3 });
+  const fires = r => r.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === 'great_fireball').length;
+  assert(r1.rounds >= 5, `（前提）長い戦闘（${r1.rounds}ラウンド）`);
+  assert(fires(r1) === 1, `号令なしでは大火球は1戦闘1回（${fires(r1)}）`);
+  // 節目は「誰かが倒れた／味方が半分以下」で来る。前衛を紙にして半分を切らせる
+  const build2 = (spirit) => ({
+    p: [mk('カミ', [], 'player', { hp: 40, atk: 3, def: 0, spd: 2 }), mk('ミラ', ['great_fireball'], 'player', { race: '魔族', hp: 400, atk: 6, def: 4, spd: 6, spirit })],
+    e: [mk('兵A', [], 'enemy', { race: '人間', hp: 600, atk: 6, def: 2, spd: 7 }), mk('兵B', [], 'enemy', { race: '人間', hp: 600, atk: 6, def: 2, spd: 3 })]
+  });
+  let found = null;
+  for (let seed = 1; seed < 80 && !found; seed++) {
+    const s = build2(3);
+    const r = Battle.simulate(s.p, s.e, { rations: rations(), seed, offerOrder: true });
+    if (r.orderOffer && r.orderOffer.candidates.some(c => c.unitId === 'p1')) found = { seed, round: r.orderOffer.round };
+  }
+  assert(!!found, '（前提）ミラに号令できる節目が出る');
+  if (found) {
+    const s = build2(3);
+    const r = Battle.simulate(s.p, s.e, { rations: rations(), seed: found.seed, offerOrder: true, orders: { [found.round]: 'p1' } });
+    const exec = r.timeline.find(e => e.type === 'order_exec');
+    const after = exec ? r.timeline.slice(r.timeline.indexOf(exec)).filter(e => e.type === 'trait_trigger' && e.traitId === 'great_fireball').length : 0;
+    assert(after >= 1, `号令なら自動の1回を使い切った後でも出る（号令後 ${after} 回）`);
+  }
+  assert(['great_fireball', 'ogre_charge', 'blood_howl', 'goblin_tactics'].every(id => TRAITS[id].autoLimit === 1), '大火球・ぶちかまし・血の雄叫び・集団戦法に autoLimit 1');
+}
+
 // 8. 台詞と定義の形：order を持つ特性は lines.order を3本以上、28文字以内、数字なし
 {
   const ids = Object.keys(TRAITS).filter(id => TRAITS[id].order);
