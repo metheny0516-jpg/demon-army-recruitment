@@ -33,6 +33,8 @@
   **幕の進行の仕様（次、Claude）で扱うこと**：`MONSTER_TEMPLATES_ACT2` の解禁（`rollApplicant` は tier 3/4 を区別しない）、
   `ENEMY_STAGES_ACT2` の接続と `MAX_CONQUEST` の幕ごとの上限、勇者戦後の切り替え場面、討伐隊の下限、`rampage` の autoLimit
   （modDealt の受け身技には効かない）、突進の押し下げが「ラウンドの終わり」になっている点（未決U3）。
+- **Opus**：`docs/SPEC_ACT_PROGRESS_2026-09-11.md` — 幕の進行（run.js）。第一幕の着地で終わらず第二幕へ。段階表・征服上限・
+  応募テンプレートを幕で切り替え、討伐隊の下限、勇者（再）は段階14。UI は main.js の battleReport 1分岐だけ。
 - 済み：**新種族3の絵**（CodeX `codex/act2-art` 7コミット、マージ済み）。立ち絵 768×1024・6ポーズ WebP・BATTLE_SPRITES 登録。
   art-coverage / portrait / species（3種）通過。表情差分は無し（任意）。
 
