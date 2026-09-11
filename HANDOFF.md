@@ -288,6 +288,20 @@ tier1 の伸びは設計と相談。その先は王国の反撃 → 全滅後の
 どちらも `EV_PICK(..., "orc" / "skeleton")` が**好みであって絞り込みではない**（該当が無ければ任意種族へ落ちる）のが原因。
 `EV_PICK` の第2引数を絞り込みと読み違えないこと。残る種族名は `orc_duel` のキャスト条件だけ（表示文ではない）。
 
+**第二幕の中身をデータだけ先に入れた（2026-09-11・Claude）**：仕様 `docs/SPEC_ACT2_CONTENT_2026-09-11.md`。
+新種族3（サキュバス・ミノタウロス・リッチ）・技6・敵段階9〜14・事件2。**今の幕では出ない。**
+- **新種族は `MONSTER_TEMPLATES_ACT2`（別配列）。** 仕様は「`MONSTER_TEMPLATES` に tier 4 で足して、
+  混ざるなら報告」だったが、`rollApplicant()` の重みは tier 3 と 4 を区別していない（`else` で同じ枝）ので
+  **足せば必ず今の応募に混ざる**。敵段階と同じく安全側の別配列にした。幕の進行で合流させること。
+- 敵段階は `ENEMY_STAGES_ACT2` ＋ `ACT_STAGE_CAP = { 1: 8, 2: 14 }`。`ENEMY_STAGES` は8のまま
+  （伸ばすと `MAX_CONQUEST` と `campaignLevel()` の上限が動いて第一幕の着地が壊れる）。
+- **技6つは `ctx.trigger()` を呼んでいない。** 呼ぶと `chain.js` の CLASSIFY に役が無くて例外が飛ぶ。
+  `src/core/*` はこの仕様では触れないので通知は `ctx.log` だけ。**幕の進行で CLASSIFY へ6つ足し、
+  `ctx.trigger` に戻すこと**（そのとき sim の「種族技の発動」集計にも載る）。
+- 既存テスト2本が件数をベタ書きしていて落ちたので**下限比較に直した**
+  （`test-debts` の `EVENTS.length === 30`、`test-skills-battle` の `skills.length === 11`）。
+  後者は species の実在確認を `MONSTER_TEMPLATES_ACT2` も見るようにした（wizard≠mage の守りは残っている）。
+
 **経験で身につく共通特性を「付ける」側を入れた（2026-09-11・Claude）**：`traits.js` に定義だけあった
 頑丈・しぶとい・担がれ慣れ・城の主を、`Game.grantExperienceTraits(notes)` が決着ごとに**名簿全員**へ判定して付ける
 （留守番も対象。城の主は留守番でしか育たない）。1決着につき1人1つまで。**id はベタ書きせず `TRAITS[id].earned` から引く。**

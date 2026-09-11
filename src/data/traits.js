@@ -499,6 +499,134 @@ const TRAITS = {
     lines: { earned: ["城の音で、腹が減る刻が分かる", "留守は任せろ。火も見ている", "この城の勝手は、もう知ってる"] }
   },
 
+  // ── 第二幕の種族技（2026-09-11・データのみ）───────────────────
+  // 新種族3体（サキュバス・ミノタウロス・リッチ）は `MONSTER_TEMPLATES_ACT2` にいるので、
+  // 今の幕（第一幕）の応募には混ざらない。ここは技の定義だけを先に置く。
+  //
+  // **`ctx.trigger()` を呼んでいない。** 呼ぶと `chain.js` の CLASSIFY に役が無くて
+  // 「未分類の因果イベント」で例外が飛ぶ（第一幕の技で実際に踏んだ）。`src/core/*` は
+  // この仕様では触らないので、通知は `ctx.log` だけにしてある。
+  // 幕の進行の仕様で CLASSIFY へ6つ足し、`ctx.trigger` に戻すこと。
+  // そのとき sim の「種族技の発動」集計にも載るようになる。
+
+  // サキュバス1段目：悪戯の強い版。刺さるのは、押しに弱い相手。
+  allure: {
+    name: "誘惑",
+    relic: "香水瓶",
+    desc: "攻撃した敵の攻撃力を2下げる",
+    order: { label: "本気で誘う", cost: 1, note: "いつもの誘惑を、次の一撃で強く効かせる" },
+    lines: { order: ["あら、ご指名？", "仕方ないわね、本気で", "断れない子は好きよ"] },
+    postAttack(ctx) {
+      if (!ctx.target.alive || ctx.target.atk <= 1) return;
+      ctx.target.atk = Math.max(1, ctx.target.atk - (ctx.ordered ? 4 : 2));
+      ctx.log(`　${ctx.attacker.name}の【誘惑】 ${ctx.target.name}の攻撃力が下がった`, "trait");
+    }
+  },
+  // サキュバス上位：惑わされた相手が、隣の味方を殴る。自動は1戦闘1回、号令なら必ず。
+  enthrall: {
+    name: "魅了",
+    desc: "攻撃した敵が、立っている別の敵1体を本来の7割で殴る（自動は1戦闘1回。号令なら必ず）",
+    skill: { species: "succubus", tier: 2, replaces: "allure" },
+    autoLimit: 1,
+    order: { label: "魅了せよ", cost: 2, note: "次の一撃で、相手が必ず仲間を殴る" },
+    lines: {
+      unlock: ["目を見て話せば、もう遅いの", "誰の味方か、忘れさせられる", "口説き方を覚えたみたい"],
+      use: ["こっちを見て？", "その人、邪魔じゃない？", "ねえ、こっちの味方でしょ"],
+      order: ["ご命令なら、喜んで", "はい、落としてきます", "任せて。得意なの"]
+    },
+    postAttack(ctx) {
+      if (!ctx.target.alive) return;
+      const others = ctx.enemies.filter(u => ctx.onField(u) && u !== ctx.target);
+      if (!others.length) return;
+      if (!ctx.ordered) {
+        if (ctx.attacker.flags.enthralled) return;
+        ctx.attacker.flags.enthralled = true;
+      }
+      const victim = ctx.pick(others);
+      const dmg = Math.max(1, Math.round(ctx.target.atk * 0.7));
+      ctx.log(`　${ctx.attacker.name}の【魅了】 ${ctx.target.name}が${victim.name}を殴った`, "trait");
+      ctx.dealRaw(ctx.target, victim, dmg, "魅了");
+    }
+  },
+
+  // ミノタウロス1段目：ラウンド1の突進で、敵の列が崩れる。
+  // 押し下げは `moveEnemyBack` を持つ onRoundEnd でしか書けないので、
+  // 「1ラウンド目の終わりに列が入れ替わる」形にした（新しいフックは作らない）。
+  charge: {
+    name: "突進",
+    relic: "鼻輪",
+    desc: "1ラウンド目の終わりに、敵の先頭を一つ後ろへ押し下げる",
+    order: { label: "突っ込め", cost: 1, note: "ラウンドを問わず、次の終わりに敵の列を崩す" },
+    lines: { order: ["フンッ", "道は、開ける", "止まれない"] },
+    onRoundEnd(ctx) {
+      if (!ctx.unit.alive || (ctx.round !== 1 && !ctx.unit.flags.chargeOrdered)) return;
+      const front = ctx.enemies.find(ctx.onField);
+      if (!front || !ctx.moveEnemyBack(front)) return;
+      ctx.unit.flags.chargeOrdered = false;
+      ctx.log(`　${ctx.unit.name}の【突進】 ${front.name}が後ろへ押し下げられた`, "trait");
+    }
+  },
+  // ミノタウロス上位：追い詰められるほど手がつけられなくなる。守りは捨てる。
+  rampage: {
+    name: "暴走",
+    desc: "自分のHPが半分以下のとき、与えるダメージが増える代わりに、受けるダメージも増える",
+    skill: { species: "minotaur", tier: 2, replaces: "charge" },
+    autoLimit: 1,
+    order: { label: "暴れろ", cost: 2, note: "HPに関係なく、次の一撃を暴走させる" },
+    lines: {
+      unlock: ["痛いほうが、よく見える", "もう、止め方を忘れた", "追い詰められると強い質でな"],
+      use: ["うおおおおッ！", "止めるな！", "まだ立てる！"],
+      order: ["……いいのか、本当に", "止まらんぞ", "了解した。暴れる"]
+    },
+    modDealt(ctx) {
+      if (ctx.ordered || ctx.attacker.hp * 2 <= ctx.attacker.maxHp) ctx.mult *= 1.5;
+    },
+    modTaken(ctx) {
+      if (ctx.unit.hp * 2 > ctx.unit.maxHp) return ctx.dmg;
+      return Math.max(1, Math.round(ctx.dmg * 1.2));
+    }
+  },
+
+  // リッチ1段目：与えた傷のぶんだけ、自分が保つ。
+  soul_drain: {
+    name: "魂吸い",
+    relic: "骨杯",
+    desc: "与えたダメージの3割ぶん回復する",
+    order: { label: "深く吸え", cost: 1, note: "次の一撃で、吸う量が倍になる" },
+    lines: { order: ["承知しました", "では、いただきます", "遠慮はやめましょう"] },
+    postAttack(ctx) {
+      const rate = ctx.ordered ? 0.6 : 0.3;
+      const heal = Math.min(ctx.attacker.maxHp - ctx.attacker.hp, Math.round(ctx.dmg * rate));
+      if (heal <= 0) return;
+      ctx.attacker.hp += heal;
+      ctx.log(`　${ctx.attacker.name}の【魂吸い】 ${ctx.target.name}から吸って回復した`, "trait");
+    }
+  },
+  // リッチ上位：3ラウンド目に一度だけ、戦場全体へ死が広がる。
+  death_pulse: {
+    name: "死の波動",
+    desc: "3ラウンド目の終わりに、敵全体へ攻撃力の6割のダメージ（1戦闘1回）",
+    skill: { species: "lich", tier: 2, replaces: "soul_drain" },
+    autoLimit: 1,
+    order: { label: "波動を放て", cost: 3, note: "ラウンドを待たず、次の終わりに全体へ放つ" },
+    lines: {
+      unlock: ["名簿が、少し長くなりました", "まとめて数えられるようになった", "一人ずつ数えるのは飽きまして"],
+      use: ["静かになさい", "ここまでです", "みなさま、ご一緒に"],
+      order: ["かしこまりました", "では、まとめて", "書類は後ほど"]
+    },
+    onRoundEnd(ctx) {
+      if (!ctx.unit.alive || ctx.unit.flags.deathPulseUsed) return;
+      if (ctx.round !== 3 && !ctx.unit.flags.deathPulseOrdered) return;
+      const targets = ctx.enemies.filter(ctx.onField);
+      if (!targets.length) return;
+      ctx.unit.flags.deathPulseUsed = true;
+      ctx.unit.flags.deathPulseOrdered = false;
+      const dmg = Math.max(1, Math.round(ctx.unit.atk * 0.6));
+      ctx.log(`　${ctx.unit.name}の【死の波動】 戦場に死が広がった`, "trait");
+      for (const target of targets) ctx.dealRaw(ctx.unit, target, dmg, "死の波動", null);
+    }
+  },
+
   // ── 種族技 tier 2 ──────────────────────────────────────
   // フック本体は battle.js 側の対応と同時に追加する。ここでは置換契約と、
   // プレイヤーへ見せる効果・台詞を先に定義して、既存特性には触れない。

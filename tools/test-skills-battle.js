@@ -155,10 +155,14 @@ const rounds = result => {
 // 技の種族IDと置き換え元は、テンプレートと既存特性に実在すること（"wizard" と書いて魔法使いが永久に覚えない事故の再発防止）
 {
   const T = vm.runInContext('TRAITS', ctx);
-  const templates = vm.runInContext('MONSTER_TEMPLATES', ctx);
+  // 第二幕の種族は別配列（MONSTER_TEMPLATES_ACT2）。今の幕の応募には混ざらないが、
+  // 技の species は「どこかのテンプレートに実在する」ことを確かめたいので両方を見る。
+  const templates = vm.runInContext('MONSTER_TEMPLATES', ctx)
+    .concat(vm.runInContext('typeof MONSTER_TEMPLATES_ACT2 !== "undefined" ? MONSTER_TEMPLATES_ACT2 : []', ctx));
   const ids = new Set(templates.map(t => t.id).concat(["king_slime"]));
   const skills = Object.entries(T).filter(([, t]) => t.skill && t.skill.tier === 2);
-  assert(skills.length === 11, '上位技は11種族ぶん');
+  // 数は幕が増えるたびに動く。**下限だけを見る**（減っていたら技を消している）。
+  assert(skills.length >= 11, `上位技は11種族ぶん以上（${skills.length}）`);
   for (const [id, t] of skills) {
     assert(ids.has(t.skill.species), `${id} の species「${t.skill.species}」がテンプレートに実在する`);
     assert(!!T[t.skill.replaces], `${id} の replaces「${t.skill.replaces}」が TRAITS に実在する`);

@@ -1363,5 +1363,82 @@ const EVENTS = [
         }
       }
     ]
+  },
+
+  {
+    id: "succubus_rumor",
+    title: "城下の噂",
+    weight: 4,
+    // 留守番（非戦闘）にその種族がいるときだけ
+    check(st) { return Game.departmentRoster("home").some(m => m.tplId === "succubus"); },
+    cast(st) {
+      const pool = Game.departmentRoster("home").filter(m => m.tplId === "succubus");
+      if (!pool.length) return null;
+      return { actor: U.pick(pool).uid };
+    },
+    text(st, c) {
+      return `留守番の${c.actor.name}（${c.actor.race}）の噂が、いつの間にか城下に広まっていた。\n`
+        + `モルモが耳を赤くして報告書を持ってくる。「面接希望が急に増えたんですが……」\n`
+        + `一方、古参の何人かは朝から落ち着かない様子で城内をうろついている。`;
+    },
+    options: [
+      {
+        label: "噂を放置する（次の面接の応募者+1）",
+        apply(st, c) {
+          st.renownBonus = 1;
+          return `噂はそのままにした。次の面接では応募者が1人増えそうだ。\n`
+            + `${c.actor.name}は「別に、何もしてないのに」と涼しい顔をしている。`;
+        }
+      },
+      {
+        label: "本人に自重を求める",
+        apply(st, c) {
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 12, 0, 100);
+          for (const m of Game.departmentRoster("home")) {
+            if (m.uid !== c.actor.uid) m.loyalty = U.clamp(m.loyalty + 4, 0, 100);
+          }
+          return `${c.actor.name}に自重するよう伝えた。本人の忠誠-12。\n`
+            + `古参たちは安心したのか、忠誠+4。噂は数日でしぼんだ。`;
+        }
+      }
+    ]
+  },
+
+  {
+    id: "minotaur_door",
+    title: "入らない扉",
+    weight: 4,
+    // 留守番（非戦闘）にその種族がいるときだけ
+    check(st) { return Game.departmentRoster("home").some(m => m.tplId === "minotaur"); },
+    cast(st) {
+      const pool = Game.departmentRoster("home").filter(m => m.tplId === "minotaur");
+      if (!pool.length) return null;
+      return { actor: U.pick(pool).uid };
+    },
+    text(st, c) {
+      return `${c.actor.name}（${c.actor.race}）が、工事現場の狭い扉の前で立ち往生している。\n`
+        + `肩幅が扉より広い。角も引っかかる。後ろでは資材を積んだ者たちが列を作っていた。\n`
+        + `「……回り道、しますか？」とモルモが恐る恐る尋ねる。`;
+    },
+    options: [
+      {
+        label: "工期を1回遅らせる",
+        apply(st, c) {
+          st.buildProgress = Math.max(0, (st.buildProgress || 0) - 2);
+          c.actor.loyalty = U.clamp(c.actor.loyalty + 5, 0, 100);
+          return `工事の予定を1回遅らせた。${c.actor.name}の忠誠+5。\n`
+            + `急かされなかったことに、本人がいちばんほっとしていた。`;
+        }
+      },
+      {
+        label: "壁を壊させて通す（建材+）",
+        apply(st, c) {
+          st.materials += 3;
+          c.actor.loyalty = U.clamp(c.actor.loyalty - 4, 0, 100);
+          return `${c.actor.name}に壁を壊してもらい、崩した分を建材3として回収した。\n`
+            + `扉はもう無い。壁ごと無い。${c.actor.name}の忠誠-4、少し気まずそうだ。`;
+        }
+      }
+    ]
   }
 ];

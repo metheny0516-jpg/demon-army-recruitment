@@ -103,7 +103,9 @@ Game.settleDebts([]);
 assert(true, "debts の無い旧セーブでも取り立てが落ちない");
 
 // ── 5. イベント側の契約 ────────────────────────────────
-assert(EVENTS.length === 30, "イベントは30本ある: " + EVENTS.length);
+// 件数はデータが増えるたびに動く。**下限だけを見る**（減っていたら何かを消している）。
+// 第二幕の事件2件を足したときに 30 のベタ書きで落ちた（2026-09-11）。
+assert(EVENTS.length >= 30, "イベントは30本以上ある: " + EVENTS.length);
 const ids = EVENTS.map(e => e.id);
 assert(new Set(ids).size === ids.length, "id に重複が無い");
 // rats（金庫のネズミ）だけは 2026-09-05 以前からある1択の通知イベント。
