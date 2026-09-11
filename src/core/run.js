@@ -209,6 +209,13 @@ const Game = {
     return Traces.record(st.traces, { kind, subject, object, data, day: st.day, turn: st.turn });
   },
 
+  // 日誌。作戦（turn）ごとにまとめ、同じ種類の出来事は一行に畳み、事実は素の文で、
+  // モルモの一言は作戦ごとに一つだけ（いちばん重い出来事に付ける）。
+  // 1行ごとに「デス」を付けると箇条書きが読めない（オーナー試遊 2026-09-11）。
+  JOURNAL_PRIORITY: ["fallen", "retreated", "ransacked", "defended", "deserted", "retired", "fired",
+    "carried", "promoted", "ordered", "downed", "late", "ate", "fermented", "revived", "hired"],
+  JOURNAL_COLLAPSE: { hired: "が採用された", downed: "が倒れて戻った", late: "が遅れて着いた",
+    ate: "が敵の携行食を食べた", carried: "が担がれて帰った" },
   journal(limit = 40) {
     const st = this.state;
     if (!st || typeof Traces === "undefined") return [];
@@ -219,21 +226,45 @@ const Game = {
       const departed = (st.departed || []).slice().reverse().find(m => m.uid === uid);
       return departed ? departed.name : "誰か";
     };
+    const plain = trace => Traces.describe(trace, nameOf).replace(/（[^）]*\d[^）]*）/g, "");
     const groups = [];
     for (const trace of Traces.query(st.traces).slice(0, cap)) {
-      let text = Traces.describe(trace, nameOf).replace(/（[^）]*\d[^）]*）/g, "");
-      const choices = typeof MORMO_LINES !== "undefined" && MORMO_LINES.journal
-        ? MORMO_LINES.journal[trace.kind] : null;
-      const template = choices && choices.length ? choices[(trace.seq || 0) % choices.length] : "{text}デス";
-      text = template.replace("{text}", text);
-      let group = groups.find(row => row.day === trace.day);
+      const key = trace.turn ?? trace.day;
+      let group = groups.find(row => row.key === key);
       if (!group) {
-        group = { day: trace.day, turn: trace.turn, lines: [] };
+        group = { key, day: trace.day, turn: trace.turn, traces: [] };
         groups.push(group);
       }
-      group.lines.push({ seq: trace.seq, kind: trace.kind, text });
+      group.traces.push(trace);
     }
-    return groups;
+    const rank = kind => { const i = this.JOURNAL_PRIORITY.indexOf(kind); return i < 0 ? 99 : i; };
+    return groups.map(group => {
+      const lines = [];
+      const byKind = new Map();
+      for (const trace of group.traces) {
+        if (!byKind.has(trace.kind)) byKind.set(trace.kind, []);
+        byKind.get(trace.kind).push(trace);
+      }
+      for (const [kind, list] of byKind) {
+        const verb = this.JOURNAL_COLLAPSE[kind];
+        if (verb && list.length > 1) {
+          const names = [...new Set(list.slice().sort((a, b) => a.seq - b.seq).map(t => nameOf(t.subject)))].join("、");   // 起きた順に並べる
+          lines.push({ seq: list[0].seq, kind, text: `${names}${verb}` });
+        } else {
+          for (const trace of list) lines.push({ seq: trace.seq, kind, text: plain(trace) });
+        }
+      }
+      lines.sort((a, b) => rank(a.kind) - rank(b.kind) || b.seq - a.seq);
+      // モルモの一言はいちばん重い出来事に一つだけ
+      const top = lines[0];
+      let remark = "";
+      if (top) {
+        const choices = typeof MORMO_LINES !== "undefined" && MORMO_LINES.journal ? MORMO_LINES.journal[top.kind] : null;
+        const template = choices && choices.length ? choices[(top.seq || 0) % choices.length] : "{text}デス";
+        remark = template.replace("{text}", top.text);
+      }
+      return { day: group.day, turn: group.turn, lines, remark };
+    });
   },
 
   recordBattleTraces(result, contribution) {

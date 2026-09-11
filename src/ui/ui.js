@@ -512,9 +512,11 @@ const UI = {
     const st = Game.state;
     this.recordsFrom = st.phase;
     const journal = typeof Game.journal === "function" ? Game.journal() : [];
+    // 作戦ごとに一節。事実は素の箇条書き、モルモの一言は節に一つ（1行ごとに「デス」を付けると読めない）。
     const journalHtml = journal.length ? journal.map(group => `<section class="journal-day">
-      <h3>${U.esc(group.day)}日目</h3>
-      <ul>${group.lines.map(line => `<li data-kind="${U.esc(line.kind)}">${U.esc(line.text)}</li>`).join("")}</ul>
+      <h3>${group.turn != null ? `第${U.esc(group.turn)}作戦のころ` : `${U.esc(group.day)}日目`}</h3>
+      <ul class="journal-lines">${group.lines.map(line => `<li data-kind="${U.esc(line.kind)}">${U.esc(line.text)}</li>`).join("")}</ul>
+      ${group.remark ? `<div class="journal-remark">モルモ「${U.esc(group.remark)}」</div>` : ""}
     </section>`).join("") : `<div class="muted journal-empty">まだ何も書いていませんデス</div>`;
     const departed = this.departedPanel();
     this.set(`<div class="records-screen">

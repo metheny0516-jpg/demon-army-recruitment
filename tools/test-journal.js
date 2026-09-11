@@ -81,7 +81,19 @@ const allText = journal.flatMap(group => group.lines.map(line => line.text)).joi
 assert(allText.includes(recruit.name), '在籍者の名前を日誌で引ける');
 assert(allText.includes('fallen殿'), '去った者の名前を日誌で引ける');
 assert(!/[0-9０-９]/.test(allText), 'モルモの日誌本文に数字を出さない');
-assert(Game.journal(2).reduce((sum, group) => sum + group.lines.length, 0) === 2, '表示件数 limit を守る');
+assert(Game.journal(2).reduce((sum, group) => sum + group.lines.length, 0) <= 2, '表示件数 limit を守る（同種は一行に畳む）');
+assert(journal.every(group => typeof group.remark === 'string'), '作戦ごとにモルモの一言が一つ付く');
+{
+  // 同じ作戦の採用が複数あれば一行に畳む
+  const before = Game.journal()[0];
+  const many = [901, 902, 903];
+  st.roster.push(...many.map(uid => ({ uid, name: `新入り${uid}`, race: 'ゴブリン', job: '', hp: 1, atk: 1, def: 0, spd: 1, salary: 1, loyalty: 50, traits: [], tags: [] })));
+  for (const uid of many) Traces.record(st.traces, { kind: 'hired', subject: uid, object: null, data: { day: st.day, lore: false }, day: st.day, turn: st.turn });
+  const head = Game.journal()[0];
+  const hiredLines = head.lines.filter(l => l.kind === 'hired');
+  assert(hiredLines.length === 1 && /新入り901、新入り902、新入り903/.test(hiredLines[0].text), `同じ作戦の採用は一行（${hiredLines[0] && hiredLines[0].text}）`);
+  void before;
+}
 
 // 旧セーブ移行。
 delete st.traces;
