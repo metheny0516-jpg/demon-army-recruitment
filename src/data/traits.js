@@ -519,7 +519,7 @@ const TRAITS = {
     postAttack(ctx) {
       if (!ctx.target.alive || ctx.target.atk <= 1) return;
       ctx.target.atk = Math.max(1, ctx.target.atk - (ctx.ordered ? 4 : 2));
-      ctx.log(`　${ctx.attacker.name}の【誘惑】 ${ctx.target.name}の攻撃力が下がった`, "trait");
+      ctx.trigger("allure");   // 発動の記録（chain.js の CLASSIFY に役あり。sim の発動集計にも載る）
     }
   },
   // サキュバス上位：惑わされた相手が、隣の味方を殴る。自動は1戦闘1回、号令なら必ず。
@@ -544,7 +544,7 @@ const TRAITS = {
       }
       const victim = ctx.pick(others);
       const dmg = Math.max(1, Math.round(ctx.target.atk * 0.7));
-      ctx.log(`　${ctx.attacker.name}の【魅了】 ${ctx.target.name}が${victim.name}を殴った`, "trait");
+      ctx.trigger("enthrall");   // 発動の記録（chain.js の CLASSIFY に役あり。sim の発動集計にも載る）
       ctx.dealRaw(ctx.target, victim, dmg, "魅了");
     }
   },
@@ -563,7 +563,7 @@ const TRAITS = {
       const front = ctx.enemies.find(ctx.onField);
       if (!front || !ctx.moveEnemyBack(front)) return;
       ctx.unit.flags.chargeOrdered = false;
-      ctx.log(`　${ctx.unit.name}の【突進】 ${front.name}が後ろへ押し下げられた`, "trait");
+      ctx.trigger("charge");   // 発動の記録（chain.js の CLASSIFY に役あり。sim の発動集計にも載る）
     }
   },
   // ミノタウロス上位：追い詰められるほど手がつけられなくなる。守りは捨てる。
@@ -599,7 +599,7 @@ const TRAITS = {
       const heal = Math.min(ctx.attacker.maxHp - ctx.attacker.hp, Math.round(ctx.dmg * rate));
       if (heal <= 0) return;
       ctx.attacker.hp += heal;
-      ctx.log(`　${ctx.attacker.name}の【魂吸い】 ${ctx.target.name}から吸って回復した`, "trait");
+      ctx.trigger("soul_drain");   // 発動の記録（chain.js の CLASSIFY に役あり。sim の発動集計にも載る）
     }
   },
   // リッチ上位：3ラウンド目に一度だけ、戦場全体へ死が広がる。
@@ -622,7 +622,7 @@ const TRAITS = {
       ctx.unit.flags.deathPulseUsed = true;
       ctx.unit.flags.deathPulseOrdered = false;
       const dmg = Math.max(1, Math.round(ctx.unit.atk * 0.6));
-      ctx.log(`　${ctx.unit.name}の【死の波動】 戦場に死が広がった`, "trait");
+      ctx.trigger("death_pulse");   // 発動の記録（chain.js の CLASSIFY に役あり。sim の発動集計にも載る）
       for (const target of targets) ctx.dealRaw(ctx.unit, target, dmg, "死の波動", null);
     }
   },

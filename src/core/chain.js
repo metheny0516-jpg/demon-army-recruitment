@@ -112,6 +112,14 @@ const CLASSIFY = {
       // ── 種族技（tier 2）─────────────────────────
       // 宣言：効果は直後の子（伝播ダメージ・追加行動・召喚・蘇生）が担う。
       // 発動しても子が出なければ何も起きていないので0段。
+      // ── 第二幕の技（2026-09-11）。データは Opus、役はここ ──
+      case 'enthrall':        // 魅了 → 相手が仲間を殴る dealRaw
+      case 'death_pulse':     // 死の波動 → 全体への dealRaw
+        return { role: 'declaration', kind: 'trait:' + d.traitId, selfEffect: false };
+      case 'allure':          // 誘惑。相手の攻撃力を下げる（同じ効果を担う別イベントは無い）
+      case 'charge':          // 突進。敵の列を押し下げる
+      case 'soul_drain':      // 魂吸い。自分の回復（heal イベントは出ない）
+        return { role: 'effect', kind: 'trait:' + d.traitId };
       case 'ogre_charge':     // ぶちかまし → 全体への dealRaw
       case 'great_fireball':  // 大火球 → 別の敵全員への dealRaw
       case 'blood_howl':      // 血の雄叫び → extraAction
