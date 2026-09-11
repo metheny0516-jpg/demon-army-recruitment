@@ -47,19 +47,19 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-formation.png', fullPage: true });
 
   await step('並び替え（前へ/後ろへ）', async () => {
-    const before = await page.locator('.card-name').first().innerText();
+    const before = await page.locator('.member-row-main b').first().innerText();
     await page.locator('[data-action="down"]').first().click();
-    const after = await page.locator('.card-name').first().innerText();
+    const after = await page.locator('.member-row-main b').first().innerText();
     if (before === after) throw new Error('並び替えが効いていない');
-    await page.locator('.department-combat-section .card').nth(1).locator('[data-action="front"]').click();
-    const restored = await page.locator('.card-name').first().innerText();
+    await page.locator('.member-row.active').nth(1).locator('[data-action="front"]').click();
+    const restored = await page.locator('.member-row-main b').first().innerText();
     if (restored !== before) throw new Error('最前列へ一発で戻せない');
   });
 
   await step('留守番へ配属', async () => {
-    await page.locator('.department-combat-section [data-action="assigndepartment"][data-department="home"]').first().click();
-    if (await page.locator('.department-home-section .card').count() !== 1) throw new Error('生活部門へ移動できない');
-    if (await page.locator('.department-combat-section .card').count() < 1) throw new Error('出撃隊が空になった');
+    await page.locator('.member-row.active [data-action="toggledeploy"]').first().click();
+    if (await page.locator('.member-row.home').count() !== 1) throw new Error('留守番へ移動できない');
+    if (await page.locator('.member-row.active').count() < 1) throw new Error('出撃隊が空になった');
   });
 
   await step('給与方針を意図的未払いへ変更', async () => {

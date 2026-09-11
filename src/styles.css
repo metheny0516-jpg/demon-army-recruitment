@@ -3225,3 +3225,174 @@ button.primary::first-letter { color: var(--gold); }
 .journal-lines { margin: 0; padding-left: 1.4em; line-height: 1.75; }
 .journal-remark { margin-top: 8px; padding: 8px 12px; border-left: 3px solid #b48ae0; background: rgba(120, 80, 170, .12); color: #d9c7f0; font-size: 14px; line-height: 1.6; }
 .records-back { position: sticky; bottom: 10px; margin-top: 18px; }
+
+/* ── 人物一覧と共通詳細 ── */
+.member-rows { display: grid; gap: 8px; }
+.member-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+  padding: 9px 11px; border: 1px solid rgba(232,189,104,.22); border-radius: 7px;
+  background: rgba(26,20,18,.72); cursor: pointer;
+}
+.member-row:hover { border-color: rgba(232,189,104,.55); }
+.member-row:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.member-row .avatar { width: 42px; height: 42px; }
+.member-row-main, .member-row-state { display: flex; flex-direction: column; min-width: 0; }
+.member-row-main span, .member-row-main small, .member-row-state small { color: var(--muted); }
+.member-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+.member-overlay {
+  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center;
+  padding: 20px; overflow: auto; background: rgba(8, 6, 8, .78);
+}
+.member-detail {
+  width: min(720px, 100%); max-height: calc(100dvh - 40px); overflow: auto; position: relative;
+  padding: 22px; border: 1px solid #80633d; border-radius: 10px;
+  background: linear-gradient(145deg, rgba(39,29,25,.98), rgba(19,15,18,.99)); box-shadow: 0 18px 60px #000b;
+}
+.member-detail > header { display: flex; gap: 16px; align-items: center; padding-right: 70px; }
+.member-detail .photo { width: 112px; height: 112px; flex: 0 0 112px; }
+.member-close { position: absolute; right: 14px; top: 14px; }
+.member-detail section { margin-top: 16px; }
+.member-detail-stats { margin-top: 14px; }
+.member-trait-group { margin-top: 8px; }
+.member-relic-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+.applicant-member { cursor: pointer; }
+.recruit-compare { display: contents; }
+
+@media (max-width: 560px) {
+  .recruit-compare { display: flex; flex-direction: column; gap: 12px; }
+  .recruit-roster { order: 1; }
+  .recruit-applicants { order: 2; }
+  .member-row { grid-template-columns: auto minmax(0, 1fr); }
+  .member-row-state, .member-row-actions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  .member-overlay { padding: 0; display: block; background: #130f12; }
+  .member-detail { width: 100%; min-height: 100dvh; max-height: none; overflow: visible; border: 0; border-radius: 0; padding: 16px; }
+  .member-detail > header { align-items: flex-start; }
+  .member-detail .photo { width: 88px; height: 88px; flex-basis: 88px; }
+}
+
+/* ── 城のメニュー（軍団／記録／参謀） ── */
+.castle-screen { display: grid; gap: 14px; }
+.castle-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 10px; border-bottom: 1px solid rgba(232, 189, 104, .28);
+}
+.castle-header h2 { margin: 0; }
+.castle-tabs {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+  position: sticky; top: 0; z-index: 5; padding: 4px 0;
+  background: linear-gradient(#151013 75%, transparent);
+}
+.castle-tab {
+  min-width: 0; min-height: 48px; padding: 9px 10px;
+  border-color: rgba(232, 189, 104, .3); background: rgba(31, 23, 22, .88);
+  color: var(--muted);
+}
+.castle-tab:hover { border-color: rgba(232, 189, 104, .62); color: var(--text); }
+.castle-tab.active,
+.castle-tab[aria-selected="true"] {
+  border-color: var(--gold); color: var(--text);
+  background: linear-gradient(180deg, rgba(115, 78, 38, .58), rgba(40, 28, 25, .94));
+  box-shadow: inset 0 -2px 0 var(--gold);
+}
+.castle-content { min-width: 0; }
+.castle-panel {
+  min-width: 0; padding: 14px; border: 1px solid rgba(232, 189, 104, .24);
+  border-radius: 8px; background: rgba(25, 19, 20, .76);
+}
+.castle-panel + .castle-panel { margin-top: 10px; }
+.castle-panel > :first-child { margin-top: 0; }
+.castle-army,
+.castle-records,
+.castle-advisor { display: grid; gap: 12px; }
+.castle-army .member-rows { grid-template-columns: 1fr; }
+.castle-army .member-row.active { border-left: 3px solid #b68b45; }
+.castle-army .member-row.home { border-left: 3px solid rgba(153, 151, 148, .45); opacity: .92; }
+.castle-army .member-row-actions { justify-content: flex-end; }
+.castle-army .member-row-actions .danger { margin-left: 12px; }
+.castle-records .journal,
+.castle-records .relics,
+.castle-records .departed,
+.castle-records .progress,
+.castle-advisor .synergy,
+.castle-advisor .facilities,
+.castle-advisor .enemy-intel { min-width: 0; }
+
+/* 編成は軍団札を共有し、説明と出撃操作だけを薄い外枠に置く。 */
+.formation-shell { display: grid; gap: 12px; }
+.formation-shell > .panel,
+.formation-army {
+  min-width: 0; padding: 12px; border: 1px solid rgba(232, 189, 104, .22);
+  border-radius: 8px; background: rgba(23, 18, 19, .68);
+}
+.formation-army .member-rows { grid-template-columns: 1fr; }
+.formation-actions {
+  display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 9px;
+  padding-top: 4px;
+}
+.formation-actions .primary { min-width: min(260px, 100%); }
+
+/* PCでは従来どおり一続きの作戦卓。スマホだけ下の2行構成に切り替える。 */
+@media (min-width: 561px) {
+  .hud-row, .hud-extra { display: contents; }
+  .hud-row > span, .hud-extra > span {
+    padding: 3px 10px; border-right: 1px solid rgba(232,189,104,.16); white-space: nowrap;
+  }
+}
+
+/* ── スマホ：判断材料は2行、決定ボタンは常に親指の位置へ ── */
+@media (max-width: 560px) {
+  /* sceneEnter の transform が fixed の基準を本文に変えてしまうため、固定主操作の場面では外す。 */
+  .game-scene:has(.formation-actions .primary),
+  .game-scene:has([data-action="afterresult"]),
+  .game-scene:has(.formation-orders > .primary) { animation: none; transform: none; }
+
+  .hud {
+    display: grid; grid-template-columns: 1fr; gap: 3px;
+    padding: 5px 6px; font-size: 11px;
+  }
+  .hud-row {
+    display: flex; align-items: center; justify-content: center;
+    min-width: 0; gap: 0; flex-wrap: wrap;
+  }
+  .hud-row > span,
+  .hud-row > button {
+    flex: 0 1 auto; min-width: 0; margin: 0; padding: 2px 6px;
+    border-right: 1px solid rgba(232, 189, 104, .16); white-space: nowrap;
+  }
+  .hud-row > :last-child { border-right: 0; }
+  .hud-row b { font-size: 12px; }
+  .hud-resources .food small { display: none; }
+  .hud-progress .counterattack-gauge { width: 30px; margin-left: 3px; }
+  .hud-progress .counterattack-tag { font-size: 9px; }
+  .hud-extra { display: none !important; }
+
+  /* 作戦は候補ごとに決定を持つため、札の下端で追従させる。 */
+  [data-action="missionpick"] {
+    position: sticky; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 20;
+    box-shadow: 0 5px 18px rgba(0, 0, 0, .72);
+  }
+
+  /* 一画面に一つの主決定がある場面は、画面下へ固定する。 */
+  .formation-actions .primary,
+  [data-action="afterresult"],
+  .formation-orders > .primary {
+    position: fixed; left: 50%; bottom: 0; z-index: 45;
+    width: min(544px, calc(100vw - 16px)); min-width: 0;
+    margin: 0; padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    box-shadow: 0 -8px 22px rgba(8, 5, 8, .82);
+  }
+
+  /* 固定ボタンの高さぶん本文を延ばし、末尾の操作や文章を覆わない。 */
+  #app:has(.formation-actions .primary),
+  #app:has([data-action="afterresult"]),
+  #app:has(.formation-orders > .primary) {
+    padding-bottom: calc(82px + env(safe-area-inset-bottom));
+  }
+  /* 通常フロー末尾の音量操作まで固定ボタンの上へスクロールできる余白。 */
+  #app:has(.formation-actions .primary) ~ .sound-control,
+  #app:has([data-action="afterresult"]) ~ .sound-control,
+  #app:has(.formation-orders > .primary) ~ .sound-control {
+    margin-bottom: calc(100px + env(safe-area-inset-bottom));
+  }
+}

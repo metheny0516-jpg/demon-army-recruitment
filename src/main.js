@@ -32,6 +32,14 @@ const App = {
     Music.update(Game.state, { scene });
   },
 
+  renderMenuContext() {
+    const scene = UI.root && UI.root.dataset.scene;
+    if (scene === "castle" || (scene === "member" && UI.memberFrom === "castle")) {
+      return UI.castle(UI.castleTab);
+    }
+    return this.render();
+  },
+
   report(expression, text, options = {}) {
     if (typeof MormoScene === "undefined") return;
     MormoScene.show({ expression, text, ...options });
@@ -213,10 +221,25 @@ const App = {
         return UI.history(Storage.loadHistory());
 
       case "records":
-        return UI.records();
+        return UI.castle("records");
 
       case "backrecords":
         return this.render();
+
+      case "castle":
+        return UI.castle(data.tab || UI.castleTab || "army");
+
+      case "castletab":
+        return UI.castle(data.tab);
+
+      case "backcastle":
+        return this.render();
+
+      case "member":
+        return UI.memberDetail(data.uid ? Number(data.uid) : null, data.index);
+
+      case "closemember":
+        return UI.memberFrom === "castle" ? UI.castle(UI.castleTab) : this.render();
 
       case "title":
         return this.showTitle();
@@ -292,19 +315,19 @@ const App = {
 
       case "up":
         Game.moveDeployed(Number(data.uid), -1);
-        return this.render();
+        return this.renderMenuContext();
 
       case "down":
         Game.moveDeployed(Number(data.uid), 1);
-        return this.render();
+        return this.renderMenuContext();
 
       case "front":
         Game.moveDeployedToFront(Number(data.uid));
-        return this.render();
+        return this.renderMenuContext();
 
       case "toggledeploy":
         Game.toggleDeploy(Number(data.uid));
-        return this.render();
+        return this.renderMenuContext();
 
       case "assigndepartment":
         Game.assignDepartment(Number(data.uid), data.department);
@@ -331,8 +354,9 @@ const App = {
         return this.render();
 
       case "fire":
+        if (data.confirm === "1" && !window.confirm("この者を解雇しますか？ 城の記録には残ります。")) return;
         Game.fire(Number(data.uid));
-        return this.render();
+        return this.renderMenuContext();
 
       case "deploy": {
         // offerRetreat を渡すのは UI だけ。提案が出た戦闘では決着が保留され、
@@ -401,11 +425,11 @@ const App = {
 
       case "giverelic":
         Game.giveRelic(data.relic, Number(data.uid));
-        return this.render();
+        return this.renderMenuContext();
 
       case "storerelic":
         Game.storeRelic(data.relic);
-        return this.render();
+        return this.renderMenuContext();
 
       case "retry":
         Game.retry();
