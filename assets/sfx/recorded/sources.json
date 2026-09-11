@@ -66,5 +66,15 @@
       "source": "candidate-starninjas-clash-07.wav",
       "seconds": 0.896
     }
+  ],
+  "win": [
+    {
+      "file": "fanfare-win.wav",
+      "source": "fanfare_3.ogg",
+      "author": "fvcalderan",
+      "url": "https://opengameart.org/content/classic-fanfare-lick",
+      "license": "CC0 1.0",
+      "seconds": 2.281
+    }
   ]
 }

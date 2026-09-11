@@ -1,5 +1,9 @@
 # 効果音のライセンス台帳
 
+## 2026-09-11 勝利ファンファーレ（`recorded/fanfare-win.wav`）
+
+- 原題: [Classic fanfare lick](https://opengameart.org/content/classic-fanfare-lick)／作者: fvcalderan／取得日: 2026-09-11／ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（同日に配布ページのCC0表記を確認）／変換: 前後無音を除去、ピーク0.85、端フェード、44.1kHz・16bit・stereo WAV。
+
 2026-09-04 オーナー試聴後: 通常物理攻撃は `candidate-antum-thwack-08.wav` と
 `candidate-antum-thwack-09.wav` を原音のまま交互使用。作者・CC0出典は下記 AntumDeluge の項。
 `recorded/` の斬撃・打撃・刺突割当は旧候補。金属防御は引き続き使用。
