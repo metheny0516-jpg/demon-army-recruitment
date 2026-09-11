@@ -34,6 +34,9 @@
 //   order_exec   { unitId, name, skillId, skillName, label, quote }  号令の実行（次ラウンド冒頭、本人が真っ先に動く）
 //   result       { victory, reversal }              reversal=総HP3割以下から勝った
 // ───────────────────────────────────────────────────────
+// 敵の大技：2ラウンド目以降、この確率で1ラウンド構え（攻撃しない）、次のラウンドに×1.8。まもるで受ける相手。
+const ENEMY_BIG_MOVE = { chance: 0.15, mult: 1.8 };
+
 const Battle = {
   MAX_ROUNDS: 30,
 
@@ -99,11 +102,48 @@ const Battle = {
   // 種を渡さなければ今までどおり Math.random（sim・テストの既定は変わらない）。
   simulate(playerUnits, enemyUnits, options) {
     options = options || {};
-    if (options.seed === undefined || options.seed === null) return this._simulate(playerUnits, enemyUnits, options);
+    const run = () => {
+      // おまかせ（自動）で最後まで回す。manual でなければ生成器は一度も止まらない。
+      const gen = this._battle(playerUnits, enemyUnits, Object.assign({}, options, { manual: false }));
+      let r = gen.next();
+      while (!r.done) r = gen.next({});
+      return r.value;
+    };
+    if (options.seed === undefined || options.seed === null) return run();
     const prev = U.rand;
     U.rand = U.seeded(options.seed);
-    try { return this._simulate(playerUnits, enemyUnits, options); }
+    try { return run(); }
     finally { U.rand = prev; }
+  },
+
+  // コマンドバトル（2026-09-11）。ラウンドごとに止まり、味方それぞれの指示を受けて解決する。
+  //   const b = Battle.start(p, e, { seed, ... });
+  //   let step = b.next();               // { type: "commands", round, allies, enemies, canRetreat, ... }
+  //   step = b.next({ p0: { cmd: "attack", target: "e1" }, p1: { cmd: "guard" }, p2: { cmd: "skill" } });
+  //   ...                                // step.type === "end" なら step.result（simulate と同じ形）
+  //   b.next({ retreat: true })          // 退く（canRetreat のとき）。result.retreated === true
+  // b.timeline は生成器が積むタイムラインそのもの（描画側は差分を読む）。
+  // 乱数の種は next() のたびに差し替えて戻す（止まっている間に他の乱数を汚さない）。
+  start(playerUnits, enemyUnits, options) {
+    options = Object.assign({}, options || {}, { manual: true });
+    const rng = options.seed === undefined || options.seed === null ? null : U.seeded(options.seed);
+    const gen = this._battle(playerUnits, enemyUnits, options);
+    const handle = { timeline: null, done: false, result: null, prompt: null };
+    handle.next = (commands) => {
+      if (handle.done) return { type: "end", result: handle.result };
+      const prev = U.rand;
+      if (rng) U.rand = rng;
+      let r;
+      try { r = gen.next(commands || {}); }
+      finally { U.rand = prev; }
+      if (r.done) { handle.done = true; handle.result = r.value; handle.prompt = null; return { type: "end", result: r.value }; }
+      handle.prompt = r.value;
+      return r.value;
+    };
+    // タイムラインの参照を生成器から受け取る（最初の yield より前に battle_start を積む）
+    const first = gen.next();
+    handle.timeline = first.value && first.value.__timeline ? first.value.__timeline : null;
+    return handle;
   },
 
   // 号令の候補：戦場にいる軍団員（傭兵・召喚物を除く）で、号令できる特性（order）を持つ者。
@@ -131,7 +171,7 @@ const Battle = {
     return { ready, unready };
   },
 
-  _simulate(playerUnits, enemyUnits, options) {
+  *_battle(playerUnits, enemyUnits, options) {
     // 保存済みランの版を正本にする。V1途中ランはアップデート後も旧倍率を維持する。
     const useV2ChainMultiplier = Number(options.chainDefVersion) >= 2;
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
@@ -165,6 +205,8 @@ const Battle = {
     }
 
     const timeline = [];
+    // コマンドバトルは最初に一度だけ止まり、タイムラインの参照を渡す（start() が受け取る）。
+    if (options.manual) yield { __timeline: timeline };
     let nextEventId = 1;
     const emit = (type, data) => {
       data = data || {};
@@ -485,6 +527,11 @@ const Battle = {
         opts.traits = [...(opts.traits || []), `CHAIN ${multiplierDepth} ×${chainMult.toFixed(2)}`];
       }
       let dmg = Math.max(1, Math.round(amount * target.mods.takenMult));
+      // まもる（コマンド）。このラウンドの被ダメージ半減。敵対攻撃だけ。
+      if (target.flags.guarding && !opts.incident && attacker.side !== target.side) {
+        dmg = Math.max(1, Math.ceil(dmg * 0.5));
+        opts.traits = [...(opts.traits || []), "まもる"];
+      }
       // 味方が受ける直前の肩代わり。敵対攻撃だけに限り、最初に数値を返した者へ当たり先を替える。
       if (!opts.incident && attacker.side !== target.side) {
         const ally = target;
@@ -667,7 +714,9 @@ const Battle = {
       unit.chainDepth = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;
       if (tryIncident(unit, allies, actionOpts)) return;
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
-      const target = U.chance(0.6) ? living[0] : U.pick(living);
+      const target = actionOpts.target && living.includes(actionOpts.target)
+        ? actionOpts.target
+        : (U.chance(0.6) ? living[0] : U.pick(living));
 
       // 号令を受けた一撃。技の条件を飛ばし（特性側が ctx.ordered を読む）、与ダメ+50%。
       // 追加行動（血の雄叫び・宴）には乗せない。代償は act() の最後で払う（次の手番は息切れ）。
@@ -680,7 +729,10 @@ const Battle = {
         const tr = TRAITS[tid];
         if (tr && tr.modDealt && !autoExhausted(unit, tid)) tr.modDealt(ctx);
       }
-      if (ordered) { ctx.mult *= 1.5; ctx.notes.push("号令"); }
+      // 号令（自動戦闘の節目）は+50%と息切れ。コマンドの「技」は気合を払うだけ（倍率も息切れも無し）。
+      if (ordered && !unit.flags.orderedManual) { ctx.mult *= 1.5; ctx.notes.push("号令"); }
+      // 敵の大技（構えの次のラウンド）。
+      if (unit.flags.bigMove) { ctx.mult *= ENEMY_BIG_MOVE.mult; ctx.notes.push("大技"); }
       const ledgerParent = unit.side === "player" ? ledgerBoost : null;
       if (ledgerParent) {
         ctx.mult *= 1.4;
@@ -774,7 +826,8 @@ const Battle = {
         }
       }
       // 号令の代償。全力を出した次の手番は息が上がって動けない（大食漢の stuffed と同じ形）。
-      if (ordered) { unit.flags.ordered = false; unit.flags.winded = true; }
+      if (ordered) { const manual = !!unit.flags.orderedManual; unit.flags.ordered = false; unit.flags.orderedManual = false; if (!manual) unit.flags.winded = true; }
+      if (unit.flags.bigMove) unit.flags.bigMove = false;
     };
 
     const wiped = us => us.every(u => !u.alive);
@@ -865,6 +918,8 @@ const Battle = {
     // 節目は戦況が動くたびに来る（1ラウンドに1回、回数の上限なし。気合と息切れが連打を抑える）。
     const orderOffers = [];
     const orders = options.orders || {};
+    let retreatedManual = false;        // コマンドで退いた（result.retreated）
+    const spiritSpent = {};             // uid → 技で払った気合（run.js が名簿へ反映）
     const offerAtRound = r => orderOffers.find(o => o.round === r) || null;
 
     outer:
@@ -914,6 +969,75 @@ const Battle = {
           });
         }
       }
+      // ── コマンド（手動）。ラウンドの頭で止まり、味方それぞれの指示を受ける ──
+      // 乱数はここでは消費しない。指示：attack（target 任意）／guard／skill／auto。retreat: true で退く。
+      for (const u of playerUnits) u.flags.guarding = false;
+      let commands = {};
+      if (options.manual) {
+        const corps = playerUnits.filter(u => !u.flags.summoned);
+        const downed = corps.filter(u => !u.alive);
+        const standing = corps.filter(onField);
+        const canRetreat = !options.noRetreatOffer && downed.length > 0 && standing.length > 0 && !wiped(enemyUnits);
+        const prompt = {
+          type: "commands", round,
+          allies: playerUnits.filter(onField).map(u => {
+            const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
+            const tr = skillId ? TRAITS[skillId] : null;
+            const cost = tr ? Math.max(0, Number(tr.order.cost) || 0) : 0;
+            const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
+            return {
+              id: u.id, uid: u.uid, name: u.name, hp: u.hp, maxHp: u.maxHp, spirit,
+              winded: !!u.flags.winded, stuffed: !!u.flags.stuffed, mercenary: !!u.flags.mercenary, summoned: !!u.flags.summoned,
+              skill: tr ? { id: skillId, name: tr.name, label: tr.order.label, note: tr.order.note || "", cost,
+                ready: !u.flags.winded && !u.flags.mercenary && (spirit === null || spirit >= cost) } : null
+            };
+          }),
+          enemies: enemyUnits.filter(onField).map(u => ({
+            id: u.id, name: u.name, hp: u.hp, maxHp: u.maxHp, intent: u.flags.charging ? "big" : "attack"
+          })),
+          canRetreat, downed: downed.map(u => u.name), timelineLength: timeline.length
+        };
+        commands = (yield prompt) || {};
+        if (commands.retreat && canRetreat) {
+          // 退く。倒れていた者は担いで帰る（撤退の提案と同じ導出）。
+          const enemiesLeft = enemyUnits.filter(onField);
+          const event = emit("retreat_offer", {
+            round, emphasis: 3, downed: downed.map(snap), standing: standing.map(snap), enemies: enemiesLeft.map(snap),
+            manual: true, text: `　魔王軍、退く。${downed.map(u => u.name).join("、")}を担いで城へ戻った`, cls: "mormo"
+          });
+          const contribution = this.summarizeContribution(timeline, playerUnits).map(row => {
+            if (row.mercenary || row.survived) return row;
+            return { ...row, survived: true, injured: true };
+          });
+          retreatOffer = { index: timeline.indexOf(event), round, contribution };
+          retreatedManual = true;
+          break outer;
+        }
+        // 技：気合を払って技を確実に出す（条件を飛ばす）。足りなければ「たたかう」に落とす。
+        for (const u of playerUnits) {
+          const c = commands[u.id];
+          if (!c || !onField(u)) continue;
+          if (c.cmd === "guard") {
+            u.flags.guarding = true;
+          } else if (c.cmd === "skill") {
+            const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
+            const tr = skillId ? TRAITS[skillId] : null;
+            const cost = tr ? Math.max(0, Number(tr.order.cost) || 0) : 0;
+            const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
+            if (tr && !u.flags.winded && !u.flags.mercenary && (spirit === null || spirit >= cost)) {
+              if (spirit !== null) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
+              u.flags.ordered = true;
+              u.flags.orderedManual = true;
+              const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
+              emit("order_exec", {
+                unitId: u.id, name: u.name, skillId, skillName: tr.name, label: tr.order.label, quote, cost, manual: true, emphasis: 3,
+                text: `　魔王「${u.name}、${tr.order.label}！」 ${u.name}「${quote}」`, cls: "order"
+              });
+            }
+          }
+        }
+      }
+
       const order = all()
         .filter(onField)
         .sort((a, b) => b.spd - a.spd || (U.chance(0.5) ? -1 : 1));
@@ -944,7 +1068,27 @@ const Battle = {
         }
         const allies = unit.side === "player" ? playerUnits : enemyUnits;
         const enemies = unit.side === "player" ? enemyUnits : playerUnits;
-        act(unit, allies, enemies, round);
+        // まもる：この手番は攻撃しない（被ダメ半減は applyDamage）。
+        if (unit.side === "player" && unit.flags.guarding) {
+          emit("note", { unitId: unit.id, guarding: true, emphasis: 1, text: `　${unit.name}は身を守っている`, cls: "trait" });
+          continue;
+        }
+        // 敵の大技：構えた次のラウンドに放つ（act の bigMove）。構えるのは2ラウンド目以降、たまに。
+        // 構えは1ラウンド攻撃を捨てるので、まもるで受ければ得、放置すれば痛い。自動戦闘でも同じ規則。
+        if (unit.side === "enemy") {
+          if (unit.flags.charging) {
+            unit.flags.charging = false;
+            unit.flags.bigMove = true;
+          } else if (round >= 2 && !unit.flags.summoned && ENEMY_BIG_MOVE.chance > 0 && U.chance(ENEMY_BIG_MOVE.chance)) {
+            unit.flags.charging = true;
+            emit("intent", { unitId: unit.id, name: unit.name, intent: "big", emphasis: 2,
+              text: `　${unit.name}が大技の構えを見せた`, cls: "trait" });
+            continue;
+          }
+        }
+        const manualCmd = options.manual ? commands[unit.id] : null;
+        act(unit, allies, enemies, round, manualCmd && manualCmd.target
+          ? { target: enemies.find(e => e.id === manualCmd.target) || null } : undefined);
         if (wiped(enemyUnits)) {
           if (!resolveRecoveryHooks(true, "enemy")) break outer;
           rescuedThisRound = true;
@@ -1027,7 +1171,9 @@ const Battle = {
     }
 
     let victory;
-    if (wiped(enemyUnits) && !wiped(playerUnits)) {
+    if (retreatedManual) {
+      victory = false;                // 退いた。勝ちでも負けでもないが、result の形は揃える
+    } else if (wiped(enemyUnits) && !wiped(playerUnits)) {
       victory = true;
     } else if (wiped(playerUnits)) {
       victory = false;
@@ -1052,7 +1198,8 @@ const Battle = {
       const death = [...timeline].reverse().find(e => e.type === "death" && e.unitId === unit.id);
       if (death) death.permanent = true;                 // 蘇生で戻らなかった＝軍団からの永久退場
     }
-    const resultText = wiped(enemyUnits) && victory ? "敵軍を全滅させた！ 魔王軍の勝利！"
+    const resultText = retreatedManual ? "魔王軍は退いた。"
+      : wiped(enemyUnits) && victory ? "敵軍を全滅させた！ 魔王軍の勝利！"
       : wiped(playerUnits) ? "魔王軍は全滅した……"
       : victory ? "長期戦の末、判定勝ち！ 勇者軍は撤退した。"
       : "長期戦の末、判定負け……魔王軍は敗走した。";
@@ -1060,7 +1207,8 @@ const Battle = {
       victory, reversal: this.detectReversal(timeline, victory), emphasis: 3,
       // permanent / reversal / firstDiscovery と同じ「重要度の印」。勝敗確定後に導出して付け、
       // 描画側だけが読む（戦闘計算には一切使わない）。判定決着と全滅を見分けるために要る。
-      wipe: wiped(playerUnits) ? "player" : wiped(enemyUnits) ? "enemy" : null,
+      wipe: retreatedManual ? null : wiped(playerUnits) ? "player" : wiped(enemyUnits) ? "enemy" : null,
+      retreated: retreatedManual,
       text: resultText, cls: victory ? "result-win" : "result-lose"
     });
 
@@ -1069,6 +1217,9 @@ const Battle = {
       timeline,
       // 続けずに退く道があったか。無ければ null。勝敗・報酬・contribution には影響しない。
       retreatOffer,
+      // コマンドで退いた（retreatOffer.contribution が担いで帰った戦果）。
+      retreated: retreatedManual,
+      spiritSpent,
       // 号令の節目（options.offerOrder のときだけ）。answered は答えの unitId か null。
       // orderOffer は最初の節目（互換）。節目は戦況が動くたびに来るので orderOffers を見る。
       orderOffer: orderOffers[0] || null,

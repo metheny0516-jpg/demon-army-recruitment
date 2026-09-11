@@ -6,7 +6,7 @@ const files = ["src/data/traits.js", "src/data/skills.js", "src/data/battle_happ
 const ctx = { console, Math: Object.create(Math) };
 vm.createContext(ctx);
 for (const f of files) vm.runInContext(fs.readFileSync(f, "utf8"), ctx, { filename: f });
-vm.runInContext("U.chance = () => true; U.pick = a => a[0]; U.rand = () => 0;", ctx);
+vm.runInContext("U.chance = () => true; U.pick = a => a[0]; U.rand = () => 0; ENEMY_BIG_MOVE.chance = 0;", ctx);   // chance=true だと敵が毎ラウンド構えて技の検査にならない
 const Battle = vm.runInContext("Battle", ctx);
 let failed = 0;
 const assert = (condition, text) => {
