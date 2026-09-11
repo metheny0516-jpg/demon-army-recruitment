@@ -23,6 +23,7 @@ const PORTRAITS = [
   "ogre",
   "succubus",
   "minotaur",
+  "lich",
 ];
 
 // イベント吹き出し専用の全身表情差分。存在する差分だけを宣言し、

@@ -35,7 +35,8 @@ const BattleScene = {
     commander: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     hero: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     succubus: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    minotaur: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    minotaur: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    lich: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
