@@ -45,7 +45,7 @@ const offersOf = r => r.timeline.filter(e => e.type === 'order_offer');
 {
   const { r, orc } = scene({ seed: 42, offerOrder: true });
   const offers = offersOf(r);
-  assert(offers.length === 1, `order_offer はちょうど1回（${offers.length}）`);
+  assert(offers.length >= 1, `order_offer が出る（${offers.length}回）`);
   const offer = offers[0];
   assert(offer && r.orderOffer && r.orderOffer.index === r.timeline.indexOf(offer), 'result.orderOffer.index が提案の位置');
   assert(offer && offer.candidates.length === 1 && offer.candidates[0].unitId === orc.id
@@ -89,7 +89,7 @@ const offersOf = r => r.timeline.filter(e => e.type === 'order_offer');
     const attacksBetween = r2.timeline.slice(roundAfter, windedAt).filter(e => e.type === 'attack' && e.fromId === base.orc.id);
     assert(windedAt > roundAfter && attacksBetween.length === 0, '息切れの手番では攻撃しない');
   }
-  assert(offersOf(r2).length === 1, '答えたあとも提案は増えない（1戦闘1回）');
+  assert(offersOf(r2).length >= 1 && r2.orderOffers.length === offersOf(r2).length, 'orderOffers が提案イベントと同数');
 }
 
 // 5. 倒れた者への号令は空振り（実行イベントは出ず、落ちない）
@@ -200,6 +200,35 @@ const offersOf = r => r.timeline.filter(e => e.type === 'order_offer');
   assert(fires(ra) === 0, `お披露目が済んだ者は号令なしでは出ない（${fires(ra)}）`);
   const b = build('great_fireball'); const rb = Battle.simulate(b.p, b.e, { rations: rations(), seed: 3 });
   assert(fires(rb) === 1, `覚えた直後の戦いでは一度だけ出る（${fires(rb)}）`);
+}
+
+// 12. 節目は戦況が動くたびに来る（1ラウンド1回、上限なし）。二つ目に答えても実行される
+{
+  const build = () => ({
+    p: [mk('タンク', ['brute'], 'player', { hp: 900, atk: 4, def: 8, spd: 2, spirit: 3 }), mk('ガロ', ['brute'], 'player', { hp: 400, atk: 6, def: 4, spd: 5, spirit: 3 })],
+    e: [mk('兵A', [], 'enemy', { race: '人間', hp: 40, atk: 5, def: 1, spd: 7 }), mk('兵B', [], 'enemy', { race: '人間', hp: 40, atk: 5, def: 1, spd: 6 }), mk('兵C', [], 'enemy', { race: '人間', hp: 40, atk: 5, def: 1, spd: 5 }), mk('兵D', [], 'enemy', { race: '人間', hp: 400, atk: 5, def: 1, spd: 4 })]
+  });
+  let found = null;
+  for (let seed = 1; seed < 80 && !found; seed++) {
+    const s = build();
+    const r = Battle.simulate(s.p, s.e, { rations: rations(), seed, offerOrder: true });
+    if (r.orderOffers.length >= 2) found = { seed, offers: r.orderOffers };
+  }
+  assert(!!found, '（前提）敵が一体ずつ倒れる戦闘で節目が2回以上来る');
+  if (found) {
+    const rounds = found.offers.map(o => o.round);
+    assert(new Set(rounds).size === rounds.length, '1ラウンドに1回まで');
+    const s = build();
+    const r = Battle.simulate(s.p, s.e, { rations: rations(), seed: found.seed, offerOrder: true, orders: { [found.offers[0].round]: 'p1' } });
+    const later = r.orderOffers.filter(o => o.round > found.offers[0].round);
+    assert(later.length >= 1, '一つ目に答えたあとも、計算し直した先に次の節目が来る');
+    if (later.length) {
+      const s2 = build();
+      const r2 = Battle.simulate(s2.p, s2.e, { rations: rations(), seed: found.seed, offerOrder: true, orders: { [found.offers[0].round]: 'p1', [later[0].round]: later[0].candidates[0].unitId } });
+      const execs = r2.timeline.filter(e => e.type === 'order_exec');
+      assert(execs.length === 2, `二つの節目に答えれば二度実行される（${execs.length}回）`);
+    }
+  }
 }
 
 // 8. 台詞と定義の形：order を持つ特性は lines.order を3本以上、28文字以内、数字なし

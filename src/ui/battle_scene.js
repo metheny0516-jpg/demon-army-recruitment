@@ -364,7 +364,7 @@ const BattleScene = {
     this.retreatAnswered = false;
     this.retreated = false;
     this.resumeSkipAfterRetreat = false;
-    this.orderAnswered = false;
+    this.orderAnswered = new Set();   // 答えた order_offer の eventId（節目は戦況が動くたびに来る）
     this.resumeSkipAfterOrder = false;
     this.resultPending = null;
     this.historySeen = new Set();
@@ -1610,7 +1610,8 @@ const BattleScene = {
   // 「号令を」。戦闘を止めて、名指しのボタン（最大3）と「任せる」を出す。
   // 既定は「任せる」（今までの挙動＝命じない）。テストの自動送りも既定を押す。
   askOrder(ev) {
-    if (this.orderAnswered || this.finished) return false;
+    if (this.orderAnswered.has(ev.eventId) || this.finished) return false;
+    this.currentOrderOffer = ev;
     if (this.mormoAwaiting) this.closeAside();
     this.mormoAwaiting = true;
     this.paused = true;
@@ -1633,7 +1634,7 @@ const BattleScene = {
       this.mormoAwaiting = false;
       this.paused = false;
       this.setMormoControlsLocked(false);
-      this.orderAnswered = true;
+      this.orderAnswered.add(ev.eventId);
       if (typeof this.onOrderChoice === "function") this.onOrderChoice("none");
       return false;
     }
@@ -1642,8 +1643,9 @@ const BattleScene = {
   },
 
   answerOrder(choice) {
-    if (this.orderAnswered) return;
-    this.orderAnswered = true;
+    const ev = this.currentOrderOffer;
+    if (!ev || this.orderAnswered.has(ev.eventId)) return;
+    this.orderAnswered.add(ev.eventId);
     // run.js が同じ種で計算し直したタイムラインを返す（任せたなら null）。
     // 提案の手前までは同じなので、今の位置からそのまま続きを再生できる。
     const next = typeof this.onOrderChoice === "function" ? this.onOrderChoice(choice) : null;
@@ -1672,7 +1674,7 @@ const BattleScene = {
   // まだ答えていない提案（撤退／号令）が、今の位置より先にあるか。
   pendingOfferAt() {
     return this.timeline.findIndex((e, i) => i >= this.index
-      && ((e.type === "retreat_offer" && !this.retreatAnswered) || (e.type === "order_offer" && !this.orderAnswered)));
+      && ((e.type === "retreat_offer" && !this.retreatAnswered) || (e.type === "order_offer" && !this.orderAnswered.has(e.eventId))));
   },
 
   setMormoControlsLocked(locked, wipe = false) {
@@ -2011,7 +2013,7 @@ const BattleScene = {
     // 提案を出したまま飛ばそうとしたら何もしない。stop() が一言ごと消してしまい、
     // 選択肢が無いまま戦闘だけが進む（＝答えずに続行したことになる）。
     if (this.mormoAwaiting && ((!this.retreatAnswered && this.timeline.some(e => e.type === "retreat_offer"))
-      || (!this.orderAnswered && this.timeline.some(e => e.type === "order_offer")))) return;
+      || this.timeline.some(e => e.type === "order_offer" && !this.orderAnswered.has(e.eventId)))) return;
     const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
     if (typeof Music !== "undefined") Music.suspend();

@@ -115,7 +115,7 @@ const Battle = {
   orderRoster(playerUnits) {
     const ready = [], unready = [];
     for (const u of playerUnits) {
-      if (!u.alive || u.flags.absent || u.flags.summoned || u.flags.mercenary) continue;
+      if (!u.alive || u.flags.absent || u.flags.summoned || u.flags.mercenary || u.flags.winded) continue;   // 息切れ中は命じられない
       const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
       if (!skillId) continue;
       const tr = TRAITS[skillId];
@@ -862,9 +862,10 @@ const Battle = {
     // 号令の節目。options.offerOrder のときだけ、1戦闘1回。提案の位置と候補を印として置く。
     // 答え（options.orders[round] = unitId）があれば次ラウンド冒頭で実行する。
     // 提案イベントは答えの有無に関わらず同じ位置に出す（同じ種で計算し直したとき、前半が一致するため）。
-    let orderOffer = null;
+    // 節目は戦況が動くたびに来る（1ラウンドに1回、回数の上限なし。気合と息切れが連打を抑える）。
+    const orderOffers = [];
     const orders = options.orders || {};
-    let orderExecuted = false;
+    const offerAtRound = r => orderOffers.find(o => o.round === r) || null;
 
     outer:
     for (round = 1; round <= this.MAX_ROUNDS; round++) {
@@ -898,9 +899,9 @@ const Battle = {
       // 号令の実行。前ラウンド末の提案に答えがあれば、本人を真っ先に動かす。
       // 倒れていれば号令は空振り（何も起きない）。乱数はここでは消費しない（台詞は pick で1回だけ消費）。
       let orderedUnit = null;
-      if (orderOffer && !orderExecuted && orderOffer.round === round - 1 && orders[orderOffer.round]) {
-        orderExecuted = true;
-        const cand = orderOffer.candidates.find(c => c.unitId === orders[orderOffer.round]);
+      const prevOffer = offerAtRound(round - 1);
+      if (prevOffer && orders[prevOffer.round]) {
+        const cand = prevOffer.candidates.find(c => c.unitId === orders[prevOffer.round]);
         const unit = cand ? playerUnits.find(u => u.id === cand.unitId) : null;
         if (cand && unit && onField(unit)) {
           unit.flags.ordered = true;
@@ -1003,7 +1004,7 @@ const Battle = {
       // 号令の節目（1戦闘1回）。ラウンドの終わり、撤退の提案のあと、勝敗判定の前。
       // 条件：戦況が動いた（このラウンドに誰かが倒れた／味方の誰かが半分を切っている）、
       // 敵が残っている、候補がいる、同じラウンドに撤退の提案を出していない（二つ続けて聞かない）。
-      if (options.offerOrder && !orderOffer && !wiped(enemyUnits) && !wiped(playerUnits)
+      if (options.offerOrder && !wiped(enemyUnits) && !wiped(playerUnits)
         && !(retreatOffer && retreatOffer.round === round)) {
         const turned = all().filter(u => !u.alive).length > deadAtRoundStart
           || playerUnits.some(u => onField(u) && !u.flags.summoned && u.hp <= u.maxHp * 0.5);
@@ -1018,7 +1019,7 @@ const Battle = {
             enemies: enemyUnits.filter(onField).map(snap),
             text: `　モルモ「魔王様、号令を。${names}と命じられます」`, cls: "mormo"
           });
-          orderOffer = { index: timeline.indexOf(event), round, candidates, answered };
+          orderOffers.push({ index: timeline.indexOf(event), round, candidates, answered });
         }
       }
 
@@ -1068,8 +1069,10 @@ const Battle = {
       timeline,
       // 続けずに退く道があったか。無ければ null。勝敗・報酬・contribution には影響しない。
       retreatOffer,
-      // 号令の節目があったか（options.offerOrder のときだけ）。answered は答えの unitId か null。
-      orderOffer,
+      // 号令の節目（options.offerOrder のときだけ）。answered は答えの unitId か null。
+      // orderOffer は最初の節目（互換）。節目は戦況が動くたびに来るので orderOffers を見る。
+      orderOffer: orderOffers[0] || null,
+      orderOffers,
       // 旧来のテキストログ（タイムラインから導出）
       log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
       rounds: Math.min(round, this.MAX_ROUNDS),
