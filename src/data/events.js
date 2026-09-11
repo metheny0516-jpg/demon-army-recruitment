@@ -985,7 +985,7 @@ const EVENTS = [
           Game.oweDebt({ kind: "dispute", uid: c.actor.uid, battlesLeft: 2,
             text: `減給された${c.actor.name}が仲間を集め` });
           return `${c.actor.name}の給料を${cut}下げた。人件費はその分だけ軽くなる。\n`
-            + `オークは何も言わずに去った。何も言わないほうが、たいてい怖い。`;
+            + `${c.actor.name}は何も言わずに去った。何も言わないほうが、たいてい怖い。`;
         }
       }
     ]
@@ -1136,7 +1136,7 @@ const EVENTS = [
           const heal = Math.max(1, Math.round(c.actor.hp * 0.05));
           c.actor.hp += heal;
           return `15Gの薬湯を飲ませた。${c.actor.name}の最大HP+${heal}。\n`
-            + `骨にしみたらしい。「……生前より効きます」`;
+            + `${c.actor.race}の身にしみたらしい。「……生前より効きます」`;
         }
       },
       {
