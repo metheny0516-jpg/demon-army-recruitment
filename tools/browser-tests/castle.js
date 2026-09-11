@@ -47,6 +47,10 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   if (await page.locator('[data-action="member"][data-uid]').count()) {
     await page.locator('[data-action="member"][data-uid]').first().evaluate(el => el.click());
     check(await page.locator('.member-detail').count() === 1, '既存メンバーの共通詳細が開かない');
+    // 詳細の上端が画面内にあること（fixed の幕を place-items:center にすると上端が画面の外へ逃げ、真っ黒に見えた）
+    await page.waitForTimeout(400);
+    const detailTop = await page.evaluate(() => Math.round(document.querySelector('.member-detail').getBoundingClientRect().top));
+    check(detailTop >= 0 && detailTop < 200, `詳細の上端が画面内にある（top=${detailTop}）`);
     const detailText = await page.locator('.member-detail').innerText();
     check(detailText.includes(recruitSnapshot.rosterName) && /HP|攻|防|速/.test(detailText),
       '人物詳細に名前と能力値が揃わない');

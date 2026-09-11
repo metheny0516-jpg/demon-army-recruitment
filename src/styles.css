@@ -3239,12 +3239,16 @@ button.primary::first-letter { color: var(--gold); }
 .member-row-main, .member-row-state { display: flex; flex-direction: column; min-width: 0; }
 .member-row-main span, .member-row-main small, .member-row-state small { color: var(--muted); }
 .member-row-actions { display: flex; flex-wrap: wrap; gap: 5px; }
+/* 人物の詳細は fixed の幕。place-items:center だと中身が画面より高いとき上端が画面の外へ逃げて
+   戻れない（オーナー試遊 2026-09-11：真っ黒で音量ボタンしか無い）。上寄せ＋margin auto で中央に置き、
+   幕そのものをスクロールさせる。sceneEnter の transform が fixed の基準を本文に変えるので、この場面では外す。 */
+.game-scene:has(.member-overlay) { animation: none; transform: none; }
 .member-overlay {
-  position: fixed; inset: 0; z-index: 80; display: grid; place-items: center;
+  position: fixed; inset: 0; z-index: 80; display: block;
   padding: 20px; overflow: auto; background: rgba(8, 6, 8, .78);
 }
 .member-detail {
-  width: min(720px, 100%); max-height: calc(100dvh - 40px); overflow: auto; position: relative;
+  width: min(720px, 100%); margin: 0 auto; max-height: none; overflow: visible; position: relative;
   padding: 22px; border: 1px solid #80633d; border-radius: 10px;
   background: linear-gradient(145deg, rgba(39,29,25,.98), rgba(19,15,18,.99)); box-shadow: 0 18px 60px #000b;
 }
@@ -3264,8 +3268,8 @@ button.primary::first-letter { color: var(--gold); }
   .recruit-applicants { order: 2; }
   .member-row { grid-template-columns: auto minmax(0, 1fr); }
   .member-row-state, .member-row-actions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 8px; }
-  .member-overlay { padding: 0; display: block; background: #130f12; }
-  .member-detail { width: 100%; min-height: 100dvh; max-height: none; overflow: visible; border: 0; border-radius: 0; padding: 16px; }
+  .member-overlay { padding: 0; background: #130f12; }
+  .member-detail { width: 100%; min-height: 100dvh; border: 0; border-radius: 0; padding: 16px; }
   .member-detail > header { align-items: flex-start; }
   .member-detail .photo { width: 88px; height: 88px; flex-basis: 88px; }
 }
