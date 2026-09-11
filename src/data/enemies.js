@@ -120,7 +120,7 @@ const ENEMY_STAGES = [
   },
   {
     stage: 8, army: "勇者アレン一行", region: "王都", reward: 50, faction: "kingdom",
-    briefing: "王国軍最後の希望は、勇者一行というより、もう後がない職場の仲間たちだ。"
+    briefing: "王国軍最後の希望は、勇者一行というより、もう後がない職場の仲間たちだ。",
     units: [
       { name: "戦士ドルフ", icon: "🪓", hp: 90, atk: 18, def: 10, spd: 7 },
       { name: "勇者アレン", icon: "👑", hp: 120, atk: 24, def: 12, spd: 10, traits: ["hero_awaken"],
