@@ -153,6 +153,18 @@ small horns and bat wings, long tail, modest deep-purple and black clothing; idl
 energy / release fingertip wave / recover / hurt / fallen; thick uneven ink, muted matte flat colors,
 1990s RPG bestiary, real RGBA alpha, no checkerboard/backdrop/shadow/grid/text/UI/watermark.
 
+### Minotaur（第二幕・2026-09-11）
+
+内蔵image_genで履歴書立ち絵と6ポーズシートを別々に生成。片方の欠けた角、両腕の鎖、
+重い戦斧を全ポーズで固定し、strike は肩から突っ込む突進。原画は
+`assets/battle/units/minotaur/motion-source.png`。
+再生成: `python scripts/prepare_species_motion.py minotaur assets/battle/units/minotaur/motion-source.png`
+
+Prompt: 1536x1024 exact 3x2 equal cells, same right-facing full-body minotaur and scale,
+one broken horn, chains around both forearms, heavy battle axe; idle / lower shoulder and wind up /
+shoulder-first charge / recover / hurt / fallen; thick uneven ink, muted matte flat colors,
+1990s RPG bestiary, real RGBA alpha, no checkerboard/backdrop/shadow/grid/text/UI/watermark.
+
 ### Slime
 
 Use case: stylized-concept. Production 2D RPG animation sprite sheet, EXACT 1536x1024, 3 columns x 2 rows of equal 512 cells, six poses of ONE identical faceless blue slime with a crooked partly submerged burgundy necktie. Thick uneven dark ink outlines, muted teal blue, restrained matte cel shading, 1990s tabletop bestiary / SNES monster manual, deliberately awkward lowly employee monster. No eyes, no mouth. All facing right. Each cell full body, generous transparent margins, no overlap. Row1: idle squat dome; attack-windup compressed wide puddle; strike stretched diagonally forward-right body slam. Row2: recover wobbling back; hurt deeply indented soft body; fallen flattened limp puddle with tie. Keep common physical scale across cells, same mass, ground under each body. Genuinely transparent alpha background. No grid, text, effects, scenery, cast shadows, glow or glossy 3D.
