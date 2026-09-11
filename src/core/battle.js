@@ -1120,7 +1120,7 @@ const Battle = {
       // 撤退の提案（1戦闘1回）。ラウンドの終わり、勝敗判定の前。
       // 条件：軍団員が倒れたまま立ち上がらなかった／敵が全滅していない／
       // 立っている軍団員が1人以上（不在＝遅刻は「立っている」に数えない）。
-      if (!retreatOffer && !options.noRetreatOffer) {
+      if (!retreatOffer && !options.noRetreatOffer && !options.manual) {   // コマンドバトルでは退くのは指示パネル（提案は出さない）
         const corps = playerUnits.filter(u => !u.flags.summoned);
         const downed = corps.filter(u => !u.alive);
         const standing = corps.filter(onField);
