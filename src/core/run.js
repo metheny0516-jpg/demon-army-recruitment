@@ -299,6 +299,7 @@ const Game = {
       this.baseOf(m);                  // base が無い旧セーブは現在値を基礎値にする
       if (!m.skillTier) m.skillTier = (m.traits || []).some(id => ((TRAITS[id] || {}).skill || {}).tier === 2) ? 2 : 1;
       if (typeof m.spirit !== "number") m.spirit = this.spiritRules().start;   // 気合（2026-09-10）。旧セーブには無い
+      if (m.debutSkill === undefined) m.debutSkill = null;                     // 旧セーブ：上位技は号令でだけ出る
     }
     if (!st.stageFights || typeof st.stageFights !== "object") st.stageFights = {};
     if (!Array.isArray(st.departed)) st.departed = [];
@@ -1698,8 +1699,10 @@ const Game = {
     monster.traits = (monster.traits || []).filter(id => id !== replaced);
     monster.traits.push(skill.id);
     monster.skillTier = 2;
+    // 覚えた直後の戦いでだけ、技は勝手に出る（お披露目）。以後は号令（気合）でだけ出る（オーナー 2026-09-11）。
+    monster.debutSkill = skill.id;
     const quote = U.pick((skill.lines && skill.lines.unlock) || ["……体が、覚えた"]);
-    if (notes) notes.push(`${monster.name}が【${skill.name}】を覚えた`);
+    if (notes) notes.push(`${monster.name}が【${skill.name}】を覚えた（次の戦いで一度だけ勝手に出る。以後は号令で）`);
     return { uid: monster.uid, name: monster.name, skillId: skill.id, skillName: skill.name, quote };
   },
 
@@ -1758,6 +1761,8 @@ const Game = {
       const record = this.memberRecord(monster);
       // 出撃して決着を迎えた者は気合が +1（戦死者はここに来る前に名簿から消えている）。
       this.gainSpirit(monster, this.spiritRules().perBattle);
+      // お披露目の戦いは終わった。以後、上位技は号令でだけ出る（この後の trainSurvivors が新しい技を置くこともある）。
+      if (monster.debutSkill) monster.debutSkill = null;
       record.battles += 1;
       if (won) record.wins += 1;
       if (row.survived === false || row.injured) record.downed += 1;

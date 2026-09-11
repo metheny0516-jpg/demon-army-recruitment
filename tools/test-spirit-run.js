@@ -16,6 +16,7 @@ vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 const Game = vm.runInContext('Game', ctx);
 const MONSTER_RULES = vm.runInContext('MONSTER_RULES', ctx);
+const TRAITS = vm.runInContext('TRAITS', ctx);
 let failed = 0;
 const assert = (c, m) => { if (c) console.log(`✓ ${m}`); else { failed++; console.log(`✗ ${m}`); } };
 const clone = v => JSON.parse(JSON.stringify(v));
@@ -93,6 +94,22 @@ const spiritOf = (st, uid) => (st.roster.find(m => m.uid === uid) || {}).spirit;
     if (st.pendingBattle) Game.settleBattle('continue');
   }
   assert(none, '気合0のガロ（cost 1）では提案が出ない');
+}
+
+// 4. 技を覚えた直後の戦いだけ debutSkill が立ち、その決着で消える
+{
+  const st = freshRun([1, 1, 1]);
+  const garo = st.roster.find(m => m.uid === 102);
+  garo.record = { battles: 5, wins: 5, downed: 0, carried: 0, late: 0, ate: 0 };
+  Game.deploy();
+  const g2 = st.roster.find(m => m.uid === 102);
+  if (g2 && g2.skillTier === 2) {
+    assert(g2.debutSkill === g2.traits.find(id => (TRAITS[id] || {}).skill), `覚えた直後は debutSkill が立つ（${g2.debutSkill}）`);
+    st.phase = 'mission'; st.missionOffers = []; Game.prepareMissions(true); Game.selectMission(0); st.selectedMission = clone(FIXED_MISSION); st.phase = 'formation';
+    Game.deploy();
+    const g3 = st.roster.find(m => m.uid === 102);
+    assert(!g3 || g3.debutSkill === null, 'お披露目の決着で debutSkill が消える');
+  } else assert(true, '（6戦目で技を覚えなかった／戦死したので省略）');
 }
 
 console.log(failed ? `\n${failed} 件失敗` : '\n全件通過');

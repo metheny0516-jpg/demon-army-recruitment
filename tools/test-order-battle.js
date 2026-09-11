@@ -189,6 +189,19 @@ const offersOf = r => r.timeline.filter(e => e.type === 'order_offer');
   assert(['great_fireball', 'ogre_charge', 'blood_howl', 'goblin_tactics'].every(id => TRAITS[id].autoLimit === 1), '大火球・ぶちかまし・血の雄叫び・集団戦法に autoLimit 1');
 }
 
+// 11. お披露目：debutSkill が無い名簿（null）では上位技は号令でだけ出る。覚えた直後（debutSkill=技）なら1回出る
+{
+  const build = (debut) => ({
+    p: [mk('タンク', [], 'player', { hp: 900, atk: 3, def: 10, spd: 2 }), mk('ミラ', ['great_fireball'], 'player', { race: '魔族', hp: 400, atk: 6, def: 4, spd: 6, spirit: 3, debutSkill: debut })],
+    e: [mk('兵A', [], 'enemy', { race: '人間', hp: 600, atk: 6, def: 2, spd: 7 }), mk('兵B', [], 'enemy', { race: '人間', hp: 600, atk: 6, def: 2, spd: 3 })]
+  });
+  const fires = r => r.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === 'great_fireball').length;
+  const a = build(null); const ra = Battle.simulate(a.p, a.e, { rations: rations(), seed: 3 });
+  assert(fires(ra) === 0, `お披露目が済んだ者は号令なしでは出ない（${fires(ra)}）`);
+  const b = build('great_fireball'); const rb = Battle.simulate(b.p, b.e, { rations: rations(), seed: 3 });
+  assert(fires(rb) === 1, `覚えた直後の戦いでは一度だけ出る（${fires(rb)}）`);
+}
+
 // 8. 台詞と定義の形：order を持つ特性は lines.order を3本以上、28文字以内、数字なし
 {
   const ids = Object.keys(TRAITS).filter(id => TRAITS[id].order);

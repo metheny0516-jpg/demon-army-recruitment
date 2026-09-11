@@ -504,7 +504,7 @@ const TRAITS = {
   // プレイヤーへ見せる効果・台詞を先に定義して、既存特性には触れない。
   ogre_charge: {
     name: "ぶちかまし",
-    desc: "敵が3体以上立っているとき、攻撃が敵全体に本来の70%で及ぶ。本人も与えた合計の10%を反動で受ける。自動では1戦闘1回、以降は号令で",
+    desc: "敵が3体以上立っているとき、攻撃が敵全体に本来の70%で及ぶ。本人も与えた合計の10%を反動で受ける。覚えた直後の戦いで一度だけ勝手に出る。以後は号令で",
     skill: { species: "ogre", tier: 2, replaces: "brute" },
     autoLimit: 1,
     order: { label: "ぶちかませ", cost: 3, note: "敵の数に関係なく、次の一撃が全体に及ぶ" },
@@ -527,7 +527,7 @@ const TRAITS = {
   },
   great_fireball: {
     name: "大火球",
-    desc: "奇数ラウンドの攻撃時、別の敵全員にも本来の70%を与え、燃焼で次ラウンド開始時に最大HPの8%を削る。自動では1戦闘1回、以降は号令で",
+    desc: "奇数ラウンドの攻撃時、別の敵全員にも本来の70%を与え、燃焼で次ラウンド開始時に最大HPの8%を削る。覚えた直後の戦いで一度だけ勝手に出る。以後は号令で",
     skill: { species: "mage", tier: 2, replaces: "fireball" },
     autoLimit: 1,
     order: { label: "大火球を放て", cost: 3, note: "偶数ラウンドでも大火球が出る" },
@@ -549,7 +549,7 @@ const TRAITS = {
   },
   blood_howl: {
     name: "血の雄叫び",
-    desc: "自分の攻撃で敵を倒した直後、もう一撃を放つ。自動では1戦闘1回、以降は号令で",
+    desc: "自分の攻撃で敵を倒した直後、もう一撃を放つ。覚えた直後の戦いで一度だけ勝手に出る。以後は号令で",
     skill: { species: "orc", tier: 2, replaces: "brute" },
     autoLimit: 1,
     order: { label: "吠えろ", cost: 3, note: "倒せなくても、もう一撃が出る" },
@@ -568,7 +568,7 @@ const TRAITS = {
   },
   goblin_tactics: {
     name: "集団戦法",
-    desc: "出撃中のゴブリンが3体以上いるとき、自分の攻撃がゴブリン数−2回追加で当たる（各50%）。自動では1戦闘1回、以降は号令で",
+    desc: "出撃中のゴブリンが3体以上いるとき、自分の攻撃がゴブリン数−2回追加で当たる（各50%）。覚えた直後の戦いで一度だけ勝手に出る。以後は号令で",
     skill: { species: "goblin", tier: 2, replaces: "pickpocket" },
     autoLimit: 1,
     order: { label: "囲め", cost: 2, note: "ゴブリンが少なくても集団戦法が出る" },

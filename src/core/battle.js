@@ -81,6 +81,9 @@ const Battle = {
       introQuote: m.introQuote || "",
       // 気合（号令の限定）。名簿の値を写す。無ければ null＝制限なし（傭兵・テストの直作り）。
       spirit: (m.spirit === undefined || m.spirit === null) ? null : Number(m.spirit),
+      // 上位技のお披露目。覚えた直後の戦いでだけ autoLimit 回まで勝手に出る。名簿の値が無い（テストの直作り・sim の敵）なら
+      // "any"＝どの技もお披露目扱い（既存テストと種族技の測定が今までどおり動く）。null なら号令でだけ出る。
+      debut: m.debutSkill === undefined ? "any" : (m.debutSkill || null),
       mods: {
         dmgMult: m.battleDmgMult || 1,
         takenMult: m.battleTakenMult || 1,
@@ -254,7 +257,8 @@ const Battle = {
     const autoExhausted = (unit, traitId) => {
       const tr = TRAITS[traitId];
       if (!tr || !tr.autoLimit || unit.flags.ordered) return false;
-      return ((unit.flags.skillUses || {})[traitId] || 0) >= tr.autoLimit;
+      const allowed = (unit.debut === "any" || unit.debut === traitId) ? tr.autoLimit : 0;
+      return ((unit.flags.skillUses || {})[traitId] || 0) >= allowed;
     };
     const skillTrigger = (unit, traitId, parent) => {
       const trait = TRAITS[traitId] || {};
