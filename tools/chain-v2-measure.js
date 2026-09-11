@@ -332,10 +332,16 @@ strategies.forEach((strategy, si) => {
   // ── 有効ランを必ず N 本そろえる ──────────────────────
   // 未完を単純に落とすと母集団が戦略ごとに変わり、「全15戦略×N」の比較でなくなる。
   // 未完が出たらseedを追加採番して補充し、**未完の件数と原因は別に残す**。
-  // 補充は N の2倍までで打ち切る（そこまで出るなら原因の切り分けが先）。
+  //
+  // **数えるのは「有効ランが N 本揃ったか」であって、採番を何回したかではない。**
+  // 打ち切り上限は無限ループを止めるためだけに置く（有効ラン数の4倍）。
+  // 以前は N の2倍で、これは「未完はめったに出ない」前提の予算だった。
+  // 全滅しても続く再建（2026-09-10）と王国の反撃でランが長くなり、
+  // 1回の採番が上限ラウンドまで走って未完になる率が上がったため、
+  // 揃う前に予算が尽きて落ちるようになった。ゲーム側のバグではない。
   const rows = [];
   let draws = 0;
-  const maxDraws = N * 2;
+  const maxDraws = N * 4;
   while (rows.length < N && draws < maxDraws) {
     const row = measureRun(strategy, SEED_BASE + si * 1000003 + draws * 7919, stats);
     draws += 1;
@@ -349,7 +355,7 @@ strategies.forEach((strategy, si) => {
   }
   if (rows.length < N) {
     console.error(`\n✗ 測定を停止する: 「${strategy.name}」で有効ランが ${rows.length}/${N} しか揃わない`
-      + `（${draws} 回採番して未完 ${draws - rows.length} 件）`);
+      + `（打ち切り上限 ${maxDraws} 回まで採番して未完 ${draws - rows.length} 件）`);
     console.error('  母集団を欠いたまま集計しない。node tools/deploy-falsy-probe.js で原因を切り分けること。');
     process.exit(1);
   }
