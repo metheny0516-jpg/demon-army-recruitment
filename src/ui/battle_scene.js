@@ -33,7 +33,8 @@ const BattleScene = {
     axeman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     cavalry: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     commander: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    hero: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    hero: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    succubus: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),

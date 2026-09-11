@@ -141,6 +141,18 @@ UI既存の戦闘絵→履歴書→絵文字フォールバックを保持。
 
 Use case: stylized-concept. Production transparent RGBA 2D RPG sprite sheet, 1536x1024, EXACT 3 columns x 2 rows of 512x512 cells. Six full body poses of ONE same stocky olive-green ORC worker soldier, big square jaw, two small tusks, irritated tired face, tense huge shoulders, short legs, patched brown leather tunic, dull red waist cloth, iron wristbands, heavy short-handled single-bladed axe held in BOTH hands. Thick uneven dark ink contour, muted earthy flat cel colors, matte 1990s tabletop bestiary/SNES monster manual, awkward not heroic. All face RIGHT. Row1: idle broad planted stance axe held low; attack-windup axe lifted high overhead knees bent; strike heavy downward chop axe low forward-right torso leaning into blow. Row2: recover pulls axe up from ground; hurt rocked back with hunched shoulders; fallen lying sideways on ground axe beside him. SAME SCALE in all six poses. Every body and weapon stays within center 400x440 area of EACH 512 cell with generous transparent margins; NOTHING crosses any cell boundary. Actual ALPHA TRANSPARENCY, NO painted checkerboard, no backdrop, no ground, no shadow, no haze, no labels or grid, no effects, no gore, no cinematic lighting or glossy 3D.
 
+### Succubus（第二幕・2026-09-11）
+
+内蔵image_genで履歴書立ち絵と6ポーズシートを別々に生成。深い紫と黒衣、小さな角と翼、
+長い尾を同一人物・同一倍率で固定し、strike は指先から紫の気を放つ。全年齢向けの被覆と、
+誘うより見下ろす余裕の表情を指定した。原画は `assets/battle/units/succubus/motion-source.png`。
+再生成: `python scripts/prepare_species_motion.py succubus assets/battle/units/succubus/motion-source.png`
+
+Prompt: 1536x1024 exact 3x2 equal cells, same right-facing full-body succubus and scale,
+small horns and bat wings, long tail, modest deep-purple and black clothing; idle / gather purple
+energy / release fingertip wave / recover / hurt / fallen; thick uneven ink, muted matte flat colors,
+1990s RPG bestiary, real RGBA alpha, no checkerboard/backdrop/shadow/grid/text/UI/watermark.
+
 ### Slime
 
 Use case: stylized-concept. Production 2D RPG animation sprite sheet, EXACT 1536x1024, 3 columns x 2 rows of equal 512 cells, six poses of ONE identical faceless blue slime with a crooked partly submerged burgundy necktie. Thick uneven dark ink outlines, muted teal blue, restrained matte cel shading, 1990s tabletop bestiary / SNES monster manual, deliberately awkward lowly employee monster. No eyes, no mouth. All facing right. Each cell full body, generous transparent margins, no overlap. Row1: idle squat dome; attack-windup compressed wide puddle; strike stretched diagonally forward-right body slam. Row2: recover wobbling back; hurt deeply indented soft body; fallen flattened limp puddle with tie. Keep common physical scale across cells, same mass, ground under each body. Genuinely transparent alpha background. No grid, text, effects, scenery, cast shadows, glow or glossy 3D.
