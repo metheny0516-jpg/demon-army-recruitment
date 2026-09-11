@@ -27,8 +27,13 @@
   人物の詳細はタップで一つの画面に統一（採用時に既存メンバーが見える）。スマホは主ボタンを下に固定、HUD 2行。3コミット（A 詳細＋面接／B 城のメニュー／C スマホ）。
 - **設計済み**：勇者を退けたあと＝三幕構成 `docs/DESIGN_ACT2_2026-09-11.md`（第二幕「援軍」段階9〜14、第三幕「決戦」15〜18。
   どちらの着地からも次の幕へ。名簿・施設・伝承は持ち越し）。
-- **Opus**：`docs/SPEC_ACT2_CONTENT_2026-09-11.md` — 第二幕の中身をデータだけ先に（新種族3・上位技6・敵段階9〜14・事件2）。
-  `src/ui/*`・`src/core/*` は触らない（CodeX の城のメニューと並行）。幕の進行（run.js）は城のメニューが入ってから別仕様。
+- 済み：**第二幕の中身**（Opus `d22f2e3`、`docs/SPEC_ACT2_CONTENT_2026-09-11.md`）。新種族3は `MONSTER_TEMPLATES_ACT2`、
+  敵段階9〜14は `ENEMY_STAGES_ACT2`、`ACT_STAGE_CAP = {1:8, 2:14}`。今の幕では応募に混ざらず段階9へ進めない（test-act2-content 76件）。
+  Claude が chain.js の CLASSIFY に5技を足して `ctx.trigger` へ戻した。
+  **幕の進行の仕様（次、Claude）で扱うこと**：`MONSTER_TEMPLATES_ACT2` の解禁（`rollApplicant` は tier 3/4 を区別しない）、
+  `ENEMY_STAGES_ACT2` の接続と `MAX_CONQUEST` の幕ごとの上限、勇者戦後の切り替え場面、討伐隊の下限、`rampage` の autoLimit
+  （modDealt の受け身技には効かない）、突進の押し下げが「ラウンドの終わり」になっている点（未決U3）。
+- **CodeX（絵）**：新種族3の立ち絵・6ポーズ・表情差分（指示文はチャットで渡し済み。ブランチ codex/act2-art）。
 
 - **完了（CodeX）**：痕跡を本体へ接続し、「城の記録」画面（日誌・蔵・去った者）を追加。
 - 作戦会議・編成・面接・結果の HUD から開け、元の phase を変えずに戻れる。
