@@ -25,7 +25,10 @@
 
 - **CodeX**：`docs/SPEC_JOURNAL_2026-09-11.md` — 痕跡（Traces）の接続と「城の記録」画面（日誌・蔵・去った者）。内政メニューの最初の一枚。
 - **Opus**：`docs/SPEC_EXPERIENCE_GRANT_2026-09-11.md` — A 共通特性の付与（run.js）、B 事件文の種族決め打ちさらい（events.js）。別コミット。
-- 済み：`test-chain-measure-retry` の採番上限（Opus `8ab11a2`）、勝利ファンファーレ（CodeX `1a6cf66`）。
+- 済み：`test-chain-measure-retry` の採番上限（Opus `8ab11a2`）、勝利ファンファーレ（CodeX `1a6cf66`）、
+  共通特性の付与（Opus `7d2a1ac`。判定は lastBattle を組む直前＝homeStays が足された後）、事件文さらい（Opus `8aa9e5f`、2件）、
+  `test-sound` の落ち（ファンファーレ差し替えで合成音の経路が変わっていた。Claude が直した）。
+- クリア率が全戦略 90〜100% に上がっている件は**今は気にしない**（オーナー 2026-09-11。システムが揃ってから難度を選ばせる）。
 
 ### 現在：勇者に負けても終わりではない／上位技の自動発動は1戦闘1回（2026-09-11・Claude）
 
