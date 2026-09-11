@@ -1663,6 +1663,14 @@ const UI = {
       </div></aside></div>`);
   },
 
+  // コマンドバトル（既定）。取っ手を渡し、決着は run.js に戻す。
+  battleManual(out) {
+    this.set(BattleScene.shell(out.stageData));
+    BattleScene.onRetreatChoice = null;
+    BattleScene.onOrderChoice = null;
+    BattleScene.playManual(out.handle, result => Game.finishManualBattle(result));
+  },
+
   battle(result, stageData) {
     // 描画はレンダラに委譲する。UIは戦闘の中身を知らない。
     this.set(BattleScene.shell(stageData));

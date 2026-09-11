@@ -236,10 +236,12 @@ const BattleScene = {
           <div class="cutin-copy"><b id="cutin-name"></b><span id="cutin-desc"></span></div>
         </div>
       </div>
+      <div class="command-panel" id="command-panel" hidden></div>
       <div class="scene-ctrl">
         <button class="small" data-action="speed" id="speed-btn">速度 x1</button>
         <button class="small" data-action="pausebattle" id="pause-btn">⏸ 読むために停止</button>
         <button class="small" data-action="skiplog">▶▶ 最後まで飛ばす</button>
+        <button class="small" data-action="autobattle" id="auto-btn">指示：手動（押して自動へ）</button>
         <button class="primary" data-action="afterbattle" id="next-btn" style="display:none">結果を見る</button>
       </div>
       </section>
@@ -369,6 +371,8 @@ const BattleScene = {
     this.resumeSkipAfterRetreat = false;
     this.orderAnswered = new Set();   // 答えた order_offer の eventId（節目は戦況が動くたびに来る）
     this.resumeSkipAfterOrder = false;
+    if (!this.manualStarting) { this.manual = null; this.autoRest = false; this.hideCommandPanel(); }
+    this.manualStarting = false;
     this.resultPending = null;
     this.historySeen = new Set();
     const history = document.getElementById("chain-history-list");
@@ -458,7 +462,11 @@ const BattleScene = {
 
   step() {
     if (this.paused) return;
-    if (this.index >= this.timeline.length) return this.finish();
+    if (this.index >= this.timeline.length) {
+      // コマンドバトル：タイムラインの末尾に来たら、次の指示を待つ（終わっていれば結果を見せる）
+      if (this.manual && !this.manual.done) return this.awaitCommands();
+      return this.finish();
+    }
     const item = (this.pacing && this.pacing.items[this.index]) || { scale: 1 };
     const ev = this.timeline[this.index++];
     // 付随演出（字幕・光・カットイン）もこのイベントの倍率で伸縮させる
@@ -481,6 +489,7 @@ const BattleScene = {
 
   togglePause() {
     if (this.finished || this.resultPending || this.mormoAwaiting) return;
+    if (this.manual && !this.manual.done && this.index >= this.timeline.length) return;   // 指示待ち中は止める対象が無い
     this.paused = !this.paused;
     if (this.paused) {
       clearTimeout(this.stepTimer);
@@ -828,8 +837,17 @@ const BattleScene = {
       }
       // 撤退の提案。ここだけは**必ず**止める（字幕へ落ちると選べなくなる）。
       case "retreat_offer":
+        if (ev.manual) { this.showAction(ev.text ? String(ev.text).trim() : "魔王軍、退く", 1800); break; }   // コマンドで退いた（提案ではない）
         this.askRetreat(ev);
         break;
+      // 敵の大技の構え。次のラウンドに来る。
+      case "intent": {
+        const u = this.units[ev.unitId];
+        this.clearFocus();
+        if (u) { u.el.classList.add("acting"); this.float(u, "大技の構え", "guard"); u.el.classList.add("intent-big"); }
+        this.showAction(`${ev.name}が大技の構えを見せた`, 1400);
+        break;
+      }
       // 号令の節目。撤退の提案と同じく**必ず**止める。
       case "order_offer":
         this.askOrder(ev);
@@ -848,6 +866,8 @@ const BattleScene = {
         break;
       }
       case "result":
+        // コマンドで退いた戦い：勝敗の決着表示は出さない（勝っても負けてもいない）
+        if (ev.retreated) { this.retreated = true; this.settleChain(); this.finish(); break; }
         this.resolveBattle(ev);
         break;
     }
@@ -1677,7 +1697,174 @@ const BattleScene = {
   // まだ答えていない提案（撤退／号令）が、今の位置より先にあるか。
   pendingOfferAt() {
     return this.timeline.findIndex((e, i) => i >= this.index
-      && ((e.type === "retreat_offer" && !this.retreatAnswered) || (e.type === "order_offer" && !this.orderAnswered.has(e.eventId))));
+      && ((e.type === "retreat_offer" && !e.manual && !this.retreatAnswered) || (e.type === "order_offer" && !this.orderAnswered.has(e.eventId))));
+  },
+
+  // ── コマンドバトル（2026-09-11） ──────────────────────────
+  // handle は Battle.start() の取っ手。ラウンドの頭で止まるたびに指示パネルを出し、決定で next(commands)。
+  // 生成器が積んだイベントをそのまま続きとして再生する（タイムラインは同じ配列）。
+  // onEnd(result) は決着（run.js の finishManualBattle）。おまかせ／飛ばすは autoRest で最後まで回す。
+  // 以後の戦闘もおまかせにする設定（localStorage）。戦闘中の「指示：手動／自動」ボタンで切り替える。
+  loadAutoBattle() { try { return localStorage.getItem("maou_auto_battle") === "1"; } catch (e) { return false; } },
+  saveAutoBattle(on) { try { localStorage.setItem("maou_auto_battle", on ? "1" : "0"); } catch (e) {} this.updateAutoBtn(); },
+  updateAutoBtn() {
+    const b = document.getElementById("auto-btn");
+    if (b) b.textContent = this.loadAutoBattle() ? "指示：自動（押して手動へ）" : "指示：手動（押して自動へ）";
+  },
+  toggleAutoBattle() {
+    const on = !this.loadAutoBattle();
+    this.saveAutoBattle(on);
+    if (this.manual && !this.manual.done) {
+      this.autoRest = on;
+      // 指示待ちの最中に自動へ切り替えたら、今のラウンドをおまかせで進める
+      if (on && this.index >= this.timeline.length && this.paused) this.submitCommands({});
+    }
+  },
+
+  playManual(handle, onEnd, onDone) {
+    this.manual = handle;
+    this.autoRest = this.loadAutoBattle();
+    this.updateAutoBtn();
+    this.onManualEnd = onEnd || null;
+    this.manualEnded = false;
+    this.cmdSel = {};
+    this.manualStarting = true;
+    const first = handle.next();
+    if (first.type === "end") this.settleManual(first.result);
+    this.play(handle.timeline, onDone);
+  },
+
+  settleManual(result) {
+    if (this.manualEnded) return;
+    this.manualEnded = true;
+    if (typeof this.onManualEnd === "function") this.onManualEnd(result);
+  },
+
+  driveManualToEnd() {
+    const handle = this.manual;
+    let guard = 0;
+    while (handle && !handle.done && guard++ < 200) handle.next({});
+    if (handle && handle.done) this.settleManual(handle.result);
+    this.eventById = new Map(this.timeline.filter(e => e.eventId).map(e => [e.eventId, e]));
+    this.pacing = this.plan(this.timeline);
+  },
+
+  awaitCommands() {
+    const handle = this.manual;
+    if (!handle || handle.done) return this.finish();
+    if (this.autoRest) {
+      this.submitCommands({});
+      return;
+    }
+    this.paused = true;
+    this.renderCommandPanel(handle.prompt);
+  },
+
+  submitCommands(commands) {
+    const handle = this.manual;
+    if (!handle || handle.done) return;
+    this.hideCommandPanel();
+    const step = handle.next(commands || {});
+    this.eventById = new Map(this.timeline.filter(e => e.eventId).map(e => [e.eventId, e]));
+    this.pacing = this.plan(this.timeline);
+    if (step.type === "end") this.settleManual(step.result);
+    this.paused = false;
+    const pause = document.getElementById("pause-btn");
+    if (pause) pause.textContent = "⏸ 読むために停止";
+    this.step();
+  },
+
+  hideCommandPanel() {
+    const panel = document.getElementById("command-panel");
+    if (panel) { panel.hidden = true; panel.innerHTML = ""; }
+    const scene = document.getElementById("scene");
+    if (scene) scene.classList.remove("awaiting-commands");
+  },
+
+  // 指示パネル。味方ごとに たたかう／まもる／技／おまかせ、たたかうなら狙い。下に 全員たたかう／おまかせで最後まで／退く／決定。
+  renderCommandPanel(prompt) {
+    const panel = document.getElementById("command-panel");
+    if (!panel || !prompt) return;
+    const sel = this.cmdSel;
+    for (const a of prompt.allies) {
+      if (!sel[a.id]) sel[a.id] = { cmd: "attack", target: null };
+      if (sel[a.id].cmd === "skill" && !(a.skill && a.skill.ready)) sel[a.id].cmd = "attack";
+      if (sel[a.id].target && !prompt.enemies.some(e => e.id === sel[a.id].target)) sel[a.id].target = null;
+    }
+    const enemyChip = (e, unitId) => `<button type="button" class="cmd-target ${sel[unitId].target === e.id ? "on" : ""}" data-unit="${e.id === undefined ? "" : U.esc(unitId)}" data-target="${U.esc(e.id)}">${e.intent === "big" ? "⚠ " : ""}${U.esc(e.name)} <small>${Math.max(0, Math.round(e.hp / e.maxHp * 100))}%</small></button>`;
+    const rows = prompt.allies.map(a => {
+      const c = sel[a.id];
+      const skill = a.skill;
+      const skillBtn = skill
+        ? `<button type="button" class="cmd-btn ${c.cmd === "skill" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="skill" ${skill.ready ? "" : "disabled"} title="${U.esc(skill.note)}">技「${U.esc(skill.label)}」<small>気合${skill.cost}</small></button>`
+        : "";
+      const spirit = typeof a.spirit === "number" ? `<small class="cmd-spirit">気合 ${"●".repeat(a.spirit)}${"○".repeat(Math.max(0, 3 - a.spirit))}</small>` : "";
+      const state = a.winded ? `<small class="cmd-state">息切れ</small>` : a.stuffed ? `<small class="cmd-state">食事中</small>` : "";
+      return `<div class="cmd-row" data-unit="${U.esc(a.id)}">
+        <div class="cmd-who"><b>${U.esc(a.name)}</b> <small>HP ${a.hp}/${a.maxHp}</small> ${spirit} ${state}</div>
+        <div class="cmd-btns">
+          <button type="button" class="cmd-btn ${c.cmd === "attack" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="attack">たたかう</button>
+          <button type="button" class="cmd-btn ${c.cmd === "guard" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="guard">まもる</button>
+          ${skillBtn}
+          <button type="button" class="cmd-btn ${c.cmd === "auto" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="auto">おまかせ</button>
+        </div>
+        ${(c.cmd === "attack" || c.cmd === "skill") && prompt.enemies.length > 1
+          ? `<div class="cmd-targets"><span>狙い</span>${prompt.enemies.map(e => enemyChip(e, a.id)).join("")}<button type="button" class="cmd-target ${c.target ? "" : "on"}" data-unit="${U.esc(a.id)}" data-target="">前から</button></div>` : ""}
+      </div>`;
+    }).join("");
+    const bigOnes = prompt.enemies.filter(e => e.intent === "big").map(e => e.name);
+    panel.innerHTML = `<div class="cmd-head"><b>ラウンド ${prompt.round}</b>　指示を出せ${bigOnes.length ? `　<span class="cmd-warn">⚠ ${U.esc(bigOnes.join("、"))}が大技を放つ</span>` : ""}</div>
+      ${rows}
+      <div class="cmd-foot">
+        <button type="button" class="small" data-cmdall="attack">全員たたかう</button>
+        <button type="button" class="small" data-cmdall="autorest">この戦いはおまかせ</button>
+        <button type="button" class="small" data-cmdall="autoalways">以後もおまかせ</button>
+        ${prompt.canRetreat ? `<button type="button" class="small danger" data-cmdall="retreat">🏰 退く（${U.esc(prompt.downed.join("、"))}を担いで）</button>` : ""}
+        <button type="button" class="primary" data-cmdall="go">決定 ▶</button>
+      </div>`;
+    panel.hidden = false;
+    const scene = document.getElementById("scene");
+    if (scene) scene.classList.add("awaiting-commands");
+    // 構えの印を敵の枠へ
+    for (const e of prompt.enemies) {
+      const u = this.units[e.id];
+      if (u) u.el.classList.toggle("intent-big", e.intent === "big");
+    }
+    if (!panel.dataset.bound) {
+      panel.dataset.bound = "1";
+      panel.addEventListener("click", ev => {
+        const btn = ev.target.closest("button");
+        if (!btn || btn.disabled) return;
+        if (btn.dataset.cmd) {
+          const unitId = btn.dataset.unit;
+          this.cmdSel[unitId] = Object.assign(this.cmdSel[unitId] || {}, { cmd: btn.dataset.cmd });
+          return this.renderCommandPanel(this.manual && this.manual.prompt);
+        }
+        if (btn.dataset.target !== undefined && btn.dataset.unit !== undefined && !btn.dataset.cmdall) {
+          const unitId = btn.dataset.unit;
+          this.cmdSel[unitId] = Object.assign(this.cmdSel[unitId] || { cmd: "attack" }, { target: btn.dataset.target || null });
+          return this.renderCommandPanel(this.manual && this.manual.prompt);
+        }
+        const all = btn.dataset.cmdall;
+        if (all === "attack") {
+          for (const a of (this.manual.prompt.allies || [])) this.cmdSel[a.id] = { cmd: "attack", target: null };
+          return this.renderCommandPanel(this.manual.prompt);
+        }
+        if (all === "autorest") { this.autoRest = true; return this.submitCommands({}); }
+        if (all === "autoalways") { this.saveAutoBattle(true); this.autoRest = true; return this.submitCommands({}); }
+        if (all === "retreat") return this.submitCommands({ retreat: true });
+        if (all === "go") {
+          const commands = {};
+          for (const a of (this.manual.prompt.allies || [])) {
+            const c = this.cmdSel[a.id] || { cmd: "attack" };
+            if (c.cmd === "auto") continue;
+            commands[a.id] = { cmd: c.cmd, target: c.target || undefined };
+          }
+          return this.submitCommands(commands);
+        }
+      });
+    }
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 1 });
   },
 
   setMormoControlsLocked(locked, wipe = false) {
@@ -2013,9 +2200,15 @@ const BattleScene = {
   // 残りを一気に適用して終わらせる
   skip() {
     if (this.finished) return;
+    // コマンドバトルの途中なら、残りをおまかせで最後まで回してから飛ばす
+    if (this.manual && !this.manual.done) {
+      this.autoRest = true;
+      this.hideCommandPanel();
+      this.driveManualToEnd();
+    }
     // 提案を出したまま飛ばそうとしたら何もしない。stop() が一言ごと消してしまい、
     // 選択肢が無いまま戦闘だけが進む（＝答えずに続行したことになる）。
-    if (this.mormoAwaiting && ((!this.retreatAnswered && this.timeline.some(e => e.type === "retreat_offer"))
+    if (this.mormoAwaiting && ((!this.retreatAnswered && this.timeline.some(e => e.type === "retreat_offer" && !e.manual))
       || this.timeline.some(e => e.type === "order_offer" && !this.orderAnswered.has(e.eventId)))) return;
     const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
@@ -2079,6 +2272,7 @@ const BattleScene = {
       this.tellChain(ev, false);
     }
     const result = this.timeline.find(e => e.type === "result");
+    if (result && result.retreated) this.retreated = true;
     if (result && !this.retreated) {
       this.banner(result.victory);
       if (!announced) this.playSettleCue(result.victory);

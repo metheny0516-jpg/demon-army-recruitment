@@ -429,8 +429,18 @@ const Game = {
     if (st.phase === "battle" && st.pendingBattle) {
       const pending = st.pendingBattle;
       st.pendingBattle = null;
-      this.recordBattleResult(pending);
-      this.settleContinue(pending);
+      // コマンドバトルの途中でリロードした：指示は失われるので、おまかせで計算して続行として決着する。
+      if (!pending.result && pending.replay && typeof Battle !== "undefined") {
+        const rp = pending.replay;
+        pending.result = Battle.simulate(JSON.parse(JSON.stringify(rp.playerUnits)), JSON.parse(JSON.stringify(rp.enemyUnits)),
+          Object.assign({}, rp.options, { manual: false }));
+      }
+      if (pending.result) {
+        this.recordBattleResult(pending);
+        this.settleContinue(pending);
+      } else {
+        st.phase = "formation";
+      }
     } else if (st.phase === "battle") {
       st.pendingBattle = null;
       st.phase = "formation";
@@ -2163,11 +2173,32 @@ const Game = {
       offerOrder: !!options.offerRetreat && !openingBattle,
       seed: options.offerRetreat ? Math.floor(U.rand() * 2147483647) : undefined
     };
-    const replay = simOptions.offerOrder ? {
+    // コマンドバトル（UI の既定、2026-09-11）。指示を受けながらラウンドごとに解決するので、ここでは計算しない。
+    // 決着は finishManualBattle()。リロードで戻ったときは replay からおまかせで計算して続行として決着する。
+    if (options.manual) {
+      simOptions.offerOrder = false;
+      simOptions.seed = Math.floor(U.rand() * 2147483647);
+    }
+    const replay = (simOptions.offerOrder || options.manual) ? {
       playerUnits: JSON.parse(JSON.stringify(playerUnits)),
       enemyUnits: JSON.parse(JSON.stringify(enemyUnits)),
       options: JSON.parse(JSON.stringify(simOptions))
     } : null;
+    if (options.manual) {
+      const handle = Battle.start(playerUnits, enemyUnits, simOptions);
+      const pending = {
+        result: null, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView: null,
+        kingMerged, replay, manual: true,
+        highlightIds: playerUnits
+          .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
+          .map(u => u.id).filter(Boolean)
+      };
+      st.pendingBattle = pending;
+      st.phase = "battle";
+      this.liveBattle = { handle, pending };
+      this.save();
+      return { handle, notes, stageData, manual: true };
+    }
     const result = Battle.simulate(playerUnits, enemyUnits, simOptions);
 
     const pending = {
@@ -2192,6 +2223,29 @@ const Game = {
     }
     this.settleContinue(pending);
     return { result, notes, stageData };
+  },
+
+  // コマンドバトルの決着。UI が取っ手（handle）を最後まで回してから呼ぶ。
+  // 退いたなら settleRetreat、それ以外は settleContinue（決着経路は二つのまま）。戻り値はフェーズ名。
+  finishManualBattle(result) {
+    const st = this.state;
+    const live = this.liveBattle;
+    const pending = st.pendingBattle;
+    if (!pending || !pending.manual) return false;
+    const final = result || (live && live.handle && live.handle.result) || null;
+    if (!final) return false;
+    pending.result = final;
+    // 技で払った気合を名簿へ反映（戦闘中のユニットは名簿の写しなので、ここで戻す）
+    for (const [uid, spent] of Object.entries(final.spiritSpent || {})) {
+      const m = st.roster.find(x => String(x.uid) === String(uid));
+      if (m && typeof m.spirit === "number") m.spirit = Math.max(0, m.spirit - spent);
+    }
+    this.liveBattle = null;
+    this.recordBattleResult(pending);
+    st.pendingBattle = null;
+    if (final.retreated) this.settleRetreat(pending);
+    else this.settleContinue(pending);
+    return st.phase;
   },
 
   // 戦闘の中身が確定したら一度だけ呼ぶ。シナジーの発見・最大戦力・最大CHAIN／OVERKILL・KPI。

@@ -64,6 +64,8 @@ async function toBattle(page) {
     Game.state.stage = 1; Game.state.gold = 50; Game.state.phase = 'formation';
     App.render();
   });
+  // コマンドバトルは指示待ちで止まるので、この検査は「以後もおまかせ」で自動に回す
+  await page.evaluate(() => { BattleScene.saveAutoBattle(true); });
   await page.click('[data-action="deploy"]');
   await page.evaluate(() => { BattleScene.speed = 4; });
   await page.waitForFunction(() => !!document.querySelector('.scene-result.win'), null, { timeout: 180000 });

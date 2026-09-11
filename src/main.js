@@ -391,14 +391,19 @@ const App = {
       case "deploy": {
         // offerRetreat を渡すのは UI だけ。提案が出た戦闘では決着が保留され、
         // BattleScene が「続ける／退く」を聞いてから Game.settleBattle() が決着させる。
-        const out = Game.deploy({ offerRetreat: true });
+        // コマンドバトル（2026-09-11）。ラウンドごとに指示を受ける。おまかせ／飛ばすは自動で最後まで回す。
+        const out = Game.deploy({ manual: true });
         if (!out) return;
         this.pendingBattle = out;
-        return UI.battle(out.result, out.stageData);
+        return UI.battleManual(out);
       }
 
       case "skiplog":
         BattleScene.skip();
+        return;
+
+      case "autobattle":
+        BattleScene.toggleAutoBattle();
         return;
 
       case "speed":

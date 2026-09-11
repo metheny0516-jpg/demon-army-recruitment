@@ -52,6 +52,19 @@ const COUNT_ATTACKS = () => {
   BattleScene.render = function (ev) { window.__drawn.push(ev.type); return render(ev); };
 };
 
+
+// 指示待ちのたびに「決定」で進め、「退く」が出るまで待つ（ラウンド1では誰も倒れていない）
+async function advanceUntilRetreat(page) {
+  for (let i = 0; i < 12; i++) {
+    await page.waitForFunction(() => !document.getElementById('command-panel').hidden || BattleScene.finished, null, { timeout: 30000 });
+    if (await page.evaluate(() => BattleScene.finished)) return false;
+    if (await page.locator('[data-cmdall="retreat"]').count()) return true;
+    if (process.env.DEBUG_RETREAT) console.log('    round', await page.evaluate(() => (BattleScene.manual && BattleScene.manual.prompt || {}).round), 'rows', await page.locator('.cmd-row').count());
+    await page.evaluate(() => document.querySelector('[data-cmdall="go"]').click());
+  }
+  return false;
+}
+
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await b.newPage({ viewport: { width: 1128, height: 900 } });
@@ -62,38 +75,27 @@ const COUNT_ATTACKS = () => {
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await enterMissionPhase(page);
 
-  console.log('▼ 提案が出て戦闘が止まる');
+  console.log('▼ 倒れた者が出ると、指示パネルに「退く」が出て戦闘が止まる（コマンドバトル）');
   await page.evaluate(SETUP);
   await page.evaluate(COUNT_ATTACKS);
   await page.evaluate(() => { BattleScene.speed = 4; });
   await page.click('[data-action="deploy"]');
-  await page.waitForSelector('.mormo-aside-choices', { timeout: 20000 });
+  // ラウンド1で捨て駒Aが倒れ、ラウンド2の指示待ちで「退く」が出る
+  ok(await advanceUntilRetreat(page), '「退く」が出るところまで進めた');
   const offer = await page.evaluate(() => ({
-    text: document.querySelector('.mormo-aside-bubble p').textContent,
-    note: (document.querySelector('.mormo-aside-note') || {}).textContent || '',
-    labels: [...document.querySelectorAll('.mormo-aside-choice')].map(el => el.textContent.trim()),
-    focused: document.activeElement && document.activeElement.textContent.trim(),
-    awaiting: BattleScene.mormoAwaiting, paused: BattleScene.paused,
+    label: document.querySelector('[data-cmdall="retreat"]').textContent,
+    paused: BattleScene.paused, panelShown: !document.getElementById('command-panel').hidden,
+    rows: document.querySelectorAll('.cmd-row').length,
     attacks: window.__drawn.filter(t => t === 'attack').length
   }));
-  ok(/捨て駒A/.test(offer.text), `モルモの一言に倒れた者の名前（${offer.text}）`);
-  ok(/退けます/.test(offer.text), '「退けます」と言っている');
-  ok(offer.labels.length === 2, `ボタンが2つ（${offer.labels.join(' / ')}）`);
-  ok(/続ける/.test(offer.labels[0]) && /退く/.test(offer.labels[1]), '「⚔ 続ける」「🏰 退く」の順');
-  ok(/続ける/.test(offer.focused || ''), '既定フォーカスは「続ける」（今までの挙動が既定）');
-  ok(offer.awaiting && offer.paused, '戦闘は止まっている');
-  ok(/担いで/.test(offer.note), '退いた場合に何が起きるかが添えてある');
+  ok(/捨て駒A/.test(offer.label), `退くボタンに倒れた者の名前（${offer.label}）`);
+  ok(/担いで/.test(offer.label), '担いで帰ることが添えてある');
+  ok(offer.paused && offer.panelShown, '戦闘は指示待ちで止まっている');
+  ok(offer.rows === 1, `立っている者だけが指示の対象（${offer.rows}人）`);
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retreat-offer.png' });
 
-  console.log('▼ 「最後まで飛ばす」は答える前は進まない');
-  await page.evaluate(() => BattleScene.skip());
-  await page.waitForTimeout(200);
-  ok(await page.locator('.mormo-aside-choices').count() === 1, '答える前の skip() では提案が消えない');
-  ok(await page.evaluate(() => !BattleScene.finished), 'skip() でも戦闘は終わらない');
-
-  console.log('▼ 「続ける」を押すと今までどおり最後まで進む');
-  await page.click('.mormo-aside-choice.primary');
-  // 続けた戦闘は最後まで再生される。速度4でも長い戦闘があるので、待ちは長めに取る。
+  console.log('▼ 「決定」で続ければ今までどおり最後まで進む');
+  await page.evaluate(() => document.querySelector('[data-cmdall="go"]').click());
   await page.evaluate(() => BattleScene.skip());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });
   const cont = await page.evaluate(() => ({
@@ -113,9 +115,9 @@ const COUNT_ATTACKS = () => {
   await page.evaluate(COUNT_ATTACKS);
   await page.evaluate(() => { BattleScene.speed = 4; });
   await page.click('[data-action="deploy"]');
-  await page.waitForSelector('.mormo-aside-choices', { timeout: 20000 });
+  ok(await advanceUntilRetreat(page), '「退く」が出るところまで進めた');
   const atOffer = await page.evaluate(() => window.__drawn.filter(t => t === 'attack').length);
-  await page.locator('.mormo-aside-choice').nth(1).click();
+  await page.evaluate(() => document.querySelector('[data-cmdall="retreat"]').click());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 20000 });
   const afterRetreat = await page.evaluate(() => ({
     attacks: window.__drawn.filter(t => t === 'attack').length,
@@ -123,13 +125,13 @@ const COUNT_ATTACKS = () => {
     injured: (Game.state.roster.find(m => m.uid === 901) || {}).injured,
     roster: Game.state.roster.map(m => m.name),
     log: document.getElementById('log').innerText,
-    banner: !!document.querySelector('.scene-result')
+    banner: !!document.querySelector('.scene-result.win, .scene-result.lose')
   }));
-  ok(afterRetreat.attacks === atOffer, `提案より後の攻撃は描画されない（${atOffer} → ${afterRetreat.attacks}）`);
+  ok(afterRetreat.attacks === atOffer, `退いたあとの攻撃は描画されない（${atOffer} → ${afterRetreat.attacks}）`);
   ok(afterRetreat.roster.includes('捨て駒A'), '倒れていた者を担いで帰った（戦死していない）');
   ok(afterRetreat.injured === 1, `担いで帰った者は負傷1（${afterRetreat.injured}）`);
   ok(afterRetreat.retreated && afterRetreat.phase === 'result', `撤退として決着した（${afterRetreat.phase}）`);
-  ok(/撤退/.test(afterRetreat.log), '戦況記録に撤退の一行が残る');
+  ok(/退く|撤退/.test(afterRetreat.log), '戦況記録に退いた一行が残る');
   ok(!afterRetreat.banner, '勝敗の決着表示は出ない（勝っても負けてもいない）');
 
   console.log('▼ 撤退のあとのモルモ報告（勝ったと言わない）');
@@ -191,9 +193,10 @@ const COUNT_ATTACKS = () => {
     Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation'; App.render();
   });
   await page.click('[data-action="deploy"]');
+  await page.waitForFunction(() => !document.getElementById('command-panel').hidden || BattleScene.finished, null, { timeout: 20000 });
+  ok(await page.locator('[data-cmdall="retreat"]').count() === 0, '誰も倒れていなければ「退く」は出ない');
   await page.evaluate(() => BattleScene.skip());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 20000 });
-  ok(await page.locator('.mormo-aside-choices').count() === 0, '誰も倒れなければ提案は出ない');
   ok(await page.evaluate(() => !Game.state.pendingBattle), '保留も残らない');
 
   if (errs.length) { process.exitCode = 1; console.log('  ✗ ページ例外: ' + errs.join(' / ')); }
