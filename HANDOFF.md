@@ -33,7 +33,8 @@
   **幕の進行の仕様（次、Claude）で扱うこと**：`MONSTER_TEMPLATES_ACT2` の解禁（`rollApplicant` は tier 3/4 を区別しない）、
   `ENEMY_STAGES_ACT2` の接続と `MAX_CONQUEST` の幕ごとの上限、勇者戦後の切り替え場面、討伐隊の下限、`rampage` の autoLimit
   （modDealt の受け身技には効かない）、突進の押し下げが「ラウンドの終わり」になっている点（未決U3）。
-- **CodeX（絵）**：新種族3の立ち絵・6ポーズ・表情差分（指示文はチャットで渡し済み。ブランチ codex/act2-art）。
+- 済み：**新種族3の絵**（CodeX `codex/act2-art` 7コミット、マージ済み）。立ち絵 768×1024・6ポーズ WebP・BATTLE_SPRITES 登録。
+  art-coverage / portrait / species（3種）通過。表情差分は無し（任意）。
 
 - **完了（CodeX）**：痕跡を本体へ接続し、「城の記録」画面（日誌・蔵・去った者）を追加。
 - 作戦会議・編成・面接・結果の HUD から開け、元の phase を変えずに戻れる。
