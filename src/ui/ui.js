@@ -1427,8 +1427,10 @@ const UI = {
       </div>`
       : b.defense && b.ransacked
       ? `<div class="banner rout">
-        <h2>城が荒らされた</h2>
-        <div>${U.esc(b.army)}に城を荒らされた。${carried.length
+        <h2>${b.castleFell ? "城が焼かれた" : "城が荒らされた"}</h2>
+        <div>${b.castleFell
+          ? `${U.esc(b.army)}に城を落とされた。だが魔王は生きている。${fallen.length ? `${U.esc(fallen.join("、"))}は戻らなかった。` : ""}軍を整え、次に備えよ。`
+          : `${U.esc(b.army)}に城を荒らされた。`}${carried.length
           ? `${U.esc(carried.join("、"))}は担いで戻った。` : ""}</div>
         <ul class="notes">
           ${(b.ransacked.facilityBefore !== undefined && b.ransacked.facilityAfter !== undefined)

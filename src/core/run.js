@@ -263,7 +263,7 @@ const Game = {
       retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {},
       // 王国の反撃（2026-09-10）
       counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
-      ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false,
+      ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false, castleFalls: 0,
       // 継承（2026-09-10）。旧セーブには無い。departed は永久離脱の履歴、
       // relics は蔵の品、pendingBond は「次の面接に混ざる縁の者」の予約。
       departed: [], relics: [], relicSeq: 0, pendingBond: null,
@@ -2175,18 +2175,14 @@ const Game = {
         st.defenses = st.defenses || { won: 0, lost: 0 };
         st.defenses.lost += 1;
         st.counterattack = null;
-        if (heroDefense) { st.heroCame = true; castleFell = true; }
+        if (heroDefense) { castleFell = true; this.castleFalls(notes); }
       }
       st.turn += 1;
       st.missionOffers = [];
       st.wipeCount = (st.wipeCount || 0) + 1;
       // 再起（時の巻き戻し）は「軍団が空で、雇う金も無い」ときの最後の手段だけに縮めた。
-      // それ以外の全滅は通常の流れへ戻り、面接で建て直す。
-      if (castleFell) {
-        // 勇者に城を明け渡した。再建は無い。
-        st.phase = "gameover";
-        st.castleFell = true;
-      } else if (this.canRebuild()) {
+      // それ以外の全滅は通常の流れへ戻り、面接で建て直す。勇者に負けても同じ（2026-09-11）。
+      if (this.canRebuild()) {
         st.phase = "result";
         this.genApplicants();
       } else {
@@ -2202,6 +2198,7 @@ const Game = {
       victory: result.victory,
       // 防衛戦（王国の反撃）の結末（表示用）。
       defense: isDefense,
+      castleFell,
       defended: !!(defenseOutcome && defenseOutcome.defended),
       ransacked: (defenseOutcome && defenseOutcome.ransacked) || null,
       // 出撃隊の全滅（表示用）。戻らなかった者と、蔵に残った品。
@@ -2376,7 +2373,7 @@ const Game = {
       st.defenses = st.defenses || { won: 0, lost: 0 };
       st.defenses.lost += 1;
       st.counterattack = null;
-      if (heroDefense) { st.heroCame = true; castleFell = true; }
+      if (heroDefense) { castleFell = true; this.castleFalls(notes); }
     } else {
       // 征服は進まない。だが敵に見つかった事実は残る。
       const alertDelta = Number(stageData.alertDelta) || 1;
@@ -2395,16 +2392,15 @@ const Game = {
     st.missionOffers = [];
     // 押し返されたのは撤退ではない。退いた回数（軍風の材料）には数えない。
     if (!lostOnPoints) st.retreatCount = (st.retreatCount || 0) + 1;
-    // 勇者に城を明け渡したら終わり。再建は無い。
-    st.phase = castleFell ? "gameover"
-      : this.canRebuild() ? "result" : "defeat";
-    if (castleFell) st.castleFell = true;
+    // 勇者に負けても終わりではない（2026-09-11）。荒らされ、建て直し、また来る勇者に備える。
+    st.phase = this.canRebuild() ? "result" : "defeat";
 
     st.lastBattle = {
       victory: false,
       retreated: !lostOnPoints,
       lostOnPoints,
       defense: isDefense,
+      castleFell,
       defended: false,
       ransacked: (defenseOutcome && defenseOutcome.ransacked) || null,
       unlocked,
@@ -2531,6 +2527,17 @@ const Game = {
 
   // 城を守れなかった。**人は取らない**（それは戦場で決まっている）。
   // 持っていかれるのは、積み上げたもの——施設・蓄え・蔵の品。
+  // 勇者に城を落とされた。**終わりではない**（オーナー 2026-09-11：ラスボスに負けて最初からは理不尽）。
+  // 荒らされ（ransack は呼び出し側で済んでいる）、勇者は去り、魔王軍レベルは保たれる。
+  // 警戒が溜まればまた来る（heroCame を戻す）。名簿が空で金も無ければ通常どおり再起か魔界史へ。
+  castleFalls(notes) {
+    const st = this.state;
+    st.castleFalls = (st.castleFalls || 0) + 1;
+    st.heroCame = false;
+    st.alert = 0;
+    notes.push(`勇者は城を焼いて去った（${st.castleFalls}度目）。魔王は生きている。軍を整え、次に備えよ`);
+  },
+
   ransack(notes) {
     const st = this.state;
     const rules = this.counterRules().ransack;

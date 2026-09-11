@@ -172,19 +172,22 @@ function fightDefense(st) {
   assert(st.heroCame === true, '勇者は来た');
 }
 {
-  // 勇者に城を明け渡す＝城陥落。再建は無い
+  // 勇者に負けても終わりではない（2026-09-11）。荒らされ、勇者は去り、魔王軍レベルは保たれ、また来る
   const st = freshRun([paper(601, 'ヨワシ'), tank(602, 'カタブツ')], [601, 602],
     { alert: COUNTERATTACK.threshold, conquest: ENEMY_STAGES.length - 1 });
   Game.checkCounterattack();
   assert(st.counterattack.kind === "hero", '（前提）勇者戦');
+  const levelBefore = Game.armyLevel();
   Game.prepareMissions(true); Game.selectMission(0); st.phase = "formation";
   Game.deploy({ offerRetreat: true });
   Game.settleBattle('retreat');
-  assert(st.phase === "gameover", `城陥落で終わり（${st.phase}）`);
-  assert(st.castleFell === true, 'castleFell が立つ');
-  assert(!!st.record && st.record.cause === "城陥落",
-    `ランの記録が「城陥落」（${st.record && st.record.cause}）`);
-  assert(st.record.clearedBy === null, 'クリアではない');
+  assert(st.phase === "result", `城を落とされても続く（${st.phase}）`);
+  assert(st.castleFalls === 1 && st.lastBattle.castleFell === true, '城陥落の回数と印');
+  assert(st.heroCame === false && st.counterattack === null && st.alert === 0, '勇者は去り、警戒は0から。また来る');
+  assert(Game.armyLevel() >= levelBefore, `魔王軍レベルは保たれる（${levelBefore} → ${Game.armyLevel()}）`);
+  st.alert = COUNTERATTACK.threshold;
+  Game.checkCounterattack();
+  assert(st.counterattack && st.counterattack.kind === "hero", '警戒が溜まれば勇者はまた来る');
 }
 {
   // 勇者を退けた後は、警戒が溜まっても もう来ない
@@ -227,7 +230,7 @@ function fightDefense(st) {
   assert(Array.isArray(st.plundered) && st.ransackCount === 0, 'plundered / ransackCount が入る');
 }
 
-// 13. 城陥落（勇者の防衛戦で全滅）は記録を確定してから gameover になる（st.record が無いと画面が落ちる）
+// 13. 勇者の防衛戦で全滅・名簿が空・金も無い → 通常どおり defeat（再起）か gameover。記録は確定している
 {
   const st = freshRun([paper(951, 'カミ')], [951], { gold: 0 });
   st.counterattack = { pending: true, kind: 'hero', armyName: '勇者一行' };
@@ -236,8 +239,9 @@ function fightDefense(st) {
   assert(defend >= 0, '（前提）勇者の防衛戦が予約されている');
   Game.selectMission(defend); st.phase = 'formation';
   Game.deploy();
-  assert(st.phase === 'gameover' && st.castleFell === true, `城陥落で gameover（${st.phase}）`);
-  assert(!!st.record && st.record.cleared === false, '記録が確定している（gameover 画面が読む st.record がある）');
+  assert(st.phase === 'defeat' || st.phase === 'gameover', `名簿が空で金も無ければ再起か終わり（${st.phase}）`);
+  if (st.phase === 'gameover') assert(!!st.record, '記録が確定している（gameover 画面が読む st.record がある）');
+  else assert(st.castleFalls === 1, '再起できる状態でも城陥落は数えられている');
 }
 
 console.log(failed ? `\n${failed} 件失敗` : '\n全件通過');
