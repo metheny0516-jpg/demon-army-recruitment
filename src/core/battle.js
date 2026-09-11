@@ -11,6 +11,7 @@
 // 因果イベント共通: { parentEventId?, chainId, chainDepth }
 //   親を持たない攻撃などが chainDepth=1 の起点。死亡・追撃・蘇生は原因イベントを親に持つ。
 //   既存の type は変えず、将来のシナジー発火とCHAIN表示に使うメタデータだけを加える。
+// V2ランだけ v2Depth も並記する。同じ実効果を一度だけ数え、倍率はこの逐次値を読む。
 //
 //   battle_start { player:[Snap], enemy:[Snap] }   Snapは下の snap() 参照
 //   dialogue     { unitId,name,side,quote }         データ指定された開戦台詞
@@ -28,6 +29,9 @@
 //   resource_forfeit { sourceId,resource,amount,label }  条件喪失による予約没収
 //   note         { }                                特性の発動などテキストのみ
 //   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
+//   order_offer  { round, candidates:[{unitId,name,skillId,skillName,label,note,cost,spirit}], unready:[...], answered? }
+//                                                  号令の節目。options.offerOrder のときだけ、1戦闘1回
+//   order_exec   { unitId, name, skillId, skillName, label, quote }  号令の実行（次ラウンド冒頭、本人が真っ先に動く）
 //   result       { victory, reversal }              reversal=総HP3割以下から勝った
 // ───────────────────────────────────────────────────────
 const Battle = {
@@ -68,9 +72,18 @@ const Battle = {
       salary: m.salary || 0,
       loyalty: m.loyalty ?? 50,
       unpaid: !!m.unpaid,
+      // F: 戦闘中ハプニングの読み取り用状態。ロスターへは保存しない。
+      starved: !!m.starved || (m.traits || []).includes("starved"),
+      feast: false,
+      chainDepth: 1,
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
       introQuote: m.introQuote || "",
+      // 気合（号令の限定）。名簿の値を写す。無ければ null＝制限なし（傭兵・テストの直作り）。
+      spirit: (m.spirit === undefined || m.spirit === null) ? null : Number(m.spirit),
+      // 上位技のお披露目。覚えた直後の戦いでだけ autoLimit 回まで勝手に出る。名簿の値が無い（テストの直作り・sim の敵）なら
+      // "any"＝どの技もお披露目扱い（既存テストと種族技の測定が今までどおり動く）。null なら号令でだけ出る。
+      debut: m.debutSkill === undefined ? "any" : (m.debutSkill || null),
       mods: {
         dmgMult: m.battleDmgMult || 1,
         takenMult: m.battleTakenMult || 1,
@@ -81,10 +94,75 @@ const Battle = {
     };
   },
 
+  // options.seed を渡すと乱数が決定的になる（同じ入力＋同じ種＝同じタイムライン）。
+  // 号令は「途中まで同じ展開のまま、指示のあとだけ分岐」させるために、同じ種で計算し直す。
+  // 種を渡さなければ今までどおり Math.random（sim・テストの既定は変わらない）。
   simulate(playerUnits, enemyUnits, options) {
     options = options || {};
+    if (options.seed === undefined || options.seed === null) return this._simulate(playerUnits, enemyUnits, options);
+    const prev = U.rand;
+    U.rand = U.seeded(options.seed);
+    try { return this._simulate(playerUnits, enemyUnits, options); }
+    finally { U.rand = prev; }
+  },
+
+  // 号令の候補：戦場にいる軍団員（傭兵・召喚物を除く）で、号令できる特性（order）を持つ者。
+  // 一人に複数あれば最初の一つ。最大3人（選択肢を読める数に絞る）。
+  // 気合（unit.spirit）が技の cost に足りない者は候補に出ない（unready に回す）。null は制限なし。
+  orderCandidates(playerUnits) {
+    return this.orderRoster(playerUnits).ready;
+  },
+  orderRoster(playerUnits) {
+    const ready = [], unready = [];
+    for (const u of playerUnits) {
+      if (!u.alive || u.flags.absent || u.flags.summoned || u.flags.mercenary || u.flags.winded) continue;   // 息切れ中は命じられない
+      const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
+      if (!skillId) continue;
+      const tr = TRAITS[skillId];
+      const cost = Math.max(0, Number(tr.order.cost) || 0);
+      const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
+      if (spirit !== null && spirit < cost) {
+        unready.push({ unitId: u.id, name: u.name, skillId, skillName: tr.name, spirit, cost });
+        continue;
+      }
+      if (ready.length >= 3) continue;
+      ready.push({ unitId: u.id, name: u.name, skillId, skillName: tr.name, label: tr.order.label, note: tr.order.note || "", cost, spirit });
+    }
+    return { ready, unready };
+  },
+
+  _simulate(playerUnits, enemyUnits, options) {
+    // 保存済みランの版を正本にする。V1途中ランはアップデート後も旧倍率を維持する。
+    const useV2ChainMultiplier = Number(options.chainDefVersion) >= 2;
     playerUnits.forEach((u, i) => { u.id = "p" + i; });
     enemyUnits.forEach((u, i) => { u.id = "e" + i; });
+    // 遅刻。特性の lateArrival が返したラウンド数だけ、戦場にいない。
+    // 開戦の並びにも入らず、口上も言わず、狙われもしない。到着は summon イベントで描く。
+    for (const u of playerUnits) {
+      for (const tid of u.traits) {
+        const tr = TRAITS[tid];
+        if (!tr || !tr.lateArrival) continue;
+        const rounds = Math.max(0, Math.floor(tr.lateArrival({ unit: u, rng: U.rand }) || 0));
+        if (rounds > 0) { u.flags.late = rounds; u.flags.absent = true; u.flags.lateTrait = tid; }
+      }
+    }
+    // 発酵した糧食（改造癖の者が生活部門で樽に寝かせた）。食べた者の一人が酔って遅刻する。
+    // 本人（改造癖）は戦場にいない。任せた仕事の結果が、ここで初めて戦闘の順番に出る。
+    {
+      const r = options.rations;
+      if (r && r.fermentedBy != null && r.consumed > 0) {
+        const eaters = playerUnits.filter(u => !u.flags.absent && !u.tags.includes("undead"));
+        const bigEaters = eaters.filter(u => u.traits.includes("big_eater"));
+        const victim = (bigEaters.length ? U.pick(bigEaters) : (eaters.length ? U.pick(eaters) : null));
+        if (victim) {
+          victim.flags.late = 1;
+          victim.flags.absent = true;
+          victim.flags.lateTrait = "tinkerer";
+          victim.flags.lateBy = r.fermentedByName || "誰か";
+          victim.flags.lateCause = "fermented_rations";
+        }
+      }
+    }
 
     const timeline = [];
     let nextEventId = 1;
@@ -104,6 +182,13 @@ const Battle = {
         data.chainDepth = (parent.chainDepth || 1) + 1;
       } else {
         data.chainDepth = 1;
+      }
+      if (useV2ChainMultiplier) {
+        const classified = Chain.classify(type, data);
+        const counted = classified.role === "effect"
+          || (classified.role === "declaration" && classified.selfEffect);
+        const parentDepth = parent ? (parent.v2Depth ?? 1) : 0;
+        data.v2Depth = parentDepth + (counted ? 1 : 0);
       }
       const event = emit(type, data);
       if (!event.chainId) event.chainId = event.eventId;
@@ -160,8 +245,56 @@ const Battle = {
       id: u.id, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon, side: u.side,
       hp: u.hp, maxHp: u.maxHp, atk: u.atk, def: u.def, spd: u.spd,
       traits: u.traits.slice(), tags: u.tags.slice(), introQuote: u.introQuote,
-      summoned: !!u.flags.summoned
+      summoned: !!u.flags.summoned,
+      late: !!u.flags.late
     });
+    // 戦場にいる者。開戦時に不在（遅刻）の者は生きていても狙えず、動けず、数に入らない。
+    const onField = u => u.alive && !u.flags.absent;
+
+    // 種族技の発動は既存の trait_trigger で記録する。技を持たない編成では呼ばず、乱数も消費しない。
+    // 上位技の自動発動は autoLimit 回まで（既定は無制限）。号令で出した分は数えない。
+    // 数えるのは実際に発動した回（skillTrigger）。判定は act() のフック呼び出し前（modDealt / postAttack）。
+    const autoExhausted = (unit, traitId) => {
+      const tr = TRAITS[traitId];
+      if (!tr || !tr.autoLimit || unit.flags.ordered) return false;
+      const allowed = (unit.debut === "any" || unit.debut === traitId) ? tr.autoLimit : 0;
+      return ((unit.flags.skillUses || {})[traitId] || 0) >= allowed;
+    };
+    const skillTrigger = (unit, traitId, parent) => {
+      const trait = TRAITS[traitId] || {};
+      if (trait.autoLimit && !unit.flags.ordered) {
+        unit.flags.skillUses = unit.flags.skillUses || {};
+        unit.flags.skillUses[traitId] = (unit.flags.skillUses[traitId] || 0) + 1;
+      }
+      const lines = trait.lines && trait.lines.use;
+      const quote = lines && lines.length ? U.pick(lines) : "";
+      return emitCausal("trait_trigger", {
+        sourceId: unit.id, traitId, name: trait.name || traitId, quote, emphasis: 2,
+        text: `　${unit.name}の【${trait.name || traitId}】${quote ? `「${quote}」` : ""}`, cls: "trait"
+      }, parent || null);
+    };
+
+    const summonUnit = (source, spec, parent) => {
+      const sideUnits = source.side === "player" ? playerUnits : enemyUnits;
+      const unit = Battle.makeUnit({
+        uid: null, tplId: spec.tplId || source.tplId, name: spec.name || `${source.name}の分身`,
+        race: spec.race || source.race, icon: source.icon, job: spec.job || source.job,
+        hp: Math.max(1, spec.maxHp || source.maxHp), atk: Math.max(1, spec.atk || source.atk),
+        def: Math.max(0, spec.def ?? source.def), spd: spec.spd || source.spd,
+        salary: 0, loyalty: source.loyalty, traits: spec.traits || [], tags: spec.tags || source.tags
+      }, source.side);
+      unit.id = `${source.side === "player" ? "ps" : "es"}${nextSummonId++}`;
+      unit.maxHp = Math.max(1, spec.maxHp || source.maxHp);
+      unit.hp = Math.max(1, Math.min(unit.maxHp, spec.hp ?? unit.maxHp));
+      unit.flags.summoned = true;
+      sideUnits.push(unit);
+      const event = emitCausal("summon", {
+        sourceUnitId: source.id, unit: snap(unit), emphasis: 2,
+        text: `　${unit.name}が現れた！`, cls: "revive"
+      }, parent || null);
+      reactToUndeadArrival(unit, event);
+      return event;
+    };
 
     // シナジー適用（merge型は出撃時に処理済み）
     // 発火条件は出撃5枠の外まで数える（options.synergyPool＝軍団全体）。
@@ -196,10 +329,12 @@ const Battle = {
       }, parent);
     };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
+    const goblinPair = activeSyn.some(s => s.id === "goblin_pair");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
     let reservedGold = 0;
     let ledgerFires = 0;
     let ledgerBoost = null;
+    let lootPairBoost = null;
     const gainBattleResource = (unit, resource, value, label, parent) => {
       const resourceName = resource === "gold" ? "G" : resource;
       const verb = label === "殉職手当" ? "支給予約" : "略奪予約";
@@ -210,6 +345,12 @@ const Battle = {
       if (resource === "gold") {
         const before = reservedGold;
         reservedGold += value;
+        if (goblinPair) {
+          lootPairBoost = emitCausal("synergy_trigger", {
+            synergyId: "goblin_pair", name: "追い剥ぎコンビ", amount: 25, emphasis: 2,
+            text: "　【追い剥ぎコンビ】盗んだ勢いで、次の味方攻撃+25%！", cls: "synergy"
+          }, event);
+        }
         const nextLedgerMark = (ledgerFires + 1) * 3;
         if (options.extortionLedger && ledgerFires < facilityWorks
           && before < nextLedgerMark && reservedGold >= nextLedgerMark) {
@@ -224,12 +365,21 @@ const Battle = {
       return event;
     };
 
-    emit("battle_start", {
-      player: playerUnits.map(snap),
+    emit("battle_start", { absent: playerUnits.filter(u => u.flags.absent).map(snap), player: playerUnits.filter(onField).map(snap),
       enemy: enemyUnits.map(snap)
     });
     let feastTrigger = null;
     const rations = options.rations;
+    // V2a の伝票（run.js の Game.mealPlan）。ここでは**倍率を計算し直さない**。
+    // 起点・対象・効果量を既存イベントへ書き添えるためだけに読む。
+    const meal = (rations && rations.meal) || null;
+    let mealTarget = null;       // 食事強化を受けた戦闘ユニット
+    let mealSource = null;       // 料理人の戦闘ユニット
+    let mealFirstHitSeen = false;   // 対象者の「最初の有効打」を1回だけ印にする
+    for (const u of playerUnits) {
+      u.starved = u.starved || !!(rations && rations.shortage > 0 && !u.tags.includes("undead"));
+      u.feast = !!(rations && rations.feastUid != null && rations.consumed >= 4);
+    }
     if (rations) {
       const rationEvent = emitCausal("resource_consume", {
         resource: "food", amount: rations.consumed, need: rations.need, shortage: rations.shortage,
@@ -248,9 +398,29 @@ const Battle = {
           text: `　${u.name}の【大食漢】 腹いっぱいで与ダメージ上昇`, cls: "trait" }, rationEvent);
       }
       const cook = byUid(rations.cookUid);
+      mealSource = cook || null;
+      mealTarget = meal && meal.targetUid != null ? byUid(meal.targetUid) : null;
       if (cook && rations.consumed > 0) {
-        emitCausal("trait_trigger", { sourceId: cook.id, traitId: "demon_cook", name: "魔界料理人", emphasis: 1,
-          text: `　${cook.name}の【魔界料理人】 食事を火力へ変換`, cls: "trait" }, rationEvent);
+        // 既存イベントに起点・対象・効果量を書き添える（新しいイベントは足さない）。
+        // 伝票が無い古い呼び出しでは、従来どおり対象も量も持たない1行のまま。
+        const targetName = mealTarget ? mealTarget.name : null;
+        const percent = meal ? meal.boostPercent : 0;
+        emitCausal("trait_trigger", {
+          sourceId: cook.id, traitId: "demon_cook", name: "魔界料理人", emphasis: 1,
+          targetId: mealTarget ? mealTarget.id : null,
+          targetName,
+          amount: meal ? meal.boost : 0,
+          amountPercent: percent,
+          consumed: rations.consumed,
+          kitchenMult: meal ? meal.kitchenMult : 1,
+          // 食欲が同値で並んだ者。「なぜこの人が受けたか」を表示側が説明できる
+          tiedIds: meal ? (meal.tiedUids || []).map(uid => (byUid(uid) || {}).id).filter(Boolean) : [],
+          targetEatsNothing: meal ? !!meal.targetEatsNothing : false,
+          text: targetName
+            ? `　${cook.name}の【魔界料理人】 ${targetName}へ食事を火力へ変換（与ダメージ+${percent}%）`
+            : `　${cook.name}の【魔界料理人】 食事を火力へ変換`,
+          cls: "trait"
+        }, rationEvent);
       }
       const hunger = byUid(rations.hungerUid);
       if (hunger && rations.emptied) {
@@ -258,17 +428,36 @@ const Battle = {
           text: `　${hunger.name}の【飢餓の悪魔】 備蓄が尽き、全軍が飢えて暴走！`, cls: "trait" }, rationEvent);
       }
       const feast = byUid(rations.feastUid);
-      if (feast && rations.consumed >= 4) {
+      if (feast && rations.consumed >= 4 && !feast.flags.absent) {  // 酔って離席中なら宴は無い
         feastTrigger = emitCausal("trait_trigger", { sourceId: feast.id, traitId: "glutton_feast", name: "暴食の宴", emphasis: 2,
           text: `　【暴食の宴】 ${feast.name}が食後の追加行動を狙う`, cls: "trait" }, rationEvent);
       }
     }
     for (const u of [...enemyUnits, ...playerUnits]) {
-      if (!u.introQuote) continue;
+      if (!u.introQuote || u.flags.absent) continue;
       emit("dialogue", {
         unitId: u.id, name: u.name, side: u.side, quote: u.introQuote,
         emphasis: 2, text: `${u.name}「${u.introQuote}」`, cls: "dialogue"
       });
+    }
+    // 遅刻者の不在を、開戦時に明示する。本人は居ないのでモルモが言う。
+    for (const u of playerUnits) {
+      if (!u.flags.absent) continue;
+      const lines = (TRAITS[u.flags.lateTrait] || {}).lines;
+      const pool = (lines && lines.absent) || ["{name}殿がいません！"];
+      const quote = U.pick(pool).replace(/\{name\}/g, u.name).replace(/\{by\}/g, u.flags.lateBy || "誰か");
+      emit("dialogue", {
+        unitId: u.id, name: "モルモ", side: "player", quote, late: true,
+        emphasis: 2, text: `モルモ「${quote}」`, cls: "dialogue"
+      });
+      // 本人は戦場にいないが、声だけは届く。
+      if (lines && lines.absentSelf && lines.absentSelf.length) {
+        const self = U.pick(lines.absentSelf);
+        emit("dialogue", {
+          unitId: u.id, name: u.name, side: "player", quote: self, late: true, offstage: true,
+          emphasis: 2, text: `${u.name}「${self}」（戦場の外から）`, cls: "dialogue"
+        });
+      }
     }
     for (const s of activeSyn) {
       // merge型（キングスライム合体）は「合体した戦闘」でだけ run.js がイベントを差し込む。
@@ -284,7 +473,37 @@ const Battle = {
     // ダメージ適用。kind で attack / splash を出し分ける。
     const applyDamage = (attacker, target, amount, kind, opts) => {
       opts = opts || {};
+      // CHAINの深さを全ダメージ系統の共通報酬にする。
+      // 3段目は小さな成功、4段目から明確な爆発。強欲だけでなく宴やOVERKILL伝播にも効く。
+      const chainDepth = opts.parentEvent ? (opts.parentEvent.chainDepth || 1) + 1 : 1;
+      const v2Depth = opts.parentEvent ? (opts.parentEvent.v2Depth ?? 1) + 1 : 1;
+      const multiplierDepth = useV2ChainMultiplier ? v2Depth : chainDepth;
+      if (attacker.side === "player" && multiplierDepth >= 3) {
+        const chainMult = multiplierDepth === 3
+          ? 1.25 : Math.min(2.5, 1.75 + (multiplierDepth - 4) * .25);
+        amount *= chainMult;
+        opts.traits = [...(opts.traits || []), `CHAIN ${multiplierDepth} ×${chainMult.toFixed(2)}`];
+      }
       let dmg = Math.max(1, Math.round(amount * target.mods.takenMult));
+      // 味方が受ける直前の肩代わり。敵対攻撃だけに限り、最初に数値を返した者へ当たり先を替える。
+      if (!opts.incident && attacker.side !== target.side) {
+        const ally = target;
+        const guards = (ally.side === "player" ? playerUnits : enemyUnits).filter(u => onField(u) && u !== ally);
+        for (const unit of guards) {
+          for (const tid of unit.traits) {
+            const tr = TRAITS[tid];
+            if (!tr || !tr.onAllyHit) continue;
+            const redirected = tr.onAllyHit({ unit, ally, attacker, dmg, round, log: note });
+            if (typeof redirected !== "number" || redirected < 0) continue;
+            const trigger = skillTrigger(unit, tid, opts.parentEvent || null);
+            target = unit;
+            dmg = Math.max(1, Math.round(redirected * target.mods.takenMult));
+            opts.parentEvent = trigger;
+            break;
+          }
+          if (target !== ally) break;
+        }
+      }
       for (const tid of target.traits) {
         const tr = TRAITS[tid];
         if (tr && tr.modTaken) dmg = tr.modTaken({ unit: target, attacker, dmg });
@@ -292,14 +511,17 @@ const Battle = {
       const hpBefore = target.hp;
       target.hp -= dmg;
 
-      let dead = false, survived = false;
+      let dead = false, survived = false, survival = null, summons = [];
       if (target.hp <= 0) {
         for (const tid of target.traits) {
           const tr = TRAITS[tid];
-          if (tr && tr.onLethal && tr.onLethal({ unit: target, log: note })) { survived = true; break; }
+          if (!tr || !tr.onLethal) continue;
+          const result = tr.onLethal({ unit: target, log: note, summon: spec => summons.push(spec),
+            trigger: traitId => skillTrigger(target, traitId, opts.parentEvent || null) });
+          if (result === true || result?.survive) { survived = true; survival = result; break; }
         }
         if (survived) {
-          target.hp = 1;
+          target.hp = Math.max(1, survival?.hp ?? 1);
         } else {
           target.alive = false;
           target.hp = 0;
@@ -321,6 +543,31 @@ const Battle = {
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
+      if (useV2ChainMultiplier && damageEvent.v2Depth !== multiplierDepth) {
+        throw new Error(`V2倍率の逐次段数がイベント段数と不一致: ${multiplierDepth} != ${damageEvent.v2Depth}`);
+      }
+      // 食事強化を受けた者の「最初の有効打」。新しいイベントは足さず、
+      // すでに出したダメージイベントへ印を書き添えるだけ（順序・回数・深度は動かない）。
+      //
+      // 印を付けるのは **食事強化が実際に乗った、敵への一撃**だけ。
+      // 仲間割れ（incident）の同士討ちは unit.atk * 0.7 の生ダメージで、
+      // mods.dmgMult を通らない＝食事強化が反映されていない。味方を殴った回を
+      // 「料理の着地」と呼ぶと、戦果が嘘になる。対象外の回では印の権利も消費しない
+      // （フラグは下の if の中でしか立てない）ので、後の本当の初撃にちゃんと付く。
+      const mealEligible = target.side === "enemy" && !opts.incident;
+      if (mealEligible && mealTarget && attacker === mealTarget && dmg > 0
+        && !mealFirstHitSeen && meal && meal.boost > 0) {
+        mealFirstHitSeen = true;
+        damageEvent.mealBoost = {
+          first: true,
+          sourceId: mealSource ? mealSource.id : null,
+          sourceName: mealSource ? mealSource.name : null,
+          targetId: mealTarget.id,
+          targetName: mealTarget.name,
+          amount: meal.boost,
+          amountPercent: meal.boostPercent
+        };
+      }
       let overkillEvent = null;
       const excessDamage = dead ? Math.max(0, dmg - hpBefore) : 0;
       const excessPercent = excessDamage > 0 ? Math.round(excessDamage / target.maxHp * 100) : 0;
@@ -341,6 +588,7 @@ const Battle = {
       if (survived) {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
       }
+      for (const spec of summons) summonUnit(target, spec, damageEvent);
       let deathEvent = null;
       if (dead) {
         deathEvent = emitCausal("death", {
@@ -361,7 +609,7 @@ const Battle = {
         if (overkillEvent && overkillEvent.percent >= needPercent && propagationDepth < limit
           && (byTrait || byOverload)) {
           const opponents = attacker.side === "player" ? enemyUnits : playerUnits;
-          const next = opponents.find(unit => unit.alive);
+          const next = opponents.find(onField);
           if (next) {
             const label = byTrait ? "連鎖虐殺" : "魔王軍完成";
             const step = propagationDepth + 1;
@@ -386,25 +634,26 @@ const Battle = {
       return { dmg, event: damageEvent, deathEvent, overkillEvent };
     };
 
-    const tryIncident = (unit, allies) => {
+    const tryIncident = (unit, allies, actionOpts) => {
       if (unit.side !== "player" || unit.flags.incidentUsed) return false;
-      const candidates = BATTLE_HAPPENINGS.filter(h => h.check(unit));
-      const generalPresent = allies.some(a => a.alive && a.rankId === "general");
+      // 既存3件は通常行動だけ。追撃中は明示した連鎖ハプニングだけを判定。
+      const candidates = BATTLE_HAPPENINGS.filter(h => (!actionOpts.isExtra || h.duringChain) && h.check(unit));
+      const generalPresent = allies.some(a => onField(a) && a.rankId === "general");
       for (const happening of candidates) {
         const chance = happening.chance * (generalPresent ? 0.35 : 1);
         if (!U.chance(chance)) continue;
         let target = null;
         if (happening.kind === "friendly_fire") {
-          const victims = allies.filter(a => a.alive && a !== unit);
+          const victims = allies.filter(a => onField(a) && a !== unit);
           if (!victims.length) continue;
           target = U.pick(victims);
         }
         unit.flags.incidentUsed = true;
-        emit("incident", {
+        emitCausal("incident", {
           id: happening.id, name: happening.name, unitId: unit.id,
           targetId: target && target.id, emphasis: 3,
           text: happening.text(unit, target), cls: "incident"
-        });
+        }, actionOpts.parentEvent || null);
         if (target) applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true, parentEvent: timeline[timeline.length - 1] });
         return true;
       }
@@ -413,25 +662,35 @@ const Battle = {
 
     const act = (unit, allies, enemies, round, actionOpts) => {
       actionOpts = actionOpts || {};
-      const living = enemies.filter(u => u.alive);
+      const living = enemies.filter(onField);
       if (living.length === 0) return;
-      if (!actionOpts.isExtra && tryIncident(unit, allies)) return;
+      unit.chainDepth = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;
+      if (tryIncident(unit, allies, actionOpts)) return;
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = U.chance(0.6) ? living[0] : U.pick(living);
 
+      // 号令を受けた一撃。技の条件を飛ばし（特性側が ctx.ordered を読む）、与ダメ+50%。
+      // 追加行動（血の雄叫び・宴）には乗せない。代償は act() の最後で払う（次の手番は息切れ）。
+      const ordered = !!unit.flags.ordered && !actionOpts.isExtra;
       const ctx = {
         attacker: unit, target, allies, enemies, round,
-        mult: unit.mods.dmgMult, notes: [], rng: U.rand
+        mult: unit.mods.dmgMult, notes: [], rng: U.rand, ordered
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
-        if (tr && tr.modDealt) tr.modDealt(ctx);
+        if (tr && tr.modDealt && !autoExhausted(unit, tid)) tr.modDealt(ctx);
       }
+      if (ordered) { ctx.mult *= 1.5; ctx.notes.push("号令"); }
       const ledgerParent = unit.side === "player" ? ledgerBoost : null;
       if (ledgerParent) {
         ctx.mult *= 1.4;
         ctx.notes.push("恐喝帳簿");
         ledgerBoost = null;
+      }
+      if (unit.side === "player" && lootPairBoost) {
+        ctx.mult *= 1.25;
+        ctx.notes.push("追い剥ぎコンビ");
+        lootPairBoost = null;
       }
       // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
       if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
@@ -459,9 +718,29 @@ const Battle = {
         unit.flags.martyrGold = 2;
         triggeredEvents.push(gainBattleResource(unit, "gold", 2, "殉職手当", applied.deathEvent));
       }
+      // 大食漢：倒した相手の飯を、その場で食い始める。次の手番が飛ぶ。
+      const eater = TRAITS.big_eater && TRAITS.big_eater.eat;
+      if (eater && unit.side === "player" && applied.deathEvent && unit.traits.includes("big_eater")
+          && (unit.flags.ateCount || 0) < eater.maxPerBattle && U.chance(eater.chance)) {
+        unit.flags.ateCount = (unit.flags.ateCount || 0) + 1;
+        unit.flags.stuffed = true;
+        const line = U.pick(TRAITS.big_eater.lines.eat);
+        const trig = emitCausal("trait_trigger", {
+          sourceId: unit.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 2,
+          note: "倒した相手の携行食を食べ始めた。次の手番は動かない。少し回復する",
+          text: `　${unit.name}の【大食漢】「${line}」 ${target.name}の携行食を食べ始めた（次の手番は動かない）`, cls: "trait"
+        }, applied.deathEvent);
+        const heal = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * eater.healRate));
+        if (heal > 0) {
+          unit.hp += heal;
+          emitCausal("heal", { unitId: unit.id, amount: heal, hp: unit.hp, maxHp: unit.maxHp, emphasis: 1 }, trig);
+        }
+      }
       const post = {
-        attacker: unit, target, dmg, enemies, log: note, pick: U.pick,
-        dealRaw: (a, t, d, label) => applyDamage(a, t, d, "splash", { label, parentEvent: applied.event }).dmg,
+        attacker: unit, target, dmg, enemies, allies, round, onField, log: note, pick: U.pick, ordered,
+        trigger: traitId => skillTrigger(unit, traitId, applied.event),
+        dealRaw: (a, t, d, label, parentEvent) => applyDamage(a, t, d, "splash", { label, parentEvent: parentEvent || applied.event }).dmg,
+        extraAction: (parentEvent, label) => act(unit, allies, enemies, round, { parentEvent, label, isExtra: true }),
         gainResource: (resource, value, label) => {
           const event = gainBattleResource(unit, resource, value, label, applied.event);
           triggeredEvents.push(event);
@@ -470,14 +749,14 @@ const Battle = {
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
-        if (tr && tr.postAttack && target) tr.postAttack(post);
+        if (tr && tr.postAttack && target && !autoExhausted(unit, tid)) tr.postAttack(post);
       }
       if (triggeredEvents.length) {
         // 金貨は軍団の成果。盗む役と反応する役を別の人材で組める。
         // 各人の greedyChains が再帰に入る前に使用済みになるため、
         // 追加攻撃で別の金貨が出ても、同じ鎖で同じ人は二度動かない。
         for (const reactor of allies) {
-          if (!reactor.alive || !enemies.some(e => e.alive)) continue;
+          if (!onField(reactor) || !enemies.some(onField)) continue;
           const reaction = {
             attacker: reactor, events: triggeredEvents,
             extraAction: (mult, parentEvent, label) => {
@@ -494,6 +773,8 @@ const Battle = {
           }
         }
       }
+      // 号令の代償。全力を出した次の手番は息が上がって動けない（大食漢の stuffed と同じ形）。
+      if (ordered) { unit.flags.ordered = false; unit.flags.winded = true; }
     };
 
     const wiped = us => us.every(u => !u.alive);
@@ -534,12 +815,22 @@ const Battle = {
         : all();
       const before = all().map(u => ({ u, alive: u.alive, hp: u.hp }));
       for (const unit of candidates) {
+        if (unit.flags.absent) continue;
         const allies = unit.side === "player" ? playerUnits : enemyUnits;
         const enemies = unit.side === "player" ? enemyUnits : playerUnits;
         for (const tid of unit.traits) {
           const tr = TRAITS[tid];
           if (!tr || !tr.onRoundEnd || (rescueOnly && !tr.rescueOnWipe)) continue;
-          tr.onRoundEnd({ unit, allies, enemies, log: note, rng: U.rand });
+          tr.onRoundEnd({ unit, allies, enemies, round, onField, log: note, rng: U.rand,
+            trigger: traitId => skillTrigger(unit, traitId, null),
+            dealRaw: (attacker, target, dmg, label, parentEvent) => applyDamage(attacker, target, dmg, "splash", { label, parentEvent }).dmg,
+            moveEnemyBack: target => {
+              const i = enemies.indexOf(target);
+              const next = i >= 0 ? enemies.findIndex((u, n) => n > i && onField(u)) : -1;
+              if (i >= 0 && next >= 0) [enemies[i], enemies[next]] = [enemies[next], enemies[i]];
+              return next >= 0;
+            }
+          });
         }
       }
       for (const s of before) {
@@ -563,17 +854,94 @@ const Battle = {
       return !wiped(rescued);
     };
     let round = 0;
+    // 撤退の提案。味方が初めて倒れたラウンドの終わりに一度だけ「重要度の印」として置く。
+    // 戦闘計算・乱数には一切関与しない（permanent / reversal と同じ性格）。
+    // simulate() はここで止まらず最後まで計算する＝「続けた場合の結末」を返す。
+    // 止めるかどうかは run.js（settleBattle）と描画側の判断。
+    let retreatOffer = null;
+    // 号令の節目。options.offerOrder のときだけ、1戦闘1回。提案の位置と候補を印として置く。
+    // 答え（options.orders[round] = unitId）があれば次ラウンド冒頭で実行する。
+    // 提案イベントは答えの有無に関わらず同じ位置に出す（同じ種で計算し直したとき、前半が一致するため）。
+    // 節目は戦況が動くたびに来る（1ラウンドに1回、回数の上限なし。気合と息切れが連打を抑える）。
+    const orderOffers = [];
+    const orders = options.orders || {};
+    const offerAtRound = r => orderOffers.find(o => o.round === r) || null;
 
     outer:
     for (round = 1; round <= this.MAX_ROUNDS; round++) {
       emit("round_start", { round, emphasis: 1, text: `── ラウンド ${round} ──`, cls: "round" });
+      const deadAtRoundStart = all().filter(u => !u.alive).length;
 
+      // 遅刻者の到着。その場にいなかった者が、途中から戦場に立つ。
+      // 味方が全員倒れたあとに一人で着くこともある。それはそれで、そういう戦いだったということ。
+      for (const u of playerUnits) {
+        if (!u.flags.absent || round <= u.flags.late) continue;
+        u.flags.absent = false;
+        u.flags.arrivedRound = round;
+        const lines = (TRAITS[u.flags.lateTrait] || {}).lines;
+        const quote = U.pick((lines && lines.arrive) || ["……遅れた"]);
+        emit("summon", {
+          sourceUnitId: null, unit: snap(u), late: true, quote, emphasis: 2,
+          text: `　${u.name}が遅れて到着「${quote}」`, cls: "revive"
+        });
+      }
+
+      // 大火球の燃焼は「次ラウンド開始時」にだけ解決する。flag に残した発動イベントを
+      // 親にするので、燃焼も元の一発の因果列として描画・戦果に残る。
+      for (const target of all().filter(u => onField(u) && u.flags.burn && u.flags.burn.at <= round)) {
+        const burn = target.flags.burn;
+        delete target.flags.burn;
+        applyDamage(burn.source, target, Math.ceil(target.maxHp * 0.08), "splash", {
+          label: "燃焼", parentEvent: burn.parentEvent || null
+        });
+      }
+
+      // 号令の実行。前ラウンド末の提案に答えがあれば、本人を真っ先に動かす。
+      // 倒れていれば号令は空振り（何も起きない）。乱数はここでは消費しない（台詞は pick で1回だけ消費）。
+      let orderedUnit = null;
+      const prevOffer = offerAtRound(round - 1);
+      if (prevOffer && orders[prevOffer.round]) {
+        const cand = prevOffer.candidates.find(c => c.unitId === orders[prevOffer.round]);
+        const unit = cand ? playerUnits.find(u => u.id === cand.unitId) : null;
+        if (cand && unit && onField(unit)) {
+          unit.flags.ordered = true;
+          orderedUnit = unit;
+          const tr = TRAITS[cand.skillId] || {};
+          const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
+          emit("order_exec", {
+            unitId: unit.id, name: unit.name, skillId: cand.skillId, skillName: cand.skillName, label: cand.label, quote, emphasis: 3,
+            text: `　魔王「${unit.name}、${cand.label}！」 ${unit.name}「${quote}」`, cls: "order"
+          });
+        }
+      }
       const order = all()
-        .filter(u => u.alive)
+        .filter(onField)
         .sort((a, b) => b.spd - a.spd || (U.chance(0.5) ? -1 : 1));
+      if (round === 1) {
+        const gale = order.find(unit => unit.traits.includes("gale"));
+        if (gale) { order.splice(order.indexOf(gale), 1); order.unshift(gale); }
+      }
+      if (orderedUnit) { order.splice(order.indexOf(orderedUnit), 1); order.unshift(orderedUnit); }
       let rescuedThisRound = false;
       for (const unit of order) {
         if (!unit.alive) continue;
+        // 号令の代償。息が上がった手番は動かない。一回だけ。
+        if (unit.flags.winded) {
+          unit.flags.winded = false;
+          emit("note", { unitId: unit.id, winded: true, emphasis: 1,
+            text: `　${unit.name}は息が上がっている（この手番は動かない）`, cls: "trait" });
+          continue;
+        }
+        // 食べている最中は動かない。一回だけ。
+        if (unit.flags.stuffed) {
+          unit.flags.stuffed = false;
+          const line = U.pick(TRAITS.big_eater.lines.busy);
+          emit("trait_trigger", {
+            sourceId: unit.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 1, busy: true,
+            text: `　${unit.name}「${line}」 食事中でこの手番は動かない`, cls: "trait"
+          });
+          continue;
+        }
         const allies = unit.side === "player" ? playerUnits : enemyUnits;
         const enemies = unit.side === "player" ? enemyUnits : playerUnits;
         act(unit, allies, enemies, round);
@@ -596,11 +964,62 @@ const Battle = {
       resolveRecoveryHooks(false, null);
 
       if (round === 1 && feastTrigger) {
-        const feastUnit = playerUnits.find(u => u.id === feastTrigger.sourceId && u.alive);
+        // 離席中（遅刻・発酵で酔った）の者は宴にも出ない。alive だけ見ると透明のまま殴りに行く（オーナー試遊で発覚）
+        const feastUnit = playerUnits.find(u => u.id === feastTrigger.sourceId && onField(u));
         if (feastUnit && !wiped(enemyUnits)) {
           act(feastUnit, playerUnits, enemyUnits, round, {
             mult: 1, parentEvent: feastTrigger, label: "暴食の宴", isExtra: true
           });
+        }
+      }
+
+      // 撤退の提案（1戦闘1回）。ラウンドの終わり、勝敗判定の前。
+      // 条件：軍団員が倒れたまま立ち上がらなかった／敵が全滅していない／
+      // 立っている軍団員が1人以上（不在＝遅刻は「立っている」に数えない）。
+      if (!retreatOffer && !options.noRetreatOffer) {
+        const corps = playerUnits.filter(u => !u.flags.summoned);
+        const downed = corps.filter(u => !u.alive);
+        const standing = corps.filter(onField);
+        if (downed.length && standing.length && !wiped(enemyUnits)) {
+          const enemiesLeft = enemyUnits.filter(onField);
+          const who = downed.length > 1 ? `${downed[0].name}殿たち` : `${downed[0].name}殿`;
+          const line = `魔王様。${who}が倒れました。今なら担いで退けます。……敵は残り${enemiesLeft.length}`;
+          const event = emit("retreat_offer", {
+            round, emphasis: 3,
+            downed: downed.map(snap),
+            standing: standing.map(snap),
+            enemies: enemiesLeft.map(snap),
+            text: `　モルモ「${line}」`, cls: "mormo"
+          });
+          // 提案時点の戦果。終了時と同じ導出関数を使い、二か所で別々に組まない。
+          // 倒れていた軍団員は「担いで帰る」＝生存（負傷）。傭兵・召喚物は今までどおり。
+          const contribution = this.summarizeContribution(timeline, playerUnits).map(row => {
+            if (row.mercenary || row.survived) return row;
+            return { ...row, survived: true, injured: true };
+          });
+          retreatOffer = { index: timeline.indexOf(event), round, contribution };
+        }
+      }
+
+      // 号令の節目（1戦闘1回）。ラウンドの終わり、撤退の提案のあと、勝敗判定の前。
+      // 条件：戦況が動いた（このラウンドに誰かが倒れた／味方の誰かが半分を切っている）、
+      // 敵が残っている、候補がいる、同じラウンドに撤退の提案を出していない（二つ続けて聞かない）。
+      if (options.offerOrder && !wiped(enemyUnits) && !wiped(playerUnits)
+        && !(retreatOffer && retreatOffer.round === round)) {
+        const turned = all().filter(u => !u.alive).length > deadAtRoundStart
+          || playerUnits.some(u => onField(u) && !u.flags.summoned && u.hp <= u.maxHp * 0.5);
+        const roster = turned ? this.orderRoster(playerUnits) : { ready: [], unready: [] };
+        const candidates = roster.ready;
+        if (candidates.length) {
+          const answered = orders[round] || null;
+          // 言い方は「号令で何が変わるか」（1段目の技は勝手に出続けるので「出せます」だと命じないと出ないように読める）。
+          const names = candidates.map(c => `${c.name}に「${c.label}」`).join("、");
+          const event = emit("order_offer", {
+            round, candidates, unready: roster.unready, answered, emphasis: 3,
+            enemies: enemyUnits.filter(onField).map(snap),
+            text: `　モルモ「魔王様、号令を。${names}と命じられます」`, cls: "mormo"
+          });
+          orderOffers.push({ index: timeline.indexOf(event), round, candidates, answered });
         }
       }
 
@@ -639,12 +1058,21 @@ const Battle = {
       : "長期戦の末、判定負け……魔王軍は敗走した。";
     emit("result", {
       victory, reversal: this.detectReversal(timeline, victory), emphasis: 3,
+      // permanent / reversal / firstDiscovery と同じ「重要度の印」。勝敗確定後に導出して付け、
+      // 描画側だけが読む（戦闘計算には一切使わない）。判定決着と全滅を見分けるために要る。
+      wipe: wiped(playerUnits) ? "player" : wiped(enemyUnits) ? "enemy" : null,
       text: resultText, cls: victory ? "result-win" : "result-lose"
     });
 
     return {
       victory,
       timeline,
+      // 続けずに退く道があったか。無ければ null。勝敗・報酬・contribution には影響しない。
+      retreatOffer,
+      // 号令の節目（options.offerOrder のときだけ）。answered は答えの unitId か null。
+      // orderOffer は最初の節目（互換）。節目は戦況が動くたびに来るので orderOffers を見る。
+      orderOffer: orderOffers[0] || null,
+      orderOffers,
       // 旧来のテキストログ（タイムラインから導出）
       log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
       rounds: Math.min(round, this.MAX_ROUNDS),
@@ -659,8 +1087,30 @@ const Battle = {
       overkillSummary: this.summarizeOverkill(timeline),
       summonCount: timeline.filter(e => e.type === "summon").length,
       facilitySummary: this.summarizeFacility(timeline),
+      mealSummary: this.summarizeMeal(timeline),
       deathChains: this.summarizeDeathChains(timeline),
       resourceChanges: this.summarizeResourceChanges(timeline)
+    };
+  },
+
+  // 食事強化が「誰から誰へ、どれだけ」効き、その人の最初の有効打がどれだったか。
+  // 戦闘中に別状態を持ち回らず、確定したタイムラインから導出するだけ。
+  // 伝票（rations.meal）が無い戦闘・古い戦果では null を返す。表示側はその表示だけを省く。
+  summarizeMeal(timeline) {
+    const events = timeline || [];
+    const cook = events.find(e => e.type === "trait_trigger" && e.traitId === "demon_cook");
+    if (!cook || !cook.targetId) return null;
+    const hit = events.find(e => e.mealBoost && e.mealBoost.first);
+    return {
+      sourceId: cook.sourceId, targetId: cook.targetId, targetName: cook.targetName || null,
+      amount: cook.amount || 0, amountPercent: cook.amountPercent || 0,
+      consumed: cook.consumed || 0, kitchenMult: cook.kitchenMult || 1,
+      tiedIds: cook.tiedIds || [], targetEatsNothing: !!cook.targetEatsNothing,
+      triggerEventId: cook.eventId,
+      // 強化された者の最初の有効打。無ければ null（一度も攻撃せずに終わった）
+      firstHit: hit ? {
+        eventId: hit.eventId, type: hit.type, toId: hit.toId, dmg: hit.dmg, dead: !!hit.dead
+      } : null
     };
   },
 
@@ -897,9 +1347,11 @@ const Battle = {
   summarizeContribution(timeline, playerUnits) {
     const hits = timeline.filter(e => (e.type === "attack" || e.type === "splash") && e.label !== "仲間割れ");
     return playerUnits.filter(u => !u.flags.summoned).map(u => {
-      const dealt = hits.filter(e => e.fromId === u.id).reduce((s, e) => s + e.dmg, 0);
+      // 反動のような自傷は「受けたダメージ」には残すが、与ダメージ／撃破には足さない。
+      // 自分を殴った量でMVPになるのは戦果として嘘になる。
+      const dealt = hits.filter(e => e.fromId === u.id && e.toId !== u.id).reduce((s, e) => s + e.dmg, 0);
       const taken = hits.filter(e => e.toId === u.id).reduce((s, e) => s + e.dmg, 0);
-      const kills = hits.filter(e => e.fromId === u.id && e.dead).length;
+      const kills = hits.filter(e => e.fromId === u.id && e.toId !== u.id && e.dead).length;
       const overkills = timeline.filter(e => e.type === "overkill" && e.fromId === u.id);
       const died = timeline.some(e => e.type === "death" && e.unitId === u.id);
       // 火力以外の働き。人物へ確実に帰属できるイベントだけを数え、
@@ -915,6 +1367,8 @@ const Battle = {
       return {
         id: u.id, uid: u.uid, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
         mercenary: !!u.flags.mercenary,   // 金で雇った一時要員。戦功・欠員・戦没者に数えない
+        late: u.flags.late || 0,          // 遅刻したラウンド数。0なら開戦から居た
+        lateCause: u.flags.lateCause || (u.flags.late ? u.flags.lateTrait : null),  // 何で遅れたか（酒好き／発酵糧食）
         unpaid: !!u.unpaid, dealt, taken, kills,
         overkillCount: overkills.length,
         maxOverkill: overkills.reduce((max, event) => Math.max(max, event.percent || 0), 0),

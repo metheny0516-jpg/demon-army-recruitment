@@ -7,7 +7,10 @@ const { autoDismissMormo } = require('./helpers.js');
   await autoDismissMormo(page);
   const errs=[]; page.on('pageerror',e=>errs.push(e.message));
   await page.goto('file://' + process.env.GAME + '/index.html');
-  await page.click('[data-action="new"]');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  // 新規は必ずスロットを指定して始める（タイトルは3枚の札になった）
+  await page.locator('.slot-card [data-action="new"][data-slot="1"]').first().click();
   await page.waitForTimeout(150);
 
   const resumes = await page.locator('.resume').count();
@@ -17,7 +20,7 @@ const { autoDismissMormo } = require('./helpers.js');
 
   const h = await page.evaluate(() => document.body.scrollHeight);
   console.log(`\n採用画面のスクロール量: ${h}px (${(h/844).toFixed(2)}画面分)`);
-  await page.screenshot({ path: process.env.SP+'/resume-recruit.png', fullPage:true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/resume-recruit.png', fullPage:true });
 
   // 編成画面には出さない（スクロール抑制のため）
   await page.locator('[data-action="hire"]:not([disabled])').first().click();

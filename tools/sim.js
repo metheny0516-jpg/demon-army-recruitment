@@ -3,8 +3,8 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/run.js'];
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js','src/core/run.js'];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
   getItem: k => (k in store ? store[k] : null),
@@ -15,6 +15,9 @@ for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename
 const Game = vm.runInContext('Game', ctx);
 const KPI = vm.runInContext('KPI', ctx);
 const Synergy = vm.runInContext('Synergy', ctx);
+const TRAITS = vm.runInContext('TRAITS', ctx);
+// tier2の種族技（上位技）一覧。ベタ書きせず TRAITS から都度導出する
+const tier2SkillIds = Object.keys(TRAITS).filter(id => TRAITS[id].skill && TRAITS[id].skill.tier === 2);
 const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
 
 function chooseIndex(apps, roster, strat){
@@ -64,15 +67,32 @@ function runOnce(strat, stats){
             const worst = st.roster.reduce((b,m)=> power(m) < power(b) ? m : b, st.roster[0]);
             Game.fire(worst.uid);
           }
-          if (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5)) { Game.skipHire(); break; }
-          Game.hire(st.applicants.map((m,i)=>[m,i]).filter(([m])=>m.salary>=5)
-                    .reduce((b,x)=> power(x[0])>power(b[0])?x:b)[1]);
+          // 軍が空になったら見送らない。安い兵を全員切った直後に高給の応募者が居ないと
+          // 0体のまま出撃へ進み、deploy() が null を返してランがそこで終わる（記録が残らない）。
+          // 「高給3体だけ」という意図は保ったまま、空のときだけ誰かを採って続行する。
+          if (st.roster.length > 0
+              && (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5))) { Game.skipHire(); break; }
+          // 高給が居ればその中で最も強い者。軍が空で高給が居ない回だけ通常の選び方へ落とす
+          // （ここで採らないと0体のまま出撃してランが終わる）。
+          const rich = st.applicants.map((m,i)=>[m,i]).filter(([m])=>m.salary>=5);
+          const before = st.roster.length;
+          Game.hire(rich.length
+            ? rich.reduce((b,x)=> power(x[0])>power(b[0])?x:b)[1]
+            : chooseIndex(st.applicants, st.roster, strat));
+          // 採用が通らなかった（資金・枠）ならここで止める。continue だと無限ループになる
+          if (st.roster.length === before) { Game.skipHire(); break; }
           continue;
         }
       }
       if (strat.kind === 'elite') {
-        // 3体埋まっている、または高給の応募者がいない回は見送る（シナジーを壊さない）
-        if (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5)) { Game.skipHire(); break; }
+        // 3体埋まっている、または高給の応募者がいない回は見送る（シナジーを壊さない）。
+        // ただし**軍が空のときは見送らない**。初回の応募に高給が居ないと一人も採らずに
+        // 出撃へ進み、deploy() が null を返してランがそこで終わる（記録が残らず、
+        // 測定では「未完」として母集団から落ちる）。
+        // 「高給3体だけ」という意図は保つ。空のときだけ下の通常経路へ落として誰かを採る
+        // （chooseIndex は elite なら給与5G以上を優先し、居なければ最も強い者を選ぶ）。
+        if (st.roster.length > 0
+            && (st.roster.length >= 3 || !st.applicants.some(m => m.salary >= 5))) { Game.skipHire(); break; }
       }
       if (!Game.canHire()) {
         const idx = chooseIndex(st.applicants, st.roster, strat);
@@ -86,13 +106,13 @@ function runOnce(strat, stats){
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') {
+      // 出撃隊に入らない者は全員留守番（控えは無い）。「留守番2人」は弱い2人を出撃候補から外す
+      let pool = st.roster.slice();
       if (strat.departments === 'balanced' && st.roster.length >= 3) {
-        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
-        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
-        Game.assignDepartment(support[0].uid, 'life');
-        Game.assignDepartment(support[1].uid, 'construction');
+        const support = st.roster.slice().sort((a,b)=> power(a) - power(b)).slice(0, 2).map(m => m.uid);
+        pool = pool.filter(m => !support.includes(m.uid));
       }
-      const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
+      const best = pool.sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);
       st.activeUids = best.map(m => m.uid);
       Game.setPayrollPolicy('regular');
@@ -108,17 +128,22 @@ function runOnce(strat, stats){
         if (lowLoyalty && (st.missionCounts.suppress || 0) < 2) kind = 'suppress';
         else if (st.gold < salary + 5 && (st.missionCounts.raid || 0) < 4) kind = 'raid';
       }
-      const index = st.missionOffers.findIndex(m => m.missionKind === kind);
-      Game.selectMission(index >= 0 ? index : 2);
+      // 防衛戦（王国の反撃）は一択で来る。選ぶ余地は無いので、あればそれを受ける。
+      const defendIndex = st.missionOffers.findIndex(m => m.missionKind === 'defend');
+      if (defendIndex >= 0) Game.selectMission(defendIndex);
+      else {
+        const index = st.missionOffers.findIndex(m => m.missionKind === kind);
+        Game.selectMission(index >= 0 ? index : Math.min(2, st.missionOffers.length - 1));
+      }
     }
     if (st.phase === 'formation') {
+      // 出撃隊に入らない者は全員留守番（控えは無い）。「留守番2人」は弱い2人を出撃候補から外す
+      let pool = st.roster.slice();
       if (strat.departments === 'balanced' && st.roster.length >= 3) {
-        for (const m of st.roster) Game.assignDepartment(m.uid, 'combat');
-        const support = st.roster.slice().sort((a,b)=> power(a) - power(b));
-        Game.assignDepartment(support[0].uid, 'life');
-        Game.assignDepartment(support[1].uid, 'construction');
+        const support = st.roster.slice().sort((a,b)=> power(a) - power(b)).slice(0, 2).map(m => m.uid);
+        pool = pool.filter(m => !support.includes(m.uid));
       }
-      const best = Game.departmentRoster('combat').slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
+      const best = pool.sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY);
       best.sort((a,b)=> b.hp - a.hp);                // 強い5体を選び、HP高い順に前へ
       st.activeUids = best.map(m => m.uid);
       let payroll = 'regular';
@@ -135,6 +160,17 @@ function runOnce(strat, stats){
       const stageNow = st.stage;
       const out = Game.deploy();
       if (!out) break;
+      // 種族技（tier2）の発動回数をタイムラインから数える。乱数は消費しない、集計のみ
+      // stats は他のハーネス（chain-v2-measure.js など）が自前で作って渡してくる。
+      // その stats に skillTriggers は無いので、ここで作る（無ければ数えない、にしない）。
+      if (out.result.timeline) {
+        if (!stats.skillTriggers) stats.skillTriggers = {};
+        for (const ev of out.result.timeline) {
+          if (ev.type === 'trait_trigger' && ev.traitId && tier2SkillIds.includes(ev.traitId)) {
+            stats.skillTriggers[ev.traitId] = (stats.skillTriggers[ev.traitId] || 0) + 1;
+          }
+        }
+      }
       stats.incidents += (out.result.incidents || []).length;
       if (st.lastDepartmentReport && st.lastDepartmentReport.foodShortage) stats.foodShortages++;
       if (st.roster.some(m => m.unpaid)) stats.unpaid++;
@@ -164,7 +200,24 @@ function runOnce(strat, stats){
       else Game.concede();
     }
   }
-  return st.record || {};
+  // 全滅と再建の観測（再建の仕様）。旧実装では wipeCount が無いので 0 になる。
+  if (!stats.wipes) stats.wipes = 0;
+  if (!stats.emptyEnds) stats.emptyEnds = 0;
+  stats.wipes += st.wipeCount || 0;
+  if (!st.roster.length) stats.emptyEnds++;
+  // 王国の反撃の観測。旧実装ではどれも 0 になる。
+  if (!stats.defense) stats.defense = { won: 0, lost: 0, ransack: 0, fall: 0, byConquest: 0, byDefense: 0 };
+  const def = st.defenses || {};
+  stats.defense.won += def.won || 0;
+  stats.defense.lost += def.lost || 0;
+  stats.defense.ransack += st.ransackCount || 0;
+  const rec = st.record || {};
+  if (rec.cause === "城陥落") stats.defense.fall++;
+  if (rec.cleared) {
+    if (rec.clearedBy === "defense") stats.defense.byDefense++;
+    else stats.defense.byConquest++;
+  }
+  return rec;
 }
 
 const strategies = [
@@ -181,7 +234,7 @@ const strategies = [
   {name:'中盤で精鋭に転換', kind:'pivot'},
   {name:'略奪4回→侵攻', kind:'greedy', mission:'raid'},
   {name:'慎重経営', kind:'greedy', mission:'careful'},
-  {name:'三部門均衡', kind:'greedy', mission:'careful', departments:'balanced'},
+  {name:'留守番2人', kind:'greedy', mission:'careful', departments:'balanced'},
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
 ];
 const N = Number(process.argv[2] || 400);
@@ -196,8 +249,9 @@ const kpiOut = (() => {
 // 比較フラグは run.js が hpMult を読まなくなり復元できないため削除した。
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
+const skillTriggerTotals = {};
 for (const s of strategies) {
-  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0 };
+  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -215,6 +269,13 @@ for (const s of strategies) {
   console.log(`  ビルド名: ${nameCount.size}種/${N}ラン　多い順 ${topNames || 'なし'}`);
   const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
   for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
+  console.log(`  全滅 ${stats.wipes || 0}回／名簿が空で終わったラン ${stats.emptyEnds || 0}`);
+  {
+    const d = stats.defense || { won: 0, lost: 0, ransack: 0, fall: 0, byConquest: 0, byDefense: 0 };
+    const total = d.won + d.lost;
+    console.log(`  防衛戦 ${total}回（勝ち ${d.won} 負け ${d.lost}${total ? `＝勝率 ${(d.won / total * 100).toFixed(0)}%` : ""}）`
+      + `／荒らされた ${d.ransack}回／城陥落 ${d.fall}／クリア内訳 攻めた ${d.byConquest}・待った ${d.byDefense}`);
+  }
   console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}／拠点接収 ${stats.seizes}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
@@ -241,8 +302,14 @@ for (const s of strategies) {
       }
     }
   }
+  for (const id of tier2SkillIds) {
+    skillTriggerTotals[id] = (skillTriggerTotals[id] || 0) + (stats.skillTriggers[id] || 0);
+  }
   KPI.reset();
 }
+
+console.log(`\n種族技の発動（全戦略・全ラン合計、0回=条件が厳しすぎる可能性）:`);
+console.log('  ' + tier2SkillIds.map(id => `${TRAITS[id].name} ${skillTriggerTotals[id] || 0}`).join('　'));
 
 if (kpiOut) {
   fs.writeFileSync(kpiOut, JSON.stringify(kpiDump, null, 2));

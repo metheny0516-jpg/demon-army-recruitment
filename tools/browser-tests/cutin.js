@@ -29,13 +29,13 @@ const { autoDismissMormo } = require('./helpers.js');
   });
   await page.click('[data-action="deploy"]');
   await page.waitForTimeout(750);
-  await page.screenshot({ path: process.env.SP + '/scene-cutin.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/scene-cutin.png' });
   const shown = await page.locator('#cutin.show').count();
   const name = await page.locator('#cutin-name').innerText();
   console.log(`カットイン表示=${shown} 内容="${name}"`);
 
   await page.waitForTimeout(3000);
-  await page.screenshot({ path: process.env.SP + '/scene-mid5.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/scene-mid5.png' });
   console.log(errors.length ? '✗ ' + errors.join(', ') : '✓ JSエラーなし');
   await browser.close();
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

@@ -68,9 +68,32 @@ const MISSION_TYPES = [
     rewardJitter: [0, 0],
     foodReward: 0,
     materialReward: 1,
-    alertDelta: 0,
+    alertDelta: 0,   // 反撃Bで COUNTERATTACK.invadeAlert（2）を run.js が読む。データ層だけで挙動を変えない
     conquestDelta: 1,
     loyaltyDelta: 0,
     difficulty: "高"
   }
 ];
+
+// 防衛は反撃の予約時だけ run.js が明示的に選ぶ。通常の3択にはまだ混ぜない。
+MISSION_TYPES.defend = {
+  id: "defend",
+  icon: "🛡",
+  title: "城を守る",
+  strategyLabel: "討伐隊を迎え撃つ",
+  strategyHint: "王国の討伐隊が城へ向かっている。防衛の報酬はない。",
+  descriptions: [
+    "魔王城へ迫る討伐隊を迎え撃つ。ここを失えば、蓄えが荒らされる。"
+  ],
+  enemyTierOffset: 1,
+  enemyMult: 1,
+  rewardMult: 0,
+  payrollCoverage: 0,
+  rewardJitter: [0, 0],
+  foodReward: 0,
+  materialReward: 0,
+  alertDelta: 0,
+  conquestDelta: 0,
+  loyaltyDelta: 0,
+  difficulty: "高"
+};

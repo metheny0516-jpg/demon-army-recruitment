@@ -13,6 +13,8 @@ const Sound = {
     "assets/sfx/candidates/candidate-antum-thwack-08.wav",
     "assets/sfx/candidates/candidate-antum-thwack-09.wav"
   ],
+  WIN_SAMPLE: "assets/sfx/recorded/fanfare-win.wav",
+  winSample: null,
   physicalSeq: 0,
   volume: 0.55,
   muted: false,
@@ -123,22 +125,29 @@ const Sound = {
   },
 
   preloadSamples() {
-    if (typeof Audio === "undefined" || this.samples.size) return;
-    for (const family of ["basun", "gachan", "zushi", "zuba"]) {
-      for (const variant of ["a", "b", "c"]) {
-        const url = `assets/sfx/recorded/${this.SAMPLE_ROLES[family]}-${variant}.wav`;
-        const audio = new Audio();
+    if (typeof Audio === "undefined") return;
+    if (!this.samples.size) {
+      for (const family of ["basun", "gachan", "zushi", "zuba"]) {
+        for (const variant of ["a", "b", "c"]) {
+          const url = `assets/sfx/recorded/${this.SAMPLE_ROLES[family]}-${variant}.wav`;
+          const audio = new Audio();
+          audio.preload = "auto";
+          audio.src = url;
+          if (audio.load) audio.load();
+          this.samples.set(url, audio);
+        }
+      }
+      for (const url of this.PHYSICAL_SAMPLES) {
+        const audio = new Audio(url);
         audio.preload = "auto";
-        audio.src = url;
         if (audio.load) audio.load();
         this.samples.set(url, audio);
       }
     }
-    for (const url of this.PHYSICAL_SAMPLES) {
-      const audio = new Audio(url);
-      audio.preload = "auto";
-      if (audio.load) audio.load();
-      this.samples.set(url, audio);
+    if (!this.winSample) {
+      this.winSample = new Audio(this.WIN_SAMPLE);
+      this.winSample.preload = "auto";
+      if (this.winSample.load) this.winSample.load();
     }
   },
 
@@ -165,6 +174,46 @@ const Sound = {
     const played = audio.play();
     if (played && played.catch) played.catch(cleanup);
     return true;
+  },
+
+  playWinSample() {
+    if (this.muted || typeof Audio === "undefined") return false;
+    this.preloadSamples();
+    const prototype = this.winSample;
+    const audio = prototype && prototype.cloneNode ? prototype.cloneNode() : new Audio(this.WIN_SAMPLE);
+    audio.volume = Math.min(1, this.volume * .82);
+    while (this.media.size >= 4) {
+      const oldest = this.media.values().next().value;
+      oldest.pause(); this.media.delete(oldest);
+    }
+    this.media.add(audio);
+    let failed = false;
+    const cleanup = () => this.media.delete(audio);
+    const fallback = () => {
+      if (failed) return;
+      failed = true;
+      cleanup();
+      this.playSynthWin();
+    };
+    if (audio.addEventListener) {
+      audio.addEventListener("ended", cleanup, { once: true });
+      audio.addEventListener("error", fallback, { once: true });
+    }
+    try {
+      const played = audio.play();
+      if (played && played.catch) played.catch(fallback);
+    } catch (e) {
+      fallback();
+    }
+    return true;
+  },
+
+  playSynthWin() {
+    [[392,0,.16],[392,.21,.16],[392,.42,.16],[523,.68,.42],
+      [494,1.16,.20],[440,1.42,.20],[494,1.68,.24],[523,2.02,1.1]]
+      .forEach(([freq,delay,duration]) => this.tone(freq,duration,{type:"triangle",gain:.30,delay}));
+    this.chord([196,247,294], .7, {type:"triangle",gain:.085,delay:1.25});
+    this.chord([131,262,330,392], 1.12, {type:"triangle",gain:.10,delay:2.02});
   },
 
   tone(freq, duration, opts = {}) {
@@ -228,6 +277,11 @@ const Sound = {
   chord(freqs, duration, opts = {}) {
     freqs.forEach((freq, i) => this.tone(freq, duration, { ...opts, delay: (opts.delay || 0) + i * (opts.stagger || 0) }));
   },
+
+  // 決着音が鳴り終わるまでの秒数。BGMを鳴らし直す側がこれを読んで待つ。
+  // 音の長さは音を作っている側が知っているべきで、呼ぶ側に定数を写すと片方だけ古くなる。
+  CUE_LENGTH: { win: 2.29, lose: 1.4 },
+  cueLength(name) { return this.CUE_LENGTH[name] || 0; },
 
   cue(name, data = {}) {
     if (this.muted) return;
@@ -331,12 +385,8 @@ const Sound = {
         this.chord([82, 123, 165], .72 * pace, { type: "sawtooth", gain: .045, stagger: .05 });
         break;
       case "win":
-        // 約3.2秒のオリジナル凱旋句。戦闘速度で音程や曲の長さを変えない。
-        [[392,0,.16],[392,.21,.16],[392,.42,.16],[523,.68,.42],
-          [494,1.16,.20],[440,1.42,.20],[494,1.68,.24],[523,2.02,1.1]]
-          .forEach(([freq,delay,duration]) => this.tone(freq,duration,{type:"triangle",gain:.065,delay}));
-        this.chord([196,247,294], .7, {type:"triangle",gain:.018,delay:1.25});
-        this.chord([131,262,330,392], 1.12, {type:"triangle",gain:.022,delay:2.02});
+        // CC0の金管ファンファーレ。失敗時だけ従来の合成音へ戻す。
+        if (!this.playWinSample()) this.playSynthWin();
         break;
       case "lose":
         [294, 233, 175, 117].forEach((freq, i) => this.tone(freq, .3 * pace, {

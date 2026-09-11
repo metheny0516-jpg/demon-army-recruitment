@@ -6,9 +6,9 @@
 const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
-  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js',
+  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
   'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js', 'src/data/achievements.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/run.js'
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
 ].filter(f => fs.existsSync(f));
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -20,6 +20,7 @@ vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 vm.runInContext('U.chance = () => false; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
 const Game = vm.runInContext('Game', ctx), Storage = vm.runInContext('Storage', ctx);
+const Chain = vm.runInContext('Chain', ctx);
 const assert = (condition, message) => { if (!condition) throw new Error(message); console.log(`✓ ${message}`); };
 
 // deploy() を通さずに「戦闘が1回終わった」状態だけを再現する。
@@ -49,16 +50,16 @@ Game.newRun();
       else Game.skipHire();
     }
     if (st.phase === 'preparation') {
-      st.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+      st.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
       if (st.day < Game.OPENING_DAYS) Game.advanceDay(st.day); else Game.prepareOpeningBattle('invade');
     }
     if (st.phase === 'mission') Game.selectMission(0);
     if (st.phase === 'formation') {
-      st.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+      st.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
       const out = Game.deploy();
       if (!out) break;
       battles++;
-      expectedChain = Math.max(expectedChain, out.result.chainSummary.maxChain);
+      expectedChain = Math.max(expectedChain, Chain.summarize(out.result.timeline).maxDepth);
       expectedOverkill = Math.max(expectedOverkill, out.result.overkillSummary.maxPercent);
       assert(st.maxChain === expectedChain && st.maxOverkill === expectedOverkill,
         `${battles}戦目の deploy() が最大CHAIN(${expectedChain})と最大OVERKILL(${expectedOverkill}%)を更新する`);

@@ -3,9 +3,9 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js',
-  'src/data/missions.js', 'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/data/missions.js', 'src/data/counterattack.js', 'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
   'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js',
-  'src/core/battle.js', 'src/core/run.js'
+  'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -112,8 +112,8 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
   assert(ev.check(st), '食料不足から食堂占拠が候補になる');
   assert(ev.cast(st).actor === 1, '最も大食いの戦闘要員が食堂を占拠する');
   resolve('kitchen_takeover', 1);
-  assert(st.roster[0].department === 'life' && !st.activeUids.includes(1),
-    '占拠犯を生活部門へ異動すると出撃隊から外れる');
+  assert(st.roster[0].department === 'home' && !st.activeUids.includes(1),
+    '占拠犯を留守番へ異動すると出撃隊から外れる（旧ID life は home に読み替え）');
   assert(st.roster[0].salary === 7 && st.food > 0, '炊事責任者への異動は給与と食料に返る');
 }
 
@@ -127,9 +127,9 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
   st.lastDepartmentReport = { foodShortage: 0, foodProduced: 5, facilityBefore: 0, facilityAfter: 0 };
   const ev = event('surplus_rations');
   assert(ev.check(st), '生活部門が余剰食料を作ると活用事件が候補になる');
-  st.roster[1].department = 'combat';
-  assert(!ev.check(st), '生活部門が空なら余剰食料事件は起きない');
-  st.roster[1].department = 'life';
+  Game.assignDepartment(2, 'combat');
+  assert(!ev.check(st), '留守番が空なら余剰食料事件は起きない');
+  Game.assignDepartment(2, 'home');
   const beforeGold = st.gold, beforeLoyalty = st.roster[1].loyalty;
   resolve('surplus_rations', 1);
   assert(st.food === 4 && st.gold === beforeGold + 5, '余剰食料をGへ変換できる');

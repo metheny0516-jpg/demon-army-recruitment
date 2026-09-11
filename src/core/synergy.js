@@ -18,7 +18,9 @@ const Synergy = {
     const base = { ...(ctx || {}) };
     base.pool = this.pool(units, ctx);
     const plain = SYNERGIES.filter(s => !s.meta && s.check(units, base));
-    const metaCtx = { ...base, activeIds: plain.map(s => s.id), activeCount: plain.length };
+    // grant 型（特性を貸すだけ）は meta の段数に数えない。接続は増やすが倍率の段は増やさない
+    const counted = plain.filter(s => !s.grant);
+    const metaCtx = { ...base, activeIds: counted.map(s => s.id), activeCount: counted.length };
     const metas = SYNERGIES.filter(s => s.meta && s.check(units, metaCtx));
     return plain.concat(metas);
   },
@@ -29,7 +31,7 @@ const Synergy = {
     const base = { ...(ctx || {}) };
     base.pool = this.pool(units, ctx);
     const act = this.active(units, base);
-    const plain = act.filter(s => !s.meta);
+    const plain = act.filter(s => !s.meta && !s.grant);
     const applyCtx = { ...base, activeIds: plain.map(s => s.id), activeCount: plain.length };
     for (const s of act) {
       if (s.type !== "merge") s.apply(units, applyCtx);
@@ -64,7 +66,7 @@ const Synergy = {
     const base = { ...(ctx || {}) };
     base.pool = (ctx && Array.isArray(ctx.pool)) ? this.sandbox(ctx.pool) : box;
     if (synergy.meta) {
-      const plain = SYNERGIES.filter(s => !s.meta && s.check(box, base));
+      const plain = SYNERGIES.filter(s => !s.meta && !s.grant && s.check(box, base));
       base.activeIds = plain.map(s => s.id);
       base.activeCount = plain.length;
     }
@@ -122,27 +124,66 @@ const Synergy = {
   // 採用画面の「この人材を今の軍団へ入れたら何が起きるか」。
   // links は戦闘計算ではなく公開情報の接続語彙であり、効果量を二重管理しない。
   // 応募者が作る事件を既存人材が受ける経路と、その逆だけを短く返す。
-  connections(candidate, roster, facilities) {
+  connections(candidate, roster, facilities, options) {
+    options = options || {};
+    const activeIds = new Set(options.activeUids || []);
+    const rosterByUid = new Map((roster || []).map(unit => [unit.uid, unit]));
+    // 本番の activeRoster() と同じく、ロスター配列ではなく activeUids の順で組む。
+    // 料理人選択と食欲同値時の対象はこの順序で決まる。
+    const active = (options.activeUids || []).map(uid => rosterByUid.get(uid)).filter(Boolean);
+    const maxDeploy = Number(options.maxDeploy) || Infinity;
+    const legalDeployments = active.length < maxDeploy
+      ? [{ units: active.concat(candidate), swapOut: null }]
+      : active.map((swapOut, index) => ({
+          units: active.map((unit, i) => i === index ? candidate : unit), swapOut
+        }));
     const traitsOf = unit => (unit && unit.traits || []).map(id => ({ id, trait: TRAITS[id] }))
       .filter(entry => entry.trait && entry.trait.links);
     const candidateTraits = traitsOf(candidate);
-    const armyTraits = (roster || []).flatMap(unit => traitsOf(unit).map(entry => ({ ...entry, unit })));
+    const armyTraits = (roster || []).flatMap(unit => traitsOf(unit).map(entry => ({ ...entry, unit, type: "unit" })));
     for (const facility of facilities || []) {
-      if (facility && facility.links) armyTraits.push({ id: facility.id, trait: facility, unit: { name: facility.name } });
+      if (facility && facility.links) armyTraits.push({ id: facility.id, trait: facility, unit: { name: facility.name }, type: "facility" });
     }
     const rows = [];
     const seen = new Set();
-    const add = (fromName, signal, toName, unitName) => {
-      const key = `${fromName}|${signal}|${toName}|${unitName || ""}`;
+    const placementNeeds = entries => {
+      const needs = ["採用"];
+      const units = entries.filter(entry => entry.type !== "facility");
+      if (units.some(entry => entry.candidate) || units.some(entry => !activeIds.has(entry.unit.uid))) {
+        needs.push("出撃");
+        if (active.length >= maxDeploy) needs.push("入れ替え");
+      }
+      return needs;
+    };
+    const add = (origin, signal, responder, extraNeeds) => {
+      const requiredExisting = [origin, responder]
+        .filter(entry => entry.type !== "facility" && !entry.candidate)
+        .map(entry => entry.unit.uid);
+      if (requiredExisting.length && !legalDeployments.some(deployment =>
+        requiredExisting.every(uid => deployment.units.some(unit => unit.uid === uid)))) return;
+      const key = `${origin.id}|${signal}|${responder.id}|${origin.unit.name}|${responder.unit.name}`;
       if (seen.has(key)) return;
       seen.add(key);
-      rows.push({ from: fromName, signal, to: toName, unitName: unitName || null });
+      const facilityNeeds = [];
+      for (const entry of [origin, responder]) {
+        if (entry.type === "facility") facilityNeeds.push(...((options.facilityNeeds || {})[entry.id] || []));
+      }
+      const needs = placementNeeds([origin, responder]).concat(facilityNeeds, extraNeeds || []);
+      const uniqueNeeds = [...new Set(needs)];
+      rows.push({
+        origin: { type: origin.type || "unit", name: origin.unit.name, ability: origin.trait.name },
+        responder: { type: responder.type || "unit", name: responder.unit.name, ability: responder.trait.name },
+        signal, needs: uniqueNeeds,
+        readyRank: uniqueNeeds.some(need => !["採用", "出撃"].includes(need)) ? 2 : uniqueNeeds.includes("出撃") ? 1 : 0,
+        sortKey: key
+      });
     };
     for (const source of candidateTraits) {
       for (const signal of source.trait.links.emits || []) {
         for (const receiver of armyTraits) {
           if ((receiver.trait.links.reacts || []).includes(signal)) {
-            add(source.trait.name, signal, receiver.trait.name, receiver.unit.name);
+            add({ ...source, unit: candidate, type: "unit", candidate: true }, signal, receiver,
+              signal === "食料消費" && !options.foodAvailable ? ["食料が必要"] : []);
           }
         }
       }
@@ -151,12 +192,187 @@ const Synergy = {
       for (const signal of source.trait.links.emits || []) {
         for (const receiver of candidateTraits) {
           if ((receiver.trait.links.reacts || []).includes(signal)) {
-            add(source.trait.name, signal, receiver.trait.name, source.unit.name);
+            add(source, signal, { ...receiver, unit: candidate, type: "unit", candidate: true },
+              signal === "食料消費" && !options.foodAvailable ? ["食料が必要"] : []);
           }
         }
       }
     }
-    return rows;
+
+    // 食事系は links の語彙一致だけでは「誰が食べるか」を決められない。
+    // 本番と同じく出撃順の最初の料理人、食欲最大（同値なら出撃順先頭）を選ぶ。
+    // 応募者が起点にも対象にもならず、採用前後で変わらない既存接続は候補にしない。
+    const appetite = unit => Number((options.appetiteByUid || {})[unit.uid]) || 0;
+    const hasFood = units => typeof options.foodAvailableFor === "function"
+      ? !!options.foodAvailableFor(units) : !!options.foodAvailable;
+    const mealOf = units => {
+      if (!hasFood(units)) return null;
+      const cook = units.find(unit => (unit.traits || []).includes("demon_cook")) || null;
+      if (!cook) return null;
+      const target = units.slice().sort((a, b) => appetite(b) - appetite(a))[0] || null;
+      return target ? { cook, target } : null;
+    };
+    const mealTrials = legalDeployments.map(deployment => ({ ...deployment, meal: mealOf(deployment.units) }));
+    const involved = mealTrials.filter(trial => trial.meal
+      && (trial.meal.cook.uid === candidate.uid || trial.meal.target.uid === candidate.uid));
+    if (involved.length) {
+      const signatures = new Set(involved.map(trial => `${trial.meal.cook.uid}|${trial.meal.target.uid}`));
+      const everyLegalChoiceInvolvesApplicant = involved.length === mealTrials.length;
+      if (signatures.size === 1 && everyLegalChoiceInvolvesApplicant) {
+        const { cook, target } = involved[0].meal;
+        const cookTrait = traitsOf(cook).find(entry => entry.id === "demon_cook");
+        const targetTrait = traitsOf(target).find(entry => entry.id === "big_eater")
+          || { id: "meal_target", trait: { name: "食事強化" } };
+        add({ ...cookTrait, unit: cook, type: "unit", candidate: cook.uid === candidate.uid }, "食事強化", {
+          ...targetTrait, unit: target, type: "unit", candidate: target.uid === candidate.uid
+        });
+      } else {
+        const key = `meal-uncertain|${candidate.uid || candidate.tplId || candidate.name}`;
+        rows.push({
+          origin: { type: "unit", name: candidate.name, ability: "食事接続候補" },
+          responder: { type: "pending", name: "対象未確定", ability: "料理人・食欲最大対象" },
+          signal: "入れ替え相手と出撃順で変化",
+          needs: ["採用", "出撃", "入れ替え相手と配置を確定"], readyRank: 2, sortKey: key
+        });
+      }
+    }
+
+    // 種族・人数条件は links に現れない。実際の check を、現在編成と採用後の編成へ適用し、
+    // 応募者によって初めて成立するものだけを候補にする。説明文の文字列から推測しない。
+    const poolNow = roster || [];
+    const poolAfter = poolNow.concat(candidate);
+    for (const synergy of SYNERGIES.filter(s => !s.meta)) {
+      const now = synergy.check(this.sandbox(active), { pool: this.sandbox(poolNow) });
+      const byHire = synergy.check(this.sandbox(active), { pool: this.sandbox(poolAfter) });
+      const legalMatches = legalDeployments.filter(deployment =>
+        synergy.check(this.sandbox(deployment.units), { pool: this.sandbox(poolAfter) }));
+      const byDeploy = legalMatches.length > 0;
+      if (now || (!byHire && !byDeploy)) continue;
+      const needs = ["採用"];
+      if (!byHire) {
+        needs.push("出撃");
+        if (active.length >= maxDeploy) {
+          const matchesEverySwap = legalMatches.length === legalDeployments.length;
+          needs.push(matchesEverySwap ? "入れ替え" : "条件を保てる相手と入れ替え");
+        }
+      }
+      const key = `synergy|${synergy.id}|${candidate.uid || candidate.tplId || candidate.name}`;
+      rows.push({
+        origin: { type: "unit", name: candidate.name, ability: candidate.race },
+        responder: { type: "synergy", name: `《${synergy.name}》`, ability: synergy.desc },
+        signal: synergy.condition, needs, readyRank: byHire ? 0 : (needs.includes("入れ替え") ? 2 : 1), sortKey: key
+      });
+    }
+
+    return rows.sort((a, b) => a.readyRank - b.readyRank || a.sortKey.localeCompare(b.sortKey));
+  },
+
+  // ── 連鎖の見取り図（信号1本ぶん） ─────────────────────
+  // 試遊で出た不満はこれ:「よく分からないけどつながった。これでいいのか？」。
+  // 倍率は伝わっているのに、**何が起点で・なぜ次へ行き・どう伸ばすか**が伝わっていない。
+  //
+  // ここでは1本の信号（例「金貨獲得」）について、
+  //   起点  signal を **出す** 能力
+  //   反応  signal に **反応する** 能力と、その反応が次に出す信号
+  //   再発火 反応が生む信号で、起点がもう一度動けるか
+  // を返す。効果量は返さない（それは preview / traitEffects の仕事）。
+  //
+  // 大原則が2つある。
+  // 1. **説明文から推測しない。** 語彙は data 側の links（emits / reacts / on / once）と、
+  //    シナジーの実際の check だけから組む。desc の日本語を解析すると、効果を変えたときに
+  //    表示だけ古いまま残る。
+  // 2. **完成レシピを全公開しない**（設計憲法 第7節）。`missing` に載せるのは
+  //    **いま手元にある駒で埋められる欠け**だけ。持っていない能力の名前は出さない。
+  signalChain(signal, squad, options) {
+    options = options || {};
+    const units = squad || [];
+    const pool = Array.isArray(options.pool) && options.pool.length ? options.pool : units;
+    const ctx = { pool };
+    const linksOf = source => source && source.links && typeof source.links === "object" ? source.links : null;
+    const node = (kind, id, name, links, who) => ({
+      kind, id, name,
+      who: who || null,
+      on: links.on || null,
+      once: !!links.once,
+      emits: (links.emits || []).slice(),
+      reacts: (links.reacts || []).slice()
+    });
+
+    // その編成でいま成立している役者だけを集める。
+    // 特性は出撃した者、シナジーは実際に check が通ったもの、施設は実際に働けるものだけ。
+    const collect = squadUnits => {
+      const found = [];
+      for (const unit of squadUnits) {
+        for (const traitId of unit.traits || []) {
+          const trait = typeof TRAITS !== "undefined" ? TRAITS[traitId] : null;
+          const links = linksOf(trait);
+          if (links) found.push(node("trait", traitId, trait.name, links, unit));
+        }
+      }
+      for (const synergy of this.active(this.sandbox(squadUnits), { pool: this.sandbox(pool) })) {
+        const links = linksOf(synergy);
+        if (links) found.push(node("synergy", synergy.id, synergy.name, links, null));
+      }
+      if (options.facility && linksOf(options.facility) && options.facilityReady !== false) {
+        found.push(node("facility", options.facility.id, options.facility.name, options.facility.links, null));
+      }
+      return found;
+    };
+
+    const established = collect(units);
+    const sources = established.filter(n => n.emits.includes(signal));
+    const reactors = established.filter(n => n.reacts.includes(signal));
+    // 反応が出す信号のうち、起点をもう一度動かせるもの。
+    // 「もう一度動ける起点」は once が立っていない起点（初回限定ではない起点）だけ。
+    const repeatable = sources.filter(n => !n.once);
+    const relaySignals = [...new Set(reactors.flatMap(n => n.emits))];
+    const loops = !!(repeatable.length && relaySignals.includes("追加攻撃"));
+
+    // ── 欠けを埋める案は「手持ちだけ」から作る ──────────
+    // 出していない軍団員の能力と、いまの手持ちであと少しで成立するシナジーだけを見る。
+    const deployed = new Set(units.map(u => u.uid));
+    const missing = [];
+    const wantSource = sources.length === 0;
+    const wantReactor = reactors.length === 0;
+    const seen = new Set(established.map(n => `${n.kind}|${n.id}`));
+    for (const unit of pool) {
+      if (deployed.has(unit.uid)) continue;
+      for (const traitId of unit.traits || []) {
+        const trait = typeof TRAITS !== "undefined" ? TRAITS[traitId] : null;
+        const links = linksOf(trait);
+        if (!links) continue;
+        const isSource = (links.emits || []).includes(signal);
+        const isReactor = (links.reacts || []).includes(signal);
+        if (!isSource && !isReactor) continue;
+        // 起点も反応も既に居るなら、「もう1人足すと回数が増える」案だけを出す
+        if (!wantSource && !wantReactor && !isReactor) continue;
+        missing.push({
+          role: isSource ? "source" : "reactor",
+          kind: "trait", id: traitId, name: trait.name,
+          how: `${unit.name}（${unit.race || ""}）を出撃させる`,
+          uid: unit.uid
+        });
+      }
+    }
+    // シナジーは「あと何体」を実測で出す。手持ちの誰かを増やして届くものだけが返る。
+    for (const entry of this.preview(units, { slots: options.slots, pool })) {
+      if (entry.active || entry.need === null) continue;
+      const synergy = SYNERGIES.find(s => s.id === entry.id);
+      const links = linksOf(synergy);
+      if (!links) continue;
+      const isSource = (links.emits || []).includes(signal);
+      const isReactor = (links.reacts || []).includes(signal);
+      if (!isSource && !isReactor) continue;
+      if (seen.has(`synergy|${entry.id}`)) continue;
+      missing.push({
+        role: isSource ? "source" : "reactor",
+        kind: "synergy", id: entry.id, name: entry.name,
+        how: `${entry.needRace ? entry.needRace + "を" : ""}あと${entry.need}体（${entry.condition || "条件"}）`,
+        need: entry.need
+      });
+    }
+
+    return { signal, sources, reactors, relaySignals, loops, missing, established: established.length };
   },
 
   // 発動中なら「いまの効き目」と「もう1体増やしたとき／1体入れ替えたときの効き目」、

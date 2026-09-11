@@ -13,7 +13,13 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.evaluate(() => {
     Game.state.stage = 8; Game.state.conquest = 7; Game.state.turn = 8;
-    Game.state.roster.forEach(m => { m.hp = 8; m.atk = 18; m.def = 0; m.spd = 99; });
+    Game.state.roster.forEach(m => { m.hp = 8; m.atk = 18; m.def = 0; m.spd = 99; m.salary = 1; });
+    // 再起画面が出るのは「全滅して名簿が空、雇う金も無い」ときだけになった（再建の仕様）。
+    // 全員を出撃させ、給与を払うと 0G になる所持金にして、本物の敗北確定を作る。
+    Game.state.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+    Game.state.roster = Game.state.roster.filter(m => Game.state.activeUids.includes(m.uid));
+    Game.state.hiresLeft = 0;
+    Game.state.gold = Game.state.roster.length;
     Game.state.phase = 'formation'; App.render();
   });
   await page.click('[data-action="deploy"]');
@@ -33,7 +39,7 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   });
   const closeText = await page.locator('.near-miss-panel').innerText();
   ok(closeText.includes('最も追い詰めた瞬間') && closeText.includes('あと 8 ダメージ'), '本当のニアミスには残ダメージを強調する');
-  if (process.env.SP) await page.screenshot({ path: process.env.SP + '/nearmiss-defeat.png', fullPage: true });
+  if (process.env.SP) await page.screenshot({ path: (process.env.SP || '.screenshots') + '/nearmiss-defeat.png', fullPage: true });
 
   await page.click('[data-action="concede"]');
   await page.waitForTimeout(80);

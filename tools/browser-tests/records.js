@@ -54,7 +54,45 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }
   if (histText.includes('総余剰') || histText.includes('獲得G')) errors.push('主要記録以外の統計が並んでいる');
 
-  await page.screenshot({ path: (process.env.SP || '.') + '/records-history.png', fullPage: true });
+  // 城の記録：作戦会議から開いて採用の日誌を読み、元画面へ戻る。
+  await page.evaluate(() => {
+    Game.newRun();
+    Game.hire(0);
+    Game.state.phase = 'mission';
+    Game.prepareMissions(true);
+    App.render();
+  });
+  const missionPhase = await page.evaluate(() => Game.state.phase);
+  const missionRecords = page.locator('[data-action="castle"], [data-action="records"]').first();
+  if (!await missionRecords.count()) errors.push('作戦会議に城の入口が無い');
+  else await missionRecords.click();
+  if (await page.locator('[data-action="castletab"][data-tab="records"]').count()) {
+    await page.locator('[data-action="castletab"][data-tab="records"]').click();
+  }
+  const journalText = await page.locator('body').innerText();
+  if (!journalText.includes('城のメニュー') || !journalText.includes('日誌') || !journalText.includes('採用')) {
+    errors.push('城の記録の日誌で採用の一行が読めない');
+  }
+  if (await page.evaluate(() => Game.state.phase) !== missionPhase) errors.push('城の記録を開くと phase が変わる');
+  const missionBack = page.locator('[data-action="backcastle"], [data-action="backrecords"]').first();
+  if (!await missionBack.count()) errors.push('城の記録に戻るボタンが無い');
+  else await missionBack.click();
+  if (await page.evaluate(() => Game.state.phase) !== 'mission') errors.push('戻ると作戦会議へ戻らない');
+  if (!await page.locator('.mission-grid').count()) errors.push('戻ったあと作戦会議が描画されない');
+
+  // 編成からも同じ入口を使え、戻った後も編成のまま。
+  await page.evaluate(() => { Game.selectMission(0); App.render(); });
+  if (await page.evaluate(() => Game.state.phase) !== 'formation') errors.push('編成テストの前提を作れない');
+  const formationRecords = page.locator('[data-action="castle"], [data-action="records"]').first();
+  if (!await formationRecords.count()) errors.push('編成に城の入口が無い');
+  else await formationRecords.click();
+  if (await page.evaluate(() => Game.state.phase) !== 'formation') errors.push('編成から記録を開くと phase が変わる');
+  const formationBack = page.locator('[data-action="backcastle"], [data-action="backrecords"]').first();
+  if (await formationBack.count()) await formationBack.click();
+  if (await page.evaluate(() => Game.state.phase) !== 'formation') errors.push('記録から編成へ戻れない');
+  if (!await page.locator('.formation-layout, .castle-screen').count()) errors.push('戻ったあと編成が描画されない');
+
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/records-history.png', fullPage: true });
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 終了画面と魔界史で主要記録2つが読める');
   await browser.close();
   process.exit(errors.length ? 1 : 0);

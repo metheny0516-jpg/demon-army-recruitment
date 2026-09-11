@@ -2,7 +2,7 @@
 const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
-  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js',
+  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
   'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
   'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js'
 ];
@@ -61,9 +61,12 @@ const victims = [make('標的A', 100, 1, 'enemy'), make('標的B', 50, 1, 'enemy
 const chain = Battle.simulate([butcher], victims);
 const spreads = chain.timeline.filter(e => e.type === 'splash' && e.label === '連鎖虐殺');
 assert(spreads.length === 3, '連鎖虐殺の伝播を最大3体で停止する');
-assert(spreads[0].dmg === 270 && spreads[1].dmg === 88 && spreads[2].dmg === 34,
+const massacreTriggers = chain.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === 'chain_massacre');
+assert(massacreTriggers.map(e => e.ratio).join(',') === '30,40,50',
   '連鎖虐殺は余剰の30%→40%→50%を次の敵へ渡す');
-assert(chain.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === 'chain_massacre').length === 3,
+assert(spreads.every(e => e.chainDepth >= 4 && (e.traits || []).some(t => t.startsWith('CHAIN '))),
+  'OVERKILL伝播のダメージにも共通CHAIN倍率を乗せる');
+assert(massacreTriggers.length === 3,
   'OVERKILLごとに連鎖虐殺の発火理由を記録する');
 assert(chain.chainSummary.maxChain >= 7, '攻撃から複数のOVERKILL伝播が一つの深いCHAINになる');
 console.log('OVERKILL基盤テスト完了');

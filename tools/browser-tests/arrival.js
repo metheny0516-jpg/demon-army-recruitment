@@ -41,7 +41,7 @@ const path = require('node:path');
         const stage = document.getElementById('scene').getBoundingClientRect();
         return [...document.querySelectorAll('.bu-state')].every(el => el.getBoundingClientRect().bottom <= stage.bottom);
       }), true, 'reinforcements overflow stage');
-      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, `arrival-${width}.png`), fullPage: true });
+      if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP || '.screenshots', `arrival-${width}.png`), fullPage: true });
     }
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.evaluate(() => { BattleScene.stop(); BattleScene.render({ type: 'revive', unitId: 'p0', hp: 10, maxHp: 30 }); });

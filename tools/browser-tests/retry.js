@@ -21,7 +21,13 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
     Game.state.stage = 8;
     Game.state.conquest = 7;
     Game.state.turn = 8;
-    Game.state.roster.forEach(m => { m.hp=5; m.atk=1; m.def=0; });
+    Game.state.roster.forEach(m => { m.hp=5; m.atk=1; m.def=0; m.salary = 1; });
+    // 再起が出るのは「全滅して名簿が空、雇う金も無い」ときだけになった（再建の仕様）。
+    // 全員を出撃させて全滅させ、給与を払ったあと紹介料（4G）に届かない所持金にする。
+    Game.state.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+    Game.state.roster = Game.state.roster.filter(m => Game.state.activeUids.includes(m.uid));
+    Game.state.hiresLeft = 0;
+    Game.state.gold = Game.state.roster.length;   // 給与を払うと 0G になる
     Game.state.phase='formation'; App.render();
   });
   await page.click('[data-action="deploy"]');
@@ -33,7 +39,7 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
   ok((await page.evaluate(()=>JSON.parse(localStorage.getItem('maou_history')||'[]').length))===0, '再起可能な間は魔界史に記録されない');
   const saveAlive = await page.evaluate(()=>!!localStorage.getItem('maou_save'));
   ok(saveAlive, '再起可能な状態はセーブに残る（途中で閉じても復帰できる）');
-  await page.screenshot({ path: process.env.SP + '/retry-defeat.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retry-defeat.png', fullPage: true });
 
   // --- 2. リロードして復帰できるか ---
   await page.reload(); await page.waitForTimeout(150);
@@ -59,7 +65,11 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
     Game.state.turn = 8;
     if(!Game.state.roster.length) Game.state.roster.push({uid:1,name:'囮',race:'スライム',job:'',hp:1,atk:1,def:0,spd:1,salary:1,loyalty:50,traits:[],tags:[],quote:'',unpaid:false});
     Game.state.activeUids = Game.state.roster.slice(0, 5).map(m => m.uid);
-    Game.state.roster.forEach(m => { m.hp=1; m.atk=1; m.def=0; });
+    // 2度目も「全滅して名簿が空、雇う金も無い」を作る（再建の仕様）
+    Game.state.roster = Game.state.roster.filter(m => Game.state.activeUids.includes(m.uid));
+    Game.state.roster.forEach(m => { m.hp=1; m.atk=1; m.def=0; m.salary=1; });
+    Game.state.hiresLeft = 0;
+    Game.state.gold = Game.state.roster.length;
     Game.state.phase='formation'; App.render();
   });
   await page.click('[data-action="deploy"]');
@@ -74,7 +84,7 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
   ok(saveGone===null, 'セーブが正しく消える');
   await page.reload(); await page.waitForTimeout(150);
   ok(await page.locator('[data-action="continue"]').count()===0, 'リロードしても「続きから」は出ない');
-  await page.screenshot({ path: process.env.SP + '/retry-final.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retry-final.png', fullPage: true });
 
   console.log(errs.length ? '\n✗ JSエラー: '+errs.join(', ') : '\n✓ JSエラーなし');
   await b.close(); process.exit(errs.length || process.exitCode ? 1 : 0);

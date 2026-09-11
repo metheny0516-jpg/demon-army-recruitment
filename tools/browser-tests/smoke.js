@@ -18,7 +18,7 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
   await step('タイトル表示', async () => {
     if (!(await page.locator('h1').innerText()).includes('魔王')) throw new Error('title missing');
   });
-  await page.screenshot({ path: process.env.SP + '/shot-title.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-title.png' });
 
   await step('新規ゲーム → 応募者3名', async () => {
     await page.click('[data-action="new"]');
@@ -32,7 +32,7 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
   // 報告が全画面で出ること自体はここまでで確認した。
   // この先は下の画面を操作するので、報告は即送りにする（実プレイでは人が送る）
   await silenceMormoFromNow(page);
-  await page.screenshot({ path: process.env.SP + '/shot-recruit.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-recruit.png', fullPage: true });
 
   await step('1人目採用（設立枠が残り再面接）', async () => {
     await page.click('[data-action="hire"]');
@@ -44,22 +44,22 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
     await page.locator('[data-action="missionpick"]').last().click();
     await page.waitForSelector('[data-action="deploy"]');
   });
-  await page.screenshot({ path: process.env.SP + '/shot-formation.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-formation.png', fullPage: true });
 
   await step('並び替え（前へ/後ろへ）', async () => {
-    const before = await page.locator('.card-name').first().innerText();
+    const before = await page.locator('.member-row-main b').first().innerText();
     await page.locator('[data-action="down"]').first().click();
-    const after = await page.locator('.card-name').first().innerText();
+    const after = await page.locator('.member-row-main b').first().innerText();
     if (before === after) throw new Error('並び替えが効いていない');
-    await page.locator('.department-combat-section .card').nth(1).locator('[data-action="front"]').click();
-    const restored = await page.locator('.card-name').first().innerText();
+    await page.locator('.member-row.active').nth(1).locator('[data-action="front"]').click();
+    const restored = await page.locator('.member-row-main b').first().innerText();
     if (restored !== before) throw new Error('最前列へ一発で戻せない');
   });
 
-  await step('生活部門へ配属', async () => {
-    await page.locator('.department-combat-section [data-action="assigndepartment"][data-department="life"]').first().click();
-    if (await page.locator('.department-life-section .card').count() !== 1) throw new Error('生活部門へ移動できない');
-    if (await page.locator('.department-combat-section .card').count() < 1) throw new Error('出撃隊が空になった');
+  await step('留守番へ配属', async () => {
+    await page.locator('.member-row.active [data-action="toggledeploy"]').first().click();
+    if (await page.locator('.member-row.home').count() !== 1) throw new Error('留守番へ移動できない');
+    if (await page.locator('.member-row.active').count() < 1) throw new Error('出撃隊が空になった');
   });
 
   await step('給与方針を意図的未払いへ変更', async () => {
@@ -83,14 +83,14 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
     if (lines < 5) throw new Error('ログ行数=' + lines);
     console.log(`    ログ${lines}行`);
   });
-  await page.screenshot({ path: process.env.SP + '/shot-battle.png' });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-battle.png' });
 
   await step('結果画面へ', async () => {
     await page.click('[data-action="afterbattle"]');
   });
   const won = await page.locator('.banner.win').count() > 0;
   console.log(`    → ${won ? '勝利' : '敗北'}`);
-  await page.screenshot({ path: process.env.SP + '/shot-result.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-result.png', fullPage: true });
 
   // 勝利していれば数戦回してセーブ復元も見る
   if (won) {
@@ -134,12 +134,12 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
   await page.click('[data-action="history"]');
   await page.waitForTimeout(120);
   console.log(`  ✓ 魔界史画面（記録 ${await page.locator('.history-item').count()} 件）`);
-  await page.screenshot({ path: process.env.SP + '/shot-history.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-history.png', fullPage: true });
 
   // PC幅でも崩れないか
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.waitForTimeout(100);
-  await page.screenshot({ path: process.env.SP + '/shot-pc.png', fullPage: true });
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-pc.png', fullPage: true });
   console.log('  ✓ PC幅レンダリング');
 
   console.log(errors.length ? '\n✗ JSエラー:\n' + errors.join('\n') : '\n✓ JSエラーなし');

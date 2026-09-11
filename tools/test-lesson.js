@@ -6,9 +6,9 @@
 const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
-  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js',
+  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
   'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/run.js'
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -29,6 +29,11 @@ assert(ids({ facilityLevel: 2, fallenTotal: 9, battlesWon: 8 })[0] === 'mourning
   '戦死者を多く出したランは、まず弔いの記憶を差し出す');
 assert(ids({ facilityLevel: 2, battlesWon: 2 }).includes('rout'),
   '早々に敗走したランには敗走の記憶が並ぶ');
+assert(Game.lessonById('arcane').test({ chainDefVersion: 1, maxChain: 2 })
+  && Game.lessonById('arcane').test({ chainDefVersion: 2, maxChain: 2 }),
+  '未完の記憶は決定どおりV1/V2とも2段以下に一致する');
+assert(!Game.lessonById('arcane').test({ chainDefVersion: 2, maxChain: 3 }),
+  'V2の3段は未完の記憶に一致しない');
 
 // ── 2. どんな負け方でも必ず3つ出る ───────────────────────────
 // 「当てはまったものだけ」にすると、綺麗に負けたランで選択肢が消えてしまう。

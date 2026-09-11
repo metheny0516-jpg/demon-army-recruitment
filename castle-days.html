@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>魔王城の10日間</title>
+<link rel="stylesheet" href="src/styles.css">
+<link rel="stylesheet" href="src/battlefield.css">
+<style>
+.cd-banner { max-width: 860px; margin: 0 auto; padding: 12px 12px 0; font-size: 12px; opacity: .6; line-height: 1.7; }
+.cd-wrap { max-width: 860px; margin: 0 auto; padding: 12px 12px 64px; }
+.cd-top { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+.cd-day { font-size: 13px; opacity: .7; } .cd-day small { opacity: .6; }
+.cd-top h1 { font-size: 22px; margin: 0; flex: 1; }
+.cd-state { font-size: 13px; opacity: .85; } .cd-state b { color: #ffd479; font-size: 16px; } .cd-state b.hot { color: #ff9a7a; }
+.cd-state span { margin-left: 8px; font-size: 11px; opacity: .7; }
+.cd-lead { opacity: .8; margin: 0 0 12px; }
+.cd-staff { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.cd-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px 6px 6px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); font-size: 12px; }
+.cd-chip.is-down { opacity: .35; } .cd-chip.is-hurt { border-color: rgba(255,154,122,.5); }
+.cd-chip b { font-size: 13px; } .cd-chip span { opacity: .6; } .cd-chip em { font-style: normal; font-size: 10px; padding: 1px 6px; border-radius: 999px; background: rgba(255,214,120,.25); }
+.cd-chip-face { width: 30px; height: 30px; object-fit: cover; object-position: top center; border-radius: 50%; }
+.cd-emoji { display: inline-block; text-align: center; }
+.cd-panel { border: 1px solid rgba(255,255,255,.14); border-radius: 10px; padding: 14px 16px; margin: 0 0 14px; background: rgba(0,0,0,.18); }
+.cd-panel h2 { font-size: 12px; letter-spacing: .12em; opacity: .7; margin: 0 0 10px; }
+.cd-panel h3 { font-size: 14px; margin: 12px 0 4px; }
+.cd-mormo { display: flex; gap: 14px; align-items: flex-start; background: rgba(120,80,180,.16); border-color: rgba(190,150,255,.3); }
+.cd-mormo img { width: 64px; height: 64px; object-fit: cover; object-position: top center; border-radius: 50%; flex: none; }
+.cd-mormo b { display: block; margin-bottom: 6px; }
+.cd-mormo ul { margin: 0; padding-left: 1.2em; line-height: 1.9; font-size: 14px; }
+.cd-mormo li.is-notable { color: #ffd479; font-weight: bold; }
+.cd-quiet { opacity: .6; margin: 0; }
+.cd-actions { display: grid; gap: 8px; }
+.cd-action { text-align: left; padding: 11px 14px; border-radius: 8px; cursor: pointer; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.04); color: inherit; display: flex; align-items: baseline; gap: 12px; }
+.cd-action.is-hot { border-color: rgba(255,214,120,.5); background: rgba(255,214,120,.08); }
+.cd-action b { font-size: 15px; } .cd-action span { font-size: 12px; opacity: .65; }
+.cd-note { font-size: 12px; opacity: .55; margin: 10px 0 0; }
+.cd-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px,1fr)); gap: 12px; }
+.cd-card { border: 1px solid rgba(255,255,255,.14); border-radius: 9px; padding: 12px; background: rgba(255,255,255,.03); }
+.cd-card-head { display: flex; gap: 10px; align-items: center; margin-bottom: 8px; }
+.cd-card-head b { display: block; font-size: 15px; } .cd-card-head span { font-size: 11px; opacity: .65; }
+.cd-face { width: 52px; height: 68px; object-fit: cover; object-position: top center; border-radius: 5px; }
+.cd-card dl { display: grid; grid-template-columns: 3em 1fr; gap: 2px 6px; font-size: 12px; line-height: 1.6; margin: 0 0 8px; }
+.cd-card dt { opacity: .5; } .cd-card dd { margin: 0; }
+.cd-traits i { display: inline-block; font-style: normal; font-size: 11px; padding: 1px 8px; border-radius: 999px; background: rgba(255,255,255,.1); margin-right: 4px; }
+.cd-traits i.unknown { background: rgba(255,214,120,.2); color: #ffd479; }
+.cd-place { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 13px; }
+.cd-where { background: rgba(0,0,0,.4); color: inherit; border: 1px solid rgba(255,255,255,.25); border-radius: 6px; padding: 4px 8px; }
+.cd-assign { display: grid; gap: 8px; }
+.cd-assign-row { display: flex; gap: 10px; align-items: center; }
+.cd-assign-row b { flex: 1; }
+.cd-lines { margin: 0; padding-left: 1.2em; line-height: 1.9; font-size: 14px; }
+.cd-burst { margin-top: 12px; padding: 10px 12px; border-radius: 8px; border-left: 3px solid #ff9a7a; background: rgba(255,154,122,.1); }
+.cd-burst-line { display: flex; gap: 10px; align-items: center; margin: 4px 0; font-size: 14px; }
+.cd-burst-face { width: 34px; height: 34px; object-fit: cover; object-position: top center; border-radius: 50%; flex: none; }
+.cd-burst small { display: block; margin-top: 6px; font-size: 10px; letter-spacing: .15em; opacity: .55; }
+.cd-ask ol { margin: 0; padding-left: 1.4em; line-height: 2; }
+.cd-foot { display: flex; gap: 12px; justify-content: center; margin-top: 18px; }
+.cd-go { font-size: 16px; font-weight: bold; padding: 12px 32px; border-radius: 8px; border: none; background: #ffd479; color: #1a1420; cursor: pointer; }
+.cd-sub { font-size: 13px; padding: 12px 20px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,.25); color: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+<script>
+// ── 本編からの隔離 ───────────────────────────────────
+// この試作は本編のセーブ（maou_save / maou_history）はもちろん、
+// 戦闘速度（maou_speed）・音量（maou_volume, maou_muted）・BGM（maou_bgm）・
+// KPI（maou_kpi）も汚さない。個々のモジュールを書き換える代わりに、
+// このページの localStorage 自体を専用の名前空間へ丸ごと差し替える。
+// これから増える鍵にも自動で効き、隔離漏れが起きない。
+(function () {
+  var real;
+  try { real = window.localStorage; } catch (e) { return; }
+  if (!real) return;
+  var PREFIX = "heroproto_";
+  var map = function (k) { return PREFIX + String(k); };
+  var keys = function () {
+    var out = [];
+    for (var i = 0; i < real.length; i++) {
+      var k = real.key(i);
+      if (k && k.indexOf(PREFIX) === 0) out.push(k.slice(PREFIX.length));
+    }
+    return out;
+  };
+  var shim = {
+    getItem: function (k) { return real.getItem(map(k)); },
+    setItem: function (k, v) { real.setItem(map(k), v); },
+    removeItem: function (k) { real.removeItem(map(k)); },
+    key: function (i) { return keys()[i] ?? null; },
+    clear: function () { keys().forEach(function (k) { real.removeItem(map(k)); }); },
+    get length() { return keys().length; }
+  };
+  try {
+    Object.defineProperty(window, "localStorage", { configurable: true, get: function () { return shim; } });
+  } catch (e) { /* 差し替えられない環境では音量や速度が本編と共有される */ }
+  window.__heroProtoStorage = { prefix: PREFIX, real: real };
+})();
+</script>
+<header class="cd-banner">魔王城の10日間 ── 変な奴を3人雇って、毎日ひとつ何かをする。本編のセーブ・魔界史・戦績・音量・速度設定に書き込みません。</header>
+<div id="app"></div>
+<script src="src/data/portraits.js"></script>
+<script src="src/core/util.js"></script>
+<script src="src/data/traits.js"></script>
+<script src="src/data/synergies.js"></script>
+<script src="src/data/battle_happenings.js"></script>
+<script src="src/data/mormo_lines.js"></script>
+<script src="src/core/synergy.js"></script>
+<script src="src/core/battle.js"></script>
+<script src="src/core/spotlight.js"></script>
+<script src="src/ui/sound.js"></script>
+<script src="src/ui/chain_view.js"></script>
+<script src="src/ui/ui.js"></script>
+<script src="src/ui/mormo_scene.js"></script>
+<script>const Game = { state: { generation: 1 }, MAX_CONQUEST: 8 };</script>
+<script src="src/ui/battle_scene.js"></script>
+<script src="src/prototype/castle_days.js"></script>
+<script src="src/prototype/castle_days_ui.js"></script>
+<script>
+UI.init(document.getElementById('app'));
+CastleDaysUI.bind();
+Sound.load();
+var q = new URLSearchParams(location.search);
+CastleDaysUI.start({ seed: q.get('seed') ? Number(q.get('seed')) : undefined });
+</script>
+</body>
+</html>

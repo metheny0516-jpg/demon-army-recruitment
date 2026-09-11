@@ -2,9 +2,9 @@
 const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
-  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js',
+  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
   'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/run.js'
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -50,7 +50,10 @@ assert(result.timeline.some(e => e.type === 'resource_consume' && e.resource ===
 assert(result.timeline.some(e => e.traitId === 'big_eater'), '大食漢の発火を表示する');
 assert(result.timeline.some(e => e.traitId === 'demon_cook'), '魔界料理人の発火を表示する');
 assert(result.timeline.some(e => e.traitId === 'hunger_demon'), '食料が0へ遷移した時だけ飢餓が発火する');
-assert(result.timeline.some(e => e.type === 'attack' && e.label === '暴食の宴'), '食料4以上で最も遅い味方が追加行動する');
+const feastAttack = result.timeline.find(e => e.type === 'attack' && e.label === '暴食の宴');
+assert(feastAttack, '食料4以上で最も遅い味方が追加行動する');
+assert(feastAttack.chainDepth === 3 && (feastAttack.traits || []).includes('CHAIN 3 ×1.25'),
+  '暴食の宴はCHAIN 3の共通倍率で増幅する');
 
 Game.state.food = 0;
 const alreadyEmpty = Game.battleRationQuote();

@@ -7,6 +7,9 @@
 //
 // 見たいのは合計値ではなく「1ランで仮説を何回試せたか」と「どこで手が止まったか」。
 const fs = require('fs');
+// 版の読み方と版別集計は本体と同じものを使う。レポート側に写しを持たない。
+const { Chain } = require('../src/core/chain.js');
+const { KPI } = require('../src/core/kpi.js');
 const path = process.argv[2];
 if (!path) {
   console.error('使い方: node tools/kpi-report.js <KPI.export() を保存したJSON>');
@@ -53,9 +56,18 @@ console.log('■ シナジー接続（異なる条件がどれだけ繋がった
 const kindsPerRun = runs.map(r => Object.keys(r.triggerKinds || {}).length);
 const kindsMean = kindsPerRun.reduce((a, b) => a + b, 0) / runs.length;
 console.log(`  発火したトリガー種類: 平均 ${fixed(kindsMean)}種/ラン（最大 ${Math.max(0, ...kindsPerRun)}種）`);
-console.log(`  最大CHAIN: 平均 ${fixed(mean('chainMax'))}（最高 ${Math.max(0, ...runs.map(r => r.chainMax || 0))}）`);
-console.log(`  代表CHAINを構成した異なる能力数: 平均 ${fixed(mean('chainAbilityMax'))}（最高 ${
-  Math.max(0, ...runs.map(r => r.chainAbilityMax || 0))}）`);
+// CHAINの深さ関連は**定義バージョンごとに分ける**。V1（親を持つ因果イベントを種類を問わず
+// +1段）とV2（同じ実効果を一度だけ数える）は数え方が違うので、混ぜた平均・最大・代表値は
+// どちらの定義でもない数字になる。版が1つだけなら従来どおりの見出しと数字で出す。
+const chainGroups = KPI.chainStatsByVersion(runs);
+const mixed = chainGroups.length > 1;
+const chainLines = (g, indent) => {
+  console.log(`${indent}最大CHAIN: 平均 ${fixed(g.chainMaxMean)}（最高 ${g.chainMaxTop}）`);
+  console.log(`${indent}代表CHAINを構成した異なる能力数: 平均 ${fixed(g.chainAbilityMean)}（最高 ${g.chainAbilityTop}）`);
+};
+// 混在時はCHAINの行をここでは出さない。内訳のあとに版ごとのブロックとしてまとめて出す
+// （最大CHAIN・代表CHAIN・判定が版ごとに一続きで読めるようにするため）。
+if (!mixed) chainLines(chainGroups[0], '  ');
 // 何が発火していないかを見るため、種類ごとの回数を多い順に出す。
 // 一度も出てこない能力は「弱い」のではなく「繋がる条件が無い」可能性が高い
 const kindTotals = new Map();
@@ -68,21 +80,42 @@ const ranked = [...kindTotals.entries()].sort((a, b) => b[1] - a[1]);
 if (ranked.length) {
   console.log(`  内訳（多い順）: ${ranked.map(([k, v]) => `${k}×${v}`).join(' / ')}`);
 }
-// 「いちばん多くの条件をまたいだ1本」を全ランから拾う（新しい順ではなく最良）
-const sample = runs.reduce((best, r) => {
-  if (!r.chainSample || !(r.chainSample.abilities || []).length) return best;
-  return !best || r.chainAbilityMax > best.chainAbilityMax ? r : best;
-}, null);
-if (sample) {
-  console.log(`  いちばん条件をまたいだ代表CHAIN（第${sample.gen}代 / 深さ${sample.chainSample.depth}）:`);
-  console.log(`    ${sample.chainSample.abilities.join(' → ')}`);
-}
-const abilityMean = mean('chainAbilityMax');
-console.log(`  判定: ${kindsMean < 4
+// 「いちばん多くの条件をまたいだ1本」も版ごとに選ぶ。深さの意味が版で違うため。
+const sampleLine = (g, indent, label) => {
+  const sample = g.sample;
+  if (!sample) return;
+  console.log(`${indent}いちばん条件をまたいだ代表CHAIN${label}（第${sample.gen}代 / 深さ${
+    sample.chainSample.depth}）:`);
+  console.log(`${indent}  ${sample.chainSample.abilities.join(' → ')}`);
+};
+// 単一版のときの判定。入力群が1つしかないので kindsMean と chainAbilityMean は同じ母集団から
+// 来ており、従来どおり1行にまとめてよい（出力を変えないためにも従来の文面のまま）。
+const verdict = (g, indent) => console.log(`${indent}判定: ${kindsMean < 4
   ? '発火するトリガーの種類が少ない → 条件そのものが足りない（能力追加＝CodeX側）'
-  : abilityMean < 3
+  : g.chainAbilityMean < 3
     ? 'トリガーは多いが連鎖が同じ能力で閉じている → 足りないのは「異なる条件をつなぐ橋」'
     : '異なる条件が実際につながっている → いまの方向で厚みを増やしてよい'}`);
+if (!mixed) {
+  sampleLine(chainGroups[0], '  ', '');
+  verdict(chainGroups[0], '  ');
+} else {
+  // 版をまたいで意味が変わらない指標（トリガー種類）と、変わる指標（CHAINの深さ）を分ける。
+  // 版別判定にグローバルな kindsMean を混ぜると、入力群の揃っていない判定になる。
+  console.log(`  判定（トリガー種類・版に依存しない）: ${kindsMean < 4
+    ? '発火するトリガーの種類が少ない → 条件そのものが足りない（能力追加＝CodeX側）'
+    : 'トリガーの種類は足りている → 次に見るのは版ごとのCHAIN判定'}`);
+  console.log('  ⚠ CHAINの定義バージョンが混在している。数え方が違うので合算した平均・最大・');
+  console.log('    代表CHAINは出さない。版ごとに読むこと（版をまたいだ比較もしない）。');
+  for (const g of chainGroups) {
+    console.log(`  ── 定義V${g.defVersion}（${g.runs}ラン）`);
+    chainLines(g, '     ');
+    sampleLine(g, '     ', `（定義V${g.defVersion}）`);
+    // この判定は**その版のランだけ**から作る（chainAbilityMean 以外を混ぜない）
+    console.log(`     判定（CHAIN・定義V${g.defVersion}のみ）: ${g.chainAbilityMean < 3
+      ? '連鎖が同じ能力で閉じている → 足りないのは「異なる条件をつなぐ橋」'
+      : '異なる条件が実際につながっている → いまの方向で厚みを増やしてよい'}`);
+  }
+}
 console.log('');
 console.log('■ もう1回（リトライ率）');
 const quick = runs.filter(r => r.quickRetry).length;

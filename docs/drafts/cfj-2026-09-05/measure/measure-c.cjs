@@ -1,0 +1,11 @@
+const fs = require('fs'), vm = require('vm'), cp = require('child_process');
+const mode = process.argv[2] || 'c';
+let seed = 20260905;
+const math = Object.create(Math);
+math.random = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296; };
+const shim = Object.create(fs);
+shim.readFileSync = (p, ...args) => ((mode === 'before' && p === 'src/data/synergies.js') || (mode !== 'f' && ['src/core/battle.js','src/data/battle_happenings.js'].includes(p))) ? cp.execFileSync('git', ['show', 'HEAD:'+p], {encoding:'utf8'}) : fs.readFileSync(p, ...args);
+let src = fs.readFileSync('tools/sim.js','utf8');
+src = src.replace('const Game =', 'vm.runInContext(`globalThis.metrics = {battles:0,synergies:0,incidents:0}; const originalSim = Battle.simulate; Battle.simulate = function(...args) { const r = originalSim.apply(this,args); metrics.battles++; metrics.synergies += r.timeline.filter(e=>e.type==="synergy").length; metrics.incidents += r.incidents.length; return r; };`, ctx);\nconst Game =');
+src = src.replace('const avg =', 'console.log("MEASURE", s.name, JSON.stringify(ctx.metrics)); ctx.metrics.battles=0;ctx.metrics.synergies=0;ctx.metrics.incidents=0;\n  const avg =');
+vm.runInNewContext(src,{require:n=>n==='fs'?shim:require(n), console,Math:math,Date,JSON,process:{argv:['node','tools/sim.js','50']}});

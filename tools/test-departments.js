@@ -3,9 +3,9 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js',
-  'src/data/missions.js', 'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/data/missions.js', 'src/data/counterattack.js', 'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
   'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js',
-  'src/core/battle.js', 'src/core/run.js'
+  'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -43,11 +43,15 @@ assert(Aptitude.of(st.roster[1]).material === 3, 'オークは建設適性3（�
 assert(Aptitude.of(st.roster[2]).food === 3, 'コボルトは食料適性3（種族ベース）');
 assert(Aptitude.of({ tplId: 'ogre', job: '重量物運搬' }).material === 7, '履歴書の前職が適性に乗る（オーガ+重量物運搬）');
 assert(Aptitude.of({ tplId: 'skeleton', job: '剣士' }).appetite === 0, 'アンデッドは食事が要らない');
-assert(Aptitude.contribution({ tplId: 'orc', job: '解体屋' }, 'life').material === 0,
-  '配属先で効く適性だけが働く（生活部門のオークは建材を出さない）');
+assert(Aptitude.contribution({ tplId: 'orc', job: '解体屋' }, 'combat').material === 0
+  && Aptitude.contribution({ tplId: 'orc', job: '解体屋' }, 'combat').food === 0,
+  '出撃隊にいる者は食料も建材も出さない（現場に出ている）');
+assert(Aptitude.contribution({ tplId: 'orc', job: '解体屋' }, 'home').material === 4
+  && Aptitude.contribution({ tplId: 'orc', job: '解体屋' }, 'life').material === 4,
+  '留守番は食料も建材も両方出す。旧ID（life）で聞いても留守番として答える');
 
 const output = Game.departmentOutput();
-assert(output.food === 3 && output.material === 3, '部門出力は所属者の適性合計');
+assert(output.food === 6 && output.material === 4, '留守番の出力は所属者の食料・建材の適性合計（オーク3+3、コボルト3+1）');
 assert(output.appetite === 4 && Game.foodNeed() === 2, '食料消費は頭数ではなく食う量で決まる');
 
 st.food = 1;
@@ -57,7 +61,7 @@ const notes = [];
 const rations = Game.prepareBattleRations(notes);
 assert(rations.consumed === 1 && st.food === 0, '出撃者ぶんの戦闘糧食を前払いする');
 Game.processDepartments({ foodReward: 0, materialReward: 1 }, notes, undefined, rations);
-assert(st.food === 2, '調達した食料3から非出撃者ぶん1を引いて2が残る');
+assert(st.food === 5, '留守番の調達6から非出撃者ぶん1を引いて5が残る');
 assert(st.roster.every(m => m.loyalty === 61), '食事が足りると軍団全員の忠誠+1');
 assert(st.facilityLevel === 1 && st.buildProgress === 5 && st.materials === 0,
   'オーク1名の施工能力3が建材を投入して仮設兵舎を完成');
@@ -91,17 +95,18 @@ st.facilityLevel = 1;
 assert(st.roster[0].hp === 20, '施設効果で保存中の個体値を汚さない');
 
 Game.assignDepartment(1, 'life');
-assert(st.activeUids.length === 0 && Game.departmentRoster('life').length === 2, '非戦闘部門へ移すと出撃隊から外れる');
+assert(st.activeUids.length === 0 && Game.departmentRoster('life').length === 3 && Game.departmentRoster('home').length === 3, '留守番へ移すと出撃隊から外れる（旧ID life でも留守番の人数）');
 Game.assignDepartment(1, 'combat');
-assert(st.activeUids[0] === 1, '戦闘部門へ戻すと空き枠へ自動選抜');
+assert(st.activeUids[0] === 1, '出撃隊へ戻すと空き枠へ自動選抜');
 
 // ── 経理・人事の適性が経営へ接続する ──
 const accountant = { uid: 4, tplId: 'goblin', name: '帳簿', race: 'ゴブリン', job: '会計係（どんぶり勘定）',
   hp: 10, atk: 1, def: 1, spd: 1, salary: 4, loyalty: 60, traits: [], tags: [], department: 'combat' };
 st.roster.push(accountant);
-assert(Game.wageDiscount() === 0, '戦闘部門に置いた会計係は経理をしない');
+Game.assignDepartment(4, 'combat');
+assert(Game.wageDiscount() === 0, '出撃させた会計係は経理をしない');
 Game.assignDepartment(4, 'life');
-assert(Game.wageDiscount() === 15, '生活部門へ回すと給与総額が15%下がる');
+assert(Game.wageDiscount() === 15, '留守番に回すと給与総額が15%下がる');
 
 const hr = { uid: 5, tplId: 'necromancer', name: '人事', race: '死霊術師', job: '人事担当（死者）',
   hp: 10, atk: 1, def: 1, spd: 1, salary: 4, loyalty: 60, traits: [], tags: [], department: 'life' };

@@ -34,11 +34,21 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!await page.locator('.scene.final-battle').count()) errors.push('最終決戦の専用背景が無い');
   if (!await page.locator('.scene-intro.show').count()) errors.push('最終決戦の開幕表示が無い');
 
-  await page.waitForTimeout(1450);
-  if (!await page.locator('.round-banner.show').count()) errors.push('ラウンド開始表示が無い');
-  if ((await page.locator('#round-number').innerText()) !== 'ROUND 1') errors.push('ROUND 1 が読めない');
+  // 尺は BattleScene が決める（61c89e3 で等速を遅くした）。固定の待ち時間を書くと
+  // 演出の尺を変えるたびにここが落ちるので、出るべき表示の側を待つ。
+  const appears = async (label, fn, timeout = 8000) => {
+    try { await page.waitForFunction(fn, null, { timeout }); return true; }
+    catch (e) { errors.push(label); return false; }
+  };
 
-  await page.waitForTimeout(1200);
+  if (await appears('ラウンド開始表示が無い', () => document.querySelector('.round-banner.show'))) {
+    if ((await page.locator('#round-number').innerText()) !== 'ROUND 1') errors.push('ROUND 1 が読めない');
+  }
+
+  await appears('攻撃者と対象が読めない', () => {
+    const t = document.getElementById('action-caption')?.textContent || '';
+    return t.includes('古参のゴブ太') && t.includes('勇者アレン');
+  });
   const action = await page.locator('#action-caption').innerText();
   if (!action.includes('古参のゴブ太') || !action.includes('勇者アレン')) errors.push('攻撃者と対象が読めない');
 
@@ -49,10 +59,13 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
       type: 'attack', fromId: 'p0', toId: 'e0', dmg: 8, hp: 34, maxHp: 50, emphasis: 2
     });
   });
-  await page.waitForTimeout(80);
+  await appears('命中前の溜めがない',
+    () => document.querySelector('#bu-p0 .bu-sprite-img')?.dataset.pose === 'attack-windup');
   const windup = await page.locator('#bu-p0 .bu-sprite-img').getAttribute('data-pose');
   if (windup !== 'attack-windup') errors.push('命中前の溜めがない');
-  await page.waitForTimeout(230);
+  // 画像VFXは接触の瞬間に出る。いつ当たるかは尺しだいなので、出るのを待つ。
+  await appears('斬撃・命中の画像VFXが出ない',
+    () => document.querySelector('#bu-e0 .bu-vfx.vfx-slash') && document.querySelector('#bu-e0 .bu-vfx.vfx-impact'));
   const vfx = await page.locator('#bu-e0 .bu-vfx').evaluateAll(images => images.map(image => ({
     kind: image.className,
     loaded: image.complete && image.naturalWidth > 0
@@ -64,14 +77,15 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     loaded: image.complete && image.naturalWidth > 0
   }));
   if (pose.pose !== 'strike' || !pose.loaded) errors.push('ゴブリンの振り抜きへ切り替わらない');
-  if (process.env.SP) await page.screenshot({ path: process.env.SP + '/scene-image-vfx.png' });
+  if (process.env.SP) await page.screenshot({ path: (process.env.SP || '.screenshots') + '/scene-image-vfx.png' });
 
   await page.evaluate(() => {
     BattleScene.render({ type: 'survive', unitId: 'p0', hp: 1, maxHp: 30, emphasis: 2 });
     BattleScene.render({ type: 'revive', unitId: 'p0', hp: 10, maxHp: 30, emphasis: 2 });
     BattleScene.render({ type: 'overkill', toId: 'e0', percent: 180, excess: 40, rank: '蹂躙', emphasis: 2 });
   });
-  await page.waitForTimeout(80);
+  await appears('guard/revive/overkill の画像VFXが出ない', () =>
+    ['guard', 'revive', 'overkill'].every(kind => document.querySelector(`.bu-vfx.vfx-${kind}`)));
   for (const kind of ['guard', 'revive', 'overkill']) {
     const loaded = await page.locator(`.bu-vfx.vfx-${kind}`).evaluateAll(images =>
       images.some(image => image.complete && image.naturalWidth > 0));

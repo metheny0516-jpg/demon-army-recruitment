@@ -33,34 +33,45 @@ const BattleScene = {
     axeman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     cavalry: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     commander: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    hero: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    hero: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    succubus: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    minotaur: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    lich: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
-  DURATION: { 0: 1000, 1: 1200, 2: 1500, 3: 1800 },
+  DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
   // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
   // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
-    battle_start: 900, round_start: 1600, synergy: 3000, facility_trigger: 3000,
-    note: 1200, dialogue: 3200, incident: 3200, death: 2200, revive: 3000, survive: 2600,
-    heal: 2200, summon: 3000, trait_trigger: 3000, resource_gain: 3000,
-    resource_forfeit: 3000, resource_consume: 2800, overkill: 3000, momentum: 3000, result: 4400
+    battle_start: 500, round_start: 1150, synergy: 1650, synergy_trigger: 1050, facility_trigger: 1250,
+    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
+    heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
+    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200,
+    order_offer: 1200, order_exec: 1600
   },
+  // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
+  ANSWER_READ_MS: 2200,
   VICTORY_PAUSE_MS: 900,
   VICTORY_HOLD_MS: 3500,
 
-  // 2026-09-05試遊：読むのが遅めの人を基準にし、自動圧縮は行わない。
-  // 急ぐときはプレイヤーがx2/x4を選ぶ。長い戦闘でも等速の意味を変えない。
-  BUDGET_MS: 45000, // 過去比較用の目安。尺を縮める判定には使わない
-  MIN_COMPRESS: 1,
+  // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
+  // 長期戦がだらけても一律には速めない。x1の目標総尺を「予算」として置き、
+  // 超えたぶんは通常攻撃と何も反応しなかった区間からだけ削る。
+  // 連鎖の中間は緩急を付ける。起点・初条件・最大余剰・蘇生・召喚・永久戦死を保護する。
+  // 2026-09-05 試遊: 全段を等速3秒にした版はオーナーが否定。「強弱を付ける」へ戻し、
+  // ただし連鎖の各段は CHAIN_STEP_FLOOR より短くしない（一瞬で流れて読めなかったため）。
+  BUDGET_MS: 45000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
+  MIN_COMPRESS: 0.45,   // 圧縮対象イベントの最小倍率（退屈な区間なので深く縮めてよい）
+  CHAIN_STEP_FLOOR: { hit: 560, overkill: 800, other: 520 },
 
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
-    "battle_start", "dialogue", "synergy", "facility_trigger", "trait_trigger",
+    "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
     "resource_gain", "resource_forfeit", "resource_consume", "momentum",
-    "overkill", "revive", "summon", "survive", "incident", "result"
+    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_offer", "order_exec", "result"
   ]),
 
   EFFECT_CLASSES: [
@@ -131,6 +142,9 @@ const BattleScene = {
   saveSpeed() { try { localStorage.setItem("maou_speed", String(this.speed)); } catch (e) {} },
 
   stop() {
+    // 決着音を待っているBGMの鳴り直しも、ここで畳む（画面が変われば App 側が鳴らす）
+    clearTimeout(this.musicTimer);
+    this.musicTimer = null;
     this.resetChain(true);
     for (const settle of this.pendingHits) settle();
     this.pendingHits.clear();
@@ -138,9 +152,10 @@ const BattleScene = {
     this.motions.clear();
     for (const t of this.timers) clearTimeout(t);
     this.timers = [];
+    this.mormoAwaiting = false;
     const scene = document.getElementById("scene");
     if (scene) {
-      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt").forEach(el => el.remove());
+      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt, .mormo-aside").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
       scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
       const morale = document.getElementById("morale");
@@ -155,7 +170,8 @@ const BattleScene = {
 
   // 骨組みのHTML。ui.js から差し込む。
   shell(stageData) {
-    this.isFinalBattle = stageData.missionKind === "invade" && stageData.baseStage === Game.MAX_CONQUEST;
+    // 防衛の勇者戦でも最終戦の演出を出す（仕様：baseStage===8 だけを見る）。
+    this.isFinalBattle = stageData.baseStage === Game.MAX_CONQUEST;
     if (typeof Music !== "undefined") Music.update(Game.state, { scene: this.isFinalBattle ? "final" : "battle" });
     const sceneClass = this.isFinalBattle ? "scene battlefield final-battle" : "scene battlefield";
     return `
@@ -167,8 +183,10 @@ const BattleScene = {
         <span class="muted">${U.esc(stageData.region)}</span>
       </div>
       <div class="chain-story" id="chain-story">
+        <span class="chain-forecast" id="chain-forecast" hidden></span>
         <span class="chain-origin" id="chain-origin">能力がつながる瞬間を見届けよう</span>
         <b id="chain-reason"></b>
+        <p class="chain-answer" id="chain-answer" hidden></p>
         <details class="chain-history" id="chain-history">
           <summary>ここまでの連鎖を読み返す <span id="chain-history-count"></span></summary>
           <p>最初の行動が1段目。その行動が次の出来事を起こすと2段目、さらに続くと3段目です。同じ段から別の反応に分かれることもあります。</p>
@@ -279,11 +297,22 @@ const BattleScene = {
     if (scene) scene.style.minHeight = count > 5 ? `${count * 83 + 175}px` : "";
   },
 
+  // 遅刻者の到着。薄い枠を外して戦場に立たせる。通常再生（render）と早送り（skip）の両方から呼ぶ。
+  // skip は render を通らない独自経路なので、ここを共通にしないと「飛ばしたときだけ枠が残る」。
+  clearAbsent(u, snap) {
+    u.absent = false;
+    u.el.classList.remove("absent");
+    this.setLife(u, false);
+    if (snap) this.setHp(u, snap.hp, snap.maxHp);
+    return u;
+  },
+
   addSummon(data) {
     if (!data || this.units[data.id]) return null;
     const band = document.getElementById(data.side === "player" ? "band-player" : "band-enemy");
     if (!band) return null;
-    const unit = { ...data, summoned: true };
+    // 遅刻して着いた軍団員は召喚物ではない（ラベルも戦功も別）
+    const unit = { ...data, summoned: !data.late };
     band.insertAdjacentHTML("beforeend", this.unitHtml(unit));
     this.registerUnit(unit);
     return this.units[data.id];
@@ -297,13 +326,14 @@ const BattleScene = {
     this.setPose(u, dead ? "fallen" : "idle");
   },
 
-  arrival(u, kind) {
+  arrival(u, kind, ev) {
     this.clearFocus();
+    const rise = kind === "summon" || kind === "late";
     u.el.classList.remove("revive-rise", "summon-rise");
-    u.el.classList.add(kind === "summon" ? "summon-rise" : "revive-rise");
-    const life = this.visualDuration(kind === "summon" ? 820 : 700);
+    u.el.classList.add(rise ? "summon-rise" : "revive-rise");
+    const life = this.visualDuration(rise ? 820 : 700);
     u.el.style.setProperty("--arrival-duration", `${life}ms`);
-    this.animateActor(u, kind === "summon" ? [
+    this.animateActor(u, rise ? [
       { opacity: 0, transform: "translateY(22px) scale(.6)" },
       { opacity: 1, transform: "translateY(-5px) scale(1.08)", offset: .7 },
       { opacity: 1, transform: "translateY(0) scale(1)" }
@@ -312,9 +342,14 @@ const BattleScene = {
       { opacity: 1, transform: "translateY(-8px) scaleY(1.04)", offset: .6 },
       { opacity: 1, transform: "translateY(0) scaleY(1)" }
     ], life);
-    this.float(u, kind === "summon" ? "召喚！" : "復活！", "heal");
-    this.showAction(`${u.name}が${kind === "summon" ? "参戦！" : "復活！"}`, 1000);
-    this.unitVfx(u, "revive", kind === "summon" ? "summon-glow" : "", 2);
+    if (kind === "late") {
+      this.float(u, "到着！", "heal");
+      this.showAction(ev && ev.quote ? `${u.name}が遅れて到着「${ev.quote}」` : `${u.name}が遅れて到着！`, 1700);
+    } else {
+      this.float(u, kind === "summon" ? "召喚！" : "復活！", "heal");
+      this.showAction(`${u.name}が${kind === "summon" ? "参戦！" : "復活！"}`, 1000);
+    }
+    this.unitVfx(u, "revive", rise ? "summon-glow" : "", 2);
     this.timers.push(setTimeout(() => u.el.classList.remove("revive-rise", "summon-rise"), life));
   },
 
@@ -327,6 +362,13 @@ const BattleScene = {
     this.onDone = onDone;
     this.finished = false;
     this.paused = false;
+    this.mormoAwaiting = false;
+    this.asideUsed = {};
+    this.retreatAnswered = false;
+    this.retreated = false;
+    this.resumeSkipAfterRetreat = false;
+    this.orderAnswered = new Set();   // 答えた order_offer の eventId（節目は戦況が動くたびに来る）
+    this.resumeSkipAfterOrder = false;
     this.resultPending = null;
     this.historySeen = new Set();
     const history = document.getElementById("chain-history-list");
@@ -348,12 +390,22 @@ const BattleScene = {
     for (const u of [...start.enemy, ...start.player]) this.registerUnit(u);
     this.updateSpeedBtn();
 
+    this.prepareChainView(timeline);
+    this.chainAnswer = this.pickChainAnswer(timeline);
     this.pacing = this.plan(timeline);
     this.eventById = new Map(timeline.filter(e => e.eventId).map(e => [e.eventId, e]));
     this.activeBeat = null;
     const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
     if (origin) origin.textContent = "能力がつながる瞬間を見届けよう";
-    if (reason) reason.textContent = "";
+    if (reason) { reason.textContent = ""; delete reason.dataset.depth; }
+    // 予告はタイムライン全体が答えを持っている。名前は伏せ、数だけ先に約束する。
+    this.synergyPlanned = timeline.filter(e => e.type === "synergy").length;
+    this.synergyFired = 0;
+    this.showForecast();
+    this.mormoAside = this.pickMormoAside(timeline);
+    this.settleCueUntil = 0;
+    const answerBand = document.getElementById("chain-answer");
+    if (answerBand) { answerBand.hidden = true; answerBand.textContent = ""; }
     document.getElementById("scene").querySelectorAll(".scene-result").forEach(e => e.remove());
     document.getElementById("scene").classList.remove("decided");
     this.eventScale = 1;
@@ -361,6 +413,47 @@ const BattleScene = {
     this.timeline = timeline;
     this.index = 0;
     this.step();
+  },
+
+  // V2ランだけ、正規化APIから再生用のevent→step対応表を一度作る。
+  // raw因果グラフは演出・戦闘用に保持し、V1ランでは既存表示へ一切介入しない。
+  prepareChainView(timeline) {
+    this.chainViewVersion = (typeof Chain !== "undefined" && typeof Game !== "undefined" && Game.state)
+      ? Chain.versionOf(Game.state) : 1;
+    this.chainEventViews = new Map();
+    this.chainPaths = new Map();
+    if (this.chainViewVersion < 2 || typeof Chain === "undefined") return;
+    const summary = Chain.summarize(timeline || []);
+    const byId = new Map(summary.events.map(e => [e.eventId, e]));
+    for (const event of summary.events) {
+      this.chainEventViews.set(event.eventId, event);
+      if (!event.counted) continue;
+      const path = summary.pathTo(e => e.eventId === event.eventId);
+      this.chainPaths.set(event.eventId, path ? path.steps : []);
+    }
+    this.normalizedChainSummary = summary;
+  },
+
+  chainEventView(ev) {
+    if (this.chainViewVersion < 2 || !ev || !this.chainEventViews) return null;
+    return this.chainEventViews.get(ev.eventId) || null;
+  },
+
+  chainStepView(ev) {
+    const info = this.chainEventView(ev);
+    if (!info || !info.counted || !this.chainPaths) return null;
+    const path = this.chainPaths.get(ev.eventId) || [];
+    return path[path.length - 1] || null;
+  },
+
+  chainDisplayDepth(ev) {
+    if (this.chainViewVersion < 2) return (ev && ev.chainDepth) || 0;
+    const info = this.chainEventView(ev);
+    return info && info.counted ? info.depth : 0;
+  },
+
+  chainStepLabel(step) {
+    return ChainViewUI.stepLabel(step);
   },
 
   step() {
@@ -373,6 +466,9 @@ const BattleScene = {
     this.eventScale = item.scale;
     const dur = this.render(ev);
     if (ev.type === "result") return; // 勝利の一拍と曲は倍速から独立
+    // モルモの確認待ちに入ったイベントでは次の予約を作らない。
+    // 読み終えた時間がそのまま「この一拍」なので、確認後は直ちに次へ進む。
+    if (this.mormoAwaiting) return;
     const wait = Math.max(60, ((item.duration || dur) * this.eventScale) / this.speed);
     this.scheduleStep(wait);
   },
@@ -384,7 +480,7 @@ const BattleScene = {
   },
 
   togglePause() {
-    if (this.finished || this.resultPending) return;
+    if (this.finished || this.resultPending || this.mormoAwaiting) return;
     this.paused = !this.paused;
     if (this.paused) {
       clearTimeout(this.stepTimer);
@@ -429,6 +525,8 @@ const BattleScene = {
   plan(timeline) {
     const events = timeline || [];
     const parents = new Set(events.filter(e => e.parentEventId).map(e => e.parentEventId));
+    // 答え合わせの1件は初見の説明そのものなので、畳み掛けから外して読む尺を渡す
+    const answerEvent = this.chainAnswer ? this.chainAnswer.at : null;
     const items = events.map(ev => ({
       duration: this.durationOf(ev),
       protected: this.isProtected(ev, !!(ev.eventId && parents.has(ev.eventId))),
@@ -446,23 +544,52 @@ const BattleScene = {
       if (!hits.length) continue;
       const overkills = indices.filter(i => events[i].type === "overkill");
       const peak = overkills.reduce((best, i) => best === null || events[i].percent > events[best].percent ? i : best, null);
+      const seen = new Set();
+      let hitCount = 0;
       for (const i of indices) {
         const ev = events[i], item = items[i];
+        const hit = hits.includes(i);
+        if (hit) hitCount++;
+        const key = `${ev.type}:${ev.traitId || ev.facilityId || ev.resource || ""}`;
+        const firstAbility = ["trait_trigger", "facility_trigger", "resource_gain", "resource_consume"].includes(ev.type) && !seen.has(key);
+        seen.add(key);
         item.beat = "relay";
         item.showBurst = ev.type !== "overkill" || i === peak;
         if (i === hits[0]) item.beat = "origin";
         else if (i === peak || (i === hits[hits.length - 1] && hits.length > 1)) item.beat = "payoff";
-        // 遅めに読む人を基準にする。中間・同じ能力の再発火も同じだけ読ませる。
-        const letters = Array.from(ev.text || ev.desc || ev.name || ev.label || "").length;
-        item.duration = Math.max(item.duration, Math.min(6500, Math.max(3000, 1600 + letters * 65)));
-        item.protected = true;
+        const preserve = ev === answerEvent || item.beat !== "relay" || firstAbility || ev.firstDiscovery || ev.permanent
+          || ["revive", "summon", "survive", "result", "synergy", "incident", "dialogue"].includes(ev.type);
+        if (preserve) {
+          item.protected = true;
+          continue;
+        }
+        // 初めての条件は読ませる。続く反応は順序を保って畳み掛ける。
+        // ただし各段に「止まって見える」下限を置く。段が進むほど短くはするが、一瞬にはしない。
+        const floor = this.CHAIN_STEP_FLOOR[hit ? "hit" : ev.type === "overkill" ? "overkill" : "other"];
+        const rhythm = Math.max(.36, .68 - Math.max(0, hitCount - 1) * .08);
+        item.duration = Math.min(item.duration, Math.max(floor, Math.round(item.duration * rhythm)));
+        item.protected = true; // 総尺予算による二重の圧縮はしない
       }
     }
     const sum = (list, fn) => list.reduce((total, item) => total + fn(item), 0);
     const protectedMs = sum(items.filter(i => i.protected), i => i.duration);
     const compressibleMs = sum(items.filter(i => !i.protected), i => i.duration);
     const rawMs = protectedMs + compressibleMs;
-    const compressScale = 1;
+    let compressScale = 1;
+    if (rawMs > this.BUDGET_MS && compressibleMs > 0) {
+      // 保護区間だけで予算を超える戦闘は、圧縮対象を最小まで縮めたうえで予算超過を許す
+      const room = (this.BUDGET_MS - protectedMs) / compressibleMs;
+      compressScale = Math.min(1, Math.max(this.MIN_COMPRESS, room));
+    }
+    for (const item of items) if (!item.protected) item.scale = compressScale;
+    if (answerEvent) {
+      const at = events.indexOf(answerEvent);
+      if (at >= 0) {
+        items[at].protected = true;
+        items[at].scale = 1;
+        items[at].duration = Math.max(items[at].duration, this.ANSWER_READ_MS);
+      }
+    }
     return {
       items, rawMs, protectedMs, compressibleMs, compressScale,
       plannedMs: sum(items, i => i.duration * i.scale)
@@ -472,19 +599,36 @@ const BattleScene = {
   // 1イベントを描画し、次までの尺(ms)を返す
   render(ev) {
     if (ev.text) this.appendLog(ev.text, ev.cls);
+    // 全滅の一言だけは決着表示と一緒に出す（banner 側）。ここは戦闘中の2場面。
+    if (this.mormoAside && this.mormoAside.at === ev && this.mormoAside.scene !== "wipe") this.sayMormo();
     this.chainFlare(ev);
     this.tellChain(ev);
+    if (this.chainAnswer && this.chainAnswer.at === ev) this.sayChainAnswer();
     if (typeof Sound !== "undefined" && !["attack", "splash", "result"].includes(ev.type)) {
       const from = this.units[ev.fromId];
       Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from && from.side });
     }
 
     switch (ev.type) {
-      case "battle_start":
+      case "battle_start": {
+        // 遅刻者は薄い枠として最初から見せる。着いたらこの枠に入る（末尾に足さない）。
+        const band = document.getElementById("band-player");
+        for (const u of ev.absent || []) {
+          if (!band || this.units[u.id]) continue;
+          band.insertAdjacentHTML("beforeend", this.unitHtml(u));
+          this.registerUnit({ ...u, summoned: false });
+          const p = this.units[u.id];
+          p.absent = true;
+          p.el.classList.add("absent");
+          const label = p.el.querySelector(".bu-state");
+          if (label) label.textContent = "遅刻中";
+        }
         this.synergyNames = [];
         this.setMorale(1, 0);
+        this.showForecast(true);
         if (this.isFinalBattle) this.battleIntro();
         break;
+      }
       case "round_start":
         // ラウンドが変わったら、伸びていた鎖はそこで締める
         this.settleChain();
@@ -494,6 +638,11 @@ const BattleScene = {
         const speaker = this.units[ev.unitId];
         this.clearFocus();
         if (speaker) speaker.el.classList.add("acting");
+        // 遅刻の二拍（モルモ→本人）は一瞬の字幕では読めないので、下半分の一言で止めて読ませる
+        if (ev.late) {
+          const who = ev.name === "モルモ" ? null : { name: ev.name, src: this.unitPortraitSrc(speaker) };
+          if (this.speakAside({ speaker: who, expression: "worried", text: ev.quote })) break;
+        }
         this.showAction(`${ev.name}「${ev.quote}」`, 1700);
         break;
       }
@@ -522,8 +671,15 @@ const BattleScene = {
         break;
       }
       case "summon": {
+        if (ev.late && this.units[ev.unit.id]) {
+          const u = this.clearAbsent(this.units[ev.unit.id], ev.unit);
+          this.arrival(u, "late", ev);
+          // 到着の一言も止めて読ませる（試遊で「反映されていない気がする」＝次の字幕に消されていた）
+          if (ev.quote) this.speakAside({ speaker: { name: u.name, src: this.unitPortraitSrc(u) }, text: ev.quote });
+          break;
+        }
         const summoned = this.addSummon(ev.unit);
-        if (summoned) this.arrival(summoned, "summon");
+        if (summoned) this.arrival(summoned, ev.late ? "late" : "summon", ev);
         break;
       }
       case "heal": {
@@ -559,10 +715,15 @@ const BattleScene = {
           this.flash(1);
           this.cutin(ev.name, ev.desc, ev.id, this.synergyNames.length);
         }
+        this.countSynergy();
         break;
       case "facility_trigger":
         this.pulse("overkill");
         this.cutin(ev.name, ev.desc || "次の味方攻撃+40%", "facility");
+        break;
+      case "synergy_trigger":
+        this.pulse("overkill");
+        this.cutin(ev.name, `連鎖の着地：次の味方攻撃+${ev.amount || 0}%`, "synergy");
         break;
       case "resource_gain": {
         const u = this.units[ev.sourceId];
@@ -603,9 +764,16 @@ const BattleScene = {
         this.clearFocus();
         if (u) u.el.classList.add("acting");
         const propagating = ev.traitId === "overload" || ev.traitId === "chain_massacre";
-        this.showAction(propagating
+        if (ev.quote && u && ev.traitId === "big_eater" && !ev.busy && !this.asideUsed.big_eater
+          && this.speakAside({ speaker: { name: u.name, src: this.unitPortraitSrc(u) }, text: ev.quote, note: ev.note })) {
+          this.asideUsed.big_eater = true;
+        } else if (ev.busy && u) {
+          // 飛んだ手番。何が起きているか本人にも浮かせる
+          this.float(u, "食事中", "guard");
+          this.showAction(`${u.name}「${ev.quote}」（食事中で動けない）`, 1400);
+        } else this.showAction(propagating
           ? `【${ev.name}】連鎖${ev.propagationDepth || 1}段目！　余剰の${ev.ratio || 35}%が流れ込む`
-          : `【${ev.name}】発動！`, 1000);
+          : ev.quote ? `${u ? u.name : ""}「${ev.quote}」` : `【${ev.name}】発動！`, ev.quote ? 1400 : 1000);
         this.pulse(ev.traitId);
         if (propagating) {
           this.flash(1);
@@ -658,6 +826,27 @@ const BattleScene = {
         this.shake();
         break;
       }
+      // 撤退の提案。ここだけは**必ず**止める（字幕へ落ちると選べなくなる）。
+      case "retreat_offer":
+        this.askRetreat(ev);
+        break;
+      // 号令の節目。撤退の提案と同じく**必ず**止める。
+      case "order_offer":
+        this.askOrder(ev);
+        break;
+      // 号令の実行。魔王の一声と本人の返事。止めない（直前に選んだばかり）。
+      case "order_exec": {
+        const u = this.units[ev.unitId];
+        this.clearFocus();
+        if (u) {
+          u.el.classList.add("acting");
+          this.float(u, "号令", "guard");
+        }
+        this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」　${ev.name}「${ev.quote}」`, 1600);
+        this.flash(1);
+        this.pulse("order");
+        break;
+      }
       case "result":
         this.resolveBattle(ev);
         break;
@@ -671,12 +860,83 @@ const BattleScene = {
   },
 
   // 表示済みの因果だけを使う。未来の撃破や報酬を先に見せない。
+  // 連鎖の1行は「誰が・何で・誰に・いくら」の順で固定する。
+  // 段ごとに文章の形が変わると、初見の人は毎回読み方を作り直すことになる。
+  // 語順を固定し、段の色だけを変えることで「同じ形の行が積み上がっていく」ように見せる。
+  CHAIN_SLOTS: [["who", "cs-who"], ["by", "cs-by"], ["to", "cs-to"], ["amount", "cs-amt"]],
+  CHAIN_DEPTH_TIERS: 6,
+
+  chainDepthTier(depth) {
+    return Math.min(this.CHAIN_DEPTH_TIERS, Math.max(1, depth || 1));
+  },
+
+  chainLineText(depth, slots) {
+    return [`第${depth || 1}段`, ...this.CHAIN_SLOTS.map(([k]) => slots[k]).filter(Boolean)].join(" ");
+  },
+
+  chainLineHtml(depth, slots) {
+    const cells = this.CHAIN_SLOTS
+      .filter(([k]) => slots[k])
+      .map(([k, cls]) => `<i class="${cls}">${U.esc(slots[k])}</i>`);
+    return `<i class="cs-step">第${depth || 1}段</i>${cells.join('<i class="cs-sep">›</i>')}`;
+  },
+
+  // 因果を固定帯へ書き込む。表示はHTML、テストや読み上げ向けにtextContentも同じ語順になる。
+  showChainLine(reason, depth, slots) {
+    reason.dataset.depth = this.chainDepthTier(depth);
+    reason.innerHTML = this.chainLineHtml(depth, slots);
+  },
+
+  tellChainV2(ev) {
+    const info = this.chainEventView(ev);
+    const step = this.chainStepView(ev);
+    if (!info || !step) return; // 宣言・補足だけでは表示段を増やさない
+    const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
+    if (!origin || !reason) return;
+    const path = this.chainPaths.get(ev.eventId) || [];
+    const first = path[0];
+    origin.textContent = first && first.actorName ? `起点：${first.actorName}` : "能力がつながった";
+    const effect = step.effect || {};
+    const unit = effect.resource === "gold" ? "G"
+      : effect.resource === "soul" ? "魂" : (effect.resource || "");
+    const slots = {
+      who: step.actorName || (step.declaredBy && step.declaredBy.actorName) || "",
+      by: this.chainStepLabel(step),
+      to: effect.targetName ? `${effect.targetName}へ` : "",
+      amount: effect.dmg != null ? `${effect.dmg}ダメージ`
+        : effect.amount != null ? `${effect.amount >= 0 ? "+" : ""}${effect.amount}${unit}` : ""
+    };
+    this.showChainLine(reason, info.depth, slots);
+
+    // 連鎖が2段目へ到達した時点で、起点を含む経路を一度ずつ履歴へ加える。
+    if (info.depth < 2) return;
+    this.historySeen ||= new Set();
+    const list = document.getElementById("chain-history-list");
+    for (const item of path) {
+      if (!list || !item.stepId || this.historySeen.has(item.stepId)) continue;
+      this.historySeen.add(item.stepId);
+      const row = document.createElement("li");
+      row.dataset.depth = this.chainDepthTier(item.depth);
+      row.innerHTML = `<b>第${item.depth || 1}段</b> ${U.esc(this.chainStepLabel(item))}`;
+      list.appendChild(row);
+    }
+    const count = document.getElementById("chain-history-count");
+    if (count) count.textContent = `（${this.historySeen.size}件）`;
+  },
+
   tellChain(ev, animate = true) {
+    if (this.chainViewVersion >= 2) return this.tellChainV2(ev);
     if (ev.chainId && !ev.parentEventId && ["attack", "splash"].includes(ev.type)) {
       const origin = document.getElementById("chain-origin"), reason = document.getElementById("chain-reason");
       const from = this.units[ev.fromId], to = this.units[ev.toId];
       if (origin) origin.textContent = from ? `${from.name}が動く` : "次の攻撃";
-      if (reason) reason.textContent = from && to ? `${from.name} → ${to.name}` : "";
+      if (reason) {
+        if (from && to) this.showChainLine(reason, 1, {
+          who: from.name, by: `自分の${ev.label || "攻撃"}で`,
+          to: `${to.name}へ`, amount: ev.dmg != null ? `${ev.dmg}ダメージ` : ""
+        });
+        else reason.textContent = "";
+      }
       return;
     }
     if (!ev.chainId || !ev.parentEventId || !this.eventById) return;
@@ -701,29 +961,43 @@ const BattleScene = {
       if (e.type === "momentum") return `戦意 ×${Number(e.mult).toFixed(2)}`;
       if (e.type === "overkill") return `${e.rank || "OVERKILL"} ${e.percent}%`;
       if (e.type === "death") return `${who}が倒れた`;
+      if (e.type === "summon" && e.late) return `${e.unit ? e.unit.name : who}が遅れて到着`;
       return `${who}${who ? "の" : ""}${e.name || e.label || ({revive: "蘇生", summon: "召喚", survive: "生存", heal: "回復"}[e.type] || "反応")}`;
     };
     origin.textContent = starter ? `起点：${starter.name}` : "能力がつながった";
     const who = actor(ev)?.name || "味方";
-    let explanation;
-    if (ev.type === "trait_trigger" && ev.traitId === "greedy") {
-      explanation = `${label(parent)}を得たので、${who}の「強欲」が発動。追加でもう一度攻撃する。`;
+    const cause = label(parent);
+    const means = ev.name || ev.label || "反応";
+    // 何が起きても同じ4つの枠に収める。空いた枠だけ落ちる。
+    let slots;
+    if (ev.type === "trait_trigger") {
+      slots = { who, by: `${cause}で《${means}》`, to: "",
+        amount: ev.traitId === "greedy" ? "もう一度攻撃" : "発動" };
     } else if (ev.type === "attack" || ev.type === "splash") {
-      explanation = `${label(parent)}がきっかけで、${who}が${this.units[ev.toId]?.name || "敵"}へ追撃。${ev.dmg}ダメージ。`;
+      slots = { who, by: `${cause}で${ev.label || "追撃"}`,
+        to: `${this.units[ev.toId]?.name || "敵"}へ`, amount: `${ev.dmg}ダメージ` };
     } else if (ev.type === "resource_gain") {
-      explanation = `${label(parent)}がきっかけで、${label(ev)}を獲得。`;
+      const unit = ev.resource === "gold" ? "G" : ev.resource === "soul" ? "魂" : ev.resource;
+      slots = { who, by: `${cause}で${ev.label || "獲得"}`, to: "", amount: `+${ev.amount}${unit}` };
     } else if (ev.type === "momentum") {
-      explanation = `${label(parent)}の余剰ダメージで味方全員の戦意が上昇。与えるダメージが${Number(ev.mult).toFixed(2)}倍に。`;
+      slots = { who: "味方全員", by: `${cause}の余剰ダメージで戦意上昇`, to: "",
+        amount: `与ダメージ ×${Number(ev.mult).toFixed(2)}` };
     } else if (ev.type === "overkill") {
-      explanation = `${label(parent)}が敵の残りHPを超えた！ 余剰${ev.excess}ダメージ（${ev.percent}% OVERKILL）。`;
-    } else explanation = `${label(parent)}がきっかけで、${label(ev)}。`;
-    reason.textContent = `第${ev.chainDepth}段：${explanation}`;
+      slots = { who: actor(parent)?.name || who, by: `${cause}が残りHPを超えた`,
+        to: `${this.units[parent.toId]?.name || this.units[ev.toId]?.name || "敵"}に`,
+        amount: `余剰${ev.excess}（${ev.percent}% ${ev.rank || "OVERKILL"}）` };
+    } else {
+      slots = { who, by: `${cause}で${means}`, to: "", amount: "" };
+    }
+    const explanation = this.chainLineText(ev.chainDepth, slots);
+    this.showChainLine(reason, ev.chainDepth, slots);
     this.historySeen ||= new Set();
     const list = document.getElementById("chain-history-list");
     for (const entry of [root, parent, ev]) {
       if (!list || !entry.eventId || this.historySeen.has(entry.eventId)) continue;
       this.historySeen.add(entry.eventId);
       const row = document.createElement("li");
+      row.dataset.depth = this.chainDepthTier(entry.chainDepth);
       row.innerHTML = `<b>第${entry.chainDepth || 1}段</b> ${U.esc(label(entry))}${entry === ev ? `<small>${U.esc(explanation)}</small>` : ""}`;
       list.appendChild(row);
     }
@@ -1065,7 +1339,9 @@ const BattleScene = {
   },
 
   chainFlare(ev) {
-    const depth = (ev && ev.chainDepth) || 0;
+    const normalized = this.chainEventView(ev);
+    if (this.chainViewVersion >= 2 && (!normalized || !normalized.counted)) return;
+    const depth = this.chainDisplayDepth(ev);
     const flare = document.getElementById("chain-flare");
     if (!flare) return;
     // 連鎖でない出来事が挟まったら、いま伸びている鎖はそこで終わり。
@@ -1150,6 +1426,364 @@ const BattleScene = {
     void c.offsetWidth;
     c.classList.add("show");
     // 次の説明で置き換えるまで残す。読む途中でフェードアウトしない。
+  },
+
+  // モルモは1戦闘に一度だけ顔を出す。「連発しない」を後追いの判定で守ろうとすると、
+  // 先に来た場面が必ず勝ってしまい、いちばん面白い瞬間を取り逃がす。
+  // タイムライン全体を先に見て、出る場面を1つだけ決めてしまう。
+  // 優先度は 全滅 ＞ 初めて見るシナジー ＞ 5段以上の連鎖（珍しい順）。
+  MORMO_ASIDE_MS: 3600,
+
+  pickMormoAside(timeline) {
+    if (typeof MORMO_BATTLE_LINES === "undefined" || typeof MormoScene === "undefined") return null;
+    const pick = (scene, at) => at ? { scene, at } : null;
+    // spotlight（誰の能力が誰を動かしたか）に反応する一言（D1）。
+    //
+    // 出すのは**根拠の最後のイベント**の位置。そこまで来れば全部起きているので、
+    // 「起きる前に結果や将来の死亡をしゃべらない」（設計書 6.3）を構造で守れる。
+    //
+    // 順序は設計書 6.1 の優先順に合わせる。全滅が最優先、次が初めての接続（discovery）、
+    // その次に spotlight。spotlight は汎用の chain（5段）を**置き換える**位置に置く。
+    // 名前と行動が入るぶん、同じ枠なら chain の汎用台詞より事件になる。
+    //
+    // **絞る。** 300戦の実測で spotlight 自体は79%の戦闘で成立する。そのまま出すと
+    // モルモが5戦に4戦しゃべることになり、「1戦闘に1回」を守っていても一言が
+    // 事件ではなく毎回のナレーションになる（第12節・ゲート8）。
+    // 出すのは **撃破まで届いた接続で、かつ起点と反応が別人** の回だけにした。
+    // これで一言の頻度は従来36%から48%へ。増えるが、増えるぶんは名前と行動が入る。
+    // 戦果の1文（U2）はこの制限を受けない。あちらは記録で、こちらは事件。
+    let spotAside = null;
+    const spot = typeof Spotlight !== "undefined" ? Spotlight.of(timeline) : null;
+    if (spot && spot.numbers && spot.numbers.killed && !spot.sameActor
+      && spot.evidence && spot.evidence.length) {
+      const lastId = spot.evidence[spot.evidence.length - 1];
+      const at = timeline.find(e => e.eventId === lastId);
+      if (at) spotAside = { scene: "spotlight", at, spotlight: spot };
+    }
+    return pick("wipe", timeline.find(e => e.type === "result" && e.wipe === "player"))
+      || pick("discovery", timeline.find(e => e.type === "synergy" && e.firstDiscovery))
+      || spotAside
+      || pick("chain", timeline.find(e => (e.chainDepth || 0) >= 5));
+  },
+
+  sayMormo() {
+    const plan = this.mormoAside;
+    if (!plan) return;
+    this.mormoAside = null; // 1戦闘1回。撃ったら予約を消す
+    this.lastMormoLine ||= {};
+    let expression, text;
+    if (plan.scene === "spotlight") {
+      // 台詞は spotlight の事実から組む。直前に出た型は避ける（名前が違っても同じ言い回しは続かせない）
+      const said = MormoScene.spotlightLine(plan.spotlight, this.lastMormoLine.spotlightTemplate);
+      if (!said) return;
+      this.lastMormoLine.spotlightTemplate = said.template;
+      ({ expression, text } = said);
+    } else {
+      const set = MORMO_BATTLE_LINES[plan.scene];
+      if (!set || !set.lines.length) return;
+      // 直前に出た1本は避ける。同じ場面が続いても同じ声にはならない。
+      const pool = set.lines.filter(line => line !== this.lastMormoLine[plan.scene]);
+      text = (pool.length ? pool : set.lines)[Math.floor(Math.random() * (pool.length || set.lines.length))];
+      this.lastMormoLine[plan.scene] = text;
+      expression = set.expression;
+    }
+    const isWipe = plan.scene === "wipe";
+    this.mormoAwaiting = true;
+    if (!isWipe) this.paused = true;
+    this.setMormoControlsLocked(true, isWipe);
+    const box = MormoScene.aside({
+      expression,
+      text,
+      host: document.getElementById("scene"),
+      buttonLabel: isWipe ? "戦果を確認する ▶" : "戦闘を再開 ▶",
+      onContinue: () => this.continueAfterMormo(isWipe)
+    });
+    if (!box) {
+      this.mormoAwaiting = false;
+      if (!isWipe) this.paused = false;
+      this.setMormoControlsLocked(false);
+      return;
+    }
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+  },
+
+  // 本人の履歴書絵。無ければ null（aside は枠を畳む）
+  unitPortraitSrc(u) {
+    if (!u || !u.tplId || typeof UI === "undefined" || !UI.hasPortrait(u.tplId)) return null;
+    return `${UI.PORTRAIT_DIR}${u.tplId}.png`;
+  },
+
+  // 下半分の一言で戦闘を止めて読ませる。モルモでも本人でも使う。
+  // すでに別の一言で止まっていれば false を返し、呼び手は字幕へ落とす（二重に止めて詰まらせない）。
+  speakAside(options) {
+    if (this.mormoAwaiting || this.finished) return false;
+    this.mormoAwaiting = true;
+    this.paused = true;
+    this.setMormoControlsLocked(true, false);
+    const box = MormoScene.aside({
+      expression: options.expression || "report",
+      text: options.text,
+      note: options.note || null,
+      speaker: options.speaker || null,
+      host: document.getElementById("scene"),
+      buttonLabel: options.buttonLabel || "戦闘を再開 ▶",
+      onContinue: () => this.continueAfterMormo(false)
+    });
+    if (!box) {
+      this.mormoAwaiting = false;
+      this.paused = false;
+      this.setMormoControlsLocked(false);
+      return false;
+    }
+    if (typeof Sound !== "undefined" && !options.speaker) Sound.cue("mormo", { index: 2 });
+    return true;
+  },
+
+  // 開いている一言を、続きを進めずに畳む。撤退の提案は「二重に止まらない」では困るので、
+  // 直前の一言（大食漢の一口など）が止めていたら先にこれで閉じる（仕様6節の落とし穴）。
+  closeAside() {
+    MormoScene.clearAside(document.getElementById("scene"));
+    this.mormoAwaiting = false;
+    this.setMormoControlsLocked(false);
+  },
+
+  // 「退きますか」。戦闘を止めて、ボタンを2つ出す。
+  // speakAside と違って**必ず止まる**入口である（字幕へ落とすと選択肢が消える）。
+  askRetreat(ev) {
+    if (this.retreatAnswered || this.finished) return false;
+    if (this.mormoAwaiting) this.closeAside();
+    this.mormoAwaiting = true;
+    this.paused = true;
+    this.setMormoControlsLocked(true, false);
+    const downed = (ev.downed || []).map(u => u.name);
+    const box = MormoScene.aside({
+      expression: "worried",
+      text: ev.text ? String(ev.text).replace(/^\s*モルモ「|」\s*$/g, "") : "退きますか",
+      note: "退けば倒れた者を担いで帰れる（戦死しない）。だが報酬は無く、征服も進まない。",
+      host: document.getElementById("scene"),
+      choices: [
+        { label: "⚔ 続ける", value: "continue", primary: true },
+        { label: "🏰 退く", value: "retreat" }
+      ],
+      onChoose: choice => this.answerRetreat(choice, downed)
+    });
+    if (!box) {
+      // 一言を出す場所が無い環境（試写室以外では起きない）。続行として扱う。
+      // ここで continueAfterMormo は呼ばない。止まっていないので、
+      // step() が今までどおり次を予約する（二重に進めない）。
+      this.mormoAwaiting = false;
+      this.paused = false;
+      this.setMormoControlsLocked(false);
+      this.retreatAnswered = true;
+      if (typeof this.onRetreatChoice === "function") this.onRetreatChoice("continue");
+      return false;
+    }
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+    return true;
+  },
+
+  answerRetreat(choice, downed) {
+    if (this.retreatAnswered) return;
+    this.retreatAnswered = true;
+    if (typeof this.onRetreatChoice === "function") this.onRetreatChoice(choice);
+    if (choice !== "retreat") {
+      // 「最後まで飛ばす」の途中で聞いた提案なら、答えたあとも飛ばし続ける。
+      if (this.resumeSkipAfterRetreat) {
+        this.resumeSkipAfterRetreat = false;
+        this.mormoAwaiting = false;
+        this.paused = false;
+        this.setMormoControlsLocked(false);
+        return this.skip();
+      }
+      return this.continueAfterMormo(false);
+    }
+    this.resumeSkipAfterRetreat = false;
+    // 退いた。ここから先の攻撃は起きなかったことになるので、描画もしない。
+    this.retreated = true;
+    this.mormoAwaiting = false;
+    this.setMormoControlsLocked(false);
+    this.index = this.timeline.length;
+    this.settleChain();
+    const who = (downed || []).join("、");
+    this.appendLog(`　魔王軍、撤退。${who ? `${who}を担いで` : ""}城へ戻った`, "result-lose");
+    this.showAction(`魔王軍、撤退。${who ? `${who}を担いで` : ""}城へ戻った`, 2600);
+    this.finish();
+  },
+
+  // 「号令を」。戦闘を止めて、名指しのボタン（最大3）と「任せる」を出す。
+  // 既定は「任せる」（今までの挙動＝命じない）。テストの自動送りも既定を押す。
+  askOrder(ev) {
+    if (this.orderAnswered.has(ev.eventId) || this.finished) return false;
+    this.currentOrderOffer = ev;
+    if (this.mormoAwaiting) this.closeAside();
+    this.mormoAwaiting = true;
+    this.paused = true;
+    this.setMormoControlsLocked(true, false);
+    const candidates = ev.candidates || [];
+    const unready = (ev.unready || []).map(u => `${u.name}は気合が抜けたまま（${u.spirit}/${u.cost}）`).join("。");
+    const box = MormoScene.aside({
+      expression: "report",
+      text: ev.text ? String(ev.text).replace(/^\s*モルモ「|」\s*$/g, "") : "号令を",
+      // 候補が3人だと説明が長くなって帯からはみ出す。3人のときは候補ごとの説明を省き、共通の一文だけにする。
+      note: `${candidates.length <= 2 ? candidates.map(c => `${c.name}：${c.note}`).join("。") + "。" : ""}${unready ? unready + "。" : ""}命じた者は次に真っ先に動いて技を必ず出す（与ダメ+50%）が、その次の手番は息が上がって動けない。`,
+      host: document.getElementById("scene"),
+      choices: [
+        ...candidates.map(c => ({ label: `📣 ${c.name}「${c.label}」${typeof c.cost === "number" && c.cost > 0 ? `（気合${c.cost}）` : ""}`, value: c.unitId })),
+        { label: "任せる", value: "none", primary: true }
+      ],
+      onChoose: choice => this.answerOrder(choice)
+    });
+    if (!box) {
+      this.mormoAwaiting = false;
+      this.paused = false;
+      this.setMormoControlsLocked(false);
+      this.orderAnswered.add(ev.eventId);
+      if (typeof this.onOrderChoice === "function") this.onOrderChoice("none");
+      return false;
+    }
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+    return true;
+  },
+
+  answerOrder(choice) {
+    const ev = this.currentOrderOffer;
+    if (!ev || this.orderAnswered.has(ev.eventId)) return;
+    this.orderAnswered.add(ev.eventId);
+    // run.js が同じ種で計算し直したタイムラインを返す（任せたなら null）。
+    // 提案の手前までは同じなので、今の位置からそのまま続きを再生できる。
+    const next = typeof this.onOrderChoice === "function" ? this.onOrderChoice(choice) : null;
+    if (Array.isArray(next) && next.length > this.index) this.swapTimeline(next);
+    if (this.resumeSkipAfterOrder) {
+      this.resumeSkipAfterOrder = false;
+      this.mormoAwaiting = false;
+      this.paused = false;
+      this.setMormoControlsLocked(false);
+      return this.skip();
+    }
+    return this.continueAfterMormo(false);
+  },
+
+  // 再生中のタイムラインを差し替える（号令のあと）。手前は一致している前提なので、
+  // 位置（index）と盤面はそのまま。尺の計画と因果の索引だけ作り直す。
+  swapTimeline(next) {
+    this.timeline = next;
+    this.eventById = new Map(next.filter(e => e.eventId).map(e => [e.eventId, e]));
+    this.prepareChainView(next);
+    this.chainAnswer = this.pickChainAnswer(next);
+    this.pacing = this.plan(next);
+    this.mormoAside = this.pickMormoAside(next);
+  },
+
+  // まだ答えていない提案（撤退／号令）が、今の位置より先にあるか。
+  pendingOfferAt() {
+    return this.timeline.findIndex((e, i) => i >= this.index
+      && ((e.type === "retreat_offer" && !this.retreatAnswered) || (e.type === "order_offer" && !this.orderAnswered.has(e.eventId))));
+  },
+
+  setMormoControlsLocked(locked, wipe = false) {
+    for (const id of ["speed-btn", "pause-btn", "next-btn"]) {
+      const button = document.getElementById(id);
+      if (button) button.disabled = locked;
+    }
+    const skip = document.querySelector('[data-action="skiplog"]');
+    if (skip) skip.disabled = locked;
+    const pause = document.getElementById("pause-btn");
+    if (pause && locked && !wipe) pause.textContent = "モルモの報告中";
+  },
+
+  continueAfterMormo(wipe = false) {
+    if (!this.mormoAwaiting) return;
+    this.mormoAwaiting = false;
+    this.setMormoControlsLocked(false);
+    if (wipe || this.finished) {
+      const pause = document.getElementById("pause-btn");
+      if (pause) pause.disabled = true;
+      return;
+    }
+    this.paused = false;
+    const pause = document.getElementById("pause-btn");
+    if (pause) pause.textContent = "⏸ 読むために停止";
+    this.step();
+  },
+
+  // 戦闘開始の時点で「今日いくつ発動するか」だけ先に約束する。
+  // 名前は伏せる。何が起きるかは伏せたまま、何回起きるかだけ渡すのが期待になる。
+  // 数が減っていく（0/3 → 3/3）のを見せることで、予告が回収されたと分かる。
+  // ── 答え合わせ（1戦闘に1回だけ） ───────────────────
+  //
+  // 編成画面の見取り図で「追い剥ぎ：金貨を得る → 強欲：金貨獲得に反応」を約束した。
+  // 戦闘中は、その約束が実際に起きた**最初の1回だけ**を同じ言葉で確かめさせる。
+  // 毎回出すと読み飛ばされ、出さないと「よく分からないけどつながった」に戻る。
+  //
+  // 選ぶのは「金貨獲得を親に持つ最初の反応」。ただし追加攻撃を生む反応
+  //（強欲）が同じ戦闘にあるなら、そちらを優先する。倍率だけの反応より
+  // 「もう一度殴った」の方が、因果として目で追える。
+  pickChainAnswer(timeline) {
+    const byId = new Map((timeline || []).filter(e => e.eventId).map(e => [e.eventId, e]));
+    const reactions = [];
+    for (const ev of timeline || []) {
+      if (!ev.parentEventId) continue;
+      if (!["trait_trigger", "synergy_trigger", "facility_trigger"].includes(ev.type)) continue;
+      const parent = byId.get(ev.parentEventId);
+      if (!parent || parent.type !== "resource_gain" || parent.resource !== "gold") continue;
+      reactions.push({ at: ev, parent });
+    }
+    if (!reactions.length) return null;
+    const emitsExtraAttack = ev => {
+      const trait = ev.traitId && typeof TRAITS !== "undefined" ? TRAITS[ev.traitId] : null;
+      return !!(trait && trait.links && (trait.links.emits || []).includes("追加攻撃"));
+    };
+    const picked = reactions.find(r => emitsExtraAttack(r.at)) || reactions[0];
+    return {
+      at: picked.at,
+      // 「何の金貨か」は資源イベントの label（追い剥ぎ／略奪者の連携／殉職手当）から取る。
+      cause: picked.parent.label || "略奪",
+      reaction: picked.at.name || (picked.at.traitId && typeof TRAITS !== "undefined"
+        && TRAITS[picked.at.traitId] && TRAITS[picked.at.traitId].name) || "反応"
+    };
+  },
+
+  sayChainAnswer() {
+    const plan = this.chainAnswer;
+    this.chainAnswer = null;   // 1戦闘に1回。出したら予約を消す
+    const band = document.getElementById("chain-answer");
+    if (!plan || !band) return;
+    band.hidden = false;
+    band.innerHTML = `<i>答え合わせ</i>《${U.esc(plan.cause)}》の金貨に、《${U.esc(plan.reaction)}》が反応した。`;
+    band.classList.remove("show");
+    void band.offsetWidth;
+    band.classList.add("show");
+  },
+
+  showForecast(announce = false) {
+    const band = document.getElementById("chain-forecast");
+    if (!band) return;
+    const planned = this.synergyPlanned || 0;
+    if (!planned) {
+      band.hidden = true;
+      band.textContent = "";
+      band.removeAttribute("data-state");
+      return;
+    }
+    const fired = Math.min(this.synergyFired || 0, planned);
+    band.hidden = false;
+    band.dataset.state = fired === 0 ? "wait" : fired >= planned ? "done" : "live";
+    band.innerHTML = `<i class="cf-label">今日の発動</i>`
+      + `<i class="cf-count">${fired}<small>/${planned}</small></i>`
+      + `<i class="cf-pips">${'<b></b>'.repeat(planned > 12 ? 0 : planned)}</i>`
+      + `<i class="cf-note">${fired >= planned ? "すべて発動した" : "シナジーが揃うのを待て"}</i>`;
+    const pips = band.querySelectorAll(".cf-pips b");
+    pips.forEach((pip, i) => { if (i < fired) pip.className = "lit"; });
+    if (announce) {
+      band.classList.remove("announce");
+      void band.offsetWidth;
+      band.classList.add("announce");
+    }
+  },
+
+  countSynergy() {
+    this.synergyFired = (this.synergyFired || 0) + 1;
+    this.showForecast();
   },
 
   battleIntro() {
@@ -1339,11 +1973,20 @@ const BattleScene = {
     if (typeof Sound !== "undefined") Sound.stopAll();
     const announce = () => {
       this.banner(ev.victory);
-      if (typeof Sound !== "undefined") Sound.cue(ev.victory ? "win" : "lose", { speed: 1 });
+      this.playSettleCue(ev.victory);
     };
     const silence = ev.victory ? this.VICTORY_PAUSE_MS : 500;
     this.timers.push(setTimeout(announce, silence));
     this.timers.push(setTimeout(() => this.finish(), silence + (ev.victory ? this.VICTORY_HOLD_MS : 1800)));
+  },
+
+  // 決着音を鳴らし、鳴り終わる時刻を控える。BGMの再開はこの時刻まで待つ。
+  playSettleCue(victory) {
+    const name = victory ? "win" : "lose";
+    this.settleCueUntil = 0;
+    if (typeof Sound === "undefined" || Sound.muted) return;
+    Sound.cue(name, { speed: 1 });
+    this.settleCueUntil = Date.now() + Sound.cueLength(name) * 1000;
   },
 
   banner(victory) {
@@ -1370,29 +2013,75 @@ const BattleScene = {
   // 残りを一気に適用して終わらせる
   skip() {
     if (this.finished) return;
+    // 提案を出したまま飛ばそうとしたら何もしない。stop() が一言ごと消してしまい、
+    // 選択肢が無いまま戦闘だけが進む（＝答えずに続行したことになる）。
+    if (this.mormoAwaiting && ((!this.retreatAnswered && this.timeline.some(e => e.type === "retreat_offer"))
+      || this.timeline.some(e => e.type === "order_offer" && !this.orderAnswered.has(e.eventId)))) return;
     const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
     if (typeof Music !== "undefined") Music.suspend();
-    if (typeof KPI !== "undefined") KPI.logSkipped();
-    if (typeof Sound !== "undefined") {
-      Sound.stopAll();
-      Sound.cue("skip");
+    // 決着表示が出たあとの「飛ばす」は、残りの戦闘を飛ばしているのではなく
+    // 勝利の余韻を早送りしているだけ。ここで stopAll() すると鳴っている最中の
+    // ファンファーレを自分で切ってしまい、勝利音が無いまま戦果へ飛ぶ。
+    // 飛ばす対象が残っていないので、スキップ音もKPIのスキップも記録しない。
+    if (!announced) {
+      if (typeof KPI !== "undefined") KPI.logSkipped();
+      if (typeof Sound !== "undefined") {
+        Sound.stopAll();
+        Sound.cue("skip");
+      }
+    }
+    // 「最後まで飛ばす」も、提案に答える前は提案の位置で止まる。
+    // skip() は render() を通らない独自経路なので、ここへ書かないと選択ごと飛んでしまう。
+    {
+      const offerAt = this.pendingOfferAt();
+      if (offerAt >= 0) {
+        while (this.index <= offerAt) {
+          const ev = this.timeline[this.index++];
+          if (ev.text) this.appendLog(ev.text, ev.cls);
+          if (ev.type === "summon") {
+            if (ev.late && this.units[ev.unit.id]) this.clearAbsent(this.units[ev.unit.id], ev.unit);
+            else this.addSummon(ev.unit);
+          }
+          const u = this.units[ev.toId] || this.units[ev.unitId];
+          if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
+          if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
+          if (ev.type === "revive" && u) this.setLife(u, false);
+          if (ev.type === "momentum") this.setMorale(ev.mult, 0);
+          if (ev.type === "synergy") this.countSynergy();
+        }
+        // 答えたら、通常再生へ戻さずに続きを飛ばす（飛ばすつもりで押したのだから）。
+        const offer = this.timeline[offerAt];
+        if (offer.type === "order_offer") {
+          this.resumeSkipAfterOrder = true;
+          this.askOrder(offer);
+        } else {
+          this.resumeSkipAfterRetreat = true;
+          this.askRetreat(offer);
+        }
+        return;
+      }
     }
     while (this.index < this.timeline.length) {
       const ev = this.timeline[this.index++];
       if (ev.text) this.appendLog(ev.text, ev.cls);
-      if (ev.type === "summon") this.addSummon(ev.unit);
+      if (ev.type === "summon") {
+        if (ev.late && this.units[ev.unit.id]) this.clearAbsent(this.units[ev.unit.id], ev.unit);
+        else this.addSummon(ev.unit);
+      }
       const u = this.units[ev.toId] || this.units[ev.unitId];
       if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
       if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
       if (ev.type === "revive" && u) this.setLife(u, false);
       if (ev.type === "momentum") this.setMorale(ev.mult, 0);
+      if (ev.type === "synergy") this.countSynergy();
+      if (this.chainViewVersion >= 2) this.chainFlare(ev);
       this.tellChain(ev, false);
     }
     const result = this.timeline.find(e => e.type === "result");
-    if (result) {
+    if (result && !this.retreated) {
       this.banner(result.victory);
-      if (!announced && typeof Sound !== "undefined") Sound.cue(result.victory ? "win" : "lose", { speed: 1 });
+      if (!announced) this.playSettleCue(result.victory);
     }
     this.finish();
   },
@@ -1415,6 +2104,29 @@ const BattleScene = {
     this.paused = false;
     this.resultPending = null;
     this.stop();
+    // 全滅の一言は決着表示のあと、片付けが済んでから。stop() より前に出すと自分で消してしまう。
+    if (this.mormoAside && this.mormoAside.scene === "wipe") this.sayMormo();
+    // ファンファーレ（Sound）のあいだ BGM は止めてある。区切りが済んだら決着の場面曲へ切り替える。
+    // 通常再生もスキップもここを通るので、場面名が battle のまま残らない。
+    //
+    // ただし**鳴り終わるのを待つ**。決着表示のあとに「最後まで飛ばす」を押すと finish() が
+    // 即座に走るため、待たないと BGM がまだ3秒残っているファンファーレの上へ重なる。
+    // BGMは音量1.0の実素材、ファンファーレは合成音なので、重なると完全に埋もれる。
+    // これが「勝利のファンファーレが鳴らない」の3つ目の原因だった。
+    const result = (this.timeline || []).find(e => e.type === "result");
+    if (result && typeof Music !== "undefined" && typeof Game !== "undefined" && Game.state) {
+      // 退いた戦闘は勝っても負けてもいない。勝てたはずの戦闘でも勝利曲は鳴らさない。
+      const scene = this.retreated ? "defeat" : result.victory ? "victory" : "defeat";
+      const wait = Math.max(0, (this.settleCueUntil || 0) - Date.now());
+      // 予約は this.timers ではなく専用の枠へ置く。this.timers は「まだ描画が残っている」
+      // ことを表す枠で、スキップ直後に空であることを回帰テストが契約として見ているため。
+      // 画面を離れたら App.render() が先に場面曲を鳴らし、そのあとの UI.set() →
+      // stop() がこの予約を捨てるので、鳴り直しが二重にならない。
+      clearTimeout(this.musicTimer);
+      this.musicTimer = null;
+      if (wait > 0) this.musicTimer = setTimeout(() => Music.update(Game.state, { scene }), wait);
+      else Music.update(Game.state, { scene });
+    }
     const pause = document.getElementById("pause-btn");
     if (pause) pause.disabled = true;
     const btn = document.getElementById("next-btn");

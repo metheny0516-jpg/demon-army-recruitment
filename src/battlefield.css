@@ -66,6 +66,10 @@
 .game-scene-battle .battlefield .bu-name { margin: 0 0 3px; font: 700 11px/1.3 sans-serif; background: #101019c9; border-radius: 3px; }
 .battlefield .bu-hp { width: 78%; margin: 0 auto; }
 .battlefield .bu.dead { opacity: .45; filter: grayscale(.8); transform: none; }
+/* 遅刻中。居ないことが見える薄い枠。着いたら外れる */
+.battlefield .bu.absent { opacity: .28; filter: grayscale(1); }
+.battlefield .bu.absent .bu-actor { animation: none; }
+.battlefield .bu.absent .bu-state { color: #ffd479; }
 .battlefield .bu.dead .bu-actor { animation: none; }
 .game-scene-battle .battlefield .bu.hit,
 .game-scene-battle .battlefield .bu.hit-big { animation: none; }
@@ -74,7 +78,9 @@
 .battlefield .bu.acting .bu-name { color: #ffe38b; }
 .battlefield .bu.targeted .bu-name { color: #ffaaa0; }
 .game-scene-battle .battlefield .bu-vfx-anchor { top: -65px; bottom: 20px; }
-.battlefield .bu-pop { top: -65px; }
+/* 数字の出発点。-65px（頭の上）だと浮き上がった先が戦場の上端やVS帯に重なり、
+   最上段の者の与ダメ・被ダメが読めなかった（2026-09-05 試遊）。胸元から出して頭の高さで消える。 */
+.battlefield .bu-pop { top: -26px; z-index: 8; }
 .battlefield .action-caption { top: 65px; bottom: auto; }
 .game-scene-battle .battlefield .cutin { top: 85px; padding: 6px 12px; }
 .game-scene-battle .battlefield .cutin b { font-size: 17px; }

@@ -4,8 +4,8 @@ const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js',
   'src/data/missions.js', 'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js', 'src/core/util.js',
-  'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js',
-  'src/core/run.js', 'src/ui/battle_scene.js'
+  'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js',
+  'src/core/run.js', 'src/ui/chain_view.js', 'src/ui/battle_scene.js'
 ];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -43,7 +43,7 @@ for (let run = 0; run < 200; run++) {
     }
     if (st.phase === 'recruit') Game.skipHire();
     if (st.phase === 'preparation') {
-      const best = Game.departmentRoster('combat').slice().sort((a, b) => power(b) - power(a))
+      const best = Game.state.roster.slice().sort((a, b) => power(b) - power(a))
         .slice(0, Game.MAX_DEPLOY);
       st.activeUids = best.map(m => m.uid);
       Game.setPayrollPolicy('regular');
@@ -55,7 +55,7 @@ for (let run = 0; run < 200; run++) {
       Game.selectMission(invade >= 0 ? invade : 0);
     }
     if (st.phase === 'formation') {
-      st.activeUids = Game.departmentRoster('combat').slice().sort((a, b) => power(b) - power(a))
+      st.activeUids = Game.state.roster.slice().sort((a, b) => power(b) - power(a))
         .slice(0, Game.MAX_DEPLOY).map(m => m.uid);
       const out = Game.deploy();
       if (!out) break;

@@ -64,10 +64,26 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   if (battle.scene !== 'battle') errors.push(`戦闘の場面名が ${battle.scene}`);
   if (!(battle.bpm > marchBpm)) errors.push(`戦闘で行進が速くならない: ${marchBpm} → ${battle.bpm}`);
   if (!battle.src || !battle.src.endsWith('/assets/bgm/battle-theme.ogg')) errors.push(`戦闘BGMへ切り替わらない: ${battle.src}`);
+  // 決着したら行進を止めて無音にし、ファンファーレ（Sound側）に場を渡す。
+  // 2026-09-05 の「勝利は戦闘BGMを止めて0.9秒待ち、約3.2秒のファンファーレ」方針で、
+  // 勝敗専用のBGMへ切り替える旧仕様は廃止された（battle_scene.js が Music.suspend を呼ぶ）。
+  // なので見るのは場面名ではなく「戦闘の行進が止まったか」。
   await page.click('[data-action="skiplog"]');
-  const settled = await page.evaluate(() => Music.desc.scene);
-  if (!['victory', 'defeat'].includes(settled)) errors.push(`決着後の場面名が ${settled}`);
+  await page.waitForFunction(() => !!document.querySelector('.scene-result'), null, { timeout: 8000 })
+    .catch(() => errors.push('決着表示が出ない'));
+  const settled = await page.evaluate(() => ({
+    timer: !!Music.timer, paused: Music.track ? Music.track.paused : true, scene: Music.desc.scene
+  }));
+  if (settled.timer) errors.push('決着しても行進が止まらない');
+  if (!settled.paused) errors.push('決着しても戦闘BGMが止まらない');
+
+  // 戦果画面へ進めば演奏が戻り、場面も戦闘から離れること
   await page.click('[data-action="afterbattle"]');
+  const after = await page.evaluate(() => ({
+    scene: Music.desc.scene, timer: !!Music.timer, paused: Music.track ? Music.track.paused : true
+  }));
+  if (after.scene === 'battle') errors.push(`戦果画面でも場面名が ${after.scene} のまま`);
+  if (!after.timer || after.paused) errors.push('戦果画面で演奏が戻らない');
 
   // 未払いは演奏を痩せさせる（ゲーム状態からの導出が生きているか）
   const unrest = await page.evaluate(() => {

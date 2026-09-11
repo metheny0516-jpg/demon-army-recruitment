@@ -98,6 +98,18 @@ const KPI = {
       mercenariesHired: 0, mercenaryGold: 0, kinHires: 0, mergesRefused: 0,
       paidHires: 0, paidHireGold: 0,
       triggerKinds: {}, chainMax: 0, chainAbilityMax: 0, chainSample: null, chainBattles: 0,
+      // chainMax をどの数え方で記録したか。**正本は渡されたラン状態**であって、
+      // いまの Chain.RECORDED_VERSION ではない。
+      //
+      // ここで定数を読むと、切替後に既存V1途中ランを再起動したときに壊れる。
+      // KPI.current はメモリだけなので再起動で消え、次の戦闘で battleStarted() が
+      // runStarted() を呼び直す。そのときの定数を入れると、ラン状態はV1のままなのに
+      // KPIだけV2になり、同じランの chainMax が2つの定義に割れる。
+      // ラン状態を正本にすれば、途中ラン・ロード・再起・再起動のどれでも版が動かない。
+      //
+      // state が無い（ラン外からの呼び出し）ときは versionOf が V1 を返す。
+      // バージョン欠落の旧stateも同じくV1で、値を推定変換しない。
+      chainDefVersion: this.chainApi().versionOf(state),
       retriesUsed: 0, sessionRun: this.session.runs, quickRetry: false
     };
     this.update(data => {
@@ -217,7 +229,7 @@ const KPI = {
   // 結果を読むだけで、result も state も書き換えない。
   battleFinished(result) {
     if (!this.current || !result) return null;
-    const summary = result.chainSummary || null;
+    const legacySummary = result.chainSummary || null;
     const timeline = Array.isArray(result.timeline) ? result.timeline : [];
     this.current.chainBattles += 1;
 
@@ -231,14 +243,36 @@ const KPI = {
         (this.current.triggerKinds[ability.key] || 0) + 1;
     }
 
-    const depth = (summary && summary.maxChain) || 0;
+    // **記録定義バージョンはラン開始時に固定したものを維持する。**
+    // 戦闘のたびに Chain.RECORDED_VERSION を読み直すと、ラン途中で切替コミットを跨いだときに
+    // 1ランの中でV1とV2の値が混ざる。混ざった時点でそのランの chainMax は
+    // どちらの定義でもない値になり、後から分離できない。
+    // （current が無い＝ラン外の呼び出しは先頭の早期returnで弾いている）
+    if (!Number.isFinite(this.current.chainDefVersion)) this.current.chainDefVersion = 1;
+
+    const v2 = this.current.chainDefVersion >= 2 ? this.chainApi().summarize(timeline) : null;
+    const depth = v2 ? v2.maxDepth : ((legacySummary && legacySummary.maxChain) || 0);
     this.current.chainMax = Math.max(this.current.chainMax, depth);
-    const abilities = this.chainAbilities(timeline, summary && summary.deepest);
+    const abilities = v2
+      ? this.normalizedChainAbilities(v2.deepest)
+      : this.chainAbilities(timeline, legacySummary && legacySummary.deepest);
     if (abilities.length > this.current.chainAbilityMax) {
       this.current.chainAbilityMax = abilities.length;
       this.current.chainSample = { depth, abilities };
     }
     return { depth, abilities };
+  },
+
+  // V2の代表経路は宣言と効果が結合済み。生イベントへ戻さず、stepに保存した能力名を読む。
+  normalizedChainAbilities(deepest) {
+    const labels = [], seen = new Set();
+    for (const step of (deepest && Array.isArray(deepest.steps) ? deepest.steps : [])) {
+      const label = (step.declaredBy && step.declaredBy.abilityName) || step.abilityName;
+      if (!label || seen.has(label)) continue;
+      seen.add(label);
+      labels.push(label);
+    }
+    return labels;
   },
 
   speedChanged() {
@@ -288,8 +322,62 @@ const KPI = {
     return entry;
   },
 
+  // ── Chain（正規化API）への依存 ─────────────────────────
+  // 版の判定は Chain.versionOf() **だけ**を使う。ここに写しを置くと、
+  // ブラウザ（グローバル）とNode（CommonJS）で別々の実装が動き、
+  // 片方だけ直したときに静かに食い違う。実際 tools/kpi-report.js は CommonJS で
+  // 動くため、写しがあると Chain.versionOf が一度も呼ばれないまま集計されていた。
+  //
+  //   ブラウザ … index.html が chain.js を先に読むのでグローバルの Chain を使う
+  //   Node     … CommonJS では chain.js の Chain はモジュール内に閉じているので require する
+  //
+  // どちらでも取れなければ**例外で止める**。版を推測して集計を続けない。
+  chainApi() {
+    if (typeof Chain !== "undefined") return Chain;
+    if (typeof require === "function") return require("./chain.js").Chain;
+    throw new Error("KPI: Chain が読み込まれていない（src/core/chain.js を先に読むこと）");
+  },
+
+  // ── CHAIN観測の定義バージョン別集計 ───────────────────
+  // chainMax / chainAbilityMax / chainSample は**数え方が変わると意味が変わる**。
+  // V1（親を持つ因果イベントを種類を問わず+1段）とV2（同じ実効果を一度だけ数える）を
+  // 同じ平均・最大・代表値へ混ぜると、どちらの定義でもない数字ができあがる。
+  // そこで版ごとに分けて返し、混在時に統合値を出さないための材料にする。
+  //
+  // 版の読み出しは Chain.versionOf() ひとつに集約する。
+  // **バージョン欠落・不正な旧KPIはV1として扱い、値を推定変換しない。**
+  //
+  // triggerKinds（発火したトリガーの種類）はここに含めない。段数の数え方ではなく
+  // 「どの能力が連鎖に参加したか」なので、版をまたいでも意味が変わらない。
+  chainStatsByVersion(runs) {
+    const chain = this.chainApi();
+    const groups = new Map();
+    for (const entry of (Array.isArray(runs) ? runs : [])) {
+      const v = chain.versionOf(entry);
+      if (!groups.has(v)) groups.set(v, []);
+      groups.get(v).push(entry);
+    }
+    const num = (entry, key) => Number(entry[key]) || 0;
+    return [...groups.entries()].sort((a, b) => a[0] - b[0]).map(([defVersion, list]) => ({
+      defVersion,
+      runs: list.length,
+      // 平均・最大は**そのバージョンのランだけ**から作る
+      chainMaxMean: list.reduce((t, r) => t + num(r, 'chainMax'), 0) / list.length,
+      chainMaxTop: list.reduce((m, r) => Math.max(m, num(r, 'chainMax')), 0),
+      chainAbilityMean: list.reduce((t, r) => t + num(r, 'chainAbilityMax'), 0) / list.length,
+      chainAbilityTop: list.reduce((m, r) => Math.max(m, num(r, 'chainAbilityMax')), 0),
+      // 代表CHAINも版をまたいで比べない。各版で「いちばん条件をまたいだ1本」を選ぶ
+      sample: list.reduce((best, r) => {
+        if (!r.chainSample || !(r.chainSample.abilities || []).length) return best;
+        return !best || num(r, 'chainAbilityMax') > num(best, 'chainAbilityMax') ? r : best;
+      }, null)
+    }));
+  },
+
   // 端末内のKPIをそのまま取り出す。DevToolsで copy(KPI.export()) して
   // tools/kpi-report.js へ渡す（ゲーム内に分析画面は作らない）
   export() { return JSON.stringify(this.load(), null, 2); },
   reset() { try { localStorage.removeItem(this.KEY); } catch (e) {} this.current = null; this.session.runs = 0; }
 };
+
+if (typeof module !== "undefined") module.exports = { KPI };

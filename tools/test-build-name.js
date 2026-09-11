@@ -6,9 +6,9 @@
 const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
-  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js',
+  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
   'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/run.js'
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -39,6 +39,16 @@ assert(name({}) === '特筆すべきことのない寄せ集め軍団', '空の�
 // ── 3. シナジーを発見していれば、種族より先にそれを名乗る ──────────
 assert(name({ mainRace: 'オーク', maxArmySize: 6, discoveredSynergyIds: ['elite_few'], alert: 14 })
   === '指名手配された精鋭', 'シナジー名が中核になるときは「軍団」を重ねない');
+
+// ── 3b. CHAIN定義版ごとの閾値 ──────────────────────────
+assert(name({ chainDefVersion: 1, maxChain: 5, mainRace: 'ゴブリン', maxArmySize: 8 })
+  === '特筆すべきことのないゴブリン軍団', 'V1は5段ではCHAIN名を付けない');
+assert(name({ chainDefVersion: 1, maxChain: 6, mainRace: 'ゴブリン', maxArmySize: 8 })
+  === '6連鎖を通したゴブリン軍団', 'V1は従来どおり6段からCHAIN名を付ける');
+assert(name({ chainDefVersion: 2, maxChain: 4, mainRace: 'ゴブリン', maxArmySize: 8 })
+  === '4連鎖を通したゴブリン軍団', 'V2は決定済み閾値の4段からCHAIN名を付ける');
+assert(name({ chainDefVersion: 2, maxChain: 3, mainRace: 'ゴブリン', maxArmySize: 8 })
+  === '特筆すべきことのないゴブリン軍団', 'V2は3段ではCHAIN名を付けない');
 
 // ── 4. ほぼ全ランで起きることは名前を占領しない ────────────────
 // 拠点接収と再起はどちらも「普通の行動」なので、他に言うことがあるランでは名乗らない。

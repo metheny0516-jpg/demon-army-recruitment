@@ -15,7 +15,7 @@ const App = {
     Game.state = null;
     if (typeof KPI !== "undefined") KPI.screen(null);
     this.music("title");
-    UI.title(!!Storage.loadRun(), Storage.loadHistory());
+    UI.title(Storage.hasAnySave(), Storage.loadHistory());
   },
 
   // BGMは「軍団そのものが演奏している」ので、場面名だけ渡せば
@@ -32,6 +32,14 @@ const App = {
     Music.update(Game.state, { scene });
   },
 
+  renderMenuContext() {
+    const scene = UI.root && UI.root.dataset.scene;
+    if (scene === "castle" || (scene === "member" && UI.memberFrom === "castle")) {
+      return UI.castle(UI.castleTab);
+    }
+    return this.render();
+  },
+
   report(expression, text, options = {}) {
     if (typeof MormoScene === "undefined") return;
     MormoScene.show({ expression, text, ...options });
@@ -41,24 +49,59 @@ const App = {
     const st = Game.state;
     const mission = st && st.selectedMission;
     const foodRisk = st && st.food <= Game.foodNeed();
+    // 包帯の身の者がいれば必ず言う。編成画面で枠が空いている理由が分からないと、
+    // 「なぜか出せない」だけが残る（オーナー試遊で発覚）。序盤の案内より先に組み立てる
+    // ――撤退は1戦目にも起きるので、案内の回だけ黙るわけにはいかない。
+    const injured = ((st && st.roster) || []).filter(m => m.injured > 0);
+    const injuredLine = injured.length
+      ? `${injured.map(m => m.name).join("、")}殿は包帯の身デス。今日は城で。\n` : "";
     if (st && st.generation === 1 && st.turn <= 2) {
-      return this.report("report", st.turn === 1
+      return this.report(injured.length ? "worried" : "report", injuredLine + (st.turn === 1
         ? "並び順が配置デス。先頭ほど狙われやすくなります。\n誰に攻撃を受けてもらうか、能力を見ながら決めてくださいネ。"
-        : "前の戦果を手がかりに、組み合わせを試しましょう。\n能力の条件を作れそうな仲間はいますか？",
+        : "前の戦果を手がかりに、組み合わせを試しましょう。\n能力の条件を作れそうな仲間はいますか？"),
         { kicker: "出撃前の人事", title: "宰相モルモ" });
     }
-    this.report(foodRisk ? "worried" : "report",
+    const culture = Game.armyCulture();
+    const cultureLine = culture ? `\nうちの軍風は『${culture}』デス。無理はなさらず。` : "";
+    this.report(injured.length || foodRisk ? "worried" : "report",
       `${mission ? `作戦は「${mission.missionTitle}」に決まりました。` : "作戦を承りました。"}\n`
+      + injuredLine
       + (foodRisk
-        ? "食料が心細いデス。出撃隊だけでなく、生活部門の配属も見直してくださいネ。"
-        : "誰を戦わせ、誰に城と暮らしを任せるか――魔王様、最後の人事をお願いします！"),
+        ? "食料が心細いデス。出撃隊だけでなく、留守番の顔ぶれも見直してくださいネ。"
+        : "誰を戦わせ、誰に城と暮らしを任せるか――魔王様、最後の人事をお願いします！")
+      + cultureLine,
       { kicker: "作戦決定", title: "宰相モルモ・出撃前報告" });
+  },
+
+  // 縁の応募者が混ざっているとき、モルモがそれとなく漏らす一言（仕様4.2）。
+  bondNote() {
+    const applicants = (Game.state && Game.state.applicants) || [];
+    // 叩き上げ：終盤に来た低ティア。数字は出さず、顔つきの話にする。
+    const veteran = applicants.find(m => m.veteran);
+    const veteranLine = veteran ? `\n${veteran.name}殿、小柄ですが歴戦の顔デス。` : "";
+    const applicant = applicants.find(m => m.bond);
+    if (!applicant) return veteranLine;
+    const relic = applicant.relicId ? Game.relicOf(applicant.relicId) : null;
+    return veteranLine
+      + `\n……この者、${applicant.bond.name}殿の話ばかりしますネ。`
+      + (relic ? `\n${applicant.bond.name}殿の${relic.name}を持っていマス。どこで拾ったのやら。` : "");
   },
 
   battleReport() {
     const st = Game.state;
     const b = st && st.lastBattle;
     if (!b) return;
+    // 幕替わり。勇者戦は終わりではなく幕切れなので、通常の勝利報告の**前に**一枚挟む。
+    // 起きなかった決着・旧セーブには `actAdvance` が無いので、そのときは何も出ない。
+    if (b.actAdvance) {
+      const by = b.actAdvance.by;
+      return this.report("report",
+        (by === "conquest"
+          ? `王都は落ちましたデス！ ……ですが王は隣国へ逃げ、援軍を呼んだそうデス。`
+          : `勇者は退きましたデス！ ……ですが、隣国の援軍を連れて戻るでしょう。`)
+        + `\n魔王様、第${b.actAdvance.to}幕デス。まだ終わりません。`,
+        { kicker: "幕替わり", title: "宰相モルモ" });
+    }
     if (st.phase === "clear") {
       return this.report("joy", `${b.army}を撃破――人間界制圧デス！\n魔王様、この軍団の歴史を刻みましょう！`,
         { kicker: "最終戦果報告", title: "宰相モルモ" });
@@ -69,7 +112,7 @@ const App = {
     }
     if (st.phase === "defeat") {
       return this.report("panic",
-        `${b.army}に敗北しました……！\nですが、まだ一度だけ時を巻き戻せます。編成を変えて再起しましょう、魔王様！`,
+        `${b.army}に敗れ、軍も金庫も空になりました……！\nですが、まだ一度だけ時を巻き戻せます。魔王様、いかがいたしましょう！`,
         { kicker: "緊急戦況報告", title: "宰相モルモ" });
     }
     const work = st.lastDepartmentReport || {};
@@ -80,9 +123,47 @@ const App = {
       : work.facilityAfter > work.facilityBefore
         ? `さらに施設が完成！ ${Game.facilityInfo().name}が次の出撃隊を支えます！`
         : `現在、食料${st.food}・建材${st.materials}・施設Lv.${st.facilityLevel}デス。`;
-    this.report(expression,
-      `${b.army}を撃退しました！ 戦果を確認してください。\n${workText}`,
-      { kicker: "戦闘・勤務報告", title: "宰相モルモ" });
+    // 撤退は勝利ではない。phase === "result" を勝利と決めつけると
+    // 「退いたのに撃退しました！」というウソの報告になる（オーナー試遊で発覚）。
+    // 防衛戦の勝敗は、既定の「撃退しました！」より必ず先に見る（同じ穴）。
+    let mExpression, mText, mKicker;
+    if (b.defense) {
+      if (b.defended) {
+        mExpression = "joy";
+        mText = `守りましたデス！ 王国は当分おとなしいはず\n${workText}`;
+        mKicker = "防衛戦・勤務報告";
+      } else {
+        mExpression = "worried";
+        mText = `……蔵が、荒らされました\n${workText}`;
+        mKicker = "防衛戦・勤務報告";
+      }
+    } else if (b.wiped) {
+      mExpression = "worried";
+      mText = `${b.army}に……全員、戻りませんでした。\n${st.roster.length ? "城の者で、立て直しましょう。" : "募集を、かけ直しましょう。"}`;
+      mKicker = "壊滅・勤務報告";
+    } else if (b.lostOnPoints) {
+      const carried = (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name);
+      mExpression = "worried";
+      mText = `押し返されました。${carried.length ? `${carried.join("、")}殿は担いで戻りました。` : ""}\n${workText}`;
+      mKicker = "敗走・勤務報告";
+    } else if (b.retreated) {
+      const carried = (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name);
+      mExpression = "worried";
+      mText = `${b.army}から退きました。${carried.length ? `${carried.join("、")}は生きています。` : ""}`
+        + `報酬はありません。\n${workText}`;
+      mKicker = "撤退・勤務報告";
+    } else {
+      mExpression = expression;
+      mText = `${b.army}を撃退しました！ 戦果を確認してください。\n${workText}`;
+      mKicker = "戦闘・勤務報告";
+    }
+    // 予告は既存の分岐すべての後に付け足す。ここで一度だけ report する。
+    if (st.counterattack && st.counterattack.pending) {
+      mText += st.counterattack.kind === "hero"
+        ? "\n魔王様。……勇者です。こちらへ来マス"
+        : "\n魔王様、王国が討伐隊を出しました。次は、こちらへ来マス";
+    }
+    this.report(mExpression, mText, { kicker: mKicker, title: "宰相モルモ" });
   },
 
   render() {
@@ -109,7 +190,11 @@ const App = {
     if (typeof Sound !== "undefined") Sound.ui(action);
     switch (action) {
       case "new":
-        Game.newRun(data.king);
+        // 新規は必ずスロットを指定する。中身があるスロットは確認してから上書きする
+        // （「続きから」を押し損ねて消える事故を無くすのが目的）。
+        if (data.slot && !Storage.slotMeta(data.slot).empty
+          && !confirm(`スロット ${data.slot} の魔王軍を消して、新しく始めますか？`)) return;
+        Game.newRun(data.king, data.slot);
         this.render();
         {
           const returning = Game.state.applicants.find(m => m.legacy);
@@ -124,7 +209,7 @@ const App = {
         }
 
       case "continue":
-        if (Game.load()) {
+        if (Game.load(data.slot)) {
           this.render();
           this.report("report", "おかえりなさいませ、魔王様！ 現在の状況から作戦を再開します。",
             { kicker: "作戦再開", title: "宰相モルモ" });
@@ -138,6 +223,53 @@ const App = {
 
       case "history":
         return UI.history(Storage.loadHistory());
+
+      case "exportsave":
+        return UI.saveTransfer(data.slot, "export", Storage.exportRun(data.slot));
+
+      case "importsave":
+        return UI.saveTransfer(data.slot, "import", "");
+
+      case "copysave": {
+        const area = document.querySelector(".save-text");
+        if (!area) return;
+        area.select();
+        if (navigator.clipboard) navigator.clipboard.writeText(area.value).catch(() => {});
+        return;
+      }
+
+      case "dosave": {
+        const area = document.getElementById("save-import");
+        if (Game.importRun(data.slot, area ? area.value : "")) return this.showTitle();
+        return this.report("worry", "読めませんデス。書き出した文字列をそのまま貼ってくださいネ。",
+          { kicker: "読み込み", title: "宰相モルモ" });
+      }
+
+      case "deletesave":
+        if (!confirm(`スロット ${data.slot} の魔王軍を消しますか？ 戻せません。`)) return;
+        Storage.clearRun(data.slot);
+        return this.showTitle();
+
+      case "records":
+        return UI.castle("records");
+
+      case "backrecords":
+        return this.render();
+
+      case "castle":
+        return UI.castle(data.tab || UI.castleTab || "army");
+
+      case "castletab":
+        return UI.castle(data.tab);
+
+      case "backcastle":
+        return this.render();
+
+      case "member":
+        return UI.memberDetail(data.uid ? Number(data.uid) : null, data.index);
+
+      case "closemember":
+        return UI.memberFrom === "castle" ? UI.castle(UI.castleTab) : this.render();
 
       case "title":
         return this.showTitle();
@@ -213,19 +345,19 @@ const App = {
 
       case "up":
         Game.moveDeployed(Number(data.uid), -1);
-        return this.render();
+        return this.renderMenuContext();
 
       case "down":
         Game.moveDeployed(Number(data.uid), 1);
-        return this.render();
+        return this.renderMenuContext();
 
       case "front":
         Game.moveDeployedToFront(Number(data.uid));
-        return this.render();
+        return this.renderMenuContext();
 
       case "toggledeploy":
         Game.toggleDeploy(Number(data.uid));
-        return this.render();
+        return this.renderMenuContext();
 
       case "assigndepartment":
         Game.assignDepartment(Number(data.uid), data.department);
@@ -252,11 +384,14 @@ const App = {
         return this.render();
 
       case "fire":
+        if (data.confirm === "1" && !window.confirm("この者を解雇しますか？ 城の記録には残ります。")) return;
         Game.fire(Number(data.uid));
-        return this.render();
+        return this.renderMenuContext();
 
       case "deploy": {
-        const out = Game.deploy();
+        // offerRetreat を渡すのは UI だけ。提案が出た戦闘では決着が保留され、
+        // BattleScene が「続ける／退く」を聞いてから Game.settleBattle() が決着させる。
+        const out = Game.deploy({ offerRetreat: true });
         if (!out) return;
         this.pendingBattle = out;
         return UI.battle(out.result, out.stageData);
@@ -297,7 +432,7 @@ const App = {
               : "この魔王軍の歩みは、次の世代のために魔界史へ残しますネ。",
             { kicker: "最終報告", title: "宰相モルモ" });
         }
-        return this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。",
+        return this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
           { kicker: "次期採用報告", title: "宰相モルモ" });
 
       case "eventpick":
@@ -309,14 +444,22 @@ const App = {
       case "eventdone":
         Game.nextRecruit();
         this.render();
-        return this.report("welcome", "城内も落ち着きました。次の応募者を面接しましょう！",
+        return this.report("welcome", "城内も落ち着きました。次の応募者を面接しましょう！" + this.bondNote(),
           { kicker: "人事再開", title: "宰相モルモ" });
 
       case "nextrecruit":
         Game.nextRecruit();
         this.render();
-        return this.report("welcome", "次の応募者をお連れしました。今の軍団に足りない役割を探しましょう！",
+        return this.report("welcome", "次の応募者をお連れしました。今の軍団に足りない役割を探しましょう！" + this.bondNote(),
           { kicker: "採用報告", title: "宰相モルモ" });
+
+      case "giverelic":
+        Game.giveRelic(data.relic, Number(data.uid));
+        return this.renderMenuContext();
+
+      case "storerelic":
+        Game.storeRelic(data.relic);
+        return this.renderMenuContext();
 
       case "retry":
         Game.retry();

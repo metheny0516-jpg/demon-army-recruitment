@@ -1,9 +1,12 @@
 // 尺の圧縮が「通常攻撃と無反応区間」だけに掛かり、事件は縮まないこと（実機・DOMあり）。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
+const { autoDismissMormo } = require('./helpers.js');
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  // 尺の完走を測る試験なので、モルモの確認は人の代わりに即送る。
+  await autoDismissMormo(page);
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
@@ -42,10 +45,10 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     };
   });
 
-  if (measured.compressScale !== 1) errors.push('長期戦が自動で圧縮された');
+  if (!(measured.compressScale < 1)) errors.push('90発の長期戦が圧縮されていない');
   if (!(measured.compressScale >= 0.45)) errors.push('圧縮が下限より深い');
   if (!measured.protectedScales.every(s => s === 1)) errors.push('シナジー・OVERKILL・永久戦死が圧縮されている');
-  if (measured.attackScale !== 1) errors.push('通常攻撃が自動で圧縮された');
+  if (!(measured.attackScale < 1)) errors.push('通常攻撃が圧縮されていない');
   if (measured.shortScale !== 1) errors.push('短い戦闘が圧縮されている');
 
   // 個別倍率で進行が壊れていないこと（x4で最後まで再生して結果ボタンが出る）
@@ -55,7 +58,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     .catch(() => errors.push('最後まで再生できず結果ボタンが出ない'));
   if (!await page.locator('.scene-result').count()) errors.push('決着表示が出ていない');
 
-  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 通常攻撃も連鎖も等速を維持し、x4で最後まで再生できる');
+  console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 事件は縮めず通常攻撃だけを圧縮する');
   await browser.close();
   process.exit(errors.length ? 1 : 0);
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

@@ -5,10 +5,10 @@
 const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
-  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js',
+  'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
   'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
   'src/core/util.js', 'src/core/storage.js', 'src/core/kpi.js', 'src/core/synergy.js',
-  'src/core/battle.js', 'src/core/run.js'
+  'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -37,7 +37,7 @@ assert(KPI.current.quickRetry === false, '最初のランは「60秒以内の再
 // ── 2. ビルド試行は「前戦から変わった戦闘」だけ ────────────────
 const st = Game.state;
 while (st.applicants.length && st.roster.length < 3 && Game.canHire()) Game.hire(0);
-st.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+st.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
 const stage = { missionKind: 'invade' };
 assert(KPI.battleStarted(st, stage) === true, '初戦は必ずビルド試行として数える');
 assert(KPI.battleStarted(st, stage) === false, '同じ編成の連戦は試行に数えない');
@@ -84,7 +84,7 @@ target.traits = traitsBefore;
     if (run.phase === 'mission') Game.selectMission(0);
   }
   if (run.phase === 'preparation') {
-    run.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+    run.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
     if (run.day < Game.OPENING_DAYS) Game.advanceDay(run.day); else Game.prepareOpeningBattle('invade');
   }
   const before = KPI.current.buildAttempts;
@@ -97,7 +97,7 @@ Game.newRun();
 {
   const run = Game.state;
   while (run.hiresLeft > 0 && run.applicants.length && run.roster.length < 3 && Game.canHire()) Game.hire(0);
-  run.activeUids = Game.departmentRoster('combat').slice(0, Game.MAX_DEPLOY).map(m => m.uid);
+  run.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
   KPI.battleStarted(run, { missionKind: 'invade' });
   KPI.battleStarted(run, { missionKind: 'invade' });
 }
@@ -127,6 +127,9 @@ assert(KPI.current.mergesRefused === 1, '合体を断った回数を数える（
 // 手組みのタイムラインを渡し、「発火したトリガー種類」と
 // 「代表CHAINを構成した異なる能力数」が因果メタデータだけから導出されることを固定する。
 {
+  // このブロックは既存V1 KPIの互換契約を固定する。V2の正規化経路は
+  // test-kpi-chain-version.js が別に確認する。
+  KPI.current.chainDefVersion = 1;
   const timeline = [
     { eventId: 'e1', type: 'attack', chainId: 'e1', chainDepth: 1 },
     { eventId: 'e2', type: 'overkill', parentEventId: 'e1', chainId: 'e1', chainDepth: 2, percent: 140, rank: 'OVERKILL' },

@@ -104,6 +104,99 @@ const MormoScene = {
     } else this.close();
   },
 
+  // 戦闘中の一言。試遊では自動で消えると内容を認識する前に戦闘へ戻ってしまったため、
+  // 明示的な確認ボタンを持つ。停止・再開そのものは呼び出し側（BattleScene）が担う。
+  // 呼び出し側は1戦闘1回に制限する責任も持つ。
+  // spotlight の事実を、モルモの声にする（D1）。
+  //
+  // 戦果の1文（UI.spotlightSentence）とは**別の声**であって、同じ文の焼き直しではない。
+  // 戦果は記録として事実を書き、モルモは現場から野次を飛ばす。ただし
+  // **どちらも同じ spotlight の事実からしか作らない**ので、片方だけ嘘になることはない。
+  // 差し込む語彙は MORMO_SPOTLIGHT_LINES（data）が持ち、埋めるのはここ1か所。
+  spotlightLine(spotlight, avoid) {
+    if (!spotlight || !spotlight.origin || !spotlight.actor) return null;
+    if (typeof MORMO_SPOTLIGHT_LINES === "undefined") return null;
+    // 同じ人が起点と反応を兼ねている回は「AがBを動かした」と言えない。
+    // 名前を2つ並べると嘘になるので、この声は出さない（戦果の1文は別の言い方で出る）。
+    if (spotlight.sameActor) return null;
+    const set = MORMO_SPOTLIGHT_LINES[spotlight.kind] || MORMO_SPOTLIGHT_LINES.fallback;
+    if (!set || !set.lines.length) return null;
+    const pool = set.lines.filter(line => line !== avoid);
+    const template = (pool.length ? pool : set.lines)[Math.floor(Math.random() * (pool.length || set.lines.length))];
+    const text = template
+      .replace(/\{origin\}/g, spotlight.origin.name || "どなたか")
+      .replace(/\{actor\}/g, spotlight.actor.name || "どなたか")
+      .replace(/\{target\}/g, (spotlight.target && spotlight.target.name) || "相手");
+    return { expression: set.expression, text, template };
+  },
+
+  aside(options = {}) {
+    if (typeof document === "undefined") return null;
+    const host = options.host || document.getElementById("scene");
+    if (!host) return null;
+    this.clearAside(host);
+    const expression = this.EXPRESSIONS.includes(options.expression) ? options.expression : "report";
+    // speaker を渡すと、モルモではなく本人が話す（遅刻したオークの「待たせたな」など）。
+    // 顔は本人の履歴書絵。無ければ枠ごと畳む。
+    const speaker = options.speaker || null;
+    const box = document.createElement("div");
+    const dense = Array.isArray(options.choices) && options.choices.length >= 3;
+    box.className = `mormo-aside mormo-aside-${expression}${speaker ? " mormo-aside-unit" : ""}${dense ? " mormo-aside-dense" : ""}`;
+    box.setAttribute("role", "dialog");
+    box.setAttribute("aria-modal", "true");
+    box.setAttribute("aria-label", speaker ? `${speaker.name}の一言` : "宰相モルモからの戦況報告");
+    // 立ち絵は512pxの全身像。丸く抜くと全身が縮んで表情が読めないので、
+    // 枠で切り抜いて顔だけを見せる（オーナー試遊の指摘）。倍率と位置はCSS側。
+    const faceSrc = speaker ? speaker.src : `assets/mormo/${expression}.webp`;
+    const faceName = speaker ? speaker.name : "宰相モルモ";
+    box.innerHTML = `${faceSrc ? `<span class="mormo-aside-face"><img class="mormo-aside-portrait"
+        src="${U.esc(faceSrc)}" alt="${U.esc(faceName)}"></span>` : ""}
+      <div class="mormo-aside-bubble"><b>${U.esc(faceName)}</b><p>${U.esc(String(options.text || ""))}</p>${
+        options.note ? `<small class="mormo-aside-note">${U.esc(String(options.note))}</small>` : ""}
+        ${Array.isArray(options.choices) && options.choices.length
+          ? `<div class="mormo-aside-choices">${options.choices.map((c, i) =>
+            `<button type="button" class="mormo-aside-choice${c.primary ? " primary" : ""}"
+              data-choice="${U.esc(String(c.value))}" data-index="${i}">${U.esc(String(c.label))}</button>`).join("")}</div>`
+          : `<button type="button" class="mormo-aside-continue">${U.esc(String(options.buttonLabel || "戦闘を再開 ▶"))}</button>`}
+      </div>`;
+    const portrait = box.querySelector(".mormo-aside-portrait");
+    // 画像が無い環境では枠ごと畳む（空の丸が残らないようにする）
+    if (portrait) portrait.onerror = () => { const face = portrait.closest(".mormo-aside-face"); (face || portrait).remove(); };
+    host.appendChild(box);
+    void box.offsetWidth;
+    box.classList.add("show");
+    // 選択肢つきの一言（撤退の提案）。押した値を onChoose へ渡す。
+    // 既定フォーカスは primary（今までの挙動＝続ける）。
+    const choices = box.querySelectorAll(".mormo-aside-choice");
+    if (choices.length) {
+      for (const choice of choices) {
+        choice.addEventListener("click", () => {
+          if (!box.isConnected) return;
+          box.remove();
+          if (typeof options.onChoose === "function") options.onChoose(choice.dataset.choice);
+        }, { once: true });
+      }
+      const primary = box.querySelector(".mormo-aside-choice.primary") || choices[0];
+      primary.focus({ preventScroll: true });
+    }
+    const button = box.querySelector(".mormo-aside-continue");
+    if (button) {
+      button.addEventListener("click", () => {
+        if (!box.isConnected) return;
+        box.remove();
+        if (typeof options.onContinue === "function") options.onContinue();
+      }, { once: true });
+      button.focus({ preventScroll: true });
+    }
+    return box;
+  },
+
+  clearAside(host) {
+    const scope = host || (typeof document !== "undefined" && document);
+    if (!scope) return;
+    scope.querySelectorAll(".mormo-aside").forEach(el => el.remove());
+  },
+
   close() {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;

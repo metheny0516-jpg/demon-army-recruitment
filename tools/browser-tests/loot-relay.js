@@ -2,12 +2,15 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const { autoDismissMormo } = require('./helpers.js');
 
 (async () => {
   const browser = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   try {
     for (const [width, speed, reduced] of [[1280, 1, false], [390, 2, false], [390, 4, true]]) {
       const page = await browser.newPage({ viewport: { width, height: 900 }, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+      // 連鎖を最後まで観測する試験なので、モルモの確認は人の代わりに即送る。
+      await autoDismissMormo(page);
       const errors = [];
       page.on('pageerror', e => errors.push(e.message));
       await page.goto('file://' + process.env.GAME + '/battle-preview.html');
@@ -28,7 +31,7 @@ const path = require('node:path');
           raw: result.timeline.reduce((n, e) => n + BattleScene.durationOf(e), 0) };
       }, speed);
       assert.ok(result.chain >= 6, '実戦エンジンから複数人の連鎖が生まれる');
-      assert.ok(result.planned >= result.raw, '中間も省略・圧縮せず読む間を確保する');
+      assert.ok(result.planned < result.raw, '同じイベント数のまま中間の待ち時間を削る');
       await page.waitForFunction(() => relaySeen.some(e => e.type === 'trait_trigger' && e.sourceId === 'p2'), null, {timeout: 90000});
       if (!reduced) {
         const dir = process.env.SP || '.screenshots';

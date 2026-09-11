@@ -43,7 +43,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
       current: KPI.current ? { speedChanges: KPI.current.speedChanges, logSkips: KPI.current.logSkips,
         reportSkips: KPI.current.reportSkips, buildAttempts: KPI.current.buildAttempts } : null,
       keys: Object.keys(localStorage).sort(),
-      savedRun: JSON.parse(localStorage.getItem('maou_save') || '{}')
+      savedRun: JSON.parse(localStorage.getItem(Storage.slotKey(Storage.activeSlot())) || '{}')
     };
   });
 
@@ -59,7 +59,9 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }
   if (!result.current || result.current.speedChanges !== 2) errors.push('進行中ランのカウンタが増えていない');
   if (!result.keys.includes('maou_kpi')) errors.push('KPIが端末内へ保存されていない: ' + result.keys.join(','));
-  if (result.keys.some(k => !['maou_save', 'maou_history', 'maou_kpi', 'maou_speed', 'maou_sound', 'maou_music'].includes(k))) {
+  // maou_save_1〜3 と maou_active_slot はセーブスロット（2026-09-11）。旧 maou_save は移行で消える。
+  if (result.keys.some(k => !['maou_save', 'maou_save_1', 'maou_save_2', 'maou_save_3', 'maou_active_slot',
+    'maou_history', 'maou_kpi', 'maou_speed', 'maou_sound', 'maou_music'].includes(k))) {
     errors.push('想定外のLocalStorageキーがある: ' + result.keys.join(','));
   }
   for (const key of ['buildAttempts', 'formationChanges', 'speedChanges', 'kpi']) {
