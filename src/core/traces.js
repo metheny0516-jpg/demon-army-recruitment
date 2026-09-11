@@ -15,12 +15,13 @@ const TRACE_KINDS = {
   retired: { label: "引退", template: "{subject}が引退した" },
   ordered: { label: "号令", template: "{subject}に「{data.skill}」と命じた" },
   defended: { label: "防衛", template: "{data.army}から城を守った" },
-  ransacked: { label: "荒らされた", template: "{data.army}に城を荒らされた" }
+  ransacked: { label: "荒らされた", template: "{data.army}に城を荒らされた" },
+  act: { label: "幕", template: "第{data.act}幕が始まった" }
 };
 
 const Traces = {
   MAX: 400,
-  MAX_KINDS: 16,
+  MAX_KINDS: 17,
   protectedKinds: new Set(["fallen", "retreated"]),
 
   record(list, trace) {

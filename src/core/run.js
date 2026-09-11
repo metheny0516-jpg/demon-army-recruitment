@@ -6,7 +6,13 @@ const Game = {
   armyPower(roster) { return roster.reduce((s, m) => s + this.power(m), 0); },
 
   RETRIES_PER_RUN: 1,
-  MAX_CONQUEST: ENEMY_STAGES.length,
+  // 幕ごとの征服上限。**定数ではなく getter**（第一幕8／第二幕14）。
+  // ui.js は Game.MAX_CONQUEST を読むだけなので、読み手は変えなくて済む。
+  get MAX_CONQUEST() {
+    const cap = typeof ACT_STAGE_CAP !== "undefined" ? ACT_STAGE_CAP : null;
+    return (cap && cap[(this.state && this.state.act) || 1]) || ENEMY_STAGES.length;
+  },
+  MAX_ACT: 2,
   MAX_ARMY: 20,
   MAX_DEPLOY: 5,
   EXTRA_HIRE_BASE_COST: 4,
@@ -118,6 +124,10 @@ const Game = {
       pendingBattle: null,
       // 全滅の回数（2026-09-10・再建）
       wipeCount: 0,
+      // 幕の進行（2026-09-11）
+      act: 1,
+      actStartedTurn: 1,
+      actHistory: [],
       // 王国の反撃（2026-09-10）。開幕の値は newRun() の末尾で入れる。
       counterattack: null,
       heroCame: false,
@@ -144,7 +154,7 @@ const Game = {
     // 開幕モードを復活させるなら、この分岐がそのまま最初の反撃になる。
     if (this.state.openingPrototype) {
       const rules = this.counterRules();
-      const stage = ENEMY_STAGES[0];
+      const stage = this.actStages()[0];
       this.state.alert = rules.threshold;
       this.state.counterattack = { pending: true, kind: "punitive", armyName: `${stage.army}討伐隊` };
     }
@@ -298,7 +308,7 @@ const Game = {
     if (!st || typeof st !== "object") return;
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
-      const legacyStage = U.clamp(Number(st.stage) || 1, 1, ENEMY_STAGES.length);
+      const legacyStage = U.clamp(Number(st.stage) || 1, 1, this.actStages().length);
       st.conquest = legacyStage - 1;
       st.turn = legacyStage;
       st.battlesWon = Math.max(0, legacyStage - 1);
@@ -344,6 +354,8 @@ const Game = {
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
       retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {},
+      // 幕の進行（2026-09-11）。旧セーブは第一幕として読む。
+      act: 1, actStartedTurn: 1, actHistory: [],
       // 王国の反撃（2026-09-10）
       counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
       ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false, castleFalls: 0,
@@ -465,7 +477,8 @@ const Game = {
 
   stageData() {
     if (this.state.selectedMission) return this.state.selectedMission;
-    return ENEMY_STAGES[Math.min(this.state.conquest, ENEMY_STAGES.length - 1)];
+    const stages = this.actStages();
+    return stages[Math.min(this.state.conquest, stages.length - 1)];
   },
 
   salaryTotal() {
@@ -905,12 +918,52 @@ const Game = {
 
   // 応募者の質は征服だけでなく経過作戦でも上がる。ただし寄り道だけで
   // 無限に膨張しないよう、従来の8段階を上限にする。
+  // 幕を進める。**ランは終わらない。** 名簿・施設・蔵・伝承・魔王軍レベルは持ち越し、
+  // 警戒だけ 0 に戻る（隣国の援軍は、まだ魔王軍を知らない）。
+  beginAct(next, by, notes) {
+    const st = this.state;
+    const prev = st.act || 1;
+    st.act = next;
+    st.actStartedTurn = st.turn;
+    st.actHistory = st.actHistory || [];
+    st.actHistory.push({ act: prev, by, turn: st.turn });
+    // 新しい敵は魔王軍をまだ知らない。時計は 0 から。
+    st.alert = 0;
+    st.counterattack = null;
+    st.heroCame = false;              // 次の幕の勇者は、幕の最終段階で来る
+    // 征服はそのまま持ち越す（第二幕の進軍は段階9から）
+    st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1);
+    if (notes) {
+      notes.push(by === "conquest"
+        ? `王都は落ちた。だが王は隣国へ逃げ、援軍を呼んだ。——第${next}幕`
+        : `勇者は退いた。だが隣国の援軍を連れて戻るだろう。——第${next}幕`);
+    }
+    this.trace("act", null, null, { act: next, by });
+    return { from: prev, to: next, by };
+  },
+
+  // 今の幕の段階表。**run.js の ENEMY_STAGES 参照は全部これを通す。**
+  // 第一幕は8段、第二幕は14段（第二幕の6段は別配列に置いてあり、ここで初めて繋がる）。
+  actStages() {
+    const act = (this.state && this.state.act) || 1;
+    return act >= 2 && typeof ENEMY_STAGES_ACT2 !== "undefined"
+      ? ENEMY_STAGES.concat(ENEMY_STAGES_ACT2) : ENEMY_STAGES;
+  },
+
+  // 今の幕で応募に来うるテンプレート。第二幕から新種族3体が混ざる。
+  templates() {
+    const act = (this.state && this.state.act) || 1;
+    return act >= 2 && typeof MONSTER_TEMPLATES_ACT2 !== "undefined"
+      ? MONSTER_TEMPLATES.concat(MONSTER_TEMPLATES_ACT2) : MONSTER_TEMPLATES;
+  },
+
   campaignLevel() {
     const st = this.state;
     // ターン側の係数は data に置く（MONSTER_RULES.levelPerTurn）。0.75 のままだと
     // ターン10で最終段階に達し、敵を連動させたときに征服2で聖騎士団が来る。
     const perTurn = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.levelPerTurn) || 0.5;
-    return U.clamp(Math.max(st.conquest + 1, Math.ceil(st.turn * perTurn)), 1, ENEMY_STAGES.length);
+    // 上限は幕の征服上限（第二幕では14まで伸びる）
+    return U.clamp(Math.max(st.conquest + 1, Math.ceil(st.turn * perTurn)), 1, this.MAX_CONQUEST);
   },
 
   // 魔王軍レベル。campaignLevel() の別名で、中身は同じ一つの値。
@@ -963,16 +1016,17 @@ const Game = {
     // 征服段階は「どこまで攻め落としたか（クリア判定）」の意味だけ残す。
     // 通常作戦の敵の段階は**征服度だけ**で決める（2026-09-10）。時間では上がらない。
     // 時間の圧力は警戒度＝王国の反撃（防衛戦は下で魔王軍レベル基準に置き換える）。
-    let baseIndex = U.clamp(st.conquest + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1);
+    const stages = this.actStages();
+    let baseIndex = U.clamp(st.conquest + type.enemyTierOffset, 0, stages.length - 1);
     // 防衛戦（王国の反撃）。討伐隊は段階7（聖騎士団）まで。勇者は段階8で固定。
     const counter = type.id === "defend" ? (st.counterattack || {}) : null;
     if (counter) {
       // 討伐隊は時間で厚くなる（魔王軍レベル基準）。段階7（聖騎士団）まで。勇者は段階8で固定。
       baseIndex = counter.kind === "hero"
-        ? ENEMY_STAGES.length - 1
-        : Math.min(U.clamp(this.armyLevel() - 1 + type.enemyTierOffset, 0, ENEMY_STAGES.length - 1), ENEMY_STAGES.length - 2);
+        ? this.MAX_CONQUEST - 1
+        : Math.min(U.clamp(this.armyLevel() - 1 + type.enemyTierOffset, 0, stages.length - 1), stages.length - 2);
     }
-    const base = ENEMY_STAGES[baseIndex];
+    const base = stages[baseIndex];
     const formations = [
       { id: "standard", name: "基本隊列", hint: "王国軍の標準的な隊列。", units: base.units },
       ...(base.variants || [])
@@ -1244,13 +1298,16 @@ const Game = {
     const favored = new Set((this.activeLesson() || {}).favor || []);
     // 指名求人：条件に合う者へ重みを寄せる。確定ではないので「出したのに来ない」も起きる。
     const brief = this.activeBrief();
-    const weights = MONSTER_TEMPLATES.map(t => {
+    const pool = this.templates();
+    const weights = pool.map(t => {
       let w;
       // 低ティアはレベル5以上で来ること自体が珍しくなる（2 → 1）。
       // 珍しくするのは「来たときに歴戦の顔をしている」ための下ごしらえ。
       if (t.tier === 1) w = level <= 3 ? 6 : (level <= 4 ? 2 : 1);
       else if (t.tier === 2) w = level <= 2 ? 2 : 5;
       else w = level <= 2 ? 0.5 : (level <= 4 ? 2 : 5);
+      // 第二幕の新顔は、来たことが分かる程度に寄せる（tier 3 と同じ枝のままで少し重く）
+      if (t.tier >= 4 && (st.act || 1) >= 2) w *= 1.5;
       if (favored.has(t.id)) w *= 3;
       if (brief) {
         // 金を払って条件を出した以上は寄る。ただし外れも残す。
@@ -1264,11 +1321,11 @@ const Game = {
     });
     const total = weights.reduce((a, b) => a + b, 0);
     let r = U.rand() * total;
-    let tpl = MONSTER_TEMPLATES.find(t => t.id === forcedTplId) || MONSTER_TEMPLATES[0];
+    let tpl = pool.find(t => t.id === forcedTplId) || pool[0];
     if (!forcedTplId) {
-      for (let i = 0; i < MONSTER_TEMPLATES.length; i++) {
+      for (let i = 0; i < pool.length; i++) {
         r -= weights[i];
-        if (r <= 0) { tpl = MONSTER_TEMPLATES[i]; break; }
+        if (r <= 0) { tpl = pool[i]; break; }
       }
     }
     // 進行補正：後から来る応募者ほど強い。伸び率は data（MONSTER_RULES.applicantGrowth）。
@@ -1644,7 +1701,7 @@ const Game = {
       || rank !== "soldier" || (entry.record.carried || 0) >= 1;
     if (!notable) return null;
     // 種族固有の特性は「その人のもの」ではないので品に宿らない。
-    const tpl = MONSTER_TEMPLATES.find(t => t.id === monster.tplId) || {};
+    const tpl = this.templates().find(t => t.id === monster.tplId) || {};
     const fixed = new Set((tpl.fixedTraits || [tpl.fixedTrait]).filter(Boolean));
     const candidates = (entry.traits || []).filter(id => !fixed.has(id) && TRAITS[id]);
     if (!candidates.length) return null;         // 宿るものが無ければ品も残らない
@@ -2251,6 +2308,8 @@ const Game = {
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
     let wipedFallen = null, wipedRelics = null;
+    // 幕替わり（表示用）。起きなかった決着・旧セーブには無い。
+    let actAdvance = null;
     // 防衛戦（王国の反撃）。勇者戦かどうかは段階で決まる。
     const isDefense = this.isDefenseBattle(stageData);
     const heroDefense = isDefense && (st.counterattack || {}).kind === "hero";
@@ -2305,13 +2364,17 @@ const Game = {
         st.turn += 1;
         st.phase = "result";
         this.genApplicants();
-      } else if (heroDefense) {
-        // 魔王城で勇者を退けた。攻めた着地と同じ「クリア」だが、辿り方が違う。
-        st.clearedBy = "defense";
-        st.phase = "clear";
-      } else if (st.conquest >= this.MAX_CONQUEST) {
-        st.clearedBy = "conquest";
-        st.phase = "clear";   // 記録の確定は deploy() の末尾でまとめて行う
+      } else if (heroDefense || st.conquest >= this.MAX_CONQUEST) {
+        // 幕の着地。魔王城で勇者を退けた（待った）か、王都まで落とした（攻めた）か。
+        // **最後の幕でなければ、ランは終わらずに次の幕が始まる。**
+        st.clearedBy = heroDefense ? "defense" : "conquest";
+        if ((st.act || 1) < this.MAX_ACT) {
+          actAdvance = this.beginAct((st.act || 1) + 1, st.clearedBy, notes);
+          st.phase = "result";
+          this.genApplicants();        // 新しい顔を見せる（未決U1の既定）
+        } else {
+          st.phase = "clear";          // 記録の確定は deploy() の末尾でまとめて行う
+        }
       } else {
         st.phase = "result";
         this.genApplicants();
@@ -2376,6 +2439,8 @@ const Game = {
       victory: result.victory,
       // 経験で身についた共通特性（表示用）。身につかなかった決着・旧セーブには無い。
       earned: earnedTraits,
+      // 幕替わり（表示用）。結果画面とモルモの報告が読む。
+      actAdvance,
       // 防衛戦（王国の反撃）の結末（表示用）。
       defense: isDefense,
       castleFell,
@@ -2706,11 +2771,14 @@ const Game = {
     if (alert < rules.threshold - 1) return null;
     if (alert < rules.threshold && !U.chance(rules.nearChance)) return null;
     // 魔王軍レベルが上限に達していれば、来るのは討伐隊ではなく勇者。ラン中1回だけ。
-    const hero = this.armyLevel() >= ENEMY_STAGES.length && !st.heroCame;
+    const stages = this.actStages();
+    // 勇者は幕の最終段階で来る（第一幕は段階8、第二幕は段階14）。ラン中1回だけ。
+    const hero = this.armyLevel() >= this.MAX_CONQUEST && !st.heroCame;
     if (!hero && st.heroCame) return null;   // 勇者を退けた後はもう来ない
     const stage = hero
-      ? ENEMY_STAGES[ENEMY_STAGES.length - 1]
-      : ENEMY_STAGES[U.clamp(this.armyLevel(), 0, ENEMY_STAGES.length - 2)];
+      ? stages[this.MAX_CONQUEST - 1]
+      // 第二幕の討伐隊は段階9以上から来る（もう見習い冒険者は寄越さない）
+      : stages[U.clamp(this.armyLevel(), st.act >= 2 ? 8 : 0, this.MAX_CONQUEST - 2)];
     st.counterattack = {
       pending: true,
       kind: hero ? "hero" : "punitive",
@@ -2959,7 +3027,7 @@ const Game = {
     const topDealer = contribution.reduce((b, c) => (c.dealt > 0 && (!b || c.dealt > b.dealt)) ? c : b, null);
     const topTanker = contribution.reduce((b, c) => (c.taken > 0 && (!b || c.taken > b.taken)) ? c : b, null);
     for (const c of contribution) {
-      const tpl = MONSTER_TEMPLATES.find(t => t.id === c.tplId);
+      const tpl = this.templates().find(t => t.id === c.tplId);
       const v = (tpl && tpl.voices) || SPECIAL_MONSTER_VOICES[c.tplId];
       if (!v) { c.voice = null; continue; }
       let key;
@@ -3134,7 +3202,7 @@ const Game = {
   // 過去の英雄は能力ではなく「名前と経歴」を継ぐ。毎ラン一度だけ低確率で戻る。
   chooseLegacyReturn(history) {
     const candidates = (history || []).map(r => r && r.hallOfFame).filter(h =>
-      h && h.tplId && MONSTER_TEMPLATES.some(t => t.id === h.tplId)
+      h && h.tplId && this.templates().some(t => t.id === h.tplId)
     );
     return candidates.length > 0 && U.chance(0.25) ? { ...U.pick(candidates) } : null;
   },
@@ -3449,9 +3517,15 @@ const Game = {
       mainRace,
       region: cleared ? "王都（制圧）" : finalMission.region,
       cause: st.castleFell ? "城陥落"
-        : cleared ? "人間界を征服し引退" : `${finalMission.army}に敗北`,
+        : cleared ? ((st.act || 1) >= 2
+          ? `第${st.act}幕・${st.clearedBy === "defense" ? "勇者撃退" : "王都攻略"}`
+          : "人間界を征服し引退")
+        : `${finalMission.army}に敗北`,
       // どう終わったか：攻めた（王都で勇者に勝つ）／待った（魔王城で勇者を退ける）。
       clearedBy: cleared ? (st.clearedBy || "conquest") : null,
+      // どの幕まで行ったか。ui.js の魔界史は触らないので、cause の文字列に幕を含める。
+      act: st.act || 1,
+      actHistory: (st.actHistory || []).map(a => ({ ...a })),
       defenses: { ...(st.defenses || { won: 0, lost: 0 }) },
       retriesUsed: st.retriesUsed || 0,
       fallenTotal: st.fallenTotal || 0,

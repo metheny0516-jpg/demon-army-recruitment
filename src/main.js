@@ -83,6 +83,17 @@ const App = {
     const st = Game.state;
     const b = st && st.lastBattle;
     if (!b) return;
+    // 幕替わり。勇者戦は終わりではなく幕切れなので、通常の勝利報告の**前に**一枚挟む。
+    // 起きなかった決着・旧セーブには `actAdvance` が無いので、そのときは何も出ない。
+    if (b.actAdvance) {
+      const by = b.actAdvance.by;
+      return this.report("report",
+        (by === "conquest"
+          ? `王都は落ちましたデス！ ……ですが王は隣国へ逃げ、援軍を呼んだそうデス。`
+          : `勇者は退きましたデス！ ……ですが、隣国の援軍を連れて戻るでしょう。`)
+        + `\n魔王様、第${b.actAdvance.to}幕デス。まだ終わりません。`,
+        { kicker: "幕替わり", title: "宰相モルモ" });
+    }
     if (st.phase === "clear") {
       return this.report("joy", `${b.army}を撃破――人間界制圧デス！\n魔王様、この軍団の歴史を刻みましょう！`,
         { kicker: "最終戦果報告", title: "宰相モルモ" });

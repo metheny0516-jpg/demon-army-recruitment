@@ -167,9 +167,11 @@ function fightDefense(st) {
     `勇者戦は段階8（${st.missionOffers[0].baseStage}）`);
   Game.selectMission(0); st.phase = "formation";
   Game.deploy();
-  assert(st.phase === "clear", `勇者を退ければクリア（${st.phase}）`);
+  // 第一幕の着地はランの終わりではなく第二幕の始まり（2026-09-11）。
+  assert(st.phase === "result", `勇者を退けても続く（${st.phase}）`);
   assert(st.clearedBy === "defense", '待った着地として記録される');
-  assert(st.heroCame === true, '勇者は来た');
+  assert(st.act === 2 && st.lastBattle.actAdvance, `第二幕が始まる（${st.act}）`);
+  assert(st.heroCame === false, '勇者はまた来る（heroCame は戻る）');
 }
 {
   // 勇者に負けても終わりではない（2026-09-11）。荒らされ、勇者は去り、魔王軍レベルは保たれ、また来る

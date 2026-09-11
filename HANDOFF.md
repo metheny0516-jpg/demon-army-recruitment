@@ -33,8 +33,15 @@
   **幕の進行の仕様（次、Claude）で扱うこと**：`MONSTER_TEMPLATES_ACT2` の解禁（`rollApplicant` は tier 3/4 を区別しない）、
   `ENEMY_STAGES_ACT2` の接続と `MAX_CONQUEST` の幕ごとの上限、勇者戦後の切り替え場面、討伐隊の下限、`rampage` の autoLimit
   （modDealt の受け身技には効かない）、突進の押し下げが「ラウンドの終わり」になっている点（未決U3）。
-- **Opus**：`docs/SPEC_ACT_PROGRESS_2026-09-11.md` — 幕の進行（run.js）。第一幕の着地で終わらず第二幕へ。段階表・征服上限・
-  応募テンプレートを幕で切り替え、討伐隊の下限、勇者（再）は段階14。UI は main.js の battleReport 1分岐だけ。
+- 済み：**幕の進行**（Opus、`docs/SPEC_ACT_PROGRESS_2026-09-11.md`）。第一幕の着地（勇者撃退／王都攻略）でランは終わらず第二幕へ。
+  `st.act` / `st.actHistory` / `st.actStartedTurn`、`Game.actStages()`・`Game.templates()`・`Game.beginAct()`、
+  `MAX_CONQUEST` は**定数ではなく幕ごとの getter**（`ACT_STAGE_CAP` 1:8 / 2:14）。第二幕の討伐隊は段階9以上、勇者（再）は段階14、
+  tier4 の応募重み ×1.5。`ENEMY_STAGES` / `MONSTER_TEMPLATES` の直参照は run.js から一掃した（残るのは getter 内の退避だけ）。
+  `phase === "clear"` は**第二幕の着地でしか起きない**。魔界史の cause は「第2幕・勇者撃退／王都攻略」。test-act-progress 48件。
+  **城陥落はもう終わりではない**ので、`castleFell` で `gameover` を期待するテストを書かないこと（test-counterattack を直した）。
+  sim 50：0%の戦略なし、クリア率 94〜100%、平均勝利 16〜25戦（＝ほぼ全ランが幕替わりを越えて第二幕を着地している）。
+  **残り**：第三幕（段階15〜18）は未実装（`MAX_ACT: 2`）。第二幕の技6つは `ctx.trigger()` を呼ばないままなので、
+  因果へ繋ぐなら chain.js の CLASSIFY に6件足すこと。U3 `rampage` の autoLimit は modDealt の受け身技には効かない（仕様どおり放置）。
 - 済み：**新種族3の絵**（CodeX `codex/act2-art` 7コミット、マージ済み）。立ち絵 768×1024・6ポーズ WebP・BATTLE_SPRITES 登録。
   art-coverage / portrait / species（3種）通過。表情差分は無し（任意）。
 
@@ -2673,6 +2680,20 @@ API は `Game.canSeizeStronghold()` / `Game.seizeQuote()` / `Game.seizeStronghol
 ## 2. 壊してはいけない設計の約束
 
 ここを崩すと後で高くつく。理由つきで書く。
+
+### 2-0. 幕（act）の切り替えは `Game` の getter を通す
+
+段階表・応募テンプレート・征服上限は幕で変わる。**データ配列を直接参照しないこと。**
+
+| 欲しいもの | 使うもの | 直接読んではいけないもの |
+|---|---|---|
+| 敵の段階表 | `Game.actStages()` | `ENEMY_STAGES` |
+| 応募テンプレート | `Game.templates()` | `MONSTER_TEMPLATES` |
+| 征服の上限 | `Game.MAX_CONQUEST`（getter） | `ENEMY_STAGES.length` |
+
+`MAX_CONQUEST` は `ACT_STAGE_CAP[st.act]` を引く **getter** である。代入するとプロパティごと壊れる。
+幕を進める入口は `Game.beginAct(next, by, notes)` ただ一つ（警戒・予約・`heroCame` を戻し、段階を引き上げ、履歴を積む）。
+`heroCame` を戻すのはここだけ。決着側で戻すと「勇者が二度来る／二度と来ない」が静かに起きる。
 
 ### 2-1. 戦闘は「計算」と「見せ方」を分離してある
 
