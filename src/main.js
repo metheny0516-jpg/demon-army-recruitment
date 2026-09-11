@@ -201,6 +201,12 @@ const App = {
       case "history":
         return UI.history(Storage.loadHistory());
 
+      case "records":
+        return UI.records();
+
+      case "backrecords":
+        return this.render();
+
       case "title":
         return this.showTitle();
 

@@ -3199,3 +3199,17 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-battle .bu-pop { z-index: 8; }
 .game-scene-battle .fnum { font-size: 17px; }
 .game-scene-battle .fnum.big { font-size: 24px; }
+
+/* ── 城の記録：日誌・蔵・去った者を一冊として読む ── */
+.records-screen { max-width: 920px; margin: 0 auto; }
+.records-screen > h1 { margin-bottom: 18px; }
+.records-section {
+  margin: 16px 0; padding: 18px;
+  border: 1px solid #665038; border-radius: 8px;
+  background: rgba(28, 21, 18, .78);
+}
+.records-section > h2 { margin: 0 0 12px; color: #f0cc86; }
+.journal-day + .journal-day { margin-top: 16px; border-top: 1px solid #594731; padding-top: 14px; }
+.journal-day h3 { margin: 0 0 7px; color: #d5ba87; font-size: 15px; }
+.journal-lines { margin: 0; padding-left: 1.4em; line-height: 1.75; }
+.records-back { position: sticky; bottom: 10px; margin-top: 18px; }
