@@ -40,8 +40,8 @@
   `phase === "clear"` は**第二幕の着地でしか起きない**。魔界史の cause は「第2幕・勇者撃退／王都攻略」。test-act-progress 48件。
   **城陥落はもう終わりではない**ので、`castleFell` で `gameover` を期待するテストを書かないこと（test-counterattack を直した）。
   sim 50：0%の戦略なし、クリア率 94〜100%、平均勝利 16〜25戦（＝ほぼ全ランが幕替わりを越えて第二幕を着地している）。
-  **残り**：第三幕（段階15〜18）は未実装（`MAX_ACT: 2`）。第二幕の技6つは `ctx.trigger()` を呼ばないままなので、
-  因果へ繋ぐなら chain.js の CLASSIFY に6件足すこと。U3 `rampage` の autoLimit は modDealt の受け身技には効かない（仕様どおり放置）。
+  **残り**：第三幕（段階15〜18）は未実装（`MAX_ACT: 2`）。第二幕の技は5つが `ctx.trigger()` 済み（CLASSIFY に役あり `f7c2c59`）。
+  暴走（rampage）だけ受け身で trigger 無し。U3 `rampage` の autoLimit は modDealt の受け身技には効かない（仕様どおり放置）。
 - 済み：**新種族3の絵**（CodeX `codex/act2-art` 7コミット、マージ済み）。立ち絵 768×1024・6ポーズ WebP・BATTLE_SPRITES 登録。
   art-coverage / portrait / species（3種）通過。表情差分は無し（任意）。
 
