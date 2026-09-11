@@ -21,6 +21,15 @@
 
 ## 0. 次チャットの開始点（2026-09-03）
 
+### ブランチの整理（2026-09-11・Claude）
+
+- GitHub の既定ブランチ `claude/demon-king-recruitment-game-sapqsx` を作業ブランチ `claude/hero-arrival-tavern-prototype-uy2toh` の
+  内容で更新した（マージ `7c77012`。両者は同一内容）。CodeX の修正が古い既定に落ちた事故（`60b1508`）の再発防止。
+- **以後、CodeX / Opus は作業ブランチから切る**（既定から切っても同内容なので今は問題ないが、次に差が出たら既定を追随させる）。
+- 取り込み済みで不要なリモートブランチ（codex/* 8本と claude/* 9本）は、このセッションからは削除できない（git の削除が
+  プロキシで通らない）。**オーナーが GitHub の Branches 画面で削除するか、CodeX にローカルから `git push origin --delete` させる。**
+  残すもの：`codex/two-wins`（不採用の実験。参照用）、`codex/f-wip`（古い退避。中身が要るか CodeX に確認してから消す）。
+
 ### 次のタスク（2026-09-11・仕様書あり）
 
 - **済み（Opus `9a44f9d`）**：セーブスロット3つ＋ファイル書き出し／読み込み（`docs/SPEC_SAVE_SLOTS_2026-09-11.md`）。オーナーは保留と言ったが
