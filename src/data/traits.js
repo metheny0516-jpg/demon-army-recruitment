@@ -34,7 +34,7 @@ const TRAITS = {
     name: "先制",
     relic: "鈴",
     desc: "ラウンド1のダメージ+30%",
-    order: { label: "先制を仕掛けろ", cost: 1, note: "ラウンドに関係なく先制が乗り、真っ先に動く" },
+    order: { label: "先制をもう一度", cost: 1, note: "ラウンド1限りの先制を、次の一撃にもう一度乗せて真っ先に動く" },
     lines: { order: ["はいっ、参ります！", "一番槍、いただきます！", "誰より早く！"] },
     modDealt(ctx) {
       if (ctx.round === 1 || ctx.ordered) {
@@ -60,7 +60,7 @@ const TRAITS = {
     desc: "20%の確率でダメージ2倍",
     // 号令（戦闘中の個人への指示）。魔王が名指しで命じると、次の一撃で技が必ず出る。
     // 条件の代わりに代償を払う（号令の共通規則は battle.js：与ダメ+50%、次の手番は息切れ）。
-    order: { label: "怪力を出せ", cost: 1, note: "次の一撃が必ず怪力になる" },
+    order: { label: "怪力を必ず", cost: 1, note: "いつもは2割の怪力を、次の一撃で必ず出す" },
     lines: { order: ["おうよ！", "任せろ、魔王様！", "潰す！"] },
     modDealt(ctx) {
       if (ctx.ordered || ctx.rng() < 0.2) {
@@ -221,7 +221,7 @@ const TRAITS = {
     name: "火球",
     relic: "杖",
     desc: "攻撃時、別の敵1体にも50%のダメージ（魔法結社で全体化）",
-    order: { label: "火球を放て", cost: 1, note: "次の火球が敵全体に広がる" },
+    order: { label: "火球を全体に", cost: 1, note: "いつもは別の敵1体の火球を、次は敵全体に広げる" },
     lines: { order: ["承知しました", "詠唱、省きます", "火を、お届けします"] },
     postAttack(ctx) {
       const others = ctx.enemies.filter(u => u.alive && u !== ctx.target);
@@ -275,7 +275,7 @@ const TRAITS = {
     name: "悪戯",
     relic: "悪戯玉",
     desc: "攻撃した敵の攻撃力を1下げる",
-    order: { label: "悪戯を仕込め", cost: 1, note: "次の悪戯で相手の攻撃力を3下げる" },
+    order: { label: "悪戯を強く", cost: 1, note: "いつもは1の悪戯で、次は相手の攻撃力を3下げる" },
     lines: { order: ["ひひっ、任せてよ", "いいの？ 本気でやるよ", "ちょっと痛いかもね"] },
     postAttack(ctx) {
       if (ctx.target.alive && ctx.target.atk > 1) {

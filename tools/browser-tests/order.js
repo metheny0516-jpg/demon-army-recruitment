@@ -77,7 +77,7 @@ async function deployUntilOffer(page, tries = 6) {
     pending: !!Game.state.pendingBattle, phase: Game.state.phase
   }));
   ok(/号令を/.test(offer.text) && /ガロ/.test(offer.text), `モルモが号令を促し、名前を言う（${offer.text}）`);
-  ok(offer.labels.length === 2 && /ガロ/.test(offer.labels[0]) && /怪力を出せ/.test(offer.labels[0]), `名指しのボタン（${offer.labels[0]}）`);
+  ok(offer.labels.length === 2 && /ガロ/.test(offer.labels[0]) && /怪力を必ず/.test(offer.labels[0]), `名指しのボタン（${offer.labels[0]}）`);
   ok(/気合1/.test(offer.labels[0]), '名指しのボタンに気合の消費が出る');
   ok(/任せる/.test(offer.labels[1]) && /任せる/.test(offer.focused || ''), '「任せる」が既定（フォーカス）');
   ok(/息が上がって/.test(offer.note), '代償が添えてある');
@@ -103,7 +103,7 @@ async function deployUntilOffer(page, tries = 6) {
     offers: BattleScene.timeline.filter(e => e.type === 'order_offer').length,
     answered: (BattleScene.timeline.find(e => e.type === 'order_offer') || {}).answered
   }));
-  ok(/魔王「ガロ、怪力を出せ！」/.test(after.log), '戦況記録に魔王の号令が残る');
+  ok(/魔王「ガロ、怪力を必ず！」/.test(after.log), '戦況記録に魔王の号令が残る');
   ok(after.execs === 1 && after.answered === 'p0', '差し替えたタイムラインに order_exec が1回、提案に答えが刻まれる');
   ok(/息が上がっている/.test(after.log) || /敵軍を全滅/.test(after.log), '息切れの手番が出る（その前に勝てば出ない）');
   ok(after.orderCount === 1, `号令の回数が数えられる（${after.orderCount}）`);

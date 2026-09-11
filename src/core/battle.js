@@ -1011,11 +1011,12 @@ const Battle = {
         const candidates = roster.ready;
         if (candidates.length) {
           const answered = orders[round] || null;
-          const names = candidates.map(c => `${c.name}の【${c.skillName}】`).join("、");
+          // 言い方は「号令で何が変わるか」（1段目の技は勝手に出続けるので「出せます」だと命じないと出ないように読める）。
+          const names = candidates.map(c => `${c.name}に「${c.label}」`).join("、");
           const event = emit("order_offer", {
             round, candidates, unready: roster.unready, answered, emphasis: 3,
             enemies: enemyUnits.filter(onField).map(snap),
-            text: `　モルモ「魔王様、号令を。${names}が出せます」`, cls: "mormo"
+            text: `　モルモ「魔王様、号令を。${names}と命じられます」`, cls: "mormo"
           });
           orderOffer = { index: timeline.indexOf(event), round, candidates, answered };
         }

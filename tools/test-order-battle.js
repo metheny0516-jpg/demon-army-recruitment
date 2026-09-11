@@ -49,7 +49,7 @@ const offersOf = r => r.timeline.filter(e => e.type === 'order_offer');
   const offer = offers[0];
   assert(offer && r.orderOffer && r.orderOffer.index === r.timeline.indexOf(offer), 'result.orderOffer.index が提案の位置');
   assert(offer && offer.candidates.length === 1 && offer.candidates[0].unitId === orc.id
-    && offer.candidates[0].skillId === 'brute' && offer.candidates[0].label === '怪力を出せ', '候補は怪力のガロだけ（紙の前衛は号令できない）');
+    && offer.candidates[0].skillId === 'brute' && offer.candidates[0].label === '怪力を必ず', '候補は怪力のガロだけ（紙の前衛は号令できない）');
   assert(offer && offer.answered === null, '答え無しの計算では answered が null');
   // 提案のラウンドは「このラウンドに誰かが倒れた」か「味方が半分を切った」
   const before = r.timeline.slice(0, r.orderOffer.index);
