@@ -3459,37 +3459,51 @@ button.primary::first-letter { color: var(--gold); }
 .hud-slot { font-size: 11px; }
 
 
-/* ── コマンドバトルの指示パネル（2026-09-11） ── */
+/* ── コマンドバトルの指示窓（ロマサガ流、2026-09-12） ──
+   戦場（#scene）の中に浮く。味方の列のすぐ上に据え（bottom は JS が計る）、後ろが透ける。 */
 .command-panel {
-  margin: 10px 0 0; padding: 10px 12px; border: 1px solid #7c6136; border-radius: 10px;
-  background: rgba(24, 17, 28, .96); box-shadow: 0 8px 26px rgba(0, 0, 0, .45);
+  position: absolute; z-index: 6; top: 50%; transform: translateY(-50%); right: 3%; left: 45%;
+  max-width: 360px; margin-left: auto; max-height: 86%; box-sizing: border-box; overflow: auto;
+  padding: 8px 10px 10px; border: 2px solid rgba(232, 189, 104, .85); border-radius: 6px;
+  background: rgba(18, 12, 34, .6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .08);
+  color: #f6e6c2;
 }
-.command-panel .cmd-head { font-size: 15px; margin-bottom: 6px; color: #f6e6c2; }
-.command-panel .cmd-warn { color: #ff9b54; font-weight: bold; }
-.cmd-row { display: grid; gap: 6px; padding: 7px 0; border-top: 1px solid rgba(232, 189, 104, .16); }
-.cmd-row:first-of-type { border-top: 0; }
-.cmd-who { font-size: 14px; color: #f6e6c2; }
-.cmd-who small { color: var(--muted); margin-left: 6px; }
+.command-panel .cmd-head { font-size: 14px; margin-bottom: 6px; line-height: 1.5; }
+.command-panel .cmd-round { display: block; font-size: 11px; color: #cdb98f; letter-spacing: .06em; }
+.command-panel .cmd-head b { font-size: 16px; }
+.command-panel .cmd-head small { color: #d9c9a8; margin-left: 6px; }
+.command-panel .cmd-warn { display: block; color: #ff9b54; font-weight: bold; font-size: 12px; }
 .cmd-spirit { color: #ffd479; letter-spacing: 1px; }
 .cmd-state { color: #e8b45c; }
-.cmd-btns, .cmd-targets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.cmd-targets > span { font-size: 12px; color: var(--muted); margin-right: 2px; }
-.cmd-btn, .cmd-target {
-  padding: 6px 10px; font-size: 13px; border-radius: 7px; border: 1px solid rgba(232, 189, 104, .3);
-  background: rgba(31, 23, 22, .88); color: var(--text); cursor: pointer;
+.cmd-menu { display: grid; gap: 5px; }
+.cmd-btn {
+  display: block; width: 100%; text-align: left; padding: 9px 12px; font-size: 15px; border-radius: 4px;
+  border: 1px solid rgba(232, 189, 104, .35); background: rgba(24, 16, 40, .55); color: #fff; cursor: pointer;
 }
-.cmd-btn small { display: block; font-size: 10px; color: #ffd479; }
+.cmd-btn small { display: inline; margin-left: 8px; font-size: 11px; color: #ffd479; white-space: nowrap; }
 .cmd-btn[disabled] { opacity: .45; cursor: not-allowed; }
-.cmd-btn.on, .cmd-target.on { border-color: var(--gold); background: linear-gradient(180deg, rgba(115, 78, 38, .6), rgba(40, 28, 25, .95)); box-shadow: inset 0 -2px 0 var(--gold); }
-.cmd-target { font-size: 12px; padding: 4px 8px; }
-.cmd-target small { color: var(--muted); }
-.cmd-foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 8px; }
-.cmd-foot .primary { min-width: 140px; }
-#scene.awaiting-commands { box-shadow: inset 0 0 0 2px rgba(232, 189, 104, .35); }
+.cmd-btn.on { border-color: var(--gold); background: linear-gradient(90deg, rgba(232, 189, 104, .38), rgba(232, 189, 104, .08)); }
+.cmd-btn.on::before { content: "▶ "; color: var(--gold); }
+.cmd-pick-hint { font-size: 14px; padding: 4px 0 6px; color: #fff; }
+.cmd-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-items: stretch; margin-top: 8px; }
+.cmd-foot .danger { grid-column: 1 / -1; }
+.cmd-foot .cmd-btn { width: auto; padding: 6px 10px; font-size: 13px; text-align: center; }
+.cmd-foot .small { font-size: 11px; padding: 5px 6px; min-width: 0; white-space: nowrap; }
+#scene.awaiting-commands .bu { filter: brightness(.6); transition: filter .2s; }
+#scene.awaiting-commands .bu.cmd-active { filter: none; z-index: 7; transform: translateY(-6px) scale(1.06); border-color: var(--gold); box-shadow: 0 0 0 2px rgba(232, 189, 104, .6), 0 0 22px rgba(232, 189, 104, .55); }
+#scene.picking-target .bu.cmd-pick { filter: none; cursor: pointer; border-color: #ff8a5c; box-shadow: 0 0 0 2px rgba(255, 138, 92, .55); animation: cmdPick 1s ease-in-out infinite; }
+/* 狙い選び中は細い帯にして上へ寄せ、敵の札を全部見せる */
+#scene.picking-target .command-panel { top: 52px; left: 50%; right: auto; transform: translateX(-50%); width: min(92%, 360px); margin: 0; background: rgba(18, 12, 34, .45); }
+#scene.picking-target .command-panel .cmd-head { display: none; }
+#scene.picking-target .command-panel .cmd-foot { margin-top: 0; }
+@keyframes cmdPick { 0%, 100% { box-shadow: 0 0 0 2px rgba(255, 138, 92, .35); } 50% { box-shadow: 0 0 0 3px rgba(255, 138, 92, .9), 0 0 18px rgba(255, 138, 92, .6); } }
+.cmd-cursor { position: absolute; left: 50%; top: -22px; transform: translateX(-50%); color: var(--gold); font-size: 16px; font-style: normal; text-shadow: 0 0 8px #000; animation: cmdCursor .7s ease-in-out infinite alternate; pointer-events: none; }
+@keyframes cmdCursor { from { transform: translate(-50%, 0); } to { transform: translate(-50%, 4px); } }
+.cmd-badge { position: absolute; right: -4px; top: -8px; font-size: 13px; font-style: normal; background: rgba(0, 0, 0, .7); border: 1px solid rgba(232, 189, 104, .6); border-radius: 50%; width: 22px; height: 22px; line-height: 20px; text-align: center; pointer-events: none; }
 .bu.intent-big .bu-name::before { content: "⚠ "; color: #ff9b54; }
 @media (max-width: 560px) {
-  .command-panel { padding: 8px; }
-  .cmd-btn { padding: 8px 9px; font-size: 13px; }
-  .cmd-foot { justify-content: stretch; }
-  .cmd-foot .primary { flex: 1 1 100%; min-height: 46px; }
+  .command-panel { padding: 6px 8px 8px; left: 44%; right: 2%; }
+  .cmd-btn { padding: 10px 12px; font-size: 15px; }
+}
 }

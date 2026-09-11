@@ -53,14 +53,14 @@ const COUNT_ATTACKS = () => {
 };
 
 
-// 指示待ちのたびに「決定」で進め、「退く」が出るまで待つ（ラウンド1では誰も倒れていない）
+// 指示待ちのたびに「全員たたかう」で進め、「退く」が出るまで待つ（ラウンド1では誰も倒れていない）
 async function advanceUntilRetreat(page) {
   for (let i = 0; i < 12; i++) {
     await page.waitForFunction(() => !document.getElementById('command-panel').hidden || BattleScene.finished, null, { timeout: 30000 });
     if (await page.evaluate(() => BattleScene.finished)) return false;
     if (await page.locator('[data-cmdall="retreat"]').count()) return true;
     if (process.env.DEBUG_RETREAT) console.log('    round', await page.evaluate(() => (BattleScene.manual && BattleScene.manual.prompt || {}).round), 'rows', await page.locator('.cmd-row').count());
-    await page.evaluate(() => document.querySelector('[data-cmdall="go"]').click());
+    await page.evaluate(() => document.querySelector('[data-cmdall="attack"]').click());
   }
   return false;
 }
@@ -85,7 +85,7 @@ async function advanceUntilRetreat(page) {
   const offer = await page.evaluate(() => ({
     label: document.querySelector('[data-cmdall="retreat"]').textContent,
     paused: BattleScene.paused, panelShown: !document.getElementById('command-panel').hidden,
-    rows: document.querySelectorAll('.cmd-row').length,
+    rows: BattleScene.manual.prompt.allies.length,
     attacks: window.__drawn.filter(t => t === 'attack').length
   }));
   ok(/捨て駒A/.test(offer.label), `退くボタンに倒れた者の名前（${offer.label}）`);
@@ -94,8 +94,8 @@ async function advanceUntilRetreat(page) {
   ok(offer.rows === 1, `立っている者だけが指示の対象（${offer.rows}人）`);
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retreat-offer.png' });
 
-  console.log('▼ 「決定」で続ければ今までどおり最後まで進む');
-  await page.evaluate(() => document.querySelector('[data-cmdall="go"]').click());
+  console.log('▼ 「全員たたかう」で続ければ今までどおり最後まで進む');
+  await page.evaluate(() => document.querySelector('[data-cmdall="attack"]').click());
   await page.evaluate(() => BattleScene.skip());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });
   const cont = await page.evaluate(() => ({

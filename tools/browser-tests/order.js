@@ -15,6 +15,18 @@ const SETUP = (spirit) => {
   BattleScene.speed = 4;
 };
 
+// 窓が閉じるまで、いま指示中の者を「たたかう」で決めていく（狙い選びは「前から」）
+async function decideRest(page) {
+  for (let i = 0; i < 10; i++) {
+    if (await page.evaluate(() => document.getElementById('command-panel').hidden)) return;
+    await page.evaluate(() => {
+      const pick = document.querySelector('[data-pick=""]');
+      if (pick) return pick.click();
+      document.querySelector('.cmd-btn[data-cmd="attack"]').click();
+    });
+  }
+}
+
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await b.newPage({ viewport: { width: 1128, height: 1000 } });
@@ -31,12 +43,15 @@ const SETUP = (spirit) => {
   await page.waitForSelector('#command-panel:not([hidden])', { timeout: 20000 });
   const panel = await page.evaluate(() => ({
     head: document.querySelector('.cmd-head').innerText,
+    unit: document.getElementById('command-panel').dataset.unit,
+    active: document.querySelectorAll('#band-player .bu.cmd-active').length,
     skill: (document.querySelector('.cmd-btn[data-cmd="skill"]') || {}).innerText || '',
     disabled: !!(document.querySelector('.cmd-btn[data-cmd="skill"]') || {}).disabled,
     spirit: (document.querySelector('.cmd-spirit') || {}).innerText || '',
     paused: BattleScene.paused, pending: !!Game.state.pendingBattle, phase: Game.state.phase
   }));
   ok(/ラウンド 1/.test(panel.head), `ラウンド1の指示待ち（${panel.head}）`);
+  ok(panel.unit === 'p0' && panel.active === 1, `先頭の者の窓が開き、その札にカーソルが乗る（${panel.unit}, active=${panel.active}）`);
   ok(/怪力を必ず/.test(panel.skill) && /気合1/.test(panel.skill), `技のボタン（${panel.skill.replace(/\\n/g, ' ')}）`);
   ok(!panel.disabled, '気合が足りるので技は選べる');
   ok(/気合 ●●●/.test(panel.spirit), `気合の表示（${panel.spirit}）`);
@@ -45,8 +60,14 @@ const SETUP = (spirit) => {
 
   console.log('▼ 技を選んで決定すると、気合を払って怪力が必ず出る');
   await page.evaluate(() => { document.querySelector('.cmd-btn[data-cmd="skill"]').click(); });
-  ok(await page.evaluate(() => document.querySelector('.cmd-btn[data-cmd="skill"]').classList.contains('on')), '技が選択状態になる');
-  await page.evaluate(() => { document.querySelector('[data-cmdall="go"]').click(); });
+  // 敵が複数なら狙い選びに移る（窓が細くなり、敵の札が光る）。「前から」で確定。
+  const picking = await page.evaluate(() => document.getElementById('command-panel').dataset.mode === 'target'
+    && document.querySelectorAll('#band-enemy .bu.cmd-pick').length > 0);
+  ok(picking, '技を選ぶと狙い選びに移り、敵の札がタップ対象になる');
+  await page.evaluate(() => { document.querySelector('[data-pick=""]').click(); });
+  // 残りの者は「たたかう」で決めていく。最後の一人で即ラウンド開始（決定ボタンは無い）
+  await decideRest(page);
+  ok(await page.evaluate(() => document.getElementById('command-panel').hidden), '最後の一人が決めた瞬間にラウンドが始まる');
   await page.evaluate(() => BattleScene.skip());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });
   const after = await page.evaluate(() => ({

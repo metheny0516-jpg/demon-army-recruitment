@@ -235,8 +235,8 @@ const BattleScene = {
           <img class="cutin-portrait" id="cutin-portrait" alt="">
           <div class="cutin-copy"><b id="cutin-name"></b><span id="cutin-desc"></span></div>
         </div>
+        <div class="command-panel" id="command-panel" hidden></div>
       </div>
-      <div class="command-panel" id="command-panel" hidden></div>
       <div class="scene-ctrl">
         <button class="small" data-action="speed" id="speed-btn">速度 x1</button>
         <button class="small" data-action="pausebattle" id="pause-btn">⏸ 読むために停止</button>
@@ -1776,95 +1776,182 @@ const BattleScene = {
 
   hideCommandPanel() {
     const panel = document.getElementById("command-panel");
-    if (panel) { panel.hidden = true; panel.innerHTML = ""; }
+    if (panel) { panel.hidden = true; panel.innerHTML = ""; delete panel.dataset.unit; delete panel.dataset.mode; }
     const scene = document.getElementById("scene");
-    if (scene) scene.classList.remove("awaiting-commands");
+    if (scene) scene.classList.remove("awaiting-commands", "picking-target");
+    for (const id in this.units) {
+      const el = this.units[id] && this.units[id].el;
+      if (!el) continue;
+      el.classList.remove("cmd-active", "cmd-pick", "cmd-decided");
+      const cur = el.querySelector(".cmd-cursor"); if (cur) cur.remove();
+      const badge = el.querySelector(".cmd-badge"); if (badge) badge.remove();
+    }
+    this.cmdSeq = null;
   },
 
-  // 指示パネル。味方ごとに たたかう／まもる／技／おまかせ、たたかうなら狙い。下に 全員たたかう／おまかせで最後まで／退く／決定。
+  // ── 指示窓（ロマサガ流、2026-09-12） ──
+  // 隊列の先頭から一人ずつ。窓は戦場の中央（味方の列のすぐ上）に浮き、後ろの戦場が透ける。
+  // たたかう／技を選ぶと窓が細くなり、敵をタップして狙いを決める（敵が1体なら省く）。
+  // 最後の一人が決めた瞬間にラウンド開始。「もどる」で一人前へ。味方の札をタップすればその者へ飛べる。
+  CMD_ICON: { attack: "⚔", guard: "🛡", skill: "✨", auto: "🤖" },
+
   renderCommandPanel(prompt) {
     const panel = document.getElementById("command-panel");
     if (!panel || !prompt) return;
-    const sel = this.cmdSel;
-    for (const a of prompt.allies) {
-      if (!sel[a.id]) sel[a.id] = { cmd: "attack", target: null };
-      if (sel[a.id].cmd === "skill" && !(a.skill && a.skill.ready)) sel[a.id].cmd = "attack";
-      if (sel[a.id].target && !prompt.enemies.some(e => e.id === sel[a.id].target)) sel[a.id].target = null;
+    if (!this.cmdSeq || this.cmdSeq.round !== prompt.round) {
+      this.cmdSeq = { round: prompt.round, idx: 0, mode: "menu", commands: {} };
     }
-    const enemyChip = (e, unitId) => `<button type="button" class="cmd-target ${sel[unitId].target === e.id ? "on" : ""}" data-unit="${e.id === undefined ? "" : U.esc(unitId)}" data-target="${U.esc(e.id)}">${e.intent === "big" ? "⚠ " : ""}${U.esc(e.name)} <small>${Math.max(0, Math.round(e.hp / e.maxHp * 100))}%</small></button>`;
-    const rows = prompt.allies.map(a => {
-      const c = sel[a.id];
+    const seq = this.cmdSeq;
+    const allies = prompt.allies;
+    if (!allies.length) return this.submitCommands({});
+    seq.idx = Math.max(0, Math.min(seq.idx, allies.length - 1));
+    const a = allies[seq.idx];
+    const sel = this.cmdSel[a.id] || { cmd: "attack", target: null };
+    const scene = document.getElementById("scene");
+    if (scene) { scene.classList.add("awaiting-commands"); scene.classList.toggle("picking-target", seq.mode === "target"); }
+    // 味方の札：指示中はカーソル、決めた者には印
+    for (const al of allies) {
+      const u = this.units[al.id]; if (!u) continue;
+      u.el.classList.toggle("cmd-active", al.id === a.id);
+      const done = seq.commands[al.id];
+      u.el.classList.toggle("cmd-decided", !!done && al.id !== a.id);
+      let badge = u.el.querySelector(".cmd-badge");
+      if (done && al.id !== a.id) {
+        if (!badge) { badge = document.createElement("i"); badge.className = "cmd-badge"; u.el.appendChild(badge); }
+        badge.textContent = this.CMD_ICON[done.cmd] || "";
+      } else if (badge) badge.remove();
+      let cur = u.el.querySelector(".cmd-cursor");
+      if (al.id === a.id) { if (!cur) { cur = document.createElement("i"); cur.className = "cmd-cursor"; cur.textContent = "▼"; u.el.appendChild(cur); } }
+      else if (cur) cur.remove();
+    }
+    // 敵の札：構えの印と、狙い選び中のタップ対象
+    for (const e of prompt.enemies) {
+      const u = this.units[e.id]; if (!u) continue;
+      u.el.classList.toggle("intent-big", e.intent === "big");
+      u.el.classList.toggle("cmd-pick", seq.mode === "target");
+    }
+    const bigOnes = prompt.enemies.filter(e => e.intent === "big").map(e => e.name);
+    const spirit = typeof a.spirit === "number" ? `<small class="cmd-spirit">気合 ${"●".repeat(a.spirit)}${"○".repeat(Math.max(0, 3 - a.spirit))}</small>` : "";
+    const state = a.winded ? `<small class="cmd-state">息切れ</small>` : a.stuffed ? `<small class="cmd-state">食事中</small>` : "";
+    const head = `<div class="cmd-head"><span class="cmd-round">ラウンド ${prompt.round}　${seq.idx + 1}/${allies.length}人目</span>
+        <b>${U.esc(a.name)}</b> <small>HP ${a.hp}/${a.maxHp}</small> ${spirit} ${state}
+        ${bigOnes.length ? `<span class="cmd-warn">⚠ ${U.esc(bigOnes.join("、"))}が大技を放つ</span>` : ""}</div>`;
+    let body;
+    if (seq.mode === "target") {
+      body = `<div class="cmd-pick-hint">狙う敵をタップ</div>
+        <div class="cmd-foot">
+          <button type="button" class="cmd-btn" data-pick="">前から</button>
+          <button type="button" class="cmd-btn cmd-back" data-nav="back">もどる</button>
+        </div>`;
+    } else {
       const skill = a.skill;
       const skillBtn = skill
-        ? `<button type="button" class="cmd-btn ${c.cmd === "skill" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="skill" ${skill.ready ? "" : "disabled"} title="${U.esc(skill.note)}">技「${U.esc(skill.label)}」<small>気合${skill.cost}</small></button>`
+        ? `<button type="button" class="cmd-btn ${sel.cmd === "skill" ? "on" : ""}" data-cmd="skill" ${skill.ready ? "" : "disabled"} title="${U.esc(skill.note)}">技「${U.esc(skill.label)}」<small>気合${skill.cost}</small></button>`
         : "";
-      const spirit = typeof a.spirit === "number" ? `<small class="cmd-spirit">気合 ${"●".repeat(a.spirit)}${"○".repeat(Math.max(0, 3 - a.spirit))}</small>` : "";
-      const state = a.winded ? `<small class="cmd-state">息切れ</small>` : a.stuffed ? `<small class="cmd-state">食事中</small>` : "";
-      return `<div class="cmd-row" data-unit="${U.esc(a.id)}">
-        <div class="cmd-who"><b>${U.esc(a.name)}</b> <small>HP ${a.hp}/${a.maxHp}</small> ${spirit} ${state}</div>
-        <div class="cmd-btns">
-          <button type="button" class="cmd-btn ${c.cmd === "attack" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="attack">たたかう</button>
-          <button type="button" class="cmd-btn ${c.cmd === "guard" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="guard">まもる</button>
+      const first = seq.idx === 0;
+      body = `<div class="cmd-menu">
+          <button type="button" class="cmd-btn ${sel.cmd === "attack" ? "on" : ""}" data-cmd="attack">たたかう</button>
+          <button type="button" class="cmd-btn ${sel.cmd === "guard" ? "on" : ""}" data-cmd="guard">まもる</button>
           ${skillBtn}
-          <button type="button" class="cmd-btn ${c.cmd === "auto" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="auto">おまかせ</button>
+          <button type="button" class="cmd-btn ${sel.cmd === "auto" ? "on" : ""}" data-cmd="auto">おまかせ</button>
         </div>
-        ${(c.cmd === "attack" || c.cmd === "skill") && prompt.enemies.length > 1
-          ? `<div class="cmd-targets"><span>狙い</span>${prompt.enemies.map(e => enemyChip(e, a.id)).join("")}<button type="button" class="cmd-target ${c.target ? "" : "on"}" data-unit="${U.esc(a.id)}" data-target="">前から</button></div>` : ""}
-      </div>`;
-    }).join("");
-    const bigOnes = prompt.enemies.filter(e => e.intent === "big").map(e => e.name);
-    panel.innerHTML = `<div class="cmd-head"><b>ラウンド ${prompt.round}</b>　指示を出せ${bigOnes.length ? `　<span class="cmd-warn">⚠ ${U.esc(bigOnes.join("、"))}が大技を放つ</span>` : ""}</div>
-      ${rows}
-      <div class="cmd-foot">
-        <button type="button" class="small" data-cmdall="attack">全員たたかう</button>
-        <button type="button" class="small" data-cmdall="autorest">この戦いはおまかせ</button>
-        <button type="button" class="small" data-cmdall="autoalways">以後もおまかせ</button>
-        ${prompt.canRetreat ? `<button type="button" class="small danger" data-cmdall="retreat">🏰 退く（${U.esc(prompt.downed.join("、"))}を担いで）</button>` : ""}
-        <button type="button" class="primary" data-cmdall="go">決定 ▶</button>
-      </div>`;
-    panel.hidden = false;
-    const scene = document.getElementById("scene");
-    if (scene) scene.classList.add("awaiting-commands");
-    // 構えの印を敵の枠へ
-    for (const e of prompt.enemies) {
-      const u = this.units[e.id];
-      if (u) u.el.classList.toggle("intent-big", e.intent === "big");
+        <div class="cmd-foot">
+          <button type="button" class="cmd-btn cmd-back" data-nav="back" ${first ? "disabled" : ""}>もどる</button>
+          ${first ? `<button type="button" class="small" data-cmdall="attack">全員たたかう</button>
+          <button type="button" class="small" data-cmdall="autorest">この戦いはおまかせ</button>
+          <button type="button" class="small" data-cmdall="autoalways">以後もおまかせ</button>
+          ${prompt.canRetreat ? `<button type="button" class="small danger" data-cmdall="retreat">🏰 退く（${U.esc(prompt.downed.join("、"))}を担いで）</button>` : ""}` : ""}
+        </div>`;
     }
+    panel.innerHTML = head + body;
+    panel.dataset.unit = a.id;
+    panel.dataset.mode = seq.mode;
+    panel.hidden = false;
+    this.placeCommandPanel();
     if (!panel.dataset.bound) {
       panel.dataset.bound = "1";
       panel.addEventListener("click", ev => {
         const btn = ev.target.closest("button");
-        if (!btn || btn.disabled) return;
+        if (!btn || btn.disabled || !this.cmdSeq) return;
+        const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
+        if (!prompt) return;
+        const cur = prompt.allies[seq.idx];
         if (btn.dataset.cmd) {
-          const unitId = btn.dataset.unit;
-          this.cmdSel[unitId] = Object.assign(this.cmdSel[unitId] || {}, { cmd: btn.dataset.cmd });
-          return this.renderCommandPanel(this.manual && this.manual.prompt);
+          const cmd = btn.dataset.cmd;
+          this.cmdSel[cur.id] = Object.assign(this.cmdSel[cur.id] || {}, { cmd });
+          if ((cmd === "attack" || cmd === "skill") && prompt.enemies.length > 1) {
+            seq.mode = "target";
+            return this.renderCommandPanel(prompt);
+          }
+          return this.decideCommand(cur.id, cmd, null);
         }
-        if (btn.dataset.target !== undefined && btn.dataset.unit !== undefined && !btn.dataset.cmdall) {
-          const unitId = btn.dataset.unit;
-          this.cmdSel[unitId] = Object.assign(this.cmdSel[unitId] || { cmd: "attack" }, { target: btn.dataset.target || null });
-          return this.renderCommandPanel(this.manual && this.manual.prompt);
+        if (btn.dataset.pick !== undefined) return this.decideCommand(cur.id, this.cmdSel[cur.id].cmd, btn.dataset.pick || null);
+        if (btn.dataset.nav === "back") {
+          if (seq.mode === "target") seq.mode = "menu";
+          else if (seq.idx > 0) seq.idx -= 1;
+          return this.renderCommandPanel(prompt);
         }
         const all = btn.dataset.cmdall;
         if (all === "attack") {
-          for (const a of (this.manual.prompt.allies || [])) this.cmdSel[a.id] = { cmd: "attack", target: null };
-          return this.renderCommandPanel(this.manual.prompt);
+          const commands = {};
+          for (const al of prompt.allies) { this.cmdSel[al.id] = { cmd: "attack", target: null }; commands[al.id] = { cmd: "attack" }; }
+          return this.submitCommands(commands);
         }
         if (all === "autorest") { this.autoRest = true; return this.submitCommands({}); }
         if (all === "autoalways") { this.saveAutoBattle(true); this.autoRest = true; return this.submitCommands({}); }
         if (all === "retreat") return this.submitCommands({ retreat: true });
-        if (all === "go") {
-          const commands = {};
-          for (const a of (this.manual.prompt.allies || [])) {
-            const c = this.cmdSel[a.id] || { cmd: "attack" };
-            if (c.cmd === "auto") continue;
-            commands[a.id] = { cmd: c.cmd, target: c.target || undefined };
-          }
-          return this.submitCommands(commands);
-        }
       });
     }
-    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 1 });
+    this.bindBattlefieldTaps();
+    if (seq.mode === "menu" && typeof Sound !== "undefined") Sound.cue("mormo", { index: 1 });
+  },
+
+  // 一人ぶん決めて次へ。最後の一人ならラウンド開始。
+  decideCommand(unitId, cmd, target) {
+    const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
+    if (!seq || !prompt) return;
+    this.cmdSel[unitId] = { cmd, target };
+    seq.commands[unitId] = { cmd, target };
+    seq.mode = "menu";
+    if (seq.idx >= prompt.allies.length - 1) {
+      const commands = {};
+      for (const al of prompt.allies) {
+        const c = seq.commands[al.id];
+        if (!c || c.cmd === "auto") continue;
+        commands[al.id] = { cmd: c.cmd, target: c.target || undefined };
+      }
+      return this.submitCommands(commands);
+    }
+    seq.idx += 1;
+    this.renderCommandPanel(prompt);
+  },
+
+  // 窓の置き場所は CSS（味方の列の右、戦場の中央の高さ。狙い選び中は上の帯）。ここでは画面外なら見える所まで送るだけ。
+  placeCommandPanel() {
+    const panel = document.getElementById("command-panel");
+    if (!panel || typeof panel.scrollIntoView !== "function") return;
+    const r = panel.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) panel.scrollIntoView({ block: "center", behavior: "smooth" });
+  },
+
+  // 戦場のタップ：狙い選び中は敵の札で確定。指示中は味方の札でその者へ飛ぶ（決め直し）。
+  bindBattlefieldTaps() {
+    const scene = document.getElementById("scene");
+    if (!scene || scene.dataset.cmdBound) return;
+    scene.dataset.cmdBound = "1";
+    scene.addEventListener("click", ev => {
+      const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
+      if (!seq || !prompt || !this.paused) return;
+      const card = ev.target.closest(".bu");
+      if (!card) return;
+      const id = card.id.replace(/^bu-/, "");
+      if (seq.mode === "target" && prompt.enemies.some(e => e.id === id)) {
+        const cur = prompt.allies[seq.idx];
+        return this.decideCommand(cur.id, this.cmdSel[cur.id].cmd, id);
+      }
+      const at = prompt.allies.findIndex(al => al.id === id);
+      if (at >= 0 && at !== seq.idx) { seq.idx = at; seq.mode = "menu"; this.renderCommandPanel(prompt); }
+    });
   },
 
   setMormoControlsLocked(locked, wipe = false) {
