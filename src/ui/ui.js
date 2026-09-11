@@ -149,6 +149,9 @@ const UI = {
   // （fallback は Game.nextSkillFor と同じロジックを保つこと。二か所で仕様を分けない）。
   nextSkillNote(m) {
     if (!m || m.mercenary) return "";
+    // 種族の伝承：軍団が既に知っている技は、採用すれば覚えた状態で来る
+    const lore = typeof Game !== "undefined" && typeof Game.loreSkillFor === "function" ? Game.loreSkillFor(m) : null;
+    if (lore) return `<div class="next-skill lore-skill">📜 軍団の伝承：採用すれば【${U.esc(lore.name)}】を覚えて来る</div>`;
     let skill = null;
     if (typeof Game !== "undefined" && typeof Game.nextSkillFor === "function") {
       skill = Game.nextSkillFor(m);

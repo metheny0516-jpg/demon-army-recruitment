@@ -112,5 +112,29 @@ const spiritOf = (st, uid) => (st.roster.find(m => m.uid === uid) || {}).spirit;
   } else assert(true, '（6戦目で技を覚えなかった／戦死したので省略）');
 }
 
+// 5. 種族の伝承：誰かが上位技を覚えたら、同じ種族の新入りは覚えた状態で来る（お披露目付き）
+{
+  const st = freshRun([1, 1, 1]);
+  const garo = st.roster.find(m => m.uid === 102);
+  garo.record = { battles: 5, wins: 5, downed: 0, carried: 0, late: 0, ate: 0 };
+  Game.deploy();
+  const g2 = st.roster.find(m => m.uid === 102);
+  if (g2 && g2.skillTier === 2) {
+    assert(st.skillLore.orc === 'blood_howl', `伝承に記録される（${JSON.stringify(st.skillLore)}）`);
+    const rookie = Game.rollApplicant('orc');
+    assert(Game.loreSkillFor(rookie) && Game.loreSkillFor(rookie).id === 'blood_howl', '応募者の札に伝承の技が見える');
+    st.applicants = [rookie]; st.hiresLeft = 1; st.phase = 'recruit'; st.gold = 500;
+    Game.hire(0);
+    const hired = st.roster[st.roster.length - 1];
+    assert(hired.traits.includes('blood_howl') && !hired.traits.includes('brute') && hired.skillTier === 2, '採用した新入りは上位技を持って来る');
+    assert(hired.debutSkill === 'blood_howl', '新入りにもお披露目の戦いがある');
+    const gob = Game.rollApplicant('goblin');
+    assert(!Game.loreSkillFor(gob), '別の種族には乗らない');
+  } else assert(true, '（6戦目で技を覚えなかった／戦死したので省略）');
+  delete st.skillLore;
+  Game.migrateState();
+  assert(st.skillLore && (st.roster.some(m => m.skillTier === 2) ? Object.keys(st.skillLore).length >= 1 : true), '旧セーブは今いる上位技持ちから伝承を埋める');
+}
+
 console.log(failed ? `\n${failed} 件失敗` : '\n全件通過');
 process.exit(failed ? 1 : 0);

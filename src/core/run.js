@@ -114,6 +114,7 @@ const Game = {
       retreatCount: 0,
       orderCount: 0,
       stageFights: {},          // 敵の慣れ：段階ごとに戦った回数（通常作戦のみ）
+      skillLore: {},            // 種族の伝承：species → 覚えた上位技 id
       pendingBattle: null,
       // 全滅の回数（2026-09-10・再建）
       wipeCount: 0,
@@ -302,6 +303,14 @@ const Game = {
       if (m.debutSkill === undefined) m.debutSkill = null;                     // 旧セーブ：上位技は号令でだけ出る
     }
     if (!st.stageFights || typeof st.stageFights !== "object") st.stageFights = {};
+    // 種族の伝承（2026-09-11）。旧セーブは今いる上位技持ちから埋める
+    if (!st.skillLore || typeof st.skillLore !== "object") {
+      st.skillLore = {};
+      for (const m of st.roster) for (const id of (m.traits || [])) {
+        const sk = (TRAITS[id] || {}).skill;
+        if (sk && sk.tier === 2 && sk.species) st.skillLore[sk.species] = id;
+      }
+    }
     if (!Array.isArray(st.departed)) st.departed = [];
     if (!Array.isArray(st.relics)) st.relics = [];
     // 答える前の戦闘が保存されていたら、続行として決着させる。
@@ -1474,6 +1483,7 @@ const Game = {
     this.baseOf(m);                  // 採用時の値を控える（昇進の boost を含まない基礎値）
     if (!m.skillTier) m.skillTier = 1;
     if (typeof m.spirit !== "number") m.spirit = this.spiritRules().start;
+    this.applyLore(m);
     if (!Array.isArray(m.relicIds)) m.relicIds = [];
     // 縁の者が「持って来た」遺物は、採用した時点で本人の物になる（4.2）。
     // それ以外の受け渡しは編成画面の蔵で魔王が決裁する（自動では渡さない）。
@@ -1689,8 +1699,31 @@ const Game = {
   // 上位技の解放。1段目（種族固有特性）が上位技に**置き換わる**。
   // 遺物由来の特性・癖・共通特性はそのまま（replaces が指す id だけが消える）。
   // 傭兵は育たない（金で雇った一時要員に軍団の経験は乗らない）。
+  // 種族の伝承。軍団が既に知っている技を、採用した新入りに乗せる（1段目を置き換え、お披露目付き）。
+  loreSkillFor(monster) {
+    const st = this.state;
+    if (!monster || !st.skillLore || !monster.tplId) return null;
+    const id = st.skillLore[monster.tplId];
+    if (!id || !TRAITS[id]) return null;
+    if ((monster.traits || []).some(t => ((TRAITS[t] || {}).skill || {}).tier === 2)) return null;
+    if (!(monster.traits || []).includes(TRAITS[id].skill.replaces)) return null;   // 1段目を持っていない者には乗らない
+    return { id, ...TRAITS[id] };
+  },
+  applyLore(monster, notes) {
+    const skill = this.loreSkillFor(monster);
+    if (!skill) return null;
+    monster.traits = (monster.traits || []).filter(t => t !== skill.skill.replaces);
+    monster.traits.push(skill.id);
+    monster.skillTier = 2;
+    monster.debutSkill = skill.id;
+    monster.loreSkill = true;
+    if (notes) notes.push(`${monster.name}は軍団の伝承で【${skill.name}】を心得ている`);
+    return skill;
+  },
+
   checkSkillUnlock(monster, notes) {
     if (!monster || monster.mercenary) return null;
+    const st = this.state;
     const rules = this.skillRules();
     if ((this.memberRecord(monster).battles || 0) < rules.unlockBattles) return null;
     const skill = this.nextSkillFor(monster);
@@ -1699,6 +1732,10 @@ const Game = {
     monster.traits = (monster.traits || []).filter(id => id !== replaced);
     monster.traits.push(skill.id);
     monster.skillTier = 2;
+    // 種族の伝承（2026-09-11）。一度誰かが覚えた技は軍団の知恵になり、同じ種族の新入りは覚えた状態で来る
+    // （戦死で6戦のカウンタが消えても、種族の技は消えない）。
+    st.skillLore = st.skillLore || {};
+    if (skill.skill && skill.skill.species) st.skillLore[skill.skill.species] = skill.id;
     // 覚えた直後の戦いでだけ、技は勝手に出る（お披露目）。以後は号令（気合）でだけ出る（オーナー 2026-09-11）。
     monster.debutSkill = skill.id;
     const quote = U.pick((skill.lines && skill.lines.unlock) || ["……体が、覚えた"]);

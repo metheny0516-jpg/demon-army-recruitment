@@ -1069,7 +1069,7 @@ const EVENTS = [
           Game.oweDebt({ kind: "materials", amount: -15, battlesLeft: 2,
             text: `${c.actor.name}が資材置き場で「ちょっと」やって` });
           return `直訴は握りつぶした。今期の建材は10増えた。（備蓄 ${st.materials}）\n`
-            + `インプは笑顔で戻っていった。笑顔で戻るときが、いちばん良くない。`;
+            + `${c.actor.name}は笑顔で戻っていった。笑顔で戻るときが、いちばん良くない。`;
         }
       }
     ]
