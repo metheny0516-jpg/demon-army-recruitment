@@ -1762,12 +1762,41 @@ const Game = {
     return unlocked;
   },
 
+  // 経験で身につく共通特性（頑丈・しぶとい・担がれ慣れ・城の主）。
+  // 定義は traits.js の `earned: { counter, at, unless }`。**id をベタ書きしない**
+  // （特性が増えたら勝手に追従する）。応募者には付かない（traitPool には入れない）。
+  //
+  // 判定は決着ごとに**名簿全員**へ。留守番も対象にしないと城の主が永久に育たない。
+  // 1決着につき1人1つまで（同じ戦いで二つ身につくのは、出来事として多すぎる）。
+  grantExperienceTraits(notes) {
+    const st = this.state;
+    const earnable = Object.keys(TRAITS).filter(id => TRAITS[id].earned);
+    const earned = [];
+    for (const monster of st.roster) {
+      if (monster.mercenary) continue;
+      const record = this.memberRecord(monster);
+      const traits = monster.traits || (monster.traits = []);
+      for (const id of earnable) {
+        if (traits.includes(id)) continue;
+        const rule = TRAITS[id].earned;
+        if ((record[rule.counter] || 0) < rule.at) continue;
+        if (rule.unless && (record[rule.unless] || 0) !== 0) continue;
+        traits.push(id);
+        const quote = U.pick((TRAITS[id].lines && TRAITS[id].lines.earned) || ["……体が、覚えた"]);
+        if (notes) notes.push(`${monster.name}は【${TRAITS[id].name}】になった`);
+        earned.push({ uid: monster.uid, name: monster.name, traitId: id, traitName: TRAITS[id].name, quote });
+        break;   // 1決着につき1人1つまで
+      }
+    }
+    return earned;
+  },
+
   // 個人カウンタ。痕跡の器（src/core/traces.js、別仕様）が入るまでのつなぎ。
   // 旧セーブには無いので、読むときに必ずここを通して補う。
   memberRecord(monster) {
     if (!monster) return { battles: 0, wins: 0, downed: 0, carried: 0, late: 0, ate: 0 };
-    if (!monster.record) monster.record = { battles: 0, wins: 0, downed: 0, carried: 0, late: 0, ate: 0 };
-    for (const key of ["battles", "wins", "downed", "carried", "late", "ate"]) {
+    if (!monster.record) monster.record = { battles: 0, wins: 0, downed: 0, carried: 0, late: 0, ate: 0, homeStays: 0 };
+    for (const key of ["battles", "wins", "downed", "carried", "late", "ate", "homeStays"]) {
       if (typeof monster.record[key] !== "number") monster.record[key] = 0;
     }
     return monster.record;
@@ -2236,8 +2265,15 @@ const Game = {
     // ツケは「判断」ではなく「わざと負ければ消える抜け道」になる。
     this.settleDebts(notes);
 
+    // 経験で身につく共通特性は、この決着でカウンタが全部動いたあとに判定する。
+    // 仕様は「trainSurvivors の直後」だが、そこだと processDepartments がまだ
+    // homeStays を足しておらず、城の主だけ1決着ぶん遅れる。
+    const earnedTraits = this.grantExperienceTraits(notes);
+
     st.lastBattle = {
       victory: result.victory,
+      // 経験で身についた共通特性（表示用）。身につかなかった決着・旧セーブには無い。
+      earned: earnedTraits,
       // 防衛戦（王国の反撃）の結末（表示用）。
       defense: isDefense,
       castleFell,
@@ -2394,6 +2430,13 @@ const Game = {
         notes.push(`${monster.name} は二度目の負傷で引退した。もう戦えない`);
         continue;
       }
+      // 担がれ慣れ：運ばれ方にこつがある者は、担がれても負傷しない。
+      // 名前は「担いで戻った」に残る（運ばれた事実は消さない）。
+      if ((monster.traits || []).includes("carried_before")
+        && TRAITS.carried_before && TRAITS.carried_before.injuryFree) {
+        notes.push(`${monster.name}は担がれ慣れている。傷にはならなかった`);
+        continue;
+      }
       monster.injured = 1;   // 次の1戦だけ休む
       // 負傷者は出撃隊から外す（次の編成画面で「出せない者が枠を塞いでいる」を作らない）
       st.activeUids = st.activeUids.filter(uid => uid !== row.uid);
@@ -2437,8 +2480,11 @@ const Game = {
     // 勇者に負けても終わりではない（2026-09-11）。荒らされ、建て直し、また来る勇者に備える。
     st.phase = this.canRebuild() ? "result" : "defeat";
 
+    const earnedTraits = this.grantExperienceTraits(notes);
+
     st.lastBattle = {
       victory: false,
+      earned: earnedTraits,
       retreated: !lostOnPoints,
       lostOnPoints,
       defense: isDefense,
@@ -2659,7 +2705,11 @@ const Game = {
     const lifeWorkers = this.departmentRoster("home");
     const builders = lifeWorkers;
     // 留守番は休んで気合を整える（出撃者の +1 は tallyBattleRecords）。開幕の日割りでは足さない。
-    if (dailyDay === undefined) for (const m of lifeWorkers) this.gainSpirit(m, this.spiritRules().perHomeTurn);
+    // 城の主が育つのもここ。留守番として過ごした決着の数を数える（出撃では育たない）。
+    if (dailyDay === undefined) for (const m of lifeWorkers) {
+      this.gainSpirit(m, this.spiritRules().perHomeTurn);
+      this.memberRecord(m).homeStays += 1;
+    }
     const output = this.departmentOutput();
     const foodReward = Math.max(0, mission.foodReward || 0);
     const materialReward = Math.max(0, mission.materialReward || 0);

@@ -1407,6 +1407,21 @@ const UI = {
     </div>`;
   },
 
+  // 経験で身についた共通特性（頑丈・しぶとい・担がれ慣れ・城の主）。
+  // 技を覚えたパネルと同じ形。**数値は出さない**（何が身についたかと、本人の一言だけ）。
+  // 身につかなかった決着・旧セーブには `earned` が無いので、その場合は何も出さない。
+  earnedTraitPanel(b) {
+    const list = b && Array.isArray(b.earned) ? b.earned : [];
+    if (!list.length) return "";
+    return `<div class="panel skill-unlock-panel earned-trait-panel">
+      <h3>🏅 経験が身についた</h3>
+      ${list.map(e => `<div class="skill-unlock-row">
+        <div><b>${U.esc(e.name)}</b>は【${U.esc(e.traitName)}】になった</div>
+        <div class="quote">「${U.esc(e.quote)}」</div>
+      </div>`).join("")}
+    </div>`;
+  },
+
   result() {
     const st = Game.state;
     const b = st.lastBattle;
@@ -1484,6 +1499,7 @@ const UI = {
            再起画面がほぼ出なくなった（再建の仕様）ので、ここに無いと二度と読まれない。 */
         (wiped || b.lostOnPoints) ? this.nearMissPanel(b.nearMiss) : ""}
       ${this.skillUnlockPanel(b)}
+      ${this.earnedTraitPanel(b)}
       ${Game.canSeizeStronghold() ? (() => {
         const q = Game.seizeQuote();
         return `<div class="panel seize-panel">

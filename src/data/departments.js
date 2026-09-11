@@ -180,8 +180,12 @@ const Aptitude = {
   contribution(monster, departmentId) {
     const apt = this.of(monster);
     const home = DEPARTMENT_ID(departmentId) !== "combat";
+    // 城の主：この城の勝手を知っている者は、留守番のとき食料を1多く調達する。
+    // 経験で身についた特性なので、応募者には付かない（run.js が決着ごとに付ける）。
+    const keeper = home && (monster.traits || []).includes("castle_keeper")
+      ? ((typeof TRAITS !== "undefined" && TRAITS.castle_keeper && TRAITS.castle_keeper.homeFood) || 0) : 0;
     return {
-      food: home ? apt.food : 0,
+      food: home ? apt.food + keeper : 0,
       material: home ? apt.material : 0,
       wage: home ? apt.wage : 0,
       recruit: home ? apt.recruit : 0,

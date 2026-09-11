@@ -405,6 +405,8 @@ button.wide { width: 100%; }
 .vault-panel .relic-name { font-size: 14px; }
 /* ラン中の「去った者たち」。押すと開く（画面を増やさない） */
 .veteran-note { color: #d8b45c; }
+/* 経験が身についた（技を覚えたパネルと同じ作りで、色だけ変える） */
+.earned-trait-panel h3 { color: #9fd8a0; }
 .departed-panel { margin-top: 8px; }
 .departed-panel > summary { cursor: pointer; list-style: none; }
 .departed-panel > summary::-webkit-details-marker { display: none; }

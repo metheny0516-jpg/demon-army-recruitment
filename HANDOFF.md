@@ -266,6 +266,15 @@ tier1 の伸びは設計と相談。その先は王国の反撃 → 全滅後の
 ランが長くなり、1回の採番が上限ラウンドまで走って未完になる率が上がって予算が先に尽きていた。
 ゲーム側のバグではない。「母集団を欠いたまま集計しない」守りは残してある。
 
+**経験で身につく共通特性を「付ける」側を入れた（2026-09-11・Claude）**：`traits.js` に定義だけあった
+頑丈・しぶとい・担がれ慣れ・城の主を、`Game.grantExperienceTraits(notes)` が決着ごとに**名簿全員**へ判定して付ける
+（留守番も対象。城の主は留守番でしか育たない）。1決着につき1人1つまで。**id はベタ書きせず `TRAITS[id].earned` から引く。**
+`m.record.homeStays` は `processDepartments` が留守番へ +1（開幕の日割りでは足さない）。
+接続：担がれ慣れ→`settleRetreat` で担がれても `injured` を付けない（名前は「担いで戻った」に残る）、
+城の主→`Aptitude.contribution` が留守番の食料調達 +1。結果画面は `UI.earnedTraitPanel`。
+**判定は仕様の「trainSurvivors の直後」ではなく `lastBattle` を組む直前**に置いた
+（直後だと `processDepartments` がまだ homeStays を足しておらず、城の主だけ1決着ぶん遅れる）。
+
 ### 現在：王国の反撃を入れた（2026-09-10・Claude／オーナー試遊待ち）
 
 仕様は `docs/SPEC_COUNTERATTACK_2026-09-10.md`。A（データ）は CodeX、**B（run.js）・C（UI）は Claude**。
