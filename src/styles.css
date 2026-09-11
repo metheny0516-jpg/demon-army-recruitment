@@ -957,6 +957,9 @@ button.wide { width: 100%; }
      決着の文字は画面中央、この帯は下半分なので、重ねても文字は隠さない。 */
   z-index: 11;
   min-height: 48%;
+  /* 選択肢が3つ以上あると帯が戦場より高くなり、上端（文の冒頭）が切れた（2026-09-11 オーナー試遊）。
+     帯は戦場の高さを超えず、超える分は吹き出しの中でスクロールする。 */
+  max-height: 100%; box-sizing: border-box;
   display: flex; align-items: center; gap: 18px;
   padding: 20px 20px 22px;
   pointer-events: auto;
@@ -967,6 +970,12 @@ button.wide { width: 100%; }
   transition: opacity .3s ease-out, transform .3s ease-out;
 }
 .mormo-aside.show { opacity: 1; transform: none; }
+/* 選択肢が3つ以上（号令の名指し）：文字と顔を詰めて、帯の中に収める */
+.mormo-aside-dense .mormo-aside-bubble { font-size: 19px; line-height: 1.5; padding: 14px 18px; }
+.mormo-aside-dense .mormo-aside-face { width: 130px; height: 130px; }
+.mormo-aside-dense .mormo-aside-note { font-size: 13px; line-height: 1.5; margin-top: 6px; }
+.mormo-aside-dense .mormo-aside-choices { margin-top: 10px; gap: 8px; }
+.mormo-aside-dense .mormo-aside-choice { padding: 8px 12px; font-size: 14px; }
 
 /* 立ち絵は全身像なので、枠で顔だけを切り抜く。
  * 3.3倍の大きさは維持し、画像を上へ30%ずらす。顔を丸の中央より少し上へ置くことで、
@@ -995,7 +1004,7 @@ button.wide { width: 100%; }
 /* 一言の下に、何が起きたかを一行で。台詞より小さく、読める大きさに */
 .mormo-aside-note { display: block; margin-top: 10px; font-size: 15px; line-height: 1.6; color: #d9c7a3; opacity: .9; }
 .mormo-aside-bubble {
-  flex: 1 1 auto;
+  flex: 1 1 auto; min-height: 0; max-height: 100%; overflow-y: auto;
   margin: 0; padding: 20px 24px;
   border: 1px solid #7c6136; border-radius: 16px 16px 16px 4px;
   background: rgba(30, 21, 36, .96);

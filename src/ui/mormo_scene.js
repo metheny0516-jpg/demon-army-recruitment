@@ -140,7 +140,8 @@ const MormoScene = {
     // 顔は本人の履歴書絵。無ければ枠ごと畳む。
     const speaker = options.speaker || null;
     const box = document.createElement("div");
-    box.className = `mormo-aside mormo-aside-${expression}${speaker ? " mormo-aside-unit" : ""}`;
+    const dense = Array.isArray(options.choices) && options.choices.length >= 3;
+    box.className = `mormo-aside mormo-aside-${expression}${speaker ? " mormo-aside-unit" : ""}${dense ? " mormo-aside-dense" : ""}`;
     box.setAttribute("role", "dialog");
     box.setAttribute("aria-modal", "true");
     box.setAttribute("aria-label", speaker ? `${speaker.name}の一言` : "宰相モルモからの戦況報告");
