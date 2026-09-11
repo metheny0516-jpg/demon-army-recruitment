@@ -1,6 +1,7 @@
 // 画面描画。状態は Game.state を読むだけで、UIは状態を持たない（描画関数は毎回作り直す）。
 const UI = {
   root: null,
+  recordsFrom: null,
 
   RACE_ICON: {
     "ゴブリン": "👺", "オーク": "🐗", "スライム": "🟢", "コボルト": "🐕",
@@ -76,6 +77,8 @@ const UI = {
     const salary = Game.salaryTotal();
     const opening = st.openingPrototype;
     const fb = Game.foodBalance();
+    const recordsButton = ["recruit", "mission", "formation", "preparation", "result"].includes(st.phase)
+      ? `<button class="small hud-records" data-action="records">📖 城の記録</button>` : "";
     return `<div class="hud">
       <span>第 <b>${st.generation}</b> 代魔王軍</span>
       <span class="army-level">魔王軍 <b>Lv.${Game.armyLevel()}</b></span>
@@ -91,6 +94,7 @@ const UI = {
       <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
       <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
       <span class="muted">${U.esc(sd.region)}</span>
+      ${recordsButton}
     </div>`;
   },
 
@@ -461,17 +465,19 @@ const UI = {
   // 蔵：離脱者が残した遺物の受け渡し。魔王が決裁する（自動では渡さない）。
   // **誰かが去っていれば、遺物が1つも無くても出す。** 何も出ないと
   // 「蔵はどこだ」になる（オーナー試遊で発覚）。空の蔵も軍団史の一部。
-  vaultPanel() {
+  vaultPanel(options = {}) {
     const st = Game.state;
     const relics = st.relics || [];
     const departed = st.departed || [];
+    const readOnly = !!options.readOnly;
+    const includeDeparted = options.includeDeparted !== false;
     if (!relics.length) {
-      if (!departed.length) return "";
+      if (!departed.length && !readOnly) return "";
       const last = departed[departed.length - 1];
       return `<div class="panel vault-panel"><h3>🏺 蔵</h3>
-        <div class="muted">蔵は空。${U.esc(last.name)}は何も残さなかった。</div>
-        <div class="muted">品を残すのは、名の通った者だけ（4戦以上／昇進済み／担がれて帰った経験）。</div>
-        ${this.departedPanel()}
+        <div class="muted">${last ? `蔵は空。${U.esc(last.name)}は何も残さなかった。` : "蔵はまだ空です。"}</div>
+        ${last ? `<div class="muted">品を残すのは、名の通った者だけ（4戦以上／昇進済み／担がれて帰った経験）。</div>` : ""}
+        ${includeDeparted ? this.departedPanel() : ""}
       </div>`;
     }
     const rows = relics.map(r => {
@@ -488,17 +494,45 @@ const UI = {
         <div class="muted">${U.esc(r.from.name)}（${U.esc(r.from.race)}）の${U.esc(causeJa)}の品。
           宿る特性：${U.esc(trait ? trait.name : "？")}</div>
         <div class="muted">${holder ? `いま ${U.esc(holder.name)} が所持` : "蔵にある"}</div>
-        <div class="row tight">
+        ${readOnly ? "" : `<div class="row tight">
           ${giveButton}
           ${holder ? `<button class="small" data-action="storerelic" data-relic="${r.id}">蔵に戻す</button>` : ""}
-        </div>
+        </div>`}
       </div>`;
     }).join("");
     return `<div class="panel vault-panel"><h3>🏺 蔵</h3>
       <div class="muted">離脱した者が残した品。宿った癖が誰かに移る。自動では渡らない。</div>
       ${rows}
-      ${this.departedPanel()}
+      ${includeDeparted ? this.departedPanel() : ""}
     </div>`;
+  },
+
+  // モルモの日誌・蔵・去った者を、進行状態を変えず一枚にまとめて読む。
+  records() {
+    const st = Game.state;
+    this.recordsFrom = st.phase;
+    const journal = typeof Game.journal === "function" ? Game.journal() : [];
+    const journalHtml = journal.length ? journal.map(group => `<section class="journal-day">
+      <h3>${U.esc(group.day)}日目</h3>
+      <ul>${group.lines.map(line => `<li data-kind="${U.esc(line.kind)}">${U.esc(line.text)}</li>`).join("")}</ul>
+    </section>`).join("") : `<div class="muted journal-empty">まだ何も書いていませんデス</div>`;
+    const departed = this.departedPanel();
+    this.set(`<div class="records-screen">
+      <header class="panel records-heading">
+        <h2>📖 城の記録</h2>
+        <div class="muted">モルモが書き留めた、魔王軍の日々。</div>
+      </header>
+      <section class="panel journal-panel">
+        <h2>日誌</h2>
+        ${journalHtml}
+      </section>
+      ${this.vaultPanel({ readOnly: true, includeDeparted: false })}
+      <section class="panel records-departed">
+        <h2>去った者</h2>
+        ${departed || `<div class="muted">まだ誰も去っていません。</div>`}
+      </section>
+      <button class="wide ghost" data-action="backrecords">← 戻る</button>
+    </div>`, "records");
   },
 
   departmentSummary() {

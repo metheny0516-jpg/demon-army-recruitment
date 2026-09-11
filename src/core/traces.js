@@ -9,12 +9,18 @@ const TRACE_KINDS = {
   retreated: { label: "撤退", template: "{data.army}が撤退した（担がれた者: {data.carried}）" },
   carried: { label: "担ぎ帰り", template: "{subject}が{data.army}で担がれて帰った" },
   hired: { label: "採用", template: "{subject}が採用された（{data.day}日目）" },
-  promoted: { label: "昇進", template: "{subject}が{data.rank}に昇進した" }
+  promoted: { label: "昇進", template: "{subject}が{data.rank}に昇進した" },
+  fired: { label: "解雇", template: "{subject}を解雇した" },
+  deserted: { label: "逃亡", template: "{subject}が軍を去った" },
+  retired: { label: "引退", template: "{subject}が引退した" },
+  ordered: { label: "号令", template: "{subject}に「{data.skill}」と命じた" },
+  defended: { label: "防衛", template: "{data.army}から城を守った" },
+  ransacked: { label: "荒らされた", template: "{data.army}に城を荒らされた" }
 };
 
 const Traces = {
   MAX: 400,
-  MAX_KINDS: 15,
+  MAX_KINDS: 16,
   protectedKinds: new Set(["fallen", "retreated"]),
 
   record(list, trace) {

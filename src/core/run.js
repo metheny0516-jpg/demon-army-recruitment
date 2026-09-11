@@ -133,6 +133,7 @@ const Game = {
       relics: [],
       relicSeq: 0,
       pendingBond: null,
+      traces: [],
       checkpoint: null
     };
     // 仕様2.5「開幕の勇者襲来を最初の反撃にする」は**開幕3日間プロトタイプ限定**にした。
@@ -202,6 +203,56 @@ const Game = {
   },
 
   save() { this.syncDepartments(); Storage.saveRun(this.state); },
+  trace(kind, subject = null, object = null, data = {}) {
+    const st = this.state;
+    if (!st || typeof Traces === "undefined") return null;
+    return Traces.record(st.traces, { kind, subject, object, data, day: st.day, turn: st.turn });
+  },
+
+  journal(limit = 40) {
+    const st = this.state;
+    if (!st || typeof Traces === "undefined") return [];
+    const cap = Math.max(0, Math.floor(Number(limit) || 0));
+    const nameOf = uid => {
+      const member = (st.roster || []).find(m => m.uid === uid);
+      if (member) return member.name;
+      const departed = (st.departed || []).slice().reverse().find(m => m.uid === uid);
+      return departed ? departed.name : "誰か";
+    };
+    const groups = [];
+    for (const trace of Traces.query(st.traces).slice(0, cap)) {
+      let text = Traces.describe(trace, nameOf).replace(/（[^）]*\d[^）]*）/g, "");
+      const choices = typeof MORMO_LINES !== "undefined" && MORMO_LINES.journal
+        ? MORMO_LINES.journal[trace.kind] : null;
+      const template = choices && choices.length ? choices[(trace.seq || 0) % choices.length] : "{text}デス";
+      text = template.replace("{text}", text);
+      let group = groups.find(row => row.day === trace.day);
+      if (!group) {
+        group = { day: trace.day, turn: trace.turn, lines: [] };
+        groups.push(group);
+      }
+      group.lines.push({ seq: trace.seq, kind: trace.kind, text });
+    }
+    return groups;
+  },
+
+  recordBattleTraces(result, contribution) {
+    const st = this.state;
+    for (const row of contribution || []) {
+      if (row.mercenary) continue;
+      if (row.survived === false || row.injured) this.trace("downed", row.uid, null, { round: null });
+      if (row.late > 0) this.trace("late", row.uid, null, { rounds: row.late, cause: row.lateCause || null });
+    }
+    const byId = new Map((contribution || []).map(row => [row.id, row]));
+    for (const event of (result && result.timeline) || []) {
+      if (event.type !== "trait_trigger" || event.traitId !== "big_eater") continue;
+      const row = byId.get(event.sourceId);
+      if (!row || row.mercenary) continue;
+      const monster = st.roster.find(m => m.uid === row.uid);
+      if (monster) this.memberRecord(monster).ate += 1;
+      this.trace("ate", row.uid, null, {});
+    }
+  },
   load() {
     const s = Storage.loadRun();
     if (!s || typeof s !== "object") return false;
@@ -267,7 +318,7 @@ const Game = {
       ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false, castleFalls: 0,
       // 継承（2026-09-10）。旧セーブには無い。departed は永久離脱の履歴、
       // relics は蔵の品、pendingBond は「次の面接に混ざる縁の者」の予約。
-      departed: [], relics: [], relicSeq: 0, pendingBond: null,
+      departed: [], relics: [], relicSeq: 0, pendingBond: null, traces: [],
       debts: []
     };
     for (const [key, value] of Object.entries(defaults)) {
@@ -313,6 +364,7 @@ const Game = {
     }
     if (!Array.isArray(st.departed)) st.departed = [];
     if (!Array.isArray(st.relics)) st.relics = [];
+    if (!Array.isArray(st.traces)) st.traces = [];
     // 答える前の戦闘が保存されていたら、続行として決着させる。
     // 再生し直すと同じ戦闘を二度見ることになり、撤退の機会もリロードで取り直せてしまう。
     if (st.phase === "battle" && st.pendingBattle) {
@@ -1492,6 +1544,7 @@ const Game = {
     if (st.activeUids.length < this.MAX_DEPLOY) st.activeUids.push(m.uid);
     st.raceCounts[m.race] = (st.raceCounts[m.race] || 0) + 1;
     if (m.tplId && !st.recruitedTplIds.includes(m.tplId)) st.recruitedTplIds.push(m.tplId);
+    this.trace("hired", m.uid, null, { day: st.day, lore: !!m.loreSkill });
     // 採用後も面接は閉じない。次の候補を見て、追加紹介料を払うか自分で終了する。
     if (this.canHire()) {
       st.rerollsThisPhase = 0;   // 新しい面接なので広告費もリセット
@@ -1538,6 +1591,7 @@ const Game = {
     // 縁の応募者は「離脱が起きた次の面接」に混ざる。ここで予約する。
     st.pendingBond = { name: entry.name, race: entry.race, tplId: entry.tplId,
       cause, army: entry.army, relicId: entry.relicId };
+    this.trace(cause, monster.uid, null, cause === "fallen" ? { army: entry.army } : {});
     return entry;
   },
 
@@ -2097,6 +2151,7 @@ const Game = {
         const unit = rp.playerUnits.find(u => u.id === chosen);
         const monster = unit && unit.uid != null ? st.roster.find(m => m.uid === unit.uid) : null;
         if (monster && cand && typeof monster.spirit === "number") monster.spirit = Math.max(0, monster.spirit - (cand.cost || 0));
+        if (monster && cand) this.trace("ordered", monster.uid, null, { skill: cand.skillName, round: offer.round });
       }
     }
     this.recordBattleResult(pending);
@@ -2147,6 +2202,7 @@ const Game = {
     if (!result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
+    this.recordBattleTraces(result, result.contribution);
     this.recordStageFight(stageData);
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
@@ -2174,6 +2230,7 @@ const Game = {
         st.defenses = st.defenses || { won: 0, lost: 0 };
         st.defenses.won += 1;
         defenseOutcome = { defended: true };
+        this.trace("defended", null, null, { army: stageData.army });
         if (heroDefense) st.heroCame = true;
         st.counterattack = null;
       } else {
@@ -2241,6 +2298,7 @@ const Game = {
       }
       if (this.isDefenseBattle(stageData)) {
         defenseOutcome = { ransacked: this.ransack(notes) };
+        this.trace("ransacked", null, null, { army: stageData.army });
         const rules = this.counterRules();
         st.alert = Math.max(0, st.alert - Math.floor(rules.threshold / 2));
         st.defenses = st.defenses || { won: 0, lost: 0 };
@@ -2391,6 +2449,9 @@ const Game = {
     const carried = contribution.filter(c => c.injured && !c.mercenary);
     // 個人カウンタは名簿が動く前に進める（引退・戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(contribution, false);
+    this.recordBattleTraces(result, contribution);
+    if (!lostOnPoints) this.trace("retreated", null, null, { army: stageData.army, carried: carried.map(c => c.name).join("、") });
+    for (const row of carried) this.trace("carried", row.uid, null, { army: stageData.army });
     this.recordStageFight(stageData);
     // 退いた戦いも1戦。出撃はした（仕様2.2）。
     const unlocked = this.trainSurvivors(contribution, notes);
@@ -2452,6 +2513,7 @@ const Game = {
     let defenseOutcome = null, castleFell = false;
     if (isDefense) {
       defenseOutcome = { ransacked: this.ransack(notes) };
+      this.trace("ransacked", null, null, { army: stageData.army });
       const rules = this.counterRules();
       st.alert = Math.max(0, st.alert - Math.floor(rules.threshold / 2));
       notes.push(`王国は荒らして満足し、引き上げた（警戒 ${st.alert}）`);
@@ -2841,6 +2903,7 @@ const Game = {
       this.state.generalsMade.push({ uid: monster.uid, name: monster.name, race: monster.race });
     }
     notes.push(`昇進！ ${monster.name} は【${rank.name}】となった。${rank.message}`);
+    this.trace("promoted", monster.uid, null, { rank: rank.name });
   },
 
   // 戦果に応じて各モンスターの一言を選ぶ。

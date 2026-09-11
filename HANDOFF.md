@@ -23,7 +23,11 @@
 
 ### 次のタスク（2026-09-11・仕様書あり）
 
-- **CodeX**：`docs/SPEC_JOURNAL_2026-09-11.md` — 痕跡（Traces）の接続と「城の記録」画面（日誌・蔵・去った者）。内政メニューの最初の一枚。
+- **完了（CodeX）**：痕跡を本体へ接続し、「城の記録」画面（日誌・蔵・去った者）を追加。
+- 作戦会議・編成・面接・結果の HUD から開け、元の phase を変えずに戻れる。
+- 日誌は新しい順40件を日ごとにまとめ、モルモの言葉で表示する。数字は本文へ出さない。
+- 蔵は閲覧専用、去った者は既存表示を流用。戦闘中には入口を出さない。
+- 契約は `st.traces` / `Game.journal()` / `UI.records()` と action `records` / `backrecords`。
 - **Opus**：`docs/SPEC_EXPERIENCE_GRANT_2026-09-11.md` — A 共通特性の付与（run.js）、B 事件文の種族決め打ちさらい（events.js）。別コミット。
 - 済み：`test-chain-measure-retry` の採番上限（Opus `8ab11a2`）、勝利ファンファーレ（CodeX `1a6cf66`）、
   共通特性の付与（Opus `7d2a1ac`。判定は lastBattle を組む直前＝homeStays が足された後）、事件文さらい（Opus `8aa9e5f`、2件）、
@@ -2690,8 +2694,16 @@ Battle.simulate() → timeline[] → BattleScene.play(timeline)
 ### 2-3a. 痕跡（`Traces`）は事実の保存器であり、因果の実行器ではない
 
 `src/core/traces.js` は、ラン中の「誰が・何を・いつ」をJSONだけで記録する。本体が記録する場所、日誌の文章、条件から起きる展開は別仕様であり、この器から直接ゲーム状態・戦闘・UIを変えない。
-kind は `TRACE_KINDS` の登録制（最大15種）。`record()` は未知kind・深いdata・不正UIDを例外なく拒否し、`record()` と `prune()` だけが配列を変更する。
+kind は `TRACE_KINDS` の登録制（現在16種）。`record()` は未知kind・深いdata・不正UIDを例外なく拒否し、`record()` と `prune()` だけが配列を変更する。
 既定上限は400件。古い通常痕跡から落とすが、`fallen` と `retreated` はランの歴史として残す。新しいkindの追加は設計担当へ戻す。
+
+### 2-3b. 城の記録（日誌）契約
+
+- `st.traces: Trace[]` はセーブ対象。新規ランと旧セーブ移行で必ず配列にし、上限400件の管理は `Traces` に任せる。
+- `Game.journal(limit = 40)` は新しい順の痕跡を日ごとにまとめ、`[{ day, turn, lines: [{ seq, kind, text }] }]` を返す。
+- `UI.records()` と action `records` / `backrecords` は `st.phase` を変えず、`UI.set(html, "records")` で専用 scene を明示する。
+- `TRACE_KINDS` は `fired` / `deserted` / `retired` / `ordered` / `defended` / `ransacked` を含む。
+- `MORMO_LINES.journal` は kind ごとの日誌用文面を持ち、ゲーム上の数値は日誌本文へ出さない。
 
 ### 2-4. コンテンツはデータ追記だけで増える
 
