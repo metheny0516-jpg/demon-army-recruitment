@@ -537,6 +537,86 @@ const UI = {
     </div>`, "records");
   },
 
+  // 軍団のどこでも使う一行表示。操作を隠す面接でも、行そのものから同じ人物詳細へ入る。
+  memberRow(m, opts) {
+    opts = opts || {};
+    const active = Game.state.activeUids.includes(m.uid);
+    const rank = Game.rankOf(m);
+    const skillEntry = (m.traits || []).map(id => ({ id, trait: TRAITS[id] }))
+      .find(entry => entry.trait && this.isSkillTrait(entry.id));
+    const marks = [
+      m.injured > 0 ? `<span class="injured">🩹 負傷</span>` : "",
+      m.unpaid ? `<span class="unpaid">給与未払い</span>` : ""
+    ].filter(Boolean).join("");
+    const controls = opts.controls ? `<div class="member-row-actions">
+      <button class="small" data-action="toggledeploy" data-uid="${m.uid}">${active ? "留守番へ" : "出撃隊へ"}</button>
+      ${active ? `<button class="small" data-action="up" data-uid="${m.uid}" ${opts.index === 0 ? "disabled" : ""}>▲</button>
+        <button class="small" data-action="down" data-uid="${m.uid}" ${opts.index === (opts.total ?? opts.activeCount) - 1 ? "disabled" : ""}>▼</button>
+        <button class="small" data-action="front" data-uid="${m.uid}" ${opts.index === 0 ? "disabled" : ""}>⏫</button>` : ""}
+      <button class="small danger" data-action="fire" data-confirm="1" data-uid="${m.uid}">解雇</button>
+    </div>` : "";
+    return `<div class="member-row${active ? " active" : " home"}" data-action="member" data-uid="${m.uid}" role="button" tabindex="0">
+      ${this.avatarHtml(m)}
+      <div class="member-row-main"><b>${U.esc(m.name)}</b><span>${U.esc(m.race)} / ${U.esc(m.job)}</span>
+        <small>${U.esc(rank.name)}　HP${m.hp} 攻${m.atk} 防${m.def} 速${m.spd}</small></div>
+      <div class="member-row-state">${marks}<small>気合 ${typeof m.spirit === "number" ? m.spirit : "-"}</small>
+        ${skillEntry ? `<small>🗡 ${U.esc(skillEntry.trait.name)}</small>` : ""}</div>${controls}
+    </div>`;
+  },
+
+  // 名簿と応募者で共用する人物詳細。呼び出し側は uid または applicantIndex の片方を渡す。
+  memberDetail(uid, applicantIndex) {
+    const st = Game.state;
+    const index = applicantIndex === undefined || applicantIndex === null || applicantIndex === "" ? null : Number(applicantIndex);
+    const applicant = index !== null && Number.isInteger(index) ? st.applicants[index] : null;
+    const m = applicant || st.roster.find(unit => unit.uid === uid);
+    if (!m) return;
+    const isApplicant = !!applicant;
+    const rank = Game.rankOf(m);
+    const nextRank = Game.nextRank(m);
+    const record = Game.memberRecord(m);
+    const base = m.base || { hp: m.hp, atk: m.atk, def: m.def, spd: m.spd };
+    const stat = (label, key) => {
+      const grown = key === "spd" ? 0 : Math.max(0, Number((m.grown || {})[key]) || 0);
+      return `<div class="stat"><span class="k">${label}</span><span class="v">${m[key]}</span>${grown ? `<small>基礎${base[key]} +${grown}</small>` : ""}</div>`;
+    };
+    const relicByTrait = this.relicByTraitOf(m);
+    const traits = (m.traits || []).map(id => ({ id, trait: TRAITS[id] })).filter(x => x.trait);
+    const traitGroup = (label, icon, rows) => rows.length
+      ? `<div class="member-trait-group"><b>${icon} ${label}</b>${this.traitHtml(rows.map(x => x.id), relicByTrait)}</div>` : "";
+    const relicTraits = traits.filter(x => relicByTrait[x.id]);
+    const quirks = traits.filter(x => x.trait.quirk && !relicByTrait[x.id]);
+    const skills = traits.filter(x => this.isSkillTrait(x.id) && !relicByTrait[x.id]);
+    const common = traits.filter(x => !relicByTrait[x.id] && !x.trait.quirk && !this.isSkillTrait(x.id));
+    const tier2 = skills.find(x => x.trait.skill && x.trait.skill.tier === 2);
+    const nextSkill = isApplicant ? (Game.loreSkillFor(m) || Game.nextSkillFor(m)) : Game.nextSkillFor(m);
+    const skillStatus = tier2 ? (m.debutSkill === tier2.id
+      ? "お披露目待ち（次の戦いで自動発動）"
+      : "お披露目済み・以後は号令でだけ発動") : "";
+    const held = this.memberRelics(m);
+    const stored = (st.relics || []).filter(r => !r.holderUid);
+    const relicActions = !isApplicant ? `<div class="member-relic-actions">
+      ${held.map(r => `<button class="small" data-action="storerelic" data-relic="${r.id}">🏺 ${U.esc(r.name)}を蔵へ戻す</button>`).join("")}
+      ${stored.map(r => `<button class="small" data-action="giverelic" data-relic="${r.id}" data-uid="${m.uid}">🏺 ${U.esc(r.name)}を渡す</button>`).join("")}</div>` : "";
+    const active = !isApplicant && st.activeUids.includes(m.uid);
+    const actions = isApplicant
+      ? `<button class="primary wide" data-action="hire" data-index="${index}" ${Game.canHireApplicant(index) ? "" : "disabled"}>採用する</button>`
+      : `<div class="row"><button data-action="toggledeploy" data-uid="${m.uid}">${active ? "留守番へ" : "出撃隊へ"}</button>
+          <button class="danger" data-action="fire" data-confirm="1" data-uid="${m.uid}">解雇</button></div>`;
+    this.set(`<div class="member-overlay"><article class="member-detail">
+      <button class="small member-close" data-action="closemember">× 閉じる</button>
+      <header>${this.avatarHtml(m, "photo")}<div><h2>${U.esc(m.name)}</h2><div>${U.esc(m.race)} / ${U.esc(m.job)}${this.secondGenLabel(m)}</div>
+        <div><span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span>　戦功 ${m.merit || 0}${nextRank ? ` / ${nextRank.threshold}` : "・最高位"}</div></div></header>
+      <div class="stats member-detail-stats">${stat("HP", "hp")}${stat("攻撃", "atk")}${stat("防御", "def")}${stat("速度", "spd")}</div>
+      <div class="meta"><span>気合 ${typeof m.spirit === "number" ? m.spirit : "-"}</span><span>忠誠 ${m.loyalty}</span><span>給与 ${m.salary}G</span></div>
+      <section><h3>特性と技</h3>${traitGroup("癖", "◌", quirks)}${traitGroup("共通特性", "◆", common)}${traitGroup("遺物由来", "🏺", relicTraits)}${traitGroup("技", "🗡", skills)}
+        ${skillStatus ? `<div class="skill-status">${U.esc(skillStatus)}</div>` : ""}${nextSkill ? `<div class="next-skill">次に覚える技／伝承：<b>【${U.esc(nextSkill.name)}】</b></div>` : ""}</section>
+      <section><h3>記録</h3><div class="member-record">出撃 ${record.battles || 0}戦（${record.wins || 0}勝）　倒れた ${record.downed || 0}回　担がれた ${record.carried || 0}回　遅刻 ${record.late || 0}回　食べた ${record.ate || 0}回</div></section>
+      ${held.length ? `<section><h3>遺物</h3>${held.map(r => `<span class="relic-chip">🏺 ${U.esc(r.name)}</span>`).join("")}</section>` : ""}
+      ${relicActions}${this.resumeHtml(m)}${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}${actions}
+    </article></div>`, "member");
+  },
+
   departmentSummary() {
     const st = Game.state;
     const combat = Game.departmentRoster("combat").length;
@@ -1111,7 +1191,7 @@ const UI = {
   recruit() {
     const st = Game.state;
     const full = !Game.canHire();
-    const cards = st.applicants.map((m, i) => this.monsterCard(m, {
+    const cards = st.applicants.map((m, i) => `<div class="applicant-member" data-action="member" data-index="${i}" role="button" tabindex="0">${this.monsterCard(m, {
       resume: true,
       footer: (() => {
         // 「採ったら食えるのか」を採用の瞬間に見せる。答えではなく、収支の動きだけを出す。
@@ -1130,18 +1210,13 @@ const UI = {
           : `無料枠で採用（給与 ${m.salary}G）`;
         return `${foodNote}<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`;
       })()
-    })).join("");
-    // 満員でも応募者を逃さず入れ替えられるよう、この画面から解雇できるようにする
+    })}</div>`).join("");
+    // 面接中も比較できる軍団一覧。操作は人物詳細へ集約し、ここでは一行を読むだけ。
     const rosterPanel = st.roster.length ? `<div class="panel">
       <h3>現在の軍団 <span class="muted">（${st.roster.length}/${Game.MAX_ARMY}）</span></h3>
-      <div class="muted">枠を空けたければ、ここで解雇できる。</div>
+      <div class="muted">応募者と比べる。人物をタップすると詳しく見られる。</div>
       <div class="spacer" style="height:8px"></div>
-      <div class="row tight">${st.roster.map(m => `
-        <span class="mini">
-          ${this.icon(m.race)} ${U.esc(m.name)}
-          <span class="muted">${U.esc(m.race)} HP${m.hp} 攻${m.atk} ${m.salary}G</span>
-          <button class="small danger" data-action="fire" data-uid="${m.uid}">解雇</button>
-        </span>`).join("")}</div>
+      <div class="member-rows">${st.roster.map(m => this.memberRow(m, { controls: false })).join("")}</div>
     </div>` : "";
     // 指名求人：金を払って「こういう奴を寄越せ」と条件を出す。中盤から解禁。
     // 条件をシナジーの発火条件と同じ語彙にしてあるので、狙って揃える手段になる。
@@ -1181,7 +1256,10 @@ const UI = {
           return l ? `<div class="lesson-note">${l.icon} 前代の教訓【${U.esc(l.name)}】${U.esc(l.effect)}</div>` : "";
         })()}
       </div>
-      <div class="cards">${cards}</div>
+      <div class="recruit-compare">
+        <div class="cards recruit-applicants">${cards}</div>
+        <div class="recruit-roster">${rosterPanel}</div>
+      </div>
       ${briefPanel}
       <div class="spacer"></div>
       <div class="row">
@@ -1191,7 +1269,6 @@ const UI = {
         ${st.roster.length === 0 ? `<span class="muted">部隊が空では出撃できない。まず1体は採用せよ。</span>` : ""}
       </div>
       <div class="spacer"></div>
-      ${rosterPanel}
       ${st.roster.length ? `<div class="panel"><h3>部門状況</h3>${this.departmentSummary()}</div>` : ""}
       ${this.synergyPanel(Game.activeRoster())}`);
   },

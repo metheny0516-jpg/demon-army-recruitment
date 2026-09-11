@@ -207,6 +207,12 @@ const App = {
       case "backrecords":
         return this.render();
 
+      case "member":
+        return UI.memberDetail(data.uid ? Number(data.uid) : null, data.index);
+
+      case "closemember":
+        return this.render();
+
       case "title":
         return this.showTitle();
 
@@ -320,6 +326,7 @@ const App = {
         return this.render();
 
       case "fire":
+        if (data.confirm === "1" && !window.confirm("この者を解雇しますか？ 城の記録には残ります。")) return;
         Game.fire(Number(data.uid));
         return this.render();
 
