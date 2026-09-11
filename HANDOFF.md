@@ -57,6 +57,11 @@
 - 済み：`test-chain-measure-retry` の採番上限（Opus `8ab11a2`）、勝利ファンファーレ（CodeX `1a6cf66`）、
   共通特性の付与（Opus `7d2a1ac`。判定は lastBattle を組む直前＝homeStays が足された後）、事件文さらい（Opus `8aa9e5f`、2件）、
   `test-sound` の落ち（ファンファーレ差し替えで合成音の経路が変わっていた。Claude が直した）。
+- 済み：**セーブスロット3つ＋書き出し／読み込み**（Opus、`docs/SPEC_SAVE_SLOTS_2026-09-11.md`）。
+  **「リロードで消える」の切り分け結果**：コード上に消える経路は無く、`file://` で実測しても
+  リロードで `maou_save` は残り「続きから」も出た。残る原因は (1)「続きから」を押さずに「新規」を押した上書き、
+  (2) ブラウザ側の保存削除（プライベート窓・サイトデータ削除・別 URL）。(1) は「新規は必ずスロットを指定」で塞ぎ、
+  (2) は書き出し／読み込み（textarea のコピー）で持ち運べるようにした。
 - クリア率が全戦略 90〜100% に上がっている件は**今は気にしない**（オーナー 2026-09-11。システムが揃ってから難度を選ばせる）。
 
 ### 現在：勇者に負けても終わりではない／上位技の自動発動は1戦闘1回（2026-09-11・Claude）
@@ -2683,6 +2688,20 @@ API は `Game.canSeizeStronghold()` / `Game.seizeQuote()` / `Game.seizeStronghol
 ## 2. 壊してはいけない設計の約束
 
 ここを崩すと後で高くつく。理由つきで書く。
+
+### 2-00. ランの保存はスロット。鍵を直接読まない
+
+`maou_save_1` 〜 `maou_save_3`、選んでいるスロットは `maou_active_slot`。旧 `maou_save` は
+`Storage.migrateLegacy()`（読み書きのたびに一度だけ効く）がスロット1へ移して消す。
+
+- 「保存があるか」は `Storage.hasAnySave()` / `Storage.slotMeta(n)`。**`loadRun()` を有無の判定に使わない**
+  （保存本体を毎回 JSON.parse することになる）。
+- 札に出す進み具合は `slotMeta` が**保存本体から導く**。meta 用の鍵を別に持たないこと（必ず食い違う）。
+- `Game.save()` / `endRun` の `clearRun()` は**選んでいるスロット**へ効く。スロットを渡すのは
+  タイトルからの `Game.newRun(king, slot)` / `Game.load(slot)` / `Game.importRun(slot, text)` だけ。
+- テスト（node）で保存の中身を覗くときは `store[Storage.slotKey(Storage.activeSlot())]`。
+- `savedAt` は `Storage.saveRun` が書く。書き出し／読み込みの往復比較では除く。
+  なお `newRun` の初期値と `migrateState` の既定値は別物なので、往復の一致は**両方 migrate を通してから**比べる。
 
 ### 2-0. 幕（act）の切り替えは `Game` の getter を通す
 

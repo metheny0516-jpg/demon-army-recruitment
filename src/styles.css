@@ -3225,3 +3225,25 @@ button.primary::first-letter { color: var(--gold); }
 .journal-lines { margin: 0; padding-left: 1.4em; line-height: 1.75; }
 .journal-remark { margin-top: 8px; padding: 8px 12px; border-left: 3px solid #b48ae0; background: rgba(120, 80, 170, .12); color: #d9c7f0; font-size: 14px; line-height: 1.6; }
 .records-back { position: sticky; bottom: 10px; margin-top: 18px; }
+
+/* ── セーブスロットの札（タイトル） ───────────────── */
+.slot-card {
+  border: 1px solid var(--line, #3a3550);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: rgba(0, 0, 0, .18);
+  text-align: left;
+}
+.slot-card.empty { opacity: .85; }
+.slot-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.slot-line { font-size: 12px; line-height: 1.5; }
+.slot-new summary { cursor: pointer; font-size: 12px; margin-top: 6px; }
+.save-text {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+.hud-slot { font-size: 11px; }

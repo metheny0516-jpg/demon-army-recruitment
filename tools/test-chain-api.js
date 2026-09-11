@@ -143,7 +143,7 @@ assert(Game.state.chainDefVersion === 2, '新規ランの保存バージョン�
 // 途中ラン（保存 → 読み直し）
 Game.state.maxChain = 7;
 Game.save();
-assert(JSON.parse(store[Storage.SAVE_KEY]).chainDefVersion === 2, '途中ランの保存にバージョンが入る');
+assert(JSON.parse(store[Storage.slotKey(Storage.activeSlot())]).chainDefVersion === 2, '途中ランの保存にバージョンが入る');
 Game.load();
 assert(Game.state.chainDefVersion === 2 && Game.state.maxChain === 7,
   'ロードしてもバージョンは変化しない');
@@ -159,7 +159,7 @@ assert(Game.state.chainDefVersion === beforeRetry, '再起しても保存バー�
 
 // 保存 → 別セッションで読み直し（再起動）
 Game.save();
-const saved = JSON.parse(store[Storage.SAVE_KEY]);
+const saved = JSON.parse(store[Storage.slotKey(Storage.activeSlot())]);
 Game.state = null;
 Game.load();
 assert(Game.state.chainDefVersion === saved.chainDefVersion,
@@ -169,7 +169,7 @@ assert(Game.state.chainDefVersion === saved.chainDefVersion,
 const old = JSON.parse(JSON.stringify(saved));
 delete old.chainDefVersion;
 old.maxChain = 9;
-store[Storage.SAVE_KEY] = JSON.stringify(old);
+store[Storage.slotKey(Storage.activeSlot())] = JSON.stringify(old);
 Game.load();
 assert(Game.state.chainDefVersion === 1, 'バージョン不明の旧セーブは V1 として扱う');
 assert(Game.state.maxChain === 9, '旧セーブの maxChain を推定変換しない（値はそのまま）');

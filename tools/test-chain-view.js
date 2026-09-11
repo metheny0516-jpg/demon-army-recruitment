@@ -114,7 +114,7 @@ assert(JSON.stringify(direct) === JSON.stringify(Chain.viewOf([])),
 
 // ── 3. 保存 → ロードで代表経路と全帰属が一致 ─────────────
 Game.save();
-const raw = JSON.parse(store[Storage.SAVE_KEY]);
+const raw = JSON.parse(store[Storage.slotKey(Storage.activeSlot())]);
 assert(JSON.stringify(raw.lastBattle.chainView) === JSON.stringify(view),
   '保存された chainView は保存前と完全一致（欠落も丸めも無い）');
 Game.state = null;
@@ -169,7 +169,7 @@ assert(Game.state.lastBattle.chainView.maxDepth !== 99,
 const old = JSON.parse(JSON.stringify(Game.state));
 delete old.lastBattle.chainView;
 delete old.chainDefVersion;
-store[Storage.SAVE_KEY] = JSON.stringify(old);
+store[Storage.slotKey(Storage.activeSlot())] = JSON.stringify(old);
 Game.load();
 assert(!('chainView' in Game.state.lastBattle),
   'chainView の無い旧セーブに、ロード時に要約を作らない（V1表示へ戻す）');

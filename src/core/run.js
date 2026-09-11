@@ -31,7 +31,9 @@ const Game = {
     return KPI[method](...args);
   },
 
-  newRun(demonKingId) {
+  // スロットを渡せばそこへ保存する（タイトルの「ここに新規」）。省略時は選んでいるスロット。
+  newRun(demonKingId, slot) {
+    if (slot !== undefined) Storage.selectSlot(slot);
     const history = Storage.loadHistory();
     const legacyReturn = this.chooseLegacyReturn(history);
     // 教訓は前代の敗北画面で選ばれている。読んだら消す（1ランに1つだけ効く）
@@ -294,11 +296,25 @@ const Game = {
       this.trace("ate", row.uid, null, {});
     }
   },
-  load() {
+  load(slot) {
+    if (slot !== undefined) Storage.selectSlot(slot);
     const s = Storage.loadRun();
     if (!s || typeof s !== "object") return false;
     this.state = s;
     this.migrateState();
+    return true;
+  },
+
+  // 書き出した JSON をスロットへ読み込む。移行を通してから保存し直すので、
+  // 古い端末で書き出した文字列も今の作りで読める。壊れていれば false。
+  importRun(slot, text) {
+    const parsed = Storage.importRun(slot, text);
+    if (!parsed) return false;
+    const keep = this.state;
+    this.state = parsed;
+    this.migrateState();
+    Storage.saveRun(this.state, slot);
+    this.state = keep;
     return true;
   },
 
