@@ -138,9 +138,28 @@ if (samplePlays < 2) throw new Error(`WAV攻撃音が再生されない: ${sampl
   Sound.playSample = realPlay;
 }
 
-// 勝利曲は倍速にしても最後の和音まで同じ長さで鳴る。
+// 勝利曲は録音素材（CC0 ファンファーレ）が先。鳴らせなければ合成音へ戻る。
+{
+  let asked = 0;
+  const originalSample = Sound.playWinSample;
+  Sound.playWinSample = () => { asked += 1; return true; };
+  const originalSynth = Sound.playSynthWin;
+  let synth = 0;
+  Sound.playSynthWin = () => { synth += 1; };
+  Sound.cue('win', { speed: 1 });
+  if (asked !== 1 || synth !== 0) throw new Error('録音の勝利曲が先に鳴らない');
+  Sound.playWinSample = () => false;
+  Sound.cue('win', { speed: 1 });
+  if (synth !== 1) throw new Error('録音が鳴らせないとき合成音へ戻らない');
+  Sound.playWinSample = originalSample;
+  Sound.playSynthWin = originalSynth;
+}
+
+// 合成の勝利曲（フォールバック）は倍速にしても最後の和音まで同じ長さで鳴る。
 {
   const original = Sound.tone;
+  const originalSample = Sound.playWinSample;
+  Sound.playWinSample = () => false;   // node には Audio が無い。合成音の経路だけを見る
   const notes = [];
   Sound.tone = (freq, duration, options = {}) => notes.push({ freq, duration, delay: options.delay || 0 });
   Sound.cue('win', {speed: 1});
@@ -150,6 +169,7 @@ if (samplePlays < 2) throw new Error(`WAV攻撃音が再生されない: ${sampl
   Sound.cue('win', {speed: 4});
   if (JSON.stringify(notes) !== normal || end < 3 || end > 3.5) throw new Error('勝利曲の長さが不正');
   Sound.tone = original;
+  Sound.playWinSample = originalSample;
 }
 Sound.setVolume(0.35);
 if (store.maou_volume !== '0.35') throw new Error('音量を保存できない');
