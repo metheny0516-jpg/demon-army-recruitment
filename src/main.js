@@ -15,7 +15,7 @@ const App = {
     Game.state = null;
     if (typeof KPI !== "undefined") KPI.screen(null);
     this.music("title");
-    UI.title(!!Storage.loadRun(), Storage.loadHistory());
+    UI.title(Storage.hasAnySave(), Storage.loadHistory());
   },
 
   // BGMは「軍団そのものが演奏している」ので、場面名だけ渡せば
@@ -190,7 +190,11 @@ const App = {
     if (typeof Sound !== "undefined") Sound.ui(action);
     switch (action) {
       case "new":
-        Game.newRun(data.king);
+        // 新規は必ずスロットを指定する。中身があるスロットは確認してから上書きする
+        // （「続きから」を押し損ねて消える事故を無くすのが目的）。
+        if (data.slot && !Storage.slotMeta(data.slot).empty
+          && !confirm(`スロット ${data.slot} の魔王軍を消して、新しく始めますか？`)) return;
+        Game.newRun(data.king, data.slot);
         this.render();
         {
           const returning = Game.state.applicants.find(m => m.legacy);
@@ -205,7 +209,7 @@ const App = {
         }
 
       case "continue":
-        if (Game.load()) {
+        if (Game.load(data.slot)) {
           this.render();
           this.report("report", "おかえりなさいませ、魔王様！ 現在の状況から作戦を再開します。",
             { kicker: "作戦再開", title: "宰相モルモ" });
@@ -219,6 +223,32 @@ const App = {
 
       case "history":
         return UI.history(Storage.loadHistory());
+
+      case "exportsave":
+        return UI.saveTransfer(data.slot, "export", Storage.exportRun(data.slot));
+
+      case "importsave":
+        return UI.saveTransfer(data.slot, "import", "");
+
+      case "copysave": {
+        const area = document.querySelector(".save-text");
+        if (!area) return;
+        area.select();
+        if (navigator.clipboard) navigator.clipboard.writeText(area.value).catch(() => {});
+        return;
+      }
+
+      case "dosave": {
+        const area = document.getElementById("save-import");
+        if (Game.importRun(data.slot, area ? area.value : "")) return this.showTitle();
+        return this.report("worry", "読めませんデス。書き出した文字列をそのまま貼ってくださいネ。",
+          { kicker: "読み込み", title: "宰相モルモ" });
+      }
+
+      case "deletesave":
+        if (!confirm(`スロット ${data.slot} の魔王軍を消しますか？ 戻せません。`)) return;
+        Storage.clearRun(data.slot);
+        return this.showTitle();
 
       case "records":
         return UI.castle("records");

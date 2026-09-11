@@ -7,7 +7,10 @@ const { autoDismissMormo } = require('./helpers.js');
   await autoDismissMormo(page);
   const errs=[]; page.on('pageerror',e=>errs.push(e.message));
   await page.goto('file://' + process.env.GAME + '/index.html');
-  await page.click('[data-action="new"]');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  // 新規は必ずスロットを指定して始める（タイトルは3枚の札になった）
+  await page.locator('.slot-card [data-action="new"][data-slot="1"]').first().click();
   await page.waitForTimeout(150);
 
   const resumes = await page.locator('.resume').count();

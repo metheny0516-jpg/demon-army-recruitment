@@ -103,6 +103,7 @@ const UI = {
         <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
         <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
         <span class="muted">${U.esc(sd.region)}</span>
+        <span class="muted hud-slot">保存中：スロット ${Storage.activeSlot()}</span>
       </div>
     </div>`;
   },
@@ -1286,9 +1287,6 @@ const UI = {
 
   // ── 画面 ────────────────────────────
   title(hasSave, history) {
-    const kingChoices = DEMON_KINGS.map(k => `<button class="wide ${k.id === "standard" ? "primary" : ""}"
-      data-action="new" data-king="${U.esc(k.id)}">${k.icon} ${U.esc(k.name)}で新規ゲーム
-      <small>${U.esc(k.desc)}</small></button>`).join("");
     this.set(`<div class="title-screen">
       <div class="title-crest" aria-hidden="true"><span>魔</span></div>
       <div class="title-kicker">DEMON KINGDOM PERSONNEL OFFICE</div>
@@ -1296,14 +1294,66 @@ const UI = {
       <p class="title-copy">採用して、配属して、働かせろ。<br>戦場も魔王城も、人材配置がすべてだ。</p>
       <div class="title-menu">
         <div class="muted">第${history.length + 1}代魔王を選ぶ</div>
-        ${kingChoices}
-        ${hasSave ? `<button class="wide" data-action="continue">続きから</button>` : ""}
+        ${Storage.slotMetas().map(m => this.slotCard(m)).join("")}
         <button class="wide ghost" data-action="history">魔界史（${history.length}代の記録）</button>
       </div>
       <div class="spacer"></div>
       <p class="muted">軍団員を戦闘・建設・生活へ配属。勝てば資源、働けば給与と手当。<br>敗北すれば軍団は消滅し、歴史だけが残る。</p>
     </div>`);
   },
+
+  // タイトルの札。中身があれば「続きから」、空きなら魔王を選んで「ここに新規」。
+  // 「続きから」を押し損ねて上書きする事故を無くすため、新規も必ずスロットを指定する。
+  slotCard(m) {
+    const kings = DEMON_KINGS.map(k => `<button class="wide ${k.id === "standard" ? "primary" : ""}"
+      data-action="new" data-king="${U.esc(k.id)}" data-slot="${m.slot}">${k.icon} ${U.esc(k.name)}で新規
+      <small>${U.esc(k.desc)}</small></button>`).join("");
+    if (m.empty) {
+      return `<div class="slot-card empty">
+        <div class="slot-head"><b>スロット ${m.slot}</b> <span class="muted">空き</span></div>
+        ${kings}
+        <button class="small ghost" data-action="importsave" data-slot="${m.slot}">読み込み</button>
+      </div>`;
+    }
+    const cap = (typeof ACT_STAGE_CAP !== "undefined" && ACT_STAGE_CAP[m.act]) || "?";
+    return `<div class="slot-card">
+      <div class="slot-head"><b>スロット ${m.slot}</b>
+        <span class="muted">${m.kingIcon} ${U.esc(m.kingName)}・第${m.generation}代</span></div>
+      <div class="slot-line muted">第${m.act}幕・作戦${m.turn}・王国攻略 ${m.conquest}/${cap}・軍団${m.rosterCount}人</div>
+      <div class="slot-line muted">最終保存 ${U.esc(this.savedAtLabel(m.savedAt))}</div>
+      <button class="wide primary" data-action="continue" data-slot="${m.slot}">続きから</button>
+      <div class="row tight">
+        <button class="small ghost" data-action="exportsave" data-slot="${m.slot}">書き出し</button>
+        <button class="small ghost" data-action="importsave" data-slot="${m.slot}">読み込み</button>
+        <button class="small danger" data-action="deletesave" data-slot="${m.slot}">削除</button>
+      </div>
+      <details class="slot-new"><summary class="muted">このスロットで新しく始める</summary>${kings}</details>
+    </div>`;
+  },
+
+  savedAtLabel(ts) {
+    if (!ts) return "不明";
+    const d = new Date(ts);
+    const p = n => String(n).padStart(2, "0");
+    return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  },
+
+  // 書き出し／読み込みは textarea だけ（file:// でも動く。ダウンロードは持たない）。
+  saveTransfer(slot, mode, text) {
+    const body = mode === "export"
+      ? `<p class="muted">この文字列をメモ帳などに保存しておけば、別の端末でも読み込めます。</p>
+         <textarea class="save-text" readonly rows="6">${U.esc(text || "")}</textarea>
+         <button class="wide primary" data-action="copysave">コピー</button>`
+      : `<p class="muted">書き出した文字列を貼り付けてください。</p>
+         <textarea class="save-text" id="save-import" rows="6" placeholder="{...}"></textarea>
+         <button class="wide primary" data-action="dosave" data-slot="${slot}">このスロットへ読み込む</button>`;
+    this.set(`<div class="title-screen">
+      <h1>${mode === "export" ? "書き出し" : "読み込み"}</h1>
+      <div class="panel"><h3>スロット ${slot}</h3>${body}</div>
+      <button class="wide ghost" data-action="title">タイトルへ戻る</button>
+    </div>`, "title");
+  },
+
 
   recruit() {
     const st = Game.state;

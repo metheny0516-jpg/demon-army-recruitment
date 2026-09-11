@@ -3396,3 +3396,25 @@ button.primary::first-letter { color: var(--gold); }
     margin-bottom: calc(100px + env(safe-area-inset-bottom));
   }
 }
+
+/* ── セーブスロットの札（タイトル） ───────────────── */
+.slot-card {
+  border: 1px solid var(--line, #3a3550);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: rgba(0, 0, 0, .18);
+  text-align: left;
+}
+.slot-card.empty { opacity: .85; }
+.slot-head { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.slot-line { font-size: 12px; line-height: 1.5; }
+.slot-new summary { cursor: pointer; font-size: 12px; margin-top: 6px; }
+.save-text {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  word-break: break-all;
+}
+.hud-slot { font-size: 11px; }
