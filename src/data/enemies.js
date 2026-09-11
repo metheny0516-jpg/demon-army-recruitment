@@ -1,8 +1,18 @@
+// 敵は勢力ごとに「何を守り、なぜ魔王軍とぶつかるか」を持つ。
+// faction / briefing は戦闘側が後から台詞・演出へ接続するためのデータで、
+// 現行の戦闘計算には影響しない。
+const ENEMY_FACTIONS = {
+  kingdom: { name: "王国軍", tone: "秩序と生活を守るために出兵する人間たち。全員が悪人ではない。" },
+  rebel: { name: "反乱魔物", tone: "前魔王・王国・部族のどこにも居場所がない魔物たち。" },
+  experiment: { name: "研究失敗体", tone: "兵器化や治療の実験で壊れ、命令だけが残った存在。" }
+};
+
 // 勇者軍の8ステージ。region は魔界史の「到達地域」に使う。
 // units の並び順が配置（先頭が狙われやすい）。
 const ENEMY_STAGES = [
   {
-    stage: 1, army: "見習い冒険者たち", region: "村はずれ", reward: 6,
+    stage: 1, army: "見習い冒険者たち", region: "村はずれ", reward: 6, faction: "kingdom",
+    briefing: "村の避難民を背に、名もない若者たちが剣を抜く。",
     units: [
       { name: "剣士見習いテト", icon: "🗡", hp: 14, atk: 5, def: 2, spd: 6 },
       { name: "剣士見習いポル", icon: "🗡", hp: 14, atk: 5, def: 2, spd: 5 }
@@ -14,7 +24,8 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 2, army: "駆け出し冒険者パーティ", region: "街道", reward: 8,
+    stage: 2, army: "駆け出し冒険者パーティ", region: "街道", reward: 8, faction: "kingdom",
+    briefing: "街道の護衛依頼を受けた若者たち。報酬は安く、覚悟だけは本物だ。",
     units: [
       { name: "剣士ロイ", icon: "🗡", hp: 20, atk: 7, def: 3, spd: 6 },
       { name: "弓手ミナ", icon: "🏹", hp: 14, atk: 8, def: 1, spd: 8 }
@@ -27,7 +38,8 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 3, army: "国境の傭兵団", region: "関所", reward: 11,
+    stage: 3, army: "国境の傭兵団", region: "関所", reward: 11, faction: "kingdom",
+    briefing: "国境の仕事人たち。正義より先に、契約書と日当を確認する。",
     units: [
       { name: "傭兵ガレス", icon: "⚔️", hp: 26, atk: 9, def: 4, spd: 5 },
       { name: "傭兵ボルド", icon: "⚔️", hp: 26, atk: 9, def: 4, spd: 5 },
@@ -41,7 +53,8 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 4, army: "神殿騎士団", region: "大神殿", reward: 14,
+    stage: 4, army: "神殿騎士団", region: "大神殿", reward: 14, faction: "kingdom",
+    briefing: "神殿は魔王軍を災厄と呼ぶ。彼らには祈りにも給料日にも退けない事情がある。",
     units: [
       { name: "神殿騎士ユーグ", icon: "🛡️", hp: 38, atk: 12, def: 7, spd: 5 },
       { name: "神殿騎士セラ", icon: "🛡️", hp: 38, atk: 12, def: 7, spd: 5 },
@@ -56,7 +69,8 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 5, army: "王国軍先遣隊", region: "城塞都市", reward: 18,
+    stage: 5, army: "王国軍先遣隊", region: "城塞都市", reward: 18, faction: "kingdom",
+    briefing: "城塞都市の市民を避難させる時間を稼ぐため、先遣隊が前へ出る。",
     units: [
       { name: "王国兵アルド", icon: "⚔️", hp: 30, atk: 10, def: 5, spd: 6 },
       { name: "王国兵ベイン", icon: "⚔️", hp: 30, atk: 10, def: 5, spd: 6 },
@@ -71,7 +85,8 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 6, army: "王国軍本隊", region: "大平原", reward: 23,
+    stage: 6, army: "王国軍本隊", region: "大平原", reward: 23, faction: "kingdom",
+    briefing: "本隊は撤かない。将軍は兵の帰る村を、兵は将軍の退職金を案じている。",
     units: [
       { name: "精鋭兵ダン", icon: "⚔️", hp: 38, atk: 13, def: 7, spd: 6 },
       { name: "精鋭兵エド", icon: "⚔️", hp: 38, atk: 13, def: 7, spd: 6 },
@@ -88,7 +103,8 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 7, army: "聖騎士団", region: "王都城門", reward: 30,
+    stage: 7, army: "聖騎士団", region: "王都城門", reward: 30, faction: "kingdom",
+    briefing: "王都城門の前。選ばれた聖騎士たちは、守る者の顔を知っている。",
     units: [
       { name: "聖騎士オルガ", icon: "🛡️", hp: 48, atk: 16, def: 10, spd: 7 },
       { name: "聖騎士ジン", icon: "🛡️", hp: 48, atk: 16, def: 10, spd: 7 },
@@ -103,7 +119,8 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 8, army: "勇者アレン一行", region: "王都", reward: 50,
+    stage: 8, army: "勇者アレン一行", region: "王都", reward: 50, faction: "kingdom",
+    briefing: "王国軍最後の希望は、勇者一行というより、もう後がない職場の仲間たちだ。"
     units: [
       { name: "戦士ドルフ", icon: "🪓", hp: 90, atk: 18, def: 10, spd: 7 },
       { name: "勇者アレン", icon: "👑", hp: 120, atk: 24, def: 12, spd: 10, traits: ["hero_awaken"],
