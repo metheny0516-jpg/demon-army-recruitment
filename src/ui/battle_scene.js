@@ -1174,9 +1174,11 @@ const BattleScene = {
     if (from) from.el.closest(".scene-band").style.zIndex = "3";
     if (to) to.el.classList.add("targeted");
     if (!from || !to) return;
-    const action = ev.type === "splash" ? (ev.label || "追撃")
+    // 技（label）はその名で。全体技は「→ 敵全体」（対象ごとに字幕を差し替えない）
+    const action = ev.label ? ev.label
+      : ev.type === "splash" ? "追撃"
       : ({ arrow: "射撃", stone: "投石", magic: "魔法攻撃" }[this.attackKind(from)] || "攻撃");
-    this.showAction(`${from.name}の${action}　→　${to.name}`);
+    this.showAction(`${from.name}の${action}　→　${ev.aoe ? (to.side === "player" ? "魔王軍全体" : "敵全体") : to.name}`);
   },
 
   // 生成画像は戦闘ルールを知らない表示素材。読込失敗時は既存CSS演出だけが残る。
