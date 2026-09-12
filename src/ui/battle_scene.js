@@ -9,6 +9,23 @@ const BattleScene = {
   EFFECT_DIR: "assets/battle/effects/",
   UNIT_DIR: "assets/battle/units/",
   VFX_DURATION: { slash: 500, impact: 460, guard: 680, revive: 860, overkill: 860 },
+  // 演出プリセット（docs/TICKET_SKILL_FX_2026-09-12.md 1節）。
+  // 絵は CodeX の `.bu-vfx.fx-<name>`（まだ無いものは CSS の単色プレースホルダ）。
+  // ここが持つのは**動き**だけ：尺・溜め・打数・弾・揺れ・数字の大きさ・残る印。
+  FX: {
+    heavy:      { life: 720, windup: 1.5, shake: true, big: true },
+    slash_multi:{ life: 520, hits: 2 },
+    fire:       { life: 620, projectile: "fire", linger: "burn" },
+    dark:       { life: 700, from: "ground" },
+    holy:       { life: 700, from: "above", friendly: true },
+    nature:     { life: 640, linger: "bound" },
+    wind:       { life: 440, projectile: "wind", fast: true },
+    aura:       { life: 760, friendly: true, linger: "buff" },
+    shield:     { life: 680, friendly: true },
+    summon:     { life: 860, friendly: true }
+  },
+  // 全体技は同時に着弾させる。総尺は単体の1.6倍まで（3体でも「長い」と感じさせない）。
+  AOE_TOTAL_MULT: 1.6,
   missingSprites: new Set(),
   preloadedSprites: new Set(),
   vfxPreloaded: false,
@@ -545,6 +562,22 @@ const BattleScene = {
       protected: this.isProtected(ev, !!(ev.eventId && parents.has(ev.eventId))),
       scale: 1
     }));
+    // 全体技（aoe）は「1体ずつ順に」だと3体で長い。同じ技の連続を1拍にまとめ、
+    // 先頭で全員へ同時に着弾させる（描画は render の aoeGroup が行う）。
+    this.aoeGroups = new Map();
+    for (let i = 0; i < events.length; i++) {
+      const head = events[i];
+      if (!head.aoe || !head.skillId) continue;
+      const at = i;
+      const group = [head];
+      while (i + 1 < events.length && events[i + 1].aoe && events[i + 1].skillId === head.skillId
+        && events[i + 1].fromId === head.fromId) group.push(events[++i]);
+      if (group.length < 2) continue;
+      items[at].duration = Math.round(items[at].duration * this.AOE_TOTAL_MULT);
+      for (let k = at + 1; k <= i; k++) items[k].duration = 0;
+      this.aoeGroups.set(head, group);
+      for (const member of group.slice(1)) this.aoeGroups.set(member, null);   // 描画済みの印
+    }
     const chains = new Map();
     events.forEach((ev, index) => {
       if (!ev.chainId) return;
@@ -661,8 +694,19 @@ const BattleScene = {
       }
       case "attack":
       case "splash": {
+        const group = this.aoeGroups && this.aoeGroups.has(ev) ? this.aoeGroups.get(ev) : undefined;
+        if (group === null) break;                    // 先頭で一緒に描き終えている（字幕と記録だけ残す）
         const from = this.units[ev.fromId], to = this.units[ev.toId];
         this.focusAttack(from, to, ev);
+        if (group) {
+          // 全体技：対象全員へ同時。数字も同時に出る。
+          for (const member of group) {
+            const target = this.units[member.toId];
+            if (target) target.el.classList.add("targeted");
+            this.attackMotion(from, target, member);
+          }
+          break;
+        }
         this.attackMotion(from, to, ev);
         break;
       }
@@ -1104,6 +1148,21 @@ const BattleScene = {
     this.timers.push(setTimeout(() => img.remove(), life));
   },
 
+  // プリセットの絵を1枚重ねる。クラス名は CodeX の CSS と揃える（.bu-vfx.fx-<name>）。
+  fxVfx(u, fx, emphasis) {
+    if (!u || !u.el || !fx) return;
+    const anchor = u.el.querySelector(".bu-vfx-anchor");
+    if (!anchor) return;
+    const preset = this.FX[fx] || {};
+    const el = document.createElement("i");
+    el.className = `bu-vfx fx-${fx}${emphasis >= 2 ? " heavy" : ""}${preset.from ? ` from-${preset.from}` : ""}`;
+    const life = this.visualDuration(preset.life || 560);
+    el.style.animationDuration = `${life}ms`;
+    anchor.appendChild(el);
+    this.timers.push(setTimeout(() => el.remove(), life));
+    return el;
+  },
+
   setPose(u, pose) {
     if (!u || !u.sprite || u.sprite.dataset.spriteFailed || !this.BATTLE_SPRITES[u.tplId]?.has(pose)) return;
     u.sprite.dataset.pose = pose;
@@ -1268,9 +1327,14 @@ const BattleScene = {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     // 読む時間を長くしても、攻撃動作自体はスローモーションにしない。
     const total = this.visualDuration(Math.min(950, this.durationOf(ev) * .88));
-    const kind = ev.type === "splash" ? "melee" : this.attackKind(from);
+    // 演出プリセット。無い（通常攻撃）なら今までどおり。
+    const preset = (ev.fx && this.FX[ev.fx]) || null;
+    const kind = ev.type === "splash" ? "melee"
+      : preset && preset.projectile ? preset.projectile : this.attackKind(from);
     const ranged = kind !== "melee";
-    const contact = reduced ? 0 : total * (ranged ? .62 : .38);
+    // heavy は溜めてから当てる（接触を後ろへ）。wind は速い（接触を前へ）。
+    const beat = preset ? (preset.windup ? 1.5 : preset.fast ? 0.6 : 1) : 1;
+    const contact = reduced ? 0 : Math.min(total * .8, total * (ranged ? .62 : .38) * beat);
     const settle = () => { if (to) this.setHp(to, ev.hp, ev.maxHp); };
     this.pendingHits.add(settle);
     const later = (fn, ms) => this.timers.push(setTimeout(fn, ms));
@@ -1319,14 +1383,24 @@ const BattleScene = {
       this.pendingHits.delete(settle);
       if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId, attackKind: kind });
       if (!to) return;
-      if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
-      this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
+      if (preset) {
+        // プリセットの絵。打数のある技（二連打・血の雄叫び）は短い間隔で2回。
+        const hits = preset.hits || 1;
+        for (let i = 0; i < hits; i++) {
+          if (i === 0) this.fxVfx(to, ev.fx, ev.emphasis);
+          else later(() => { this.fxVfx(to, ev.fx, ev.emphasis); this.float(to, String(ev.dmg), "big"); }, 140 * i);
+        }
+        this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
+      } else {
+        if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
+        this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
+      }
       // 連鎖の段と戦意の高さで数字の大きさが変わる
       const surge = Math.max(
         Math.max(0, (ev.chainDepth || 1) - 2),
         this.moraleTier || 0
       );
-      this.hit(to, ev.dmg, ev.emphasis, ev.label, surge);
+      this.hit(to, ev.dmg, preset && preset.big ? Math.max(2, ev.emphasis || 0) : ev.emphasis, ev.label, surge);
       this.setPose(to, "hurt");
       const recoil = to.side === "player" ? -1 : 1;
       this.animateActor(to, ["slime", "king_slime"].includes(to.tplId) ? [
@@ -1343,7 +1417,8 @@ const BattleScene = {
         this.setPose(to, to.el.classList.contains("dead") ? "fallen" : "idle");
         to.el.classList.remove("hit", "hit-big");
       }, Math.min(total * .5, total - contact));
-      if (ev.emphasis >= 3 && !reduced) this.shake();
+      // heavy は一撃で画面が小さく揺れる（大技を「重い」と感じさせるのはここだけ）
+      if ((ev.emphasis >= 3 || (preset && preset.shake)) && !reduced) this.shake();
     };
     if (reduced) impact(); else later(impact, contact);
   },

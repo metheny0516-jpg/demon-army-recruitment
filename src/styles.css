@@ -3541,3 +3541,80 @@ button.primary::first-letter { color: var(--gold); }
 .member-row .leaving, .leaving-line { color: #ffb36b; }
 .leaving-line { font-size: 13px; margin: 6px 0; }
 .member-row .leaving { font-size: 11px; margin-left: 6px; }
+
+/* ── 演出プリセット（docs/TICKET_SKILL_FX_2026-09-12.md 1節） ─────────
+   絵（背景画像）は CodeX が battlefield.css の `.bu-vfx.fx-<name>` に足す。
+   こちらは**動き**（keyframes）と、絵が入るまでの単色プレースホルダだけを持つ。
+   battlefield.css は styles.css の後に読まれるので、絵が入れば背景はそちらが勝つ。 */
+.game-scene-battle .bu-vfx[class*="fx-"] {
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.9) 0 10%, rgba(255,255,255,.25) 38%, transparent 70%);
+  background-size: contain; background-position: center; background-repeat: no-repeat;
+}
+.game-scene-battle .bu-vfx.fx-heavy { width: 150%; height: 150%; animation: battleFxHeavy .72s ease-out;
+  background: radial-gradient(circle, rgba(255,244,214,.95) 0 12%, rgba(255,170,80,.55) 40%, transparent 72%); }
+.game-scene-battle .bu-vfx.fx-slash_multi { animation: battleVfxSlash .52s ease-out;
+  background: linear-gradient(115deg, transparent 38%, rgba(255,240,220,.95) 47%, transparent 55%),
+              linear-gradient(115deg, transparent 52%, rgba(255,220,190,.75) 60%, transparent 68%); }
+.game-scene-battle .bu-vfx.fx-fire { animation: battleFxRise .62s ease-out;
+  background: radial-gradient(circle, rgba(255,240,190,.95) 0 12%, rgba(255,120,40,.6) 42%, transparent 74%); }
+.game-scene-battle .bu-vfx.fx-dark { animation: battleFxRipple .7s ease-out;
+  background: radial-gradient(circle, rgba(190,120,255,.7) 0 18%, rgba(60,20,90,.55) 46%, transparent 74%); }
+.game-scene-battle .bu-vfx.fx-holy { width: 92%; animation: battleFxDescend .7s ease-out;
+  background: linear-gradient(180deg, rgba(255,240,190,.9), rgba(255,230,160,.25) 70%, transparent); }
+.game-scene-battle .bu-vfx.fx-nature { animation: battleFxCling .64s ease-out;
+  background: radial-gradient(circle, rgba(150,230,140,.75) 0 20%, rgba(60,120,60,.5) 48%, transparent 76%); }
+.game-scene-battle .bu-vfx.fx-wind { animation: battleFxGust .44s ease-out;
+  background: linear-gradient(100deg, transparent 40%, rgba(220,245,255,.85) 50%, transparent 60%); }
+.game-scene-battle .bu-vfx.fx-aura { width: 120%; height: 60%; top: 86%; border-radius: 50%;
+  animation: battleFxRing .76s ease-out;
+  background: radial-gradient(ellipse, rgba(255,220,130,.75) 0 30%, rgba(255,200,90,.25) 60%, transparent 78%); }
+.game-scene-battle .bu-vfx.fx-shield { width: 118%; height: 118%; animation: battleVfxGuard .68s ease-out;
+  background: radial-gradient(circle, rgba(190,215,255,.55) 0 42%, rgba(120,160,240,.35) 62%, transparent 78%); }
+.game-scene-battle .bu-vfx.fx-summon { width: 160%; height: 180%; top: 38%; animation: battleVfxRevive .86s ease-out;
+  background: radial-gradient(circle, rgba(210,255,220,.7) 0 20%, rgba(80,160,120,.4) 50%, transparent 76%); }
+/* 出どころ：dark は足元から、holy は頭上から */
+.game-scene-battle .bu-vfx.from-ground { top: 78%; }
+.game-scene-battle .bu-vfx.from-above { top: 18%; }
+@keyframes battleFxHeavy {
+  0% { opacity: 0; transform: translate(-50%, -62%) scale(.3) rotate(-14deg); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -48%) scale(1.45); }
+}
+@keyframes battleFxRise {
+  0% { opacity: 0; transform: translate(-50%, -28%) scale(.4); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -68%) scale(1.25); }
+}
+@keyframes battleFxRipple {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.25); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+}
+@keyframes battleFxDescend {
+  0% { opacity: 0; transform: translate(-50%, -110%) scale(.9); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -30%) scale(1); }
+}
+@keyframes battleFxCling {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+}
+@keyframes battleFxGust {
+  0% { opacity: 0; transform: translate(-80%, -50%) scale(.8) skewX(-18deg); }
+  40% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) skewX(-18deg); }
+  100% { opacity: 0; transform: translate(-20%, -50%) scale(1.1) skewX(-18deg); }
+}
+@keyframes battleFxRing {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.25); }
+}
+/* 弾（CodeX が絵を入れるまでの形）。既存の .battle-projectile の上に乗る */
+.projectile-fire::before { width: 16px; height: 16px; left: -8px; top: -8px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 15%, #ffd27a 35%, #ff7a30 65%, #ff4d0000 80%); box-shadow: 0 0 14px #ff9a45; }
+.projectile-fire::after { width: 38px; height: 8px; top: -4px; left: -40px; border-radius: 50%;
+  background: linear-gradient(90deg, transparent, #ff9a45a0); }
+.projectile-wind::before { width: 26px; height: 3px; top: -1px; left: -26px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #dff4ff); box-shadow: 0 4px 0 -1px #dff4ff80, 0 -4px 0 -1px #dff4ff80; }
