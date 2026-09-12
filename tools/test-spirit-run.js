@@ -89,7 +89,9 @@ const spiritOf = (st, uid) => (st.roster.find(m => m.uid === uid) || {}).spirit;
   for (let i = 0; i < 25 && none; i++) {
     const st = freshRun([1, 0, 1]);
     const out = Game.deploy({ offerRetreat: true });
-    if (out && out.result.orderOffer) none = false;
+    // 味方が倒れると気合が+1される（2026-09-12）ので、誰も倒れていないのに提案が出た回だけを数える
+    const fellBefore = out && out.result.orderOffer && out.result.timeline.slice(0, out.result.orderOffer.index || 0).some(e => e.type === 'death' && String(e.unitId).startsWith('p'));
+    if (out && out.result.orderOffer && !fellBefore) none = false;
     if (st.pendingBattle) Game.answerOrder('none');
     if (st.pendingBattle) Game.settleBattle('continue');
   }

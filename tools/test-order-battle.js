@@ -150,7 +150,8 @@ const offersOf = r => r.timeline.filter(e => e.type === 'order_offer');
   const orc = mk('ガロ', ['brute'], 'player', { hp: 300, atk: 12, def: 6, spd: 4, spirit: 0 });
   const foe = mk('勇者', [], 'enemy', { race: '人間', hp: 700, atk: 30, def: 4, spd: 7 });
   const foe2 = mk('従者', [], 'enemy', { race: '人間', hp: 200, atk: 8, def: 2, spd: 3 });
-  const rr = Battle.simulate([weak, orc], [foe, foe2], { rations: rations(), seed: 42, offerOrder: true });
+  // 味方が倒れると気合が+1されるので（2026-09-12）、一人で出て「半分を切った」節目だけを見る
+  const rr = Battle.simulate([orc], [foe, foe2], { rations: rations(), seed: 42, offerOrder: true });
   assert(offersOf(rr).length === 0, '号令できる者が全員気合不足なら提案は出ない');
   const costs = Object.keys(TRAITS).filter(id => TRAITS[id].order).map(id => TRAITS[id].order.cost);
   assert(costs.every(c => Number.isInteger(c) && c >= 1 && c <= 3), 'cost は 1〜3 の整数');
