@@ -92,7 +92,7 @@ const UI = {
       </div>
       <div class="hud-row hud-progress">
         <span class="army-level">魔王軍 <b>Lv.${Game.armyLevel()}</b></span>
-        <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
+        <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b>${Game.outpostCleared && Game.outpostCleared() ? `<small class="outpost-done"> ▸前哨済</small>` : ""}</span>
         <span>警戒度 <b>${st.alert}</b>${this.counterattackGauge()}</span>
         ${recordsButton}
       </div>
@@ -1479,8 +1479,16 @@ const UI = {
               ? `施工役なし。建材${Math.max(0, 3 - (st.buildProgress || 0))}で勝利後に拠点接収できる（備蓄${st.materials || 0}）`
               : `施工役なし（${m.materialReward || 0}建材は備蓄）`)
           : `勝利後 最大${buildEstimate}投入／次施設まで${buildRemaining}`;
+      // 進軍は「前哨戦 → 本戦」の2戦（2026-09-12）。どちらの戦いなのかを最初に出す。
+      const phase = m.twoStage
+        ? (m.missionPhase === "outpost"
+          ? `<span class="mission-phase outpost">前哨戦</span>`
+          : `<span class="mission-phase main">本戦</span>`)
+        : "";
       const consequence = m.missionKind === "invade"
-        ? `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`
+        ? (m.missionPhase === "outpost"
+          ? "王国攻略は進まない（勝てば本戦へ）"
+          : `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`)
         : m.missionKind === "suppress"
           ? `生存者の忠誠 +${m.loyaltyDelta}`
           : "王国攻略は進まない";
@@ -1488,12 +1496,14 @@ const UI = {
         <div class="mission-route-number"><span>進軍路</span><b>${i + 1}</b></div>
         <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : "🏰"}
           危険度 ${U.esc(m.difficulty)}</div>
-        <h3>${U.esc(m.missionTitle)}</h3>
+        <h3>${phase}${U.esc(m.missionTitle)}</h3>
         <div class="mission-purpose"><b>${U.esc(m.strategyLabel || "作戦")}</b><br>
           <span>${U.esc(m.strategyHint || "")}</span></div>
         <div class="mission-army">${U.esc(m.army)} <span class="muted">— ${U.esc(m.region)}</span></div>
         <div class="mission-formation"><b>敵編成：${U.esc(m.formationName || "基本隊列")}</b><br>
-          <span class="muted">${U.esc(m.formationHint || "敵情を確認して出撃隊を選べ。")}</span></div>
+          <span class="muted">${U.esc(m.formationHint || "敵情を確認して出撃隊を選べ。")}</span>
+          ${m.missionPhase === "main" && m.twoStage ? `<br><span class="outpost-note">前哨で見た隊列と同じ</span>` : ""}
+          ${m.missionPhase === "outpost" ? `<br><span class="outpost-note">この隊列がそのまま本戦の隊列になる</span>` : ""}</div>
         <p>${U.esc(m.description)}</p>
         <dl class="mission-economy">
           <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
@@ -1525,6 +1535,7 @@ const UI = {
         <div class="muted">${forced
           ? "迎え撃つほかない。面接と編成で備えよ。"
           : "略奪と鎮圧は軍団を整える寄り道、王国侵攻は最終決戦を近づける。建設担当がいれば、どの作戦でも勝利後に備蓄建材を施設へ投入する。"}</div>
+        ${forced ? "" : this.outpostMormo(offers)}
       </div>
       <div class="panel mission-assets"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
       </header>
@@ -1533,6 +1544,15 @@ const UI = {
       <div class="spacer"></div>
       ${forced ? "" : `<button class="wide ghost mission-return" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`}
       </div>`, "mission");
+  },
+
+  // 前哨戦・本戦のモルモの一言（2026-09-12）。進軍が2戦制の段階でだけ出す。
+  outpostMormo(offers) {
+    const invade = (offers || []).find(m => m.missionKind === "invade" && m.twoStage);
+    if (!invade || typeof MORMO_LINES === "undefined") return "";
+    const lines = invade.missionPhase === "outpost" ? MORMO_LINES.outpost : MORMO_LINES.mainBattle;
+    if (!lines || !lines.length) return "";
+    return `<div class="mormo-brief">宰相モルモ「${U.esc(lines[0])}」</div>`;
   },
 
   facility() {

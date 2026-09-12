@@ -158,11 +158,20 @@ const FX = ['heavy', 'slash_multi', 'fire', 'dark', 'holy', 'nature', 'wind', 'a
     BattleScene.finished = false; BattleScene.index = 0;
     BattleScene.skip();
   });
-  await page.waitForTimeout(1200);
-  const left = await page.evaluate(() => ({
-    vfx: document.querySelectorAll('.bu-vfx').length,
-    projectile: document.querySelectorAll('.battle-projectile').length
-  }));
+  // 絵は寿命が来ると自分で消える。長いプリセット（aura 760ms）が接触の遅れと重なると
+  // 固定の待ち時間では取りこぼすので、消えるまで待つ（消えなければそこで落ちる）。
+  const left = await page.evaluate(async () => {
+    const count = () => ({
+      vfx: document.querySelectorAll('.bu-vfx').length,
+      projectile: document.querySelectorAll('.battle-projectile').length
+    });
+    for (let i = 0; i < 40; i++) {
+      const now = count();
+      if (!now.vfx && !now.projectile) return now;
+      await new Promise(r => setTimeout(r, 100));
+    }
+    return count();
+  });
   ok(left.vfx === 0 && left.projectile === 0, `残骸なし（絵${left.vfx} / 弾${left.projectile}）`);
 
   console.log('\n▼ 低モーション：静止画1枚＋数字');
