@@ -2103,6 +2103,28 @@ const Game = {
     this.save();
   },
 
+  // 慰留（2026-09-12）。去りかけ（leaving）か忠誠が低い者に、給与2回分の慰留金で忠誠を戻す。
+  RETAIN_LOYALTY: 30,
+  RETAIN_THRESHOLD: 20,
+  retainCost(monster) { return Math.max(3, (monster.salary || 0) * 2); },
+  canRetain(monster) {
+    return !!monster && !monster.mercenary && (monster.leaving || monster.loyalty <= this.RETAIN_THRESHOLD) && this.state.gold >= this.retainCost(monster);
+  },
+  retain(uid) {
+    const st = this.state;
+    const m = st.roster.find(x => x.uid === uid);
+    if (!this.canRetain(m)) return false;
+    const cost = this.retainCost(m);
+    st.gold -= cost;
+    m.loyalty = U.clamp(m.loyalty + this.RETAIN_LOYALTY, 0, 100);
+    m.leaving = false;
+    m.unpaid = false;
+    m.unpaidStreak = 0;
+    // 痕跡の種類は17で打ち止め（Traces.MAX_KINDS）なので、慰留は痕跡にしない。日誌の notes だけ
+    this.save();
+    return { cost, loyalty: m.loyalty };
+  },
+
   // 出撃隊と留守番の往復。外せば留守番、入れれば出撃隊（枠が無ければ失敗）。
   toggleDeploy(uid) {
     const st = this.state;
@@ -3471,9 +3493,20 @@ const Game = {
       + `この者たちへの給与支払いは不要になった`);
   },
 
+  // 逃亡（2026-09-12 オーナー試遊「急に逃亡されるとへこむ」）。忠誠0で即去るのをやめ、**一度は荷物をまとめる**。
+  // 荷物をまとめた者（leaving）は、次の決着までに忠誠が戻らなければ去る。引き留めは「慰留」（retain：金で忠誠を戻す）か給与を払うこと。
   processDepartures(notes) {
     const st = this.state;
-    const leaving = st.roster.filter(m => m.loyalty <= 0);
+    const leaving = [];
+    for (const m of st.roster) {
+      if (m.loyalty > 0) { if (m.leaving) { m.leaving = false; notes.push(`${m.name} は荷物を解いた（忠誠 ${m.loyalty}）`); } continue; }
+      if (!m.leaving) {
+        m.leaving = true;
+        notes.push(`${m.name} が荷物をまとめ始めた……次の決着までに引き留めなければ軍を去る（給与を払う／慰留）`);
+        continue;
+      }
+      leaving.push(m);
+    }
     for (const m of leaving) {
       notes.push(`${m.name} は愛想を尽かして軍を去った……`);
       this.recordDeparture(m, "deserted");
