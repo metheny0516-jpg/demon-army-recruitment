@@ -14,6 +14,9 @@ const BattleScene = {
   vfxPreloaded: false,
   BATTLE_SPRITES: {
     goblin: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    harpy: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    mimic: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    troll: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     skeleton: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     orc: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),

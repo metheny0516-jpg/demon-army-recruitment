@@ -190,3 +190,109 @@ Use case: stylized-concept. Production 2D RPG animation sprite sheet, EXACT 1536
 ### 採用した背景抽出
 
 Background extraction only: remove ALL dark backdrop and colored haze around the six sprites. Make genuinely transparent alpha background, including gaps between bones and equipment. Preserve exactly the six illustrations, their colors, ink outlines, identities, positions, size and 1536x1024 three-by-two grid layout. No other changes. No background, no shadow, no glow.
+
+
+## ハーピー・ミミック・トロル（2026-09-12）
+
+内蔵 `image_gen` で各1枚の6ポーズ原画を生成し、
+`assets/battle/units/{harpy,mimic,troll}/motion-source.png` に保存。
+各フォルダの `idle / attack-windup / strike / recover / hurt / fallen.webp` は
+512×512・実アルファ・種族内共通倍率・足元492px。`motion-review.png` は6ポーズの縮小比較。
+`BATTLE_SPRITES` に3行を追加し、既存のポーズ遷移・左右反転・フォールバックへ接続した。
+設計ゲート7の「誰がどう働いたかを理解できる見せ方」を補い、戦闘式や尺は変更しない。
+
+### 人物と生成プロンプト
+
+共通指示（内蔵 image_gen、CLI/APIは使用していない）:
+
+> Production transparent RGBA 2D RPG sprite sheet, EXACT 1536x1024,
+> exactly 3 columns x 2 rows of equal 512x512 cells. Six right-facing full-body
+> poses of ONE identical character at the SAME physical scale, same proportions
+> and equipment. Row1 idle / attack-windup / strike; row2 recover / hurt / fallen.
+> Thick uneven dark ink, limited muted matte earthy flat cel colors, restrained
+> print texture, awkward hand-drawn 1990s tabletop bestiary / SNES monster manual.
+> Complete silhouettes with generous empty gutters; no clipping or overlap.
+> Actual alpha transparency outside sprites, no background, ground, cast shadows,
+> effects, speed lines, glow, grid, labels, text, watermark, blood or gore.
+
+- **Harpy** — `assets/monsters/harpy.png` を人物・羽根の色・画風の参照に使用。
+  Female harpy with shy worried eyes, short ochre beak-like nose, tousled brown/ochre
+  feather hair and crest, tan face, brown wing-arms, cream feathered chest,
+  worn brown cross-body satchel, bird talon legs, modest fully feather-covered body.
+  Idle hovering slightly with bent talons / windup rising with wings spread upward /
+  strike diagonal downward-right diving kick / recover beating wings back upright /
+  hurt wings tucked protectively / fallen lying sideways, wings spread, head right.
+  初稿はRGBチェック柄だったため、内蔵image_genで背景抽出を追加。
+  採用した修正指示:
+  “Remove the background from this sprite sheet. Return a transparent PNG cutout of
+  all six sprites. Keep the artwork exactly unchanged, including its matte muted
+  colors and rough ink. The grey and white squares are background and must become
+  fully transparent, including all negative spaces between feathers. Preserve the
+  1536x1024 size and exact sprite positions. Do not draw a new background.”
+- **Mimic** — 参照指定の `assets/monsters/mimic.png` は存在せず、オーナーの
+  「立ち絵含めて最初から考えてよい」という追認により新規デザイン。
+  Squat weathered dark-ochre wooden treasure chest, curved lid, two tarnished dark
+  iron bands, square brass latch, small blunt feet, ivory triangular teeth,
+  muted dark-purple mouth. No eyes on the wood, no arms.
+  Idle completely closed / windup lid cracked with teeth peeking /
+  strike huge toothy maw snapping right / recover lid lowering /
+  hurt tilted rattling lid (pose only) / fallen toppled box, detached lid,
+  a few dull coins and wood splinters scattered close by.
+- **Troll** — 新規デザイン。Big hulking troll, rough stone-like grey-green skin,
+  broad blunt nose, small tired eyes, lower tusks, bald head, stooped long-armed
+  muscular body, short thick legs, ragged brown loincloth and belt, one wooden club.
+  Idle stooped with club lowered / windup club shouldered behind head /
+  strike downward-right smash / recover pulling club back up /
+  hurt free hand over head / fallen lying on back with club beside hand.
+
+立ち絵ファイル・登録データは今回追加していない。ミミックとトロルの将来の立ち絵は
+この原画の木材・金具・牙、石肌・顔・棍棒を同じ個体として参照できる。
+3原画とも1536×1024 RGBA、透明領域のalpha=0を検査済み。
+透明ピクセルのRGBに色が残っていても、WebP合成には表示されない。
+
+### 切り分けと再生成
+
+`prepare_species_motion.py` の共通倍率計算・リサイズ・WebP出力をそのまま使用。
+現行スクリプトの引数choicesには新3種がないため、変更ファイルの制約を守り、
+実行時のメモリ内だけで対象名を追加した。ハーピーの下段はfallenの左足を保持するため
+空白列995pxで区切る（既存の賢者等と同じ空白境界補正）。
+スクリプト本体を編集せず再生成するコマンドは以下。リポジトリルートで実行:
+
+```python
+from pathlib import Path
+import sys
+script = Path('scripts/prepare_species_motion.py').resolve()
+code = script.read_text(encoding='utf-8').replace(
+    "'minotaur', 'lich'))",
+    "'minotaur', 'lich', 'harpy', 'mimic', 'troll'))")
+code = code.replace(
+    "            bounds = cell.getchannel",
+    "            if args.species == 'harpy' and i >= 3:\n"
+    "                edges = (0, 512, 995, 1536)\n"
+    "                cell = source.crop((edges[i % 3], y, edges[i % 3 + 1], y + 512))\n"
+    "            bounds = cell.getchannel")
+for species in ('harpy', 'mimic', 'troll'):
+    sys.argv = [str(script), species,
+                f'assets/battle/units/{species}/motion-source.png']
+    exec(compile(code, str(script), 'exec'),
+         {'__name__': '__main__', '__file__': str(script)})
+```
+
+このコードをPythonの標準入力へ渡す。倍率は種族内で一つのみで、個別ポーズの拡大はしない。
+18枚ともalpha外接矩形の下端492、512角、余白ありを確認し、縮小比較を目視した。
+
+### 検証とテスト側の残件
+
+- `node --check src/ui/battle_scene.js` 通過。
+- 指定の `art-coverage.js` → `species.js` → `battlefield.js` を直列実行。
+  species・battlefieldは通過。art-coverageは画像読み込み失敗0件の後、
+  旧固定値 `144` と追加後の `162` の比較だけで失敗。
+- テストファイルを変更せず、メモリ内で期待数のみ162へ更新したart-coverageを追加実行し通過。
+  全162枚の512角画像、第一幕の基本・variants計49敵エントリ、敵10役の対応を確認。
+- 既存 `battle-preview.html` のroles表は新3種に未対応なので、単にSPECIESを渡すだけでは
+  スライム・骸骨を検査してしまう。追加検証ではページ内のroles表へ新3種を一時追加し、
+  `sprite.dataset.tplId` が対象種族であることも確認してから既存speciesテストを直列実行。
+  6ポーズ、左右、390/1280px、x1/x2/x4、HP同期、戻り、スキップ、低モーション、
+  画像失敗時フォールバックを対象3種それぞれで検査。
+- テスト/試写ファイルの恒久更新（期待数162とroles表への3種追加）は今回の変更範囲外。
+  `HANDOFF.md` も編集せず、本節に再生成方法と引き継ぎをまとめた。
