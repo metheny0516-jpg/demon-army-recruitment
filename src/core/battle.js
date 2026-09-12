@@ -911,6 +911,7 @@ const Battle = {
       living: enemies.filter(onField), onField, timeline, U, rand: U.rand, chance: U.chance, pick: U.pick,
       playerUnits, enemyUnits,
       applyDamage, act, note, emit, emitCausal, pickTarget, lowestAlly, moveBack, gainBattleResource, gainSpirit,
+      summon: (spec, parent) => summonUnit(unit, spec, parent || null),
       pickEnemy: () => (cmd && cmd.targetId && enemies.find(e => e.id === cmd.targetId && onField(e))) || (enemies.some(onField) ? pickTarget(unit, enemies.filter(onField), round) : null),
       heal: (t, ratio, label) => {
         const amount = Math.min(t.maxHp - t.hp, Math.ceil(t.maxHp * ratio));

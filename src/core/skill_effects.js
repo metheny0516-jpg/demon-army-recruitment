@@ -17,7 +17,8 @@
 //        damage(target, mult, label) → dmg（通常攻撃の式で label 付き）, heal(target, ratio, label) → amount,
 //        note(text, cls), emit(type, data), emitCausal(type, data, parent),
 //        pickTarget(unit, living, round), pickEnemy(), lowestAlly(allies, except), moveBack(list, target),
-//        gainBattleResource(unit, "gold", n, label, parent), gainSpirit(unit, n, reason) }
+//        gainBattleResource(unit, "gold", n, label, parent), gainSpirit(unit, n, reason),
+//        summon(spec, parent)（spec: { name, race, tplId, maxHp, atk, def, spd, job }。本人の側に現れる） }
 //
 // 乱数は ctx.rand / ctx.chance / ctx.pick だけを使う（Math.random を直接呼ぶと同じ種で展開が変わる）。
 // 新しい kind の技は src/data/skills.js の SKILLS か、カタログ src/data/skills_catalog.js に置く。
