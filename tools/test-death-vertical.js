@@ -80,6 +80,9 @@ function trial(seed, specs, order, conquest, facility) {
   st.facilityLevel = facility ? 2 : 0;
   st.activeFacilityId = facility || null;
   st.pendingFacilityChoiceLevel = null;
+  // 進軍は2戦制になった（2026-09-12）。ここが見たいのは「本戦の厚さの敵と戦った結果」
+  // なので、前哨は制した状態にしてから組む（前哨は敵が半分で、誰も倒れない）。
+  st.outpost = { stage: st.conquest, cleared: true, formationId: null };
   st.selectedMission = Game.buildMission(MISSION_TYPES.find(m => m.id === 'invade'));
   st.phase = 'formation';
   const out = Game.deploy();

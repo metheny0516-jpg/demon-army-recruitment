@@ -122,6 +122,7 @@ const Game = {
       retreatCount: 0,
       orderCount: 0,
       stageFights: {},          // 敵の慣れ：段階ごとに戦った回数（通常作戦のみ）
+      outpost: null,            // 前哨戦の札（2026-09-12）。{ stage, cleared, formationId }
       skillLore: {},            // 種族の伝承：species → 覚えた上位技 id
       pendingBattle: null,
       // 全滅の回数（2026-09-10・再建）
@@ -369,7 +370,7 @@ const Game = {
       feastPending: null, hungerStreak: 0,
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
-      retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {},
+      retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {}, outpost: null,
       // 幕の進行（2026-09-11）。旧セーブは第一幕として読む。
       act: 1, actStartedTurn: 1, actHistory: [],
       // 王国の反撃（2026-09-10）
@@ -425,6 +426,8 @@ const Game = {
       }
     }
     if (!st.stageFights || typeof st.stageFights !== "object") st.stageFights = {};
+    // 前哨戦（2026-09-12）。旧セーブは前哨から始める。
+    if (st.outpost === undefined) st.outpost = null;
     // 種族の伝承（2026-09-11）。旧セーブは今いる上位技持ちから埋める
     if (!st.skillLore || typeof st.skillLore !== "object") {
       st.skillLore = {};
@@ -1047,6 +1050,37 @@ const Game = {
     return st.missionOffers;
   },
 
+  // 前哨戦の規則（docs/SPEC_TWO_STAGE_BATTLES_2026-09-12.md）。
+  // 進軍は「前哨戦 → 本戦」の2戦。征服度が進むのは本戦に勝ったときだけ。
+  TWO_STAGE_REWARD_MULT: 1.3,      // 1段階を2戦に割ったぶんの補正（段階表は触らない）
+  OUTPOST_REWARD_RATIO: 0.5,
+  OUTPOST_FOOD_REWARD: 2,
+  // その段階に前哨が要るか。段階1（チュートリアル）と最終段階（勇者・王都）は一発勝負。
+  outpostNeeded(baseIndex) {
+    if (baseIndex <= 0) return false;                       // 段階1は敵2体。半分にすると1体になり狙い選びが消える
+    if (baseIndex >= this.MAX_CONQUEST - 1) return false;    // 勇者戦・幕の最終段階は前哨なし
+    return true;
+  },
+  // 今の征服度で前哨を制しているか（HUD と作戦カードが読む）。
+  outpostCleared() {
+    const st = this.state;
+    const o = st && st.outpost;
+    return !!(o && o.cleared && o.stage === st.conquest);
+  },
+  // 前哨戦の敵：本戦の隊列の前半（役つきを1体は残す）。
+  outpostUnits(units) {
+    const keep = Math.max(1, Math.ceil(units.length / 2));
+    const ROLES = ["shield", "archer", "priest", "caster", "commander", "rogue", "brute"];
+    const picked = units.slice(0, keep);
+    // 前半が全員 fighter なら、役つきを1体だけ後半から引いてくる
+    // （前哨は「どんな隊列か」を読むための戦いなので、役が1つも見えないと意味がない）。
+    if (!picked.some(u => ROLES.includes(u.role))) {
+      const withRole = units.slice(keep).find(u => ROLES.includes(u.role));
+      if (withRole) picked[picked.length - 1] = withRole;
+    }
+    return picked;
+  },
+
   buildMission(type, previousFormationId) {
     const st = this.state;
     // 敵も魔王軍レベルに連動する（仕様2.3）。征服段階だけで引いていた頃は、
@@ -1069,7 +1103,9 @@ const Game = {
       { id: "standard", name: "基本隊列", hint: "王国軍の標準的な隊列。", units: base.units },
       ...(base.variants || [])
     ];
-    const formation = formations.find(f => f.id === previousFormationId) || U.pick(formations);
+    // 前哨で見た隊列が本戦の隊列（読みに意味を持たせる）。控えは st.outpost.formationId。
+    const heldId = type.id === "invade" && this.outpostCleared() ? (st.outpost || {}).formationId : null;
+    const formation = formations.find(f => f.id === (heldId || previousFormationId)) || U.pick(formations);
     // 大軍は選抜の自由度が高いぶん敵にも察知される。隠し補正にせず
     // mission.armyPressure として作戦カードへ渡し、解雇・維持の判断材料にする。
     const armyPressure = Math.min(6, Math.max(0, st.roster.length - this.MAX_DEPLOY) * 2);
@@ -1085,11 +1121,18 @@ const Game = {
       def: stat(unit.def, 0),
       spd: stat(unit.spd, 1)
     }));
+    // 進軍だけが2戦制。前哨戦は敵が半分・報酬も半分・征服度は進まない。
+    const isOutpost = type.id === "invade" && !counter
+      && this.outpostNeeded(baseIndex) && !this.outpostCleared();
+    const twoStage = type.id === "invade" && !counter && this.outpostNeeded(baseIndex);
     const jitter = U.randInt(type.rewardJitter[0], type.rewardJitter[1]);
     // 略奪は「給与を払ったうえで少し蓄えられる」資金調達策にする。
     // 固定額だけでは大所帯ほど赤字になり、寄り道する意味が逆転してしまう。
     const payrollSupport = Math.round(this.salaryTotal() * (type.payrollCoverage || 0));
-    const reward = Math.max(1, Math.round(base.reward * type.rewardMult) + payrollSupport + jitter);
+    // 1段階を2戦に割ったので、1戦あたりの実入りは落ちる。段階表を触らずここで補正する。
+    const stageReward = base.reward * type.rewardMult * (twoStage ? this.TWO_STAGE_REWARD_MULT : 1);
+    const reward = Math.max(1, Math.round(stageReward * (isOutpost ? this.OUTPOST_REWARD_RATIO : 1))
+      + payrollSupport + jitter);
     const variant = type.armies ? U.randInt(0, type.armies.length - 1) : 0;
     const isInvade = type.id === "invade";
     // 討伐隊の名は段階表から作る（固有の敵を足すときは段階表に行を足すだけで済む）。
@@ -1099,20 +1142,26 @@ const Game = {
     return {
       stage: st.turn,
       missionKind: type.id,
-      missionTitle: type.title,
+      missionTitle: isOutpost ? `前哨戦：${base.region}の斥候` : type.title,
       strategyLabel: type.strategyLabel,
       strategyHint: type.strategyHint,
-      description: U.pick(type.descriptions),
+      description: U.pick((isOutpost && type.outpostDescriptions) || type.descriptions),
+      // 前哨戦か本戦か（表示と決着が読む）。進軍以外は常に "main"。
+      missionPhase: isOutpost ? "outpost" : "main",
+      twoStage,
       difficulty: type.difficulty,
-      army: defenseArmy || (isInvade ? base.army : type.armies[variant]),
+      army: defenseArmy || (isInvade ? (isOutpost ? `${base.army}の斥候隊` : base.army) : type.armies[variant]),
       region: counter ? "魔王城" : (isInvade ? base.region : type.regions[variant]),
       reward,
       // 進軍の警戒度は counterattack.js の invadeAlert が正本（反撃A で missions.js を 0 に戻した）。
       // 反撃B はここを読み忘れていて、進軍に勝っても警戒が上がらなかった（時計が動かない）。
-      alertDelta: isInvade ? this.counterRules().invadeAlert : type.alertDelta,
-      conquestDelta: type.conquestDelta,
+      alertDelta: isOutpost
+        ? Math.ceil(this.counterRules().invadeAlert / 2)
+        : (isInvade ? this.counterRules().invadeAlert : type.alertDelta),
+      // 征服度が進むのは本戦の勝ちだけ。
+      conquestDelta: isOutpost ? 0 : type.conquestDelta,
       loyaltyDelta: type.loyaltyDelta,
-      foodReward: type.foodReward || 0,
+      foodReward: isOutpost ? this.OUTPOST_FOOD_REWARD : (type.foodReward || 0),
       materialReward: type.materialReward || 0,
       armyPressure,
       familiarity,
@@ -1120,7 +1169,7 @@ const Game = {
       formationId: formation.id,
       formationName: formation.name,
       formationHint: formation.hint,
-      units
+      units: isOutpost ? this.outpostUnits(units) : units
     };
   },
 
@@ -2537,6 +2586,7 @@ const Game = {
       } else {
         this.applyMissionOutcome(stageData, notes);
       }
+      this.advanceOutpost(stageData, true, notes);
       if (openingBattle) {
         const foodReward = Math.max(0, stageData.foodReward || 0);
         const materialReward = Math.max(0, stageData.materialReward || 0);
@@ -2594,6 +2644,7 @@ const Game = {
       const alertDelta = this.WIPE_ALERT;
       st.alert = Math.max(0, st.alert + alertDelta);
       notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
+      this.advanceOutpost(stageData, false, notes);
       // 留守番の仕事と手当は続く。城は落ちていない。
       // 出撃隊は死んでいるので給与は発生しない（paySalaries は名簿を見るが、もう外れている）。
       if (!openingBattle) {
@@ -2836,6 +2887,7 @@ const Game = {
       const alertDelta = Number(stageData.alertDelta) || 1;
       st.alert = Math.max(0, st.alert + alertDelta);
       notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
+      this.advanceOutpost(stageData, false, notes);
     }
 
     // 留守番の仕事は戦場の結果と無関係。給与も払う
@@ -3050,6 +3102,24 @@ const Game = {
   isInjured(uid) {
     const m = this.state.roster.find(x => x.uid === uid);
     return !!(m && m.injured > 0);
+  },
+
+  // 前哨と本戦の行き来。勝った／負けた（退いた）の両方から呼ぶ**唯一の入口**。
+  //   前哨に勝った → 本戦へ。本戦に勝った → 征服度が進んで前哨へ戻る（次の段階の前哨）。
+  //   本戦に負けた → 前哨からやり直し（オーナー決定）。前哨に負けた → そのまま前哨。
+  advanceOutpost(mission, won, notes) {
+    const st = this.state;
+    if (!mission || mission.missionKind !== "invade") return null;
+    if (mission.missionPhase === "outpost") {
+      if (!won) return null;                       // 前哨に負けた：もう一度前哨から
+      st.outpost = { stage: st.conquest, cleared: true, formationId: mission.formationId };
+      if (notes) notes.push(`${mission.region}の前哨を制した。次は本戦`);
+      return "outpost-cleared";
+    }
+    // 本戦。勝っても負けても前哨の札は返す（勝ちは次の段階の前哨、負けは同じ段階の前哨）。
+    st.outpost = null;
+    if (!won && notes && mission.twoStage) notes.push("本戦で退けられた。前哨から立て直す");
+    return won ? "main-cleared" : "main-lost";
   },
 
   applyMissionOutcome(mission, notes) {
