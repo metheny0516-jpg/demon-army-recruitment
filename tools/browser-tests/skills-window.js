@@ -135,6 +135,66 @@ const SETUP = () => {
   ok(/外れた/.test(notes.miss), `外れが戦況記録に出る（${notes.miss.trim().slice(0, 40)}）`);
   ok(/spirit-up/.test(notes.gainCls), `気合が高まった札が光る（${notes.gainCls.split(' ').filter(c => /spirit/.test(c)).join(',')}）`);
 
+  console.log('\n▼ お披露目：覚えた直後の戦いは技が光り、気合なしで一度撃てる');
+  await page.evaluate(() => BattleScene.skip());
+  await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });
+  await page.evaluate(() => {
+    Game.state.roster = [{
+      uid: 950, tplId: 'ogre', name: 'オヒロメ', race: 'オーガ', job: '', hp: 240, atk: 14, def: 6, spd: 3,
+      salary: 2, loyalty: 70, traits: ['ogre_charge'], skills: [], tags: [], quote: '', unpaid: false, injured: 0,
+      spirit: 0, skillTier: 2, debutSkill: 'ogre_charge'      // 覚えた直後（気合は0）
+    }];
+    Game.state.activeUids = [950];
+    Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation';
+    App.render();
+    BattleScene.speed = 4;
+  });
+  await page.click('[data-action="deploy"]');
+  await page.waitForSelector('#command-panel:not([hidden])', { timeout: 20000 });
+  const debut = await page.evaluate(() => {
+    const btn = document.querySelector('.cmd-btn[data-skill="ogre_charge"]');
+    return {
+      lit: !!btn && btn.classList.contains('cmd-debut'),
+      text: btn ? btn.innerText.replace(/\n/g, ' ').trim() : '',
+      disabled: !!btn && btn.disabled,
+      cost: (BattleScene.manual.prompt.allies[0].skills.find(s => s.id === 'ogre_charge') || {}).cost,
+      spirit: (document.querySelector('.cmd-spirit') || {}).innerText || ''
+    };
+  });
+  ok(debut.lit, `お披露目の技が光る（cmd-debut：${debut.lit}）`);
+  ok(/お披露目・気合なし/.test(debut.text), `窓に「お披露目・気合なし」（${debut.text}）`);
+  ok(debut.cost === 0 && !debut.disabled, `気合0で押せる（気合${debut.spirit.replace(/\s/g, '')} cost=${debut.cost}）`);
+  // 押して撃つ：気合は減らず、order_exec に debut が立つ
+  await page.evaluate(() => document.querySelector('.cmd-btn[data-skill="ogre_charge"]').click());
+  await page.evaluate(() => {
+    const pick = document.querySelector('[data-pick=""]');
+    if (pick) pick.click();
+  });
+  await page.waitForTimeout(400);
+  const fired = await page.evaluate(() => ({
+    exec: BattleScene.timeline.filter(e => e.type === 'order_exec' && e.debut).length,
+    spirit: (Game.state.roster.find(m => m.uid === 950) || {}).spirit,
+    spent: JSON.stringify((BattleScene.manual.result || {}).spiritSpent || {})
+  }));
+  ok(fired.exec === 1, `お披露目として実行された（${fired.exec}）`);
+  ok(fired.spirit === 0, `気合0のまま撃てた（${fired.spirit}）`);
+  ok(!/950/.test(fired.spent), `spiritSpent に0を積まない（${fired.spent}）`);
+  // 2回目以降は通常の気合表示に戻る（この戦いではもう光らない）
+  const second = await page.evaluate(async () => {
+    for (let i = 0; i < 40 && document.getElementById('command-panel').hidden; i++) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    const btn = document.querySelector('.cmd-btn[data-skill="ogre_charge"]');
+    return btn ? { lit: btn.classList.contains('cmd-debut'), text: btn.innerText.replace(/\n/g, ' ') } : null;
+  });
+  if (second) {
+    ok(!second.lit, `2回目はもう光らない（${second.text.trim()}）`);
+    ok(/気合\d/.test(second.text), `通常の気合表示に戻る（${second.text.trim()}）`);
+  } else {
+    ok(true, '（この戦いは1ラウンドで終わったので2回目は見ていない）');
+  }
+  await page.screenshot({ path: (process.env.SP || '.screenshots') + '/skills-window-debut-390.png' });
+
   console.log('\n▼ 最後まで戦えること（技を出したまま決着する）');
   await page.evaluate(() => BattleScene.skip());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });

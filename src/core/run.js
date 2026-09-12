@@ -1991,10 +1991,11 @@ const Game = {
     // （戦死で6戦のカウンタが消えても、種族の技は消えない）。
     st.skillLore = st.skillLore || {};
     if (skill.skill && skill.skill.species) st.skillLore[skill.skill.species] = skill.id;
-    // 覚えた直後の戦いでだけ、技は勝手に出る（お披露目）。以後は号令（気合）でだけ出る（オーナー 2026-09-11）。
+    // 覚えた直後の戦い＝お披露目。手で戦うなら指示窓でその技が光り、一度だけ気合なしで撃てる
+    // （おまかせ・sim では今までどおり勝手に1回出る。2026-09-12）。
     monster.debutSkill = skill.id;
     const quote = U.pick((skill.lines && skill.lines.unlock) || ["……体が、覚えた"]);
-    if (notes) notes.push(`${monster.name}が【${skill.name}】を覚えた（次の戦いで一度だけ勝手に出る。以後は号令で）`);
+    if (notes) notes.push(`${monster.name}が【${skill.name}】を覚えた（次の戦いでは気合なしで一度撃てる。窓で光る）`);
     return { uid: monster.uid, name: monster.name, skillId: skill.id, skillName: skill.name, quote };
   },
 

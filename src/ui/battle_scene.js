@@ -981,11 +981,15 @@ const BattleScene = {
           // 使用者を前へ出さず、対象の側の光り方（heal / cover / revive）に任せる。
           const here = ["self", "none", "all_allies"].includes(ev.target) || (sk && sk.kind === "rest");
           if (here && ev.fx) this.fxVfx(u, ev.fx, 2);
-          this.float(u, sk && sk.kind === "charm" ? "♥ 魅惑" : "号令", sk && sk.kind === "charm" ? "heal" : "guard");
+          this.float(u, ev.debut ? "お披露目！" : sk && sk.kind === "charm" ? "♥ 魅惑" : "号令",
+            ev.debut ? "big" : sk && sk.kind === "charm" ? "heal" : "guard");
+          if (ev.debut) u.el.classList.add("debut-flash");
         }
-        this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」　${ev.name}「${ev.quote}」`, 1600);
-        this.flash(1);
+        this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」　${ev.name}「${ev.quote}」`, ev.debut ? 2000 : 1600);
+        this.flash(ev.debut ? 2 : 1);
         this.pulse("order");
+        // お披露目は一段強く。覚えた技を初めて自分の手で出す一瞬なので、ここだけ止めて見せる。
+        if (ev.debut) this.cutin(ev.label || ev.skillName, `${ev.name}、お披露目`, ev.skillId);
         break;
       }
       case "result":
@@ -2068,8 +2072,10 @@ const BattleScene = {
       const list = (a.skills && a.skills.length ? a.skills : (a.skill ? [a.skill] : [])).slice(0, 2);
       const skillBtn = list.map(sk => {
         const on = sel.cmd === "skill" && (sel.skill || list[0].id) === sk.id;
-        return `<button type="button" class="cmd-btn cmd-skill ${on ? "on" : ""}" data-cmd="skill" data-skill="${U.esc(sk.id)}"
-          ${sk.ready ? "" : "disabled"} title="${U.esc(sk.note || "")}">技「${U.esc(sk.label || sk.name)}」<small>${U.esc(sk.note || "")}　気合${sk.cost}${sk.ready ? "" : "・" + U.esc(sk.why || "")}</small></button>`;
+        // お披露目：覚えた直後の戦いの1回だけ、金の縁が脈打ち、気合なしで撃てる。
+        const cost = sk.debut ? "お披露目・気合なし" : `気合${sk.cost}`;
+        return `<button type="button" class="cmd-btn cmd-skill ${on ? "on" : ""}${sk.debut ? " cmd-debut" : ""}" data-cmd="skill" data-skill="${U.esc(sk.id)}"
+          ${sk.ready ? "" : "disabled"} title="${U.esc(sk.note || "")}">技「${U.esc(sk.label || sk.name)}」<small>${U.esc(sk.note || "")}　${cost}${sk.ready ? "" : "・" + U.esc(sk.why || "")}</small></button>`;
       }).join("");
       const first = seq.idx === 0;
       body = `<div class="cmd-menu">

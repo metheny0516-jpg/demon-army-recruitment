@@ -3624,3 +3624,24 @@ button.primary::first-letter { color: var(--gold); }
 .bu-mark { font-size: 11px; line-height: 1; filter: drop-shadow(0 1px 2px #000); animation: markIn .3s ease-out; }
 .bu.covering { outline: 1px solid rgba(190, 215, 255, .7); }
 @keyframes markIn { from { opacity: 0; transform: translateY(3px) scale(.6); } to { opacity: 1; transform: none; } }
+
+/* ── お披露目（覚えた直後の戦いの1回だけ。docs/SPEC_DEBUT_2026-09-12.md 4節） ── */
+.cmd-btn.cmd-debut {
+  border-color: var(--gold, #e8bd68);
+  background: linear-gradient(90deg, rgba(232, 189, 104, .28), rgba(232, 189, 104, .06));
+  animation: debutPulse 1.4s ease-in-out infinite;
+}
+.cmd-btn.cmd-debut small { color: #ffe6a8; }
+@keyframes debutPulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(232, 189, 104, .45); }
+  50% { box-shadow: 0 0 0 2px rgba(232, 189, 104, .95), 0 0 18px rgba(232, 189, 104, .6); }
+}
+.bu.debut-flash { animation: debutFlash .8s ease-out; }
+@keyframes debutFlash {
+  0% { filter: brightness(2.2) saturate(1.4); }
+  100% { filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmd-btn.cmd-debut, .bu.debut-flash { animation: none; }
+  .cmd-btn.cmd-debut { box-shadow: 0 0 0 2px rgba(232, 189, 104, .9); }
+}
