@@ -139,10 +139,11 @@ assert(applicant.traits.includes('coward') && !applicant.traits.includes('pickpo
   '新しいゴブリンは卑怯者を保ち、追い剥ぎは持たない（技へ移った。3戦で鬨の声を覚える）');
 
 Game.state = {
-  roster: [Object.assign(goblin(8, 20), { traits: ['coward'] })],
+  roster: [Object.assign(goblin(8, 20), { traits: ['coward', 'pickpocket'] })],
   applicants: [], activeUids: [1]
 };
 Game.migrateState();
-assert(Game.state.roster[0].traits.includes('pickpocket'), '旧セーブのゴブリンにも追い剥ぎを補う');
+// 2026-09-12：追い剥ぎは技へ移った。旧セーブの癖は移行で消え、補われない
+assert(!Game.state.roster[0].traits.includes('pickpocket'), '旧セーブのゴブリンから追い剥ぎの癖は外れ、補われない');
 
 console.log('略奪経済CHAINテスト完了');

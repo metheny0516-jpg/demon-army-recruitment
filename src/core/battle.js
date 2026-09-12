@@ -1254,7 +1254,8 @@ const Battle = {
               const why = skillWhy(u, sk, spirit);
               skills.push({ id: sid, name: sk.name, label: sk.name, note: sk.note || "", cost: sk.cost || 0, kind: sk.kind, target: sk.target, ready: !why, why });
             }
-            const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
+            // 上位技（tier 2）だけを技として並べる。1段目の癖に残る order は号令エンジン（sim・テスト）用で、窓には出さない
+            const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order && TRAITS[tid].skill && TRAITS[tid].skill.tier === 2);
             const tr = skillId ? TRAITS[skillId] : null;
             if (tr) {
               const cost = Math.max(0, Number(tr.order.cost) || 0);
@@ -1299,7 +1300,7 @@ const Battle = {
           } else if (c.cmd === "skill") {
             const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
             const speciesIds = (u.skills || []).filter(id => SK[id]);
-            const traitId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
+            const traitId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order && TRAITS[tid].skill && TRAITS[tid].skill.tier === 2);
             const sid = c.skill || speciesIds[0] || traitId;
             const sk = SK[sid];
             if (sk) {
