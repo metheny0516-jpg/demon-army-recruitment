@@ -240,5 +240,32 @@ console.log('▼ 9. 差し込み口：SKILL_EFFECTS の新しい kind と ENEMY_
   delete SKILLS.test_drain; delete SKILLS.test_stance; delete FX.test_drain; delete FX.test_stance; delete ROLES.test_bomber;
 }
 
+console.log('▼ 10. お披露目：覚えた直後の戦いでは上位技が光り、一度だけ気合なし。勝手には出ない（手動）。自動では今までどおり出る');
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const mkDebut = () => mk('ガロ', { traits: ['ogre_charge'], debutSkill: 'ogre_charge', spirit: 0, atk: 10, spd: 9, hp: 300 });
+  const p = [mkDebut()];
+  const e = foes(3, { hp: 400, atk: 1 });
+  const h = Battle.start(p, e, opts({ seed: 11 }));
+  const pr = h.next();
+  const sk = pr.allies[0].skills.find(x => x.id === 'ogre_charge');
+  assert(sk && sk.debut === true && sk.cost === 0 && sk.ready === true, `お披露目の技は気合0でも選べて cost 0（debut=${sk && sk.debut}, cost=${sk && sk.cost}）`);
+  h.next({ p0: { cmd: 'attack' } });
+  assert(!events(h, 'trait_trigger').some(ev => ev.traitId === 'ogre_charge'), 'たたかうを選んだラウンドでは勝手に出ない（手動）');
+  const pr2 = h.prompt;
+  h.next({ p0: { cmd: 'skill', skill: 'ogre_charge' } });
+  const ex = events(h, 'order_exec').find(ev => ev.skillId === 'ogre_charge');
+  assert(ex && ex.debut === true && ex.cost === 0 && p[0].spirit === 0, 'お披露目で撃つと気合を払わない');
+  assert(events(h, 'trait_trigger').some(ev => ev.traitId === 'ogre_charge') && events(h, 'splash').filter(ev => ev.label === 'ぶちかまし').length >= 2, 'ぶちかましが必ず出る（他の敵にも及ぶ）');
+  const pr3 = h.prompt;
+  const sk3 = pr3 && pr3.allies[0] && pr3.allies[0].skills.find(x => x.id === 'ogre_charge');
+  assert(sk3 && sk3.debut === false && sk3.cost === 3 && sk3.ready === false && sk3.why === '気合不足', `2回目からは通常の気合（cost=${sk3 && sk3.cost}, ${sk3 && sk3.why}）`);
+  const r = finish(h);
+  assert(Array.isArray(r.debutShown) && r.debutShown.includes('ガロ'), 'result.debutShown に載る');
+  const auto = Battle.simulate([mkDebut()], foes(3, { hp: 400, atk: 1 }), opts({ seed: 11 }));
+  assert(auto.timeline.some(ev => ev.type === 'trait_trigger' && ev.traitId === 'ogre_charge'), '自動戦闘（simulate）では今までどおり勝手に1回出る');
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

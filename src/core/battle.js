@@ -302,7 +302,8 @@ const Battle = {
     const autoExhausted = (unit, traitId) => {
       const tr = TRAITS[traitId];
       if (!tr || !tr.autoLimit || unit.flags.ordered) return false;
-      const allowed = (unit.debut === "any" || unit.debut === traitId) ? tr.autoLimit : 0;
+      // お披露目（2026-09-12）：手動戦闘では勝手に出さず、窓で光らせて気合なしで1回撃てる（"any" は制限なしの印なので今までどおり）
+      const allowed = unit.debut === "any" ? tr.autoLimit : (unit.debut === traitId && !options.manual) ? tr.autoLimit : 0;
       return ((unit.flags.skillUses || {})[traitId] || 0) >= allowed;
     };
     const skillTrigger = (unit, traitId, parent) => {
@@ -384,6 +385,7 @@ const Battle = {
     const SK = Object.assign({}, typeof SKILL_CATALOG !== "undefined" ? SKILL_CATALOG : {}, typeof SKILLS !== "undefined" ? SKILLS : {});
     const SPIRIT_MAX = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit && MONSTER_RULES.spirit.max) || 3;
     const spiritGained = {};            // uid → 戦闘中に増えた気合（run.js が名簿へ反映）
+    const debutShown = [];              // お披露目を実際に使った者の uid
     let scatterUntil = 0;               // かく乱：このラウンドまで敵の狙いが散る
     const gainSpirit = (u, amount, reason) => {
       if (u.side !== "player" || u.flags.summoned || u.flags.mercenary || u.spirit === null || u.spirit === undefined) return;
@@ -418,10 +420,11 @@ const Battle = {
       return ids;
     };
     // 技が今選べない理由。null なら選べる。
+    const isDebut = (u, sk) => !!(sk && sk.kind === "trait" && u.debut && u.debut !== "any" && u.debut === sk.trait && !u.flags.debutUsed);
     const skillWhy = (u, sk, spirit) => {
       if (u.flags.mercenary) return "傭兵";
       if (u.flags.winded) return "息切れ";
-      if (spirit !== null && spirit < (sk.cost || 0)) return "気合不足";
+      if (spirit !== null && spirit < (isDebut(u, sk) ? 0 : (sk.cost || 0))) return "気合不足";
       if (sk.condition === "hp50" && u.hp < u.maxHp * 0.5) return "条件外";
       if (sk.kind === "revive" && !playerUnits.some(a => !a.alive && !a.flags.summoned)) return "条件外";
       if (sk.kind === "cover" && !playerUnits.some(a => onField(a) && a !== u)) return "条件外";
@@ -1259,7 +1262,8 @@ const Battle = {
             for (const sid of unitSkillIds(u)) {
               const sk = SK[sid]; if (!sk) continue;
               const why = skillWhy(u, sk, spirit);
-              skills.push({ id: sid, name: sk.name, label: sk.label || sk.name, note: sk.note || "", cost: sk.cost || 0, kind: sk.kind, target: sk.target, ready: !why, why });
+              const debut = isDebut(u, sk);
+              skills.push({ id: sid, name: sk.name, label: sk.label || sk.name, note: sk.note || "", cost: debut ? 0 : (sk.cost || 0), kind: sk.kind, target: sk.target, ready: !why, why, debut });
             }
             return {
               id: u.id, uid: u.uid, name: u.name, hp: u.hp, maxHp: u.maxHp, spirit,
@@ -1305,13 +1309,15 @@ const Battle = {
               // 上位技：気合を払い、次の一撃で癖の条件を飛ばす（号令の manual 版。+50% も息切れも無い）
               if (!skillWhy(u, sk, spirit)) {
                 const tr = TRAITS[sk.trait] || {};
-                const cost = sk.cost || 0;
-                if (spirit !== null) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
+                const debut = isDebut(u, sk);
+                const cost = debut ? 0 : (sk.cost || 0);
+                if (spirit !== null && cost > 0) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
+                if (debut) { u.flags.debutUsed = true; debutShown.push(u.uid); }
                 u.flags.ordered = true;
                 u.flags.orderedManual = true;
-                const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
+                const quote = U.pick(debut ? ((tr.lines && (tr.lines.unlock || tr.lines.order)) || ["……体が、覚えている"]) : ((tr.lines && tr.lines.order) || ["……はっ！"]));
                 emit("order_exec", {
-                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, cost, manual: true, emphasis: 3,
+                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, cost, manual: true, debut, emphasis: 3,
                   text: `　魔王「${u.name}、${sk.label || sk.name}！」 ${u.name}「${quote}」`, cls: "order"
                 });
               }
@@ -1560,6 +1566,7 @@ const Battle = {
       retreated: retreatedManual,
       spiritSpent,
       spiritGained,
+      debutShown,
       // 号令の節目（options.offerOrder のときだけ）。answered は答えの unitId か null。
       // orderOffer は最初の節目（互換）。節目は戦況が動くたびに来るので orderOffers を見る。
       orderOffer: orderOffers[0] || null,
