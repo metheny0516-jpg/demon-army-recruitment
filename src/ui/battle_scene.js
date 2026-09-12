@@ -53,7 +53,7 @@ const BattleScene = {
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
     heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
     resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200,
-    order_offer: 1200, order_exec: 1600
+    order_offer: 1200, order_exec: 1600, cover: 1300
   },
   // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
   ANSWER_READ_MS: 2200,
@@ -856,6 +856,13 @@ const BattleScene = {
         break;
       }
       // 技の外れ・気合の高まり・動けない・守り。字幕だけ（ログは render の先頭で出ている）。
+      case "cover": {
+        const u = this.units[ev.unitId];
+        this.clearFocus();
+        if (u) { u.el.classList.add("acting"); this.float(u, "🛡 かばう", "guard"); }
+        this.showAction(`${ev.name}が${ev.forName}をかばった！`, 1300);
+        break;
+      }
       case "note": {
         const u = this.units[ev.unitId];
         if (ev.skillMiss) {
@@ -1874,10 +1881,13 @@ const BattleScene = {
       u.el.classList.toggle("intent-big", e.intent === "big");
       for (const kind of Object.keys(this.INTENT)) u.el.classList.toggle("intent-" + kind, e.intent === kind);
       u.el.classList.toggle("cmd-pick", seq.mode === "target" && this.cmdTargetSide !== "ally");
+      u.el.classList.toggle("cmd-covered", !!e.coveredBy);
     }
+    const covered = prompt.enemies.filter(e => e.coveredBy).map(e => `🛡 ${e.name}は${(prompt.enemies.find(c => c.id === e.coveredBy) || {}).name || "盾役"}に守られている（狙うと盾役が受ける）`);
     const warnings = prompt.enemies
       .filter(e => this.INTENT[e.intent])
-      .map(e => `${this.INTENT[e.intent].mark} ${e.name}が${this.INTENT[e.intent].word}`);
+      .map(e => `${this.INTENT[e.intent].mark} ${e.name}が${this.INTENT[e.intent].word}`)
+      .concat(covered);
     const spirit = typeof a.spirit === "number" ? `<small class="cmd-spirit">気合 ${"●".repeat(a.spirit)}${"○".repeat(Math.max(0, 3 - a.spirit))}</small>` : "";
     const state = a.winded ? `<small class="cmd-state">息切れ</small>` : a.stuffed ? `<small class="cmd-state">食事中</small>` : "";
     const head = `<div class="cmd-head"><span class="cmd-round">ラウンド ${prompt.round}　${seq.idx + 1}/${allies.length}人目</span>
@@ -1887,7 +1897,7 @@ const BattleScene = {
     if (seq.mode === "target") {
       body = `<div class="cmd-pick-hint">${this.cmdTargetSide === "ally"
           ? (this.cmdTargetKind === "fallen" ? "起こす者をタップ（倒れた味方）" : "かける相手をタップ（味方）")
-          : "狙う敵をタップ"}</div>
+          : "狙う敵をタップ"}${this.cmdTargetSide !== "ally" && covered.length ? `<small class="cmd-covered-hint">${U.esc(covered.join("　"))}</small>` : ""}</div>
         <div class="cmd-foot">
           <button type="button" class="cmd-btn" data-pick="">${this.cmdTargetSide === "ally" ? "おまかせ" : "前から"}</button>
           <button type="button" class="cmd-btn cmd-back" data-nav="back">もどる</button>

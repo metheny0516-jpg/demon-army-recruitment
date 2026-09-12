@@ -210,7 +210,7 @@ test('全痕跡kind: options未指定相当で安全、凍結済み履歴を変�
     const b = battle(kind, 'fighter', 7, options); b.h.next({ p0: { cmd: 'skill' }, p1: { cmd: 'guard' } });
     assert.equal(JSON.stringify(options), before);
     if (kind === 'relic_weight') assert.equal(b.p[0].flags.buff, undefined, '実戦のラウンド末で鼓舞解除');
-    if (kind === 'carried_debt' || kind === 'carried_resolve') assert(b.h.timeline.some(x => x.type === 'note' && /かばった/.test(x.text)));
+    if (kind === 'carried_debt' || kind === 'carried_resolve') assert(b.h.timeline.some(x => (x.type === 'cover' || x.type === 'note') && /かばった/.test(x.text)));
   }
 });
 

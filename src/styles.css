@@ -3502,6 +3502,8 @@ button.primary::first-letter { color: var(--gold); }
 @keyframes cmdCursor { from { transform: translate(-50%, 0); } to { transform: translate(-50%, 4px); } }
 .cmd-badge { position: absolute; right: -4px; top: -8px; font-size: 13px; font-style: normal; background: rgba(0, 0, 0, .7); border: 1px solid rgba(232, 189, 104, .6); border-radius: 50%; width: 22px; height: 22px; line-height: 20px; text-align: center; pointer-events: none; }
 .bu.intent-big .bu-name::before { content: "⚠ "; color: #ff9b54; }
+#scene.picking-target .bu.cmd-covered .bu-name::after { content: " 🛡"; }
+.cmd-covered-hint { display: block; font-size: 11px; color: #9fc4ff; margin-top: 3px; }
 @media (max-width: 560px) {
   .command-panel { padding: 6px 8px 8px; left: 44%; right: 2%; }
   .cmd-btn { padding: 10px 12px; font-size: 15px; }
