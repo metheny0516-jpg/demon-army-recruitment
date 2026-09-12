@@ -267,5 +267,30 @@ console.log('▼ 10. お披露目：覚えた直後の戦いでは上位技が�
   ENEMY_BIG_MOVE.chance = bigChance;
 }
 
+console.log('▼ 11. 演出プリセット（fx）：技のイベントに skillId と fx が載る。通常攻撃には載らない');
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const p = [mk('ガロ', { skills: ['orc_cleave'], spd: 9 }), mk('ミラ', { skills: ['mage_fireball'], spd: 8 }), mk('ポン', { skills: ['goblin_warcry'], spd: 7 }), mk('ゴロム', { skills: ['troll_rest'], spd: 6, hp: 100 })];
+  p[3].hp = 40;
+  const e = foes(3, { hp: 500, atk: 1 });
+  const h = Battle.start(p, e, opts({ seed: 12 }));
+  h.next();
+  h.next({ p0: { cmd: 'skill', target: 'e0' }, p1: { cmd: 'skill' }, p2: { cmd: 'skill' }, p3: { cmd: 'skill' } });
+  const cleave = events(h, 'attack').find(ev => ev.fromId === 'p0' && ev.label === '薙ぎ払い');
+  assert(cleave && cleave.fx === 'heavy' && cleave.skillId === 'orc_cleave', `薙ぎ払い：fx heavy・skillId（${cleave && cleave.fx}）`);
+  const fire = events(h, 'attack').filter(ev => ev.fromId === 'p1' && ev.label === '火球');
+  assert(fire.length === 3 && fire.every(ev => ev.fx === 'fire' && ev.aoe === true), '火球：3体とも fx fire・aoe 印');
+  const warcry = events(h, 'note').find(ev => ev.buff && ev.unitId === 'p2');
+  assert(warcry && warcry.fx === 'aura' && Array.isArray(warcry.targets) && warcry.targets.length === 4, '鬨の声：fx aura と対象一覧');
+  const rest = events(h, 'heal').find(ev => ev.unitId === 'p3');
+  assert(rest && rest.fx === 'holy' && rest.skillId === 'troll_rest', '休む：heal に fx holy');
+  const ex = events(h, 'order_exec').find(ev => ev.skillId === 'mage_fireball');
+  assert(ex && ex.fx === 'fire' && ex.target === 'all_enemies', 'order_exec に fx と対象の種類');
+  h.next({ p0: { cmd: 'attack' }, p1: { cmd: 'attack' }, p2: { cmd: 'attack' }, p3: { cmd: 'attack' } });
+  const plain = events(h, 'attack').filter(ev => ev.fromId === 'p0' && !ev.label);
+  assert(plain.length && plain.every(ev => !ev.fx && !ev.skillId), '通常攻撃には fx も skillId も無い');
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

@@ -384,6 +384,9 @@ const Battle = {
     // ── 技（SKILLS）と敵の役割。仕様 docs/SPEC_SKILLS_2026-09-12.md ──
     const SK = Object.assign({}, typeof SKILL_CATALOG !== "undefined" ? SKILL_CATALOG : {}, typeof SKILLS !== "undefined" ? SKILLS : {});
     const SPIRIT_MAX = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit && MONSTER_RULES.spirit.max) || 3;
+    // 演出プリセット（fx）。技のイベントに載せる。描画側が読む（無ければ通常攻撃の見た目）。
+    const FXK = typeof FX_BY_KIND !== "undefined" ? FX_BY_KIND : {};
+    const fxOf = sk => (sk && (sk.fx || FXK[sk.kind])) || null;
     const spiritGained = {};            // uid → 戦闘中に増えた気合（run.js が名簿へ反映）
     const debutShown = [];              // お披露目を実際に使った者の uid
     let scatterUntil = 0;               // かく乱：このラウンドまで敵の狙いが散る
@@ -594,7 +597,7 @@ const Battle = {
         if (coverer) {
           const ratio = coverer.flags.coverRatio || 0.6;
           // 構造化して出す（描画側が字幕にする。狙った敵と違う者に当たる理由を見せないと「バグ」に見える）
-          emit("cover", { unitId: coverer.id, forId: target.id, name: coverer.name, forName: target.name, emphasis: 2,
+          emit("cover", { unitId: coverer.id, forId: target.id, name: coverer.name, forName: target.name, fx: "shield", emphasis: 2,
             text: `　${coverer.name}が${target.name}をかばった！`, cls: "trait" });
           target = coverer;
           dmg = Math.max(1, Math.round(amount * ratio * target.mods.takenMult));
@@ -656,6 +659,8 @@ const Battle = {
         fromId: attacker.id, toId: target.id, dmg,
         hp: target.hp, maxHp: target.maxHp, dead,
         traits: opts.traits || [], label: opts.label || null, emphasis,
+        skillId: opts.skillId || null, fx: opts.fx || (attacker.flags.bigMove && attacker.side !== target.side && !opts.incident ? "heavy" : null),
+        aoe: !!opts.aoe,
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
@@ -830,6 +835,7 @@ const Battle = {
       const applied = applyDamage(unit, target, amount, "attack", {
         traits: ctx.notes,
         label: actionOpts.label || null,
+        skillId: actionOpts.skillId || null, fx: actionOpts.fx || null,
         parentEvent: actionOpts.parentEvent || ledgerParent || null
       });
       const dmg = applied.dmg;
@@ -928,12 +934,12 @@ const Battle = {
         const amount = Math.min(t.maxHp - t.hp, Math.ceil(t.maxHp * ratio));
         if (amount <= 0) return 0;
         t.hp += amount;
-        emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: label || (sk && sk.name) || null, emphasis: 1 }, null);
+        emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: label || (sk && sk.name) || null, skillId: cmd && cmd.id || null, fx: fxOf(sk), emphasis: 1 }, null);
         return amount;
       },
       damage: (target, mult, label, extra) => {
         const raw = unit.atk * mult * (0.9 + U.rand() * 0.2) * (unit.mods.dmgMult || 1);
-        return applyDamage(unit, target, Math.max(1, Math.round(raw) - Math.floor(target.def / 2)), "attack", Object.assign({ label, traits: label ? [label] : [] }, extra || {})).dmg;
+        return applyDamage(unit, target, Math.max(1, Math.round(raw) - Math.floor(target.def / 2)), "attack", Object.assign({ label, traits: label ? [label] : [], skillId: cmd && cmd.id || null, fx: fxOf(sk) }, extra || {})).dmg;
       }
     });
     const resolveSkill = (unit, sk, cmd, allies, enemies, round) => {
@@ -945,20 +951,21 @@ const Battle = {
         return;
       }
       const pickEnemy = () => (cmd.targetId && living.find(e => e.id === cmd.targetId)) || (living.length ? pickTarget(unit, living, round) : null);
+      const fx = fxOf(sk), skillId = cmd.id || null;
       const heal = (t, ratio) => {
         const amount = Math.min(t.maxHp - t.hp, Math.ceil(t.maxHp * ratio));
         if (amount <= 0) return;
         t.hp += amount;
-        emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: sk.name, emphasis: 1 }, null);
+        emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: sk.name, skillId, fx, emphasis: 1 }, null);
       };
       switch (sk.kind) {
         case "strike": case "debuff": case "steal": {
           const target = pickEnemy();
           let dmg = 0;
-          if (target && sk.power) dmg = act(unit, allies, enemies, round, { target, mult: sk.power, label: sk.name }) || 0;
+          if (target && sk.power) dmg = act(unit, allies, enemies, round, { target, mult: sk.power, label: sk.name, skillId, fx }) || 0;
           if (sk.splash && target) {
             const other = living.find(e => e !== target && onField(e));
-            if (other) applyDamage(unit, other, Math.max(1, Math.round(unit.atk * sk.power * sk.splash) - Math.floor(other.def / 2)), "splash", { label: sk.name });
+            if (other) applyDamage(unit, other, Math.max(1, Math.round(unit.atk * sk.power * sk.splash) - Math.floor(other.def / 2)), "splash", { label: sk.name, skillId, fx });
           }
           if (sk.atkDown && target && target.alive) { target.atk = Math.max(1, target.atk - sk.atkDown); note(`　${target.name}の攻撃力が${sk.atkDown}下がった（残${target.atk}）`, "trait"); }
           if (sk.push && target && target.alive) moveBack(enemies, target);
@@ -970,7 +977,7 @@ const Battle = {
           for (const e of living) {
             if (!onField(e)) continue;
             const raw = unit.atk * sk.power * (0.9 + U.rand() * 0.2) * (unit.mods.dmgMult || 1);
-            applyDamage(unit, e, Math.max(1, Math.round(raw) - Math.floor(e.def / 2)), "attack", { label: sk.name, traits: [sk.name] });
+            applyDamage(unit, e, Math.max(1, Math.round(raw) - Math.floor(e.def / 2)), "attack", { label: sk.name, traits: [sk.name], skillId, fx, aoe: true });
             if (sk.burn && e.alive) e.flags.burn = { at: round + 1, source: unit, parentEvent: null };
           }
           if (sk.winded) unit.flags.winded = true;
@@ -1004,7 +1011,7 @@ const Battle = {
           const death = [...timeline].reverse().find(e => e.type === "death" && e.unitId === t.id) || null;
           t.alive = true; t.hp = Math.max(1, Math.round(t.maxHp * sk.power));
           t.flags.wasRevived = true;
-          emitCausal("revive", { unitId: t.id, sourceId: unit.id, skillId: cmd.id, hp: t.hp, maxHp: t.maxHp, emphasis: 3 }, death);
+          emitCausal("revive", { unitId: t.id, sourceId: unit.id, skillId: cmd.id, fx, hp: t.hp, maxHp: t.maxHp, emphasis: 3 }, death);
           if (sk.selfHp) { unit.hp = Math.max(1, unit.hp - Math.round(unit.maxHp * sk.selfHp)); note(`　${unit.name}は代償に身を削った（残HP ${unit.hp}）`, "trait"); }
           break;
         }
@@ -1027,11 +1034,12 @@ const Battle = {
       if (fx && fx.immediate) { fx.immediate(hookCtx(unit, sk, cmd, playerUnits, enemyUnits, round)); return true; }
       if (sk.kind === "cover") {
         const t = (cmd.targetId && playerUnits.find(a => a.id === cmd.targetId && onField(a) && a !== unit)) || lowestAlly(playerUnits, unit);
-        if (t) { unit.flags.covering = t.id; unit.flags.coverRatio = sk.power || 0.6; note(`　${unit.name}が${t.name}の前に立つ`, "trait"); }
+        if (t) { unit.flags.covering = t.id; unit.flags.coverRatio = sk.power || 0.6; emit("note", { unitId: unit.id, forId: t.id, fx: "shield", covering: true, emphasis: 1, text: `　${unit.name}が${t.name}の前に立つ`, cls: "trait" }); }
         return true;
       }
       if (sk.kind === "buff") {
         for (const a of playerUnits.filter(onField)) a.flags.buff = { mult: sk.power || 1.3, until: round, name: sk.name };
+        emit("note", { unitId: unit.id, fx: fxOf(sk) || "aura", buff: true, targets: playerUnits.filter(onField).map(a => a.id), emphasis: 1, text: `　${unit.name}の${sk.name}で味方が奮い立つ`, cls: "trait" });
         return true;
       }
       if (sk.kind === "scatter") { scatterUntil = round + 1; unit.flags.decoyUntil = round + 1; return true; }
@@ -1078,14 +1086,14 @@ const Battle = {
         const t = allies.find(a => a.id === plan.targetId && onField(a)) || lowestAlly(allies, null);
         if (!t) return false;
         const amount = Math.min(t.maxHp - t.hp, Math.ceil(t.maxHp * 0.25));
-        if (amount > 0) { t.hp += amount; emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: "癒やし", emphasis: 1 }, null); }
+        if (amount > 0) { t.hp += amount; emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: "癒やし", fx: "holy", emphasis: 1 }, null); }
         note(`　${unit.name}が${t.name}を癒やした`, "trait");
         return true;
       }
       if (plan.kind === "aoe") {
         for (const p of enemies.filter(onField)) {
           const raw = unit.atk * 0.6 * (0.9 + U.rand() * 0.2);
-          applyDamage(unit, p, Math.max(1, Math.round(raw) - Math.floor(p.def / 2)), "attack", { label: "全体攻撃", traits: ["術"] });
+          applyDamage(unit, p, Math.max(1, Math.round(raw) - Math.floor(p.def / 2)), "attack", { label: "全体攻撃", traits: ["術"], fx: "fire", aoe: true });
         }
         return true;
       }
@@ -1093,7 +1101,7 @@ const Battle = {
       if (plan.kind === "guard" || plan.kind === "cover") { emit("note", { unitId: unit.id, guarding: true, emphasis: 1, text: `　${unit.name}は守りに入っている`, cls: "trait" }); return true; }
       if (plan.kind === "buff") {
         for (const a of allies.filter(onField)) a.flags.buff = { mult: 1.2, until: round + 1, name: "隊長の号令" };
-        note(`　${unit.name}「全軍、押せ！」 敵の攻撃が高まった（2ラウンド）`, "trait");
+        emit("note", { unitId: unit.id, fx: "aura", buff: true, emphasis: 1, text: `　${unit.name}「全軍、押せ！」 敵の攻撃が高まった（2ラウンド）`, cls: "trait" });
         return true;
       }
       return false;
@@ -1321,7 +1329,7 @@ const Battle = {
                 u.flags.orderedManual = true;
                 const quote = U.pick(debut ? ((tr.lines && (tr.lines.unlock || tr.lines.order)) || ["……体が、覚えている"]) : ((tr.lines && tr.lines.order) || ["……はっ！"]));
                 emit("order_exec", {
-                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, cost, manual: true, debut, emphasis: 3,
+                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, cost, manual: true, debut, fx: fxOf(sk), target: "enemy", emphasis: 3,
                   text: `　魔王「${u.name}、${sk.label || sk.name}！」 ${u.name}「${quote}」`, cls: "order"
                 });
               }
@@ -1335,7 +1343,7 @@ const Battle = {
                 const quote = U.pick((sk.lines && sk.lines.use) || ["……はっ！"]);
                 const cmd = { id: sid, targetId: c.target || null };
                 emit("order_exec", {
-                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.name, quote, cost, manual: true, species: true, emphasis: 3,
+                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.name, quote, cost, manual: true, species: true, fx: fxOf(sk), target: sk.target, emphasis: 3,
                   text: `　魔王「${u.name}、${sk.name}！」 ${u.name}「${quote}」`, cls: "order"
                 });
                 if (applyImmediateSkill(u, sk, cmd, round)) cmd.done = true;
