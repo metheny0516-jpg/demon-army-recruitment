@@ -281,6 +281,7 @@ const BattleScene = {
       <div class="bu-name">${u.side === "enemy" && this.ROLE_ICON[u.role] ? `<i class="bu-role" title="${U.esc(this.ROLE_LABEL[u.role] || "")}">${this.ROLE_ICON[u.role]}</i>` : ""}${U.esc(u.name)}</div>
       <div class="bu-hp"><div class="bu-hpfill" id="hp-${u.id}"></div></div>
       <span class="bu-state"></span>
+      <span class="bu-marks" aria-hidden="true"></span>
       <div class="bu-pop" id="pop-${u.id}"></div>
     </div>`;
   },
@@ -676,7 +677,9 @@ const BattleScene = {
         break;
       }
       case "round_start":
-        // ラウンドが変わったら、伸びていた鎖はそこで締める
+        // ラウンドが変わったら、伸びていた鎖はそこで締める。残る印もここで一度落とす
+        // （拘束・燃焼・鼓舞はどれも1ラウンドで解ける。解除のイベントは無い）。
+        this.clearMarks();
         this.settleChain();
         this.roundBanner(ev.round);
         break;
@@ -724,6 +727,7 @@ const BattleScene = {
           this.setLife(u, false);
           this.setHp(u, ev.hp, ev.maxHp);
           this.arrival(u, "revive");
+          if (ev.fx) this.fxVfx(u, ev.fx, 2);
         }
         break;
       }
@@ -741,7 +745,15 @@ const BattleScene = {
       }
       case "heal": {
         const u = this.units[ev.unitId];
-        if (u) { this.setHp(u, ev.hp, ev.maxHp); this.float(u, "+" + ev.amount, "heal"); }
+        const src = this.units[ev.sourceId];
+        // 味方対象：使用者は動かない（acting だけ）。光るのは対象の側。
+        if (src && src !== u) src.el.classList.add("acting");
+        if (u) {
+          this.setHp(u, ev.hp, ev.maxHp);
+          this.fxVfx(u, ev.fx || (ev.skillId ? "holy" : null), 1);
+          this.float(u, "+" + ev.amount, "heal");
+          if (ev.label) this.showAction(`${ev.label}　→　${u.name} に +${ev.amount}`, 900);
+        }
         break;
       }
       case "survive": {
@@ -904,12 +916,41 @@ const BattleScene = {
       case "cover": {
         const u = this.units[ev.unitId];
         this.clearFocus();
-        if (u) { u.el.classList.add("acting"); this.float(u, "🛡 かばう", "guard"); }
+        if (u) {
+          u.el.classList.add("acting", "covering");
+          this.float(u, "🛡 かばう", "guard");
+          this.fxVfx(u, ev.fx || "shield", 2);
+          this.mark(u, "cover");
+        }
         this.showAction(`${ev.name}が${ev.forName}をかばった！`, 1300);
         break;
       }
       case "note": {
         const u = this.units[ev.unitId];
+        // 味方の前に立つ（かばう宣言）。使用者は前へ出るが、狙われるのは次の被弾から。
+        if (ev.covering) {
+          const t = this.units[ev.forId];
+          if (u) { u.el.classList.add("acting", "covering"); this.fxVfx(u, ev.fx || "shield", 2); this.mark(u, "cover"); }
+          if (t) this.fxVfx(t, ev.fx || "shield", 1);
+          this.showAction(String(ev.text || "").trim(), 1000);
+          break;
+        }
+        // 鼓舞：対象全員の足元に同時に輪。1ラウンド残る。
+        if (ev.buff) {
+          const side = u ? u.side : "player";
+          const ids = (ev.targets && ev.targets.length)
+            ? ev.targets
+            : Object.values(this.units).filter(x => x.side === side && !x.el.classList.contains("dead")).map(x => x.id);
+          for (const id of ids) {
+            const t = this.units[id];
+            if (!t) continue;
+            this.fxVfx(t, ev.fx || "aura", 1);
+            this.mark(t, "buff");
+          }
+          if (u) u.el.classList.add("acting");
+          this.showAction(String(ev.text || "").trim(), 1100);
+          break;
+        }
         if (ev.skillMiss) {
           if (u) this.float(u, "外れた", "guard");
           this.showAction(String(ev.text || "").trim(), 900);
@@ -918,7 +959,8 @@ const BattleScene = {
           this.flashSpirit(ev.unitId);
           this.showAction(String(ev.text || "").trim(), 800);
         } else if (ev.stunned) {
-          if (u) this.float(u, "動けない", "guard");
+          // 拘束は残る印。次のラウンド頭で解ける（解除のイベントは無い）。
+          if (u) { this.float(u, "✦ 動けない", "guard"); this.fxVfx(u, "nature", 1); this.mark(u, "bound"); }
         } else if (ev.guarding) {
           if (u) this.float(u, "🛡", "guard");
         }
@@ -931,10 +973,15 @@ const BattleScene = {
       // 号令の実行。魔王の一声と本人の返事。止めない（直前に選んだばかり）。
       case "order_exec": {
         const u = this.units[ev.unitId];
+        const sk = this.skillOf(ev.skillId);
         this.clearFocus();
         if (u) {
           u.el.classList.add("acting");
-          this.float(u, "号令", "guard");
+          // 自分対象（休む・狂乱）はその場で光る。味方対象（かばう・癒やす・起こす）は
+          // 使用者を前へ出さず、対象の側の光り方（heal / cover / revive）に任せる。
+          const here = ["self", "none", "all_allies"].includes(ev.target) || (sk && sk.kind === "rest");
+          if (here && ev.fx) this.fxVfx(u, ev.fx, 2);
+          this.float(u, sk && sk.kind === "charm" ? "♥ 魅惑" : "号令", sk && sk.kind === "charm" ? "heal" : "guard");
         }
         this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」　${ev.name}「${ev.quote}」`, 1600);
         this.flash(1);
@@ -1161,6 +1208,37 @@ const BattleScene = {
     anchor.appendChild(el);
     this.timers.push(setTimeout(() => el.remove(), life));
     return el;
+  },
+
+  // 技の定義を引く（表示だけに使う。無ければ null＝今までどおりの見た目）。
+  // データは const 宣言なので window には乗らない。識別子を typeof で確かめてから引く。
+  skillOf(id) {
+    if (!id) return null;
+    if (typeof SKILLS !== "undefined" && SKILLS[id]) return SKILLS[id];
+    if (typeof UPPER_SKILLS !== "undefined" && UPPER_SKILLS[id]) return UPPER_SKILLS[id];
+    if (typeof SKILL_CATALOG !== "undefined" && SKILL_CATALOG[id]) return SKILL_CATALOG[id];
+    return null;
+  },
+
+  // 残る印（拘束・燃焼・鼓舞・かばい）。解除のイベントが無いものは次のラウンド頭で消す。
+  MARKS: { bound: "🌿", burn: "🔥", buff: "✨", cover: "🛡", charm: "💗" },
+  mark(u, kind, on = true) {
+    if (!u || !u.el || !this.MARKS[kind]) return;
+    const box = u.el.querySelector(".bu-marks");
+    if (!box) return;
+    const found = box.querySelector(`.bu-mark-${kind}`);
+    if (!on) { if (found) found.remove(); return; }
+    if (found) return;
+    const el = document.createElement("i");
+    el.className = `bu-mark bu-mark-${kind}`;
+    el.textContent = this.MARKS[kind];
+    box.appendChild(el);
+  },
+  clearMarks() {
+    for (const u of Object.values(this.units)) {
+      const box = u.el && u.el.querySelector(".bu-marks");
+      if (box) box.innerHTML = "";
+    }
   },
 
   setPose(u, pose) {
@@ -1391,6 +1469,10 @@ const BattleScene = {
           else later(() => { this.fxVfx(to, ev.fx, ev.emphasis); this.float(to, String(ev.dmg), "big"); }, 140 * i);
         }
         this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
+        // 燃焼は札の下に小さな炎を残す（次のラウンド頭で消える）
+        // （燃え移る技だけ。火球のように燃焼を残さない技には付けない）
+        if (preset.linger === "burn" && (this.skillOf(ev.skillId) || {}).burn
+          && to.el && !to.el.classList.contains("dead")) this.mark(to, "burn");
       } else {
         if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
         this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);

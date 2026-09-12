@@ -3618,3 +3618,9 @@ button.primary::first-letter { color: var(--gold); }
   background: linear-gradient(90deg, transparent, #ff9a45a0); }
 .projectile-wind::before { width: 26px; height: 3px; top: -1px; left: -26px; border-radius: 2px;
   background: linear-gradient(90deg, transparent, #dff4ff); box-shadow: 0 4px 0 -1px #dff4ff80, 0 -4px 0 -1px #dff4ff80; }
+
+/* 残る印（拘束・燃焼・鼓舞・かばい）。札の下に小さく並ぶ */
+.bu-marks { position: absolute; top: 100%; left: 0; right: 0; display: flex; gap: 2px; justify-content: center; margin-top: 12px; pointer-events: none; }
+.bu-mark { font-size: 11px; line-height: 1; filter: drop-shadow(0 1px 2px #000); animation: markIn .3s ease-out; }
+.bu.covering { outline: 1px solid rgba(190, 215, 255, .7); }
+@keyframes markIn { from { opacity: 0; transform: translateY(3px) scale(.6); } to { opacity: 1; transform: none; } }
