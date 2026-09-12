@@ -2260,7 +2260,9 @@ const Game = {
       // 号令（UI だけ）。節目で止めて名指しで命じる。答えを受けたら同じ種で計算し直すので、
       // 戦闘の入力（ユニットと選択肢）を計算前の姿で取っておく。sim・テストは今までどおり。
       offerOrder: !!options.offerRetreat && !openingBattle,
-      seed: options.offerRetreat ? Math.floor(U.rand() * 2147483647) : undefined
+      seed: options.offerRetreat ? Math.floor(U.rand() * 2147483647) : undefined,
+      // 痕跡・遺物・去った者。技の派生行動（skill_effects.js）が読む。戦闘計算の既定では使わない
+      traces: st.traces || [], relics: st.relics || [], departed: st.departed || []
     };
     // コマンドバトル（UI の既定、2026-09-11）。指示を受けながらラウンドごとに解決するので、ここでは計算しない。
     // 決着は finishManualBattle()。リロードで戻ったときは replay からおまかせで計算して続行として決着する。
