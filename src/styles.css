@@ -3292,6 +3292,7 @@ button.primary::first-letter { color: var(--gold); }
 .member-detail > header { display: flex; gap: 16px; align-items: center; padding-right: 70px; }
 .member-detail .photo { width: 112px; height: 112px; flex: 0 0 112px; }
 .member-close { position: absolute; right: 14px; top: 14px; }
+.member-home { position: absolute; left: 14px; top: 14px; }
 .member-detail section { margin-top: 16px; }
 .member-detail-stats { margin-top: 14px; }
 .member-trait-group { margin-top: 8px; }
@@ -3314,9 +3315,13 @@ button.primary::first-letter { color: var(--gold); }
 /* ── 城のメニュー（軍団／記録／参謀） ── */
 .castle-screen { display: grid; gap: 14px; }
 .castle-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   padding-bottom: 10px; border-bottom: 1px solid rgba(232, 189, 104, .28);
 }
+.castle-header h1 { white-space: nowrap; }
+.castle-header > div { min-width: 0; }
+.castle-tabs { flex: 1 1 100%; }   /* 4札は常に見出しの下へ一列（狭い幅で縦書きに崩れていた、2026-09-12） */
+.castle-home { margin-left: auto; }
 .castle-header h2 { margin: 0; }
 .castle-tabs {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;   /* 4札（城下町を追加、2026-09-12） */
@@ -3674,3 +3679,8 @@ button.primary::first-letter { color: var(--gold); }
 .town-table { border-collapse: collapse; font-size: 12px; }
 .town-table th, .town-table td { padding: 3px 8px; border-bottom: 1px solid var(--line); text-align: right; }
 .town-table td:first-child, .town-table th:first-child { text-align: left; }
+
+/* 事件で止めて見せる一コマの合図（2026-09-12） */
+.hold-hint { position: absolute; right: 10px; bottom: 8px; z-index: 6; font-size: 12px; color: #f6e6c2; background: rgba(0,0,0,.55); border: 1px solid rgba(232,189,104,.5); border-radius: 12px; padding: 3px 10px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.hold-hint.show { opacity: 1; animation: holdBlink 1.2s ease-in-out infinite; }
+@keyframes holdBlink { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }

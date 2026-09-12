@@ -665,6 +665,7 @@ const UI = {
     </div>` : `<button class="wide ghost castle-back" data-action="backcastle">← 戻る</button>`;
     this.set(`${this.hud()}<div class="castle-screen${options.formation ? " formation-shell" : ""}">
       <header class="castle-header"><div><h1>${options.formation ? "編成" : "🏰 城のメニュー"}</h1>
+        ${options.formation ? "" : `<button class="small ghost castle-home" data-action="home">⌂ メインへ</button>`}
         <div class="muted">${options.formation ? "出撃する者と城に残る者を決める。詳しい作戦情報は城の参謀札へ。" : "いつでも見るものを、四つの札にまとめました。"}</div></div>${tabs}</header>
       <main class="castle-content ${options.formation ? "formation-army" : ""}">${content}</main>${formationActions}
     </div>`, options.formation ? "formation" : "castle");
@@ -743,6 +744,7 @@ const UI = {
           <button class="danger" data-action="fire" data-confirm="1" data-uid="${m.uid}">解雇</button></div>`;
     this.set(`<div class="member-overlay"><article class="member-detail">
       <button class="small member-close" data-action="closemember">× 閉じる</button>
+      <button class="small ghost member-home" data-action="home">⌂ メインへ</button>
       <header>${this.avatarHtml(m, "photo")}<div><h2>${U.esc(m.name)}</h2><div>${U.esc(m.race)} / ${U.esc(m.job)}${this.secondGenLabel(m)}</div>
         <div><span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span>　戦功 ${m.merit || 0}${nextRank ? ` / ${nextRank.threshold}` : "・最高位"}</div></div></header>
       <div class="stats member-detail-stats">${stat("HP", "hp")}${stat("攻撃", "atk")}${stat("防御", "def")}${stat("速度", "spd")}</div>

@@ -257,6 +257,7 @@ const BattleScene = {
           <div class="cutin-copy"><b id="cutin-name"></b><span id="cutin-desc"></span></div>
         </div>
         <div class="command-panel" id="command-panel" hidden></div>
+        <div class="hold-hint" id="hold-hint" aria-hidden="true">▶ タップで進む</div>
       </div>
       <div class="scene-ctrl">
         <button class="small" data-action="speed" id="speed-btn">速度 x1</button>
@@ -379,6 +380,7 @@ const BattleScene = {
 
   // ── 再生 ──────────────────────────────────
   play(timeline, onDone) {
+    this.bindBattlefieldTaps();   // 事件のタップ送り（自動再生でも効く）
     this.stop();
     if (typeof Sound !== "undefined") Sound.stopAll();
     this.loadSpeed();
@@ -499,8 +501,41 @@ const BattleScene = {
     // モルモの確認待ちに入ったイベントでは次の予約を作らない。
     // 読み終えた時間がそのまま「この一拍」なので、確認後は直ちに次へ進む。
     if (this.mormoAwaiting) return;
-    const wait = Math.max(60, ((item.duration || dur) * this.eventScale) / this.speed);
+    let wait = Math.max(60, ((item.duration || dur) * this.eventScale) / this.speed);
+    // 事件（特性の発動・技・かばう・構え・戦死・蘇生・食事）は一コマをしっかり見せる：
+    // 最短 HOLD_MS は次へ進まず、戦場をタップすれば先へ（オーナー試遊 2026-09-12「一コマ一コマ演出が短すぎ」）。
+    // おまかせで流している間と低モーションは今までどおり。
+    if (this.isBeat(ev) && !this.autoRest && !this.reducedMotion()) {
+      wait = Math.max(wait, this.HOLD_MS / Math.max(1, this.speed / 2));
+      this.showHoldHint(true);
+    } else this.showHoldHint(false);
     this.scheduleStep(wait);
+  },
+
+  // 止めて見せる出来事。数字は「読み終える尺」。x1 で 2.6 秒、x2 で 2.6 秒、x4 で 1.3 秒。
+  HOLD_MS: 2600,
+  BEAT_TYPES: new Set(["trait_trigger", "order_exec", "cover", "intent", "incident", "revive", "summon", "synergy_trigger", "facility_trigger", "retreat_offer"]),
+  isBeat(ev) {
+    if (!ev) return false;
+    if (this.BEAT_TYPES.has(ev.type)) return !(ev.type === "trait_trigger" && !ev.quote && (ev.emphasis || 0) < 2);
+    if (ev.type === "death") { const u = this.units[ev.unitId]; return !!(u && u.side === "player"); }
+    if (ev.type === "note") return !!(ev.skillMiss || ev.spiritGain || ev.stunned || ev.buff);
+    return false;
+  },
+  reducedMotion() { return typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches; },
+  showHoldHint(on) {
+    const h = document.getElementById("hold-hint");
+    if (h) h.classList.toggle("show", !!on);
+  },
+  // 戦場のタップで、止めて見せている一コマを先へ送る（指示待ち・停止中・モルモの確認中は何もしない）
+  advanceBeat() {
+    if (this.paused || this.finished || this.mormoAwaiting || !this.stepTimer) return false;
+    const h = document.getElementById("hold-hint");
+    if (!h || !h.classList.contains("show")) return false;
+    clearTimeout(this.stepTimer);
+    this.showHoldHint(false);
+    this.step();
+    return true;
   },
 
   scheduleStep(wait) {
@@ -2193,6 +2228,8 @@ const BattleScene = {
     if (!scene || scene.dataset.cmdBound) return;
     scene.dataset.cmdBound = "1";
     scene.addEventListener("click", ev => {
+      // 事件で止めて見せている最中のタップは「先へ」
+      if (!this.cmdSeq && this.advanceBeat()) return;
       const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
       if (!seq || !prompt || !this.paused) return;
       const card = ev.target.closest(".bu");

@@ -288,6 +288,11 @@ const App = {
       case "backcastle":
         return this.render();
 
+      // どの画面からでも「いま進めるべき画面」へ。城・詳細・城下町から一発で戻る（オーナー試遊 2026-09-12）
+      case "home":
+        UI.memberFrom = null;
+        return this.render();
+
       case "member":
         return UI.memberDetail(data.uid ? Number(data.uid) : null, data.index);
 
