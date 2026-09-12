@@ -2,7 +2,7 @@
 // speciesUnlockBattles：種族技（SKILLS）を覚える戦闘数。unlockBattles：上位技（TRAITS の tier 2）。
 const SKILL_RULES = {
   speciesUnlockBattles: 3,
-  unlockBattles: 6,
+  unlockBattles: 8,
   growthPerBattle: 0.02,
   growthCapBattles: 12
 };

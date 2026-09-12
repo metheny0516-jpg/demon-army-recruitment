@@ -202,8 +202,12 @@ function fightOnce(st) {
     '1段目を持つ者は次に覚える技を引ける（オークの怪力 → 血の雄叫び）');
   const done = member(204, 'ベテラン', { traits: ['blood_howl'] });
   assert(Game.nextSkillFor(done) === null, 'もう覚えている者は null');
+  // 1段目（怪力など）は技へ移ってテンプレートから消えたので、**種族が合えば覚える**（2026-09-12）。
   const none = member(205, 'ナニモ', { traits: [] });
-  assert(Game.nextSkillFor(none) === null, '技の無い者は null');
+  assert(Game.nextSkillFor(none) && Game.nextSkillFor(none).id === 'blood_howl',
+    '1段目が無くても種族が合えば引ける（オーク → 血の雄叫び）');
+  const noSkill = member(206, 'ハーピー', { tplId: 'harpy', traits: [] });
+  assert(Game.nextSkillFor(noSkill) === null, '上位技を持たない種族は null');
   // 11技すべてが 1段目から引けること
   const tier2 = Object.keys(TRAITS).filter(id => (TRAITS[id].skill || {}).tier === 2);
   const reachable = tier2.filter(id => {

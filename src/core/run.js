@@ -411,6 +411,18 @@ const Game = {
       if (!m.skillTier) m.skillTier = (m.traits || []).some(id => ((TRAITS[id] || {}).skill || {}).tier === 2) ? 2 : 1;
       if (typeof m.spirit !== "number") m.spirit = this.spiritRules().start;   // 気合（2026-09-10）。旧セーブには無い
       if (m.debutSkill === undefined) m.debutSkill = null;                     // 旧セーブ：上位技は号令でだけ出る
+      // 技（2026-09-12）。癖として持っていた種族固有の効果は技へ移した。
+      // 旧セーブからはその癖を取り除き、3戦以上出ている者には種族技を持たせる
+      // （何も持たない者が出来ないよう、癖を消すのと技を渡すのは必ず同じ移行で行う）。
+      if (!Array.isArray(m.skills)) m.skills = [];
+      if (typeof m.lateBloomer !== "boolean") m.lateBloomer = this.isLateBloomer(m);
+      if (m.homeBonus === undefined) m.homeBonus = null;
+      const moved = (m.traits || []).filter(id => this.MOVED_TO_SKILL.includes(id));
+      if (moved.length) m.traits = (m.traits || []).filter(id => !this.MOVED_TO_SKILL.includes(id));
+      if ((this.memberRecord(m).battles || 0) >= this.unlockBattlesFor(m, "species")) {
+        const sk = this.speciesSkillFor(m);
+        if (sk) m.skills.push(sk.id);
+      }
     }
     if (!st.stageFights || typeof st.stageFights !== "object") st.stageFights = {};
     // 種族の伝承（2026-09-11）。旧セーブは今いる上位技持ちから埋める
@@ -565,7 +577,7 @@ const Game = {
     const out = { food: 0, material: 0, wage: 0, recruit: 0, appetite: 0, contributors: [] };
     for (const m of st.roster) {
       const deptId = this.departmentOf(m).id;
-      const c = Aptitude.contribution(m, deptId);
+      const c = this.contributionOf(m, deptId);
       out.food += c.food;
       out.material += c.material;
       out.wage += c.wage;
@@ -598,7 +610,7 @@ const Game = {
     const list = roster || this.state.roster;
     let produce = 0;
     for (const m of list) {
-      produce += Aptitude.contribution(m, this.departmentOf(m).id).food;
+      produce += this.contributionOf(m, this.departmentOf(m).id).food;
     }
     const need = this.foodNeedFor(list);
     return { produce, need, delta: produce - need, stock: Math.max(0, this.state.food || 0) };
@@ -1367,6 +1379,8 @@ const Game = {
     const scale = 1 + growth * (level - 1) * (veteran ? veteranMult : 1);
     const vary = v => Math.max(1, Math.round(v * scale * (0.85 + U.rand() * 0.3)));
     const job = U.pick(tpl.jobs);
+    // 遅咲き（裏方の職）は採用の時点で決まる。職業欄を書き換えない限り変わらない。
+    const lateBloomer = this.LATE_BLOOMER_JOBS.some(word => job.indexOf(word) !== -1);
     const traits = (tpl.fixedTraits || [tpl.fixedTrait]).filter(Boolean).slice();
     if (tpl.traitPool.length > 0 && U.chance(0.5)) {
       const extra = U.pick(tpl.traitPool);
@@ -1393,6 +1407,11 @@ const Game = {
       salary: U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(level / 4),
       loyalty: U.randInt(tpl.loyalty[0], tpl.loyalty[1]),
       traits,
+      // 技（SKILLS）は誰でも3戦で覚える。採用時は空。
+      skills: [],
+      // 遅咲き（裏方の職）。戦場では倍かかるが、代わりに城の仕事を1つぶん多くこなす。
+      lateBloomer,
+      homeBonus: lateBloomer ? U.pick(this.LATE_BLOOMER_FIELDS) : null,
       tags: tpl.tags.slice(),
       quote: U.pick(tpl.quotes),
       prevJob: U.pick(tpl.prevJobs),
@@ -1796,13 +1815,55 @@ const Game = {
 
   // ── 育成：種族技と小成長 ─────────────────────
   // 出撃を重ねた者だけが育つ（留守番では伸びない）。経験値は持たず、出撃数がそのまま経験。
+  // 裏方の職。戦場では遅れて咲くが、城では1つぶん多く働く（仕様4節）。
+  // 職業欄の部分一致で見る（既存の職業名を変えずに拾えるようにしてある）。
+  LATE_BLOOMER_JOBS: ["会計", "倉庫", "広報", "伝令", "受付", "経理", "備品", "配達"],
+  // 技へ移した種族固有の癖（仕様 2026-09-12 の1節）。TRAITS からは**消さない**
+  // （敵・遺物・旧セーブの魔界史が参照する）。名簿から外すのは migrateState だけ。
+  MOVED_TO_SKILL: ["brute", "pickpocket", "fireball", "guardian_prayer", "mischief",
+    "allure", "charge", "regen", "slime_body", "bone", "necromancy"],
+  // 遅咲きの倍率。仕様は「3→6、8→12」なので、種族技は2倍、上位技は1.5倍。
+  // （どちらも2倍にすると上位技が16戦になり、ランの戦闘数（今14〜20）を超えて一生来ない）
+  LATE_BLOOMER_MULT: { species: 2, order: 1.5 },
+
   skillRules() {
     const rules = (typeof SKILL_RULES !== "undefined" && SKILL_RULES) || {};
     return {
-      unlockBattles: rules.unlockBattles !== undefined ? rules.unlockBattles : 6,
+      speciesUnlockBattles: rules.speciesUnlockBattles !== undefined ? rules.speciesUnlockBattles : 3,
+      unlockBattles: rules.unlockBattles !== undefined ? rules.unlockBattles : 8,
       growthPerBattle: rules.growthPerBattle !== undefined ? rules.growthPerBattle : 0.025,
       growthCapBattles: rules.growthCapBattles !== undefined ? rules.growthCapBattles : 12
     };
+  },
+
+  // 遅咲きか（履歴書の職業欄で決まる。採用時に決めて monster.lateBloomer に控える）。
+  isLateBloomer(monster) {
+    if (!monster) return false;
+    if (typeof monster.lateBloomer === "boolean") return monster.lateBloomer;   // 採用時に決めた値が正
+    const job = monster.job || "";
+    return this.LATE_BLOOMER_JOBS.some(word => job.indexOf(word) !== -1);
+  },
+  // その者が技を覚えるまでの戦闘数。遅咲きは倍かかる（3→6、8→12）。
+  unlockBattlesFor(monster, key) {
+    const rules = this.skillRules();
+    const species = key === "species";
+    const base = species ? rules.speciesUnlockBattles : rules.unlockBattles;
+    if (!this.isLateBloomer(monster)) return base;
+    return Math.round(base * this.LATE_BLOOMER_MULT[species ? "species" : "order"]);
+  },
+  // 遅咲きが代わりに持つ内政の伸び。採用時に決めて monster.homeBonus に控える。
+  // Aptitude（departments.js）は種族と職業だけを見るので、加算はこちら側で行う。
+  LATE_BLOOMER_FIELDS: ["food", "material", "recruit"],
+  homeBonusOf(monster) {
+    const key = monster && monster.homeBonus;
+    return this.LATE_BLOOMER_FIELDS.includes(key) ? key : null;
+  },
+  // 留守番の貢献。Aptitude に遅咲きの +1 を足す唯一の入口。
+  contributionOf(monster, deptId) {
+    const c = Aptitude.contribution(monster, deptId);
+    const key = this.homeBonusOf(monster);
+    if (key && c[key] !== undefined && DEPARTMENT_ID(deptId) !== "combat") c[key] += 1;
+    return c;
   },
 
   // 採用時の値を控える。**昇進の boost は含めない**（含めると伸びが昇進に比例して膨らむ）。
@@ -1861,7 +1922,32 @@ const Game = {
       // 種族が一致しない（テンプレートに無い1段目を遺物などで持っている）なら覚えない。
       // 他種族の技を拾わせない。
     }
+    // 1段目がテンプレートから消えた種族（怪力などは技へ移った。仕様 2026-09-12）でも、
+    // **種族が合えば覚える**。replaces を持っていることは条件ではない。
+    for (const key of Object.keys(TRAITS)) {
+      const skill = TRAITS[key].skill;
+      if (skill && skill.tier === 2 && skill.species === monster.tplId) return { id: key, ...TRAITS[key] };
+    }
     return null;
+  },
+
+  // 種族技（SKILLS）。3戦で誰でも覚える。上位技（TRAITS）と違って伝承は要らない。
+  speciesSkillFor(monster) {
+    if (!monster || monster.mercenary || !monster.tplId) return null;
+    if (typeof SPECIES_SKILL === "undefined" || typeof SKILLS === "undefined") return null;
+    const id = SPECIES_SKILL[monster.tplId];
+    if (!id || !SKILLS[id]) return null;
+    if ((monster.skills || []).includes(id)) return null;     // もう覚えている
+    return { id, ...SKILLS[id] };
+  },
+  checkSpeciesSkill(monster, notes) {
+    if (!monster || monster.mercenary) return null;
+    if ((this.memberRecord(monster).battles || 0) < this.unlockBattlesFor(monster, "species")) return null;
+    const skill = this.speciesSkillFor(monster);
+    if (!skill) return null;
+    monster.skills = (monster.skills || []).concat(skill.id);
+    if (notes) notes.push(`${monster.name}が技【${skill.name}】を覚えた。次から指示で出せる`);
+    return { uid: monster.uid, name: monster.name, skillId: skill.id, skillName: skill.name, species: true };
   },
 
   // 上位技の解放。1段目（種族固有特性）が上位技に**置き換わる**。
@@ -1893,7 +1979,7 @@ const Game = {
     if (!monster || monster.mercenary) return null;
     const st = this.state;
     const rules = this.skillRules();
-    if ((this.memberRecord(monster).battles || 0) < rules.unlockBattles) return null;
+    if ((this.memberRecord(monster).battles || 0) < this.unlockBattlesFor(monster, "order")) return null;
     const skill = this.nextSkillFor(monster);
     if (!skill) return null;
     const replaced = skill.skill.replaces;
@@ -1923,6 +2009,8 @@ const Game = {
       if (row.survived === false) continue;      // この戦いで戦死した者は育たない
       const monster = st.roster.find(m => m.uid === row.uid);
       if (!monster) continue;
+      const species = this.checkSpeciesSkill(monster, notes);
+      if (species) unlocked.push(species);
       const gained = this.checkSkillUnlock(monster, notes);
       if (gained) unlocked.push(gained);
       this.applyGrowth(monster);
@@ -2235,17 +2323,30 @@ const Game = {
     const final = result || (live && live.handle && live.handle.result) || null;
     if (!final) return false;
     pending.result = final;
-    // 技で払った気合を名簿へ反映（戦闘中のユニットは名簿の写しなので、ここで戻す）
-    for (const [uid, spent] of Object.entries(final.spiritSpent || {})) {
-      const m = st.roster.find(x => String(x.uid) === String(uid));
-      if (m && typeof m.spirit === "number") m.spirit = Math.max(0, m.spirit - spent);
-    }
+    this.applySpiritChanges(final, pending);
     this.liveBattle = null;
     this.recordBattleResult(pending);
     st.pendingBattle = null;
     if (final.retreated) this.settleRetreat(pending);
     else this.settleContinue(pending);
     return st.phase;
+  },
+
+  // 戦闘で動いた気合を名簿へ戻す。戦闘中のユニットは名簿の写しなので、ここで一度だけ反映する。
+  // 払った分（技）と高まった分（まもって大技を受けた・味方が倒れた）の両方。
+  applySpiritChanges(result, pending) {
+    const st = this.state;
+    if (!result || (pending && pending.spiritApplied)) return;
+    if (pending) pending.spiritApplied = true;
+    const find = uid => st.roster.find(x => String(x.uid) === String(uid));
+    for (const [uid, spent] of Object.entries(result.spiritSpent || {})) {
+      const m = find(uid);
+      if (m && typeof m.spirit === "number") m.spirit = Math.max(0, m.spirit - spent);
+    }
+    for (const [uid, got] of Object.entries(result.spiritGained || {})) {
+      const m = find(uid);
+      if (m) this.gainSpirit(m, Number(got) || 0);        // 上限は spiritRules().max
+    }
   },
 
   // 戦闘の中身が確定したら一度だけ呼ぶ。シナジーの発見・最大戦力・最大CHAIN／OVERKILL・KPI。
@@ -2363,6 +2464,7 @@ const Game = {
   // 二つ持つと「テストは通るのに UI からだけ結果が違う」が起きる。
   settleContinue(pending) {
     const st = this.state;
+    this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);   // 号令で保留した戦闘はここで初めて確定する（済んでいれば何もしない）
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
     const goldBefore = st.gold;
@@ -2509,6 +2611,8 @@ const Game = {
       victory: result.victory,
       // 経験で身についた共通特性（表示用）。身につかなかった決着・旧セーブには無い。
       earned: earnedTraits,
+      // 戦闘中に高まった気合（表示用。まもって大技を受けた／仲間が倒れた）。
+      spiritGained: (result && result.spiritGained) || null,
       // 幕替わり（表示用）。結果画面とモルモの報告が読む。
       actAdvance,
       // 防衛戦（王国の反撃）の結末（表示用）。
@@ -2614,6 +2718,7 @@ const Game = {
   // 倒れていた軍団員は担いで帰る（戦死しない）が、報酬は無く、征服も進まない。
   settleRetreat(pending, options = {}) {
     const st = this.state;
+    this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
     const goldBefore = st.gold;
