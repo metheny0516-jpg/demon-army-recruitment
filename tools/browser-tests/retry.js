@@ -1,6 +1,6 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const { autoDismissMormo } = require('./helpers.js');
-const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
+const ok = (c,m) => { if (!c) process.exitCode = 1; console.log((c?'  ✓ ':'  ✗ ')+m); };   // 落ちたら run-all を赤に（以前は素通りしていた）
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await b.newPage({ viewport: { width: 390, height: 844 } });
@@ -14,6 +14,7 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   // 「1戦勝った直後の採用フェーズ」を再現する（ここが再起の戻り先になる）
+  await page.evaluate(() => { if (typeof TOWN_RULES !== 'undefined') TOWN_RULES.taxPerTerritory = { 1: 0, 2: 0, 3: 0 }; });   // 城下町の税を切る（全滅→再起・危機の検証は「金が無い」前提）
   await page.evaluate(() => { Game.state.gold = 40; Game.genApplicants(); Game.nextRecruit(); App.render(); });
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   const goldBefore = await page.evaluate(() => Game.state.checkpoint.gold);
@@ -37,13 +38,14 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
   ok(await page.locator('[data-action="retry"]').count()===1, '「再起する」ボタンが出る');
   ok(await page.locator('[data-action="concede"]').count()===1, '「ここで終わる」ボタンが出る');
   ok((await page.evaluate(()=>JSON.parse(localStorage.getItem('maou_history')||'[]').length))===0, '再起可能な間は魔界史に記録されない');
-  const saveAlive = await page.evaluate(()=>!!localStorage.getItem('maou_save'));
+  const saveAlive = await page.evaluate(()=>!!localStorage.getItem('maou_save_1'));
   ok(saveAlive, '再起可能な状態はセーブに残る（途中で閉じても復帰できる）');
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retry-defeat.png', fullPage: true });
 
   // --- 2. リロードして復帰できるか ---
   await page.reload(); await page.waitForTimeout(150);
   await page.click('[data-action="continue"]');
+  await page.evaluate(() => { if (typeof TOWN_RULES !== 'undefined') TOWN_RULES.taxPerTerritory = { 1: 0, 2: 0, 3: 0 }; });   // リロードで規則が戻るので、もう一度切る
   await page.waitForTimeout(150);
   console.log('▼ 途中で閉じて再開');
   ok(await page.locator('[data-action="retry"]').count()===1, 'リロード後も再起画面から再開できる');
@@ -80,7 +82,7 @@ const ok = (c,m) => console.log((c?'  ✓ ':'  ✗ ')+m);
   const hist = await page.evaluate(()=>JSON.parse(localStorage.getItem('maou_history')||'[]'));
   ok(hist.length===1, '魔界史に記録される');
   ok(hist[0] && hist[0].retriesUsed===1, `記録に再起回数が残る (retriesUsed=${hist[0]&&hist[0].retriesUsed})`);
-  const saveGone = await page.evaluate(()=>localStorage.getItem('maou_save'));
+  const saveGone = await page.evaluate(()=>localStorage.getItem('maou_save_1'));
   ok(saveGone===null, 'セーブが正しく消える');
   await page.reload(); await page.waitForTimeout(150);
   ok(await page.locator('[data-action="continue"]').count()===0, 'リロードしても「続きから」は出ない');

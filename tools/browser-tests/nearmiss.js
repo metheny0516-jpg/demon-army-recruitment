@@ -19,6 +19,7 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
     Game.state.activeUids = Game.state.roster.slice(0, Game.MAX_DEPLOY).map(m => m.uid);
     Game.state.roster = Game.state.roster.filter(m => Game.state.activeUids.includes(m.uid));
     Game.state.hiresLeft = 0;
+    if (typeof TOWN_RULES !== 'undefined') TOWN_RULES.taxPerTerritory = { 1: 0, 2: 0, 3: 0 };   // 城下町の税を切る（危機の検証は「金が無い」前提）
     Game.state.gold = Game.state.roster.length;
     Game.state.phase = 'formation'; App.render();
   });

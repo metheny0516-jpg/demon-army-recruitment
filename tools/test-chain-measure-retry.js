@@ -17,7 +17,7 @@ const N = 11;                                   // 再現ケース（11ラン目
 const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'chain-measure-')), 'm.json');
 
 execFileSync(process.execPath, [path.join(__dirname, 'chain-v2-measure.js'), String(N), '--json', out],
-  { env: { ...process.env, CHAIN_SEED_BASE: '1000' }, stdio: 'pipe' });
+  { env: { ...process.env, CHAIN_SEED_BASE: '1000', SIM_NO_TOWN: '1' }, stdio: 'pipe' });   // 城下町の税を切る（全滅→再起が起きる前提の測定）
 
 const data = JSON.parse(fs.readFileSync(out, 'utf8'));
 const runs = data.runs || [];

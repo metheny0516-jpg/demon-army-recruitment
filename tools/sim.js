@@ -3,8 +3,9 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js','src/data/town.js','src/data/events.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js','src/core/town.js','src/core/run.js'];
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/demon_kings.js',
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/run.js'];
+// SIM_NO_TOWN=1 で城下町（税）を読まない。再起の回帰テスト（test-chain-measure-retry）は全滅が起きる前提なので、税で楽になった後も同じ種で測れるようにする
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
   getItem: k => (k in store ? store[k] : null),
