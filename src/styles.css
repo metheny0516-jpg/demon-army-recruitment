@@ -3489,7 +3489,7 @@ button.primary::first-letter { color: var(--gold); }
 .cmd-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-items: stretch; margin-top: 8px; }
 .cmd-foot .danger { grid-column: 1 / -1; }
 .cmd-foot .cmd-btn { width: auto; padding: 6px 10px; font-size: 13px; text-align: center; }
-.cmd-foot .small { font-size: 11px; padding: 5px 6px; min-width: 0; white-space: nowrap; }
+.cmd-foot .small { font-size: 11px; padding: 5px 6px; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 #scene.awaiting-commands .bu { filter: brightness(.6); transition: filter .2s; }
 #scene.awaiting-commands .bu.cmd-active { filter: none; z-index: 7; transform: translateY(-6px) scale(1.06); border-color: var(--gold); box-shadow: 0 0 0 2px rgba(232, 189, 104, .6), 0 0 22px rgba(232, 189, 104, .55); }
 #scene.picking-target .bu.cmd-pick { filter: none; cursor: pointer; border-color: #ff8a5c; box-shadow: 0 0 0 2px rgba(255, 138, 92, .55); animation: cmdPick 1s ease-in-out infinite; }
@@ -3507,3 +3507,28 @@ button.primary::first-letter { color: var(--gold); }
   .cmd-btn { padding: 10px 12px; font-size: 15px; }
 }
 }
+
+/* ── 指示窓：技の枠・敵の役と構え（2026-09-12） ───────── */
+.cmd-btn.cmd-skill { text-align: left; }
+.cmd-btn.cmd-skill { padding: 7px 10px; }
+/* 技の一行は「名前」＋「効き・気合」。効きは長いので必ず折り返す（390px で切れない） */
+.cmd-btn.cmd-skill small {
+  display: block; margin-left: 0; white-space: normal; overflow-wrap: anywhere;
+  opacity: .8; font-size: 10px; line-height: 1.35;
+}
+.cmd-btn.cmd-skill:disabled { opacity: .45; }
+.cmd-spirit.gain { animation: spirit-gain .7s ease-out; }
+@keyframes spirit-gain {
+  0% { color: inherit; text-shadow: none; }
+  30% { color: #ffd76a; text-shadow: 0 0 8px rgba(255, 215, 106, .9); }
+  100% { color: inherit; text-shadow: none; }
+}
+.bu.spirit-up .bu-actor { animation: spirit-gain .7s ease-out; }
+.bu-role { font-size: 10px; margin-right: 2px; opacity: .9; }
+/* 構えの印。大技（既存の intent-big）と同じ扱いで、色だけ役に合わせる */
+.bu.intent-heal { box-shadow: 0 0 0 2px rgba(120, 220, 160, .8); }
+.bu.intent-aoe { box-shadow: 0 0 0 2px rgba(255, 150, 80, .8); }
+.bu.intent-guard { box-shadow: 0 0 0 2px rgba(150, 180, 255, .8); }
+/* 味方を狙う技：味方の札もタップ対象として光る（cmd-pick は既存の光り方を使う） */
+#band-player .bu.cmd-pick { cursor: pointer; }
+.skill-hint.late-bloomer { opacity: .8; font-style: italic; }

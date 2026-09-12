@@ -257,7 +257,7 @@ const BattleScene = {
       <div class="bu-vfx-anchor" aria-hidden="true"></div>
       <div class="bu-flash"></div>
       <div class="bu-actor"><div class="bu-icon">${this.portraitHtml(u)}</div></div>
-      <div class="bu-name">${U.esc(u.name)}</div>
+      <div class="bu-name">${u.side === "enemy" && this.ROLE_ICON[u.role] ? `<i class="bu-role" title="${U.esc(this.ROLE_LABEL[u.role] || "")}">${this.ROLE_ICON[u.role]}</i>` : ""}${U.esc(u.name)}</div>
       <div class="bu-hp"><div class="bu-hpfill" id="hp-${u.id}"></div></div>
       <span class="bu-state"></span>
       <div class="bu-pop" id="pop-${u.id}"></div>
@@ -840,12 +840,33 @@ const BattleScene = {
         if (ev.manual) { this.showAction(ev.text ? String(ev.text).trim() : "魔王軍、退く", 1800); break; }   // コマンドで退いた（提案ではない）
         this.askRetreat(ev);
         break;
-      // 敵の大技の構え。次のラウンドに来る。
+      // 敵の構え。次のラウンドに来る（大技・癒やし・全体術・守り）。
       case "intent": {
         const u = this.units[ev.unitId];
+        const kind = this.INTENT[ev.intent] ? ev.intent : "big";
         this.clearFocus();
-        if (u) { u.el.classList.add("acting"); this.float(u, "大技の構え", "guard"); u.el.classList.add("intent-big"); }
-        this.showAction(`${ev.name}が大技の構えを見せた`, 1400);
+        if (u) {
+          u.el.classList.add("acting", "intent-" + kind);
+          this.float(u, this.INTENT[kind].mark + " 構え", "guard");
+        }
+        this.showAction(`${ev.name}が${this.INTENT[kind].word}`, 1400);
+        break;
+      }
+      // 技の外れ・気合の高まり・動けない・守り。字幕だけ（ログは render の先頭で出ている）。
+      case "note": {
+        const u = this.units[ev.unitId];
+        if (ev.skillMiss) {
+          if (u) this.float(u, "外れた", "guard");
+          this.showAction(String(ev.text || "").trim(), 900);
+        } else if (ev.spiritGain) {
+          if (u) { this.float(u, `気合+${ev.spiritGain}`, "heal"); u.el.classList.add("spirit-up"); setTimeout(() => u.el.classList.remove("spirit-up"), 700); }
+          this.flashSpirit(ev.unitId);
+          this.showAction(String(ev.text || "").trim(), 800);
+        } else if (ev.stunned) {
+          if (u) this.float(u, "動けない", "guard");
+        } else if (ev.guarding) {
+          if (u) this.float(u, "🛡", "guard");
+        }
         break;
       }
       // 号令の節目。撤退の提案と同じく**必ず**止める。
@@ -1782,11 +1803,14 @@ const BattleScene = {
     for (const id in this.units) {
       const el = this.units[id] && this.units[id].el;
       if (!el) continue;
-      el.classList.remove("cmd-active", "cmd-pick", "cmd-decided");
+      el.classList.remove("cmd-active", "cmd-pick", "cmd-decided",
+        ...Object.keys(this.INTENT).map(k => "intent-" + k));
       const cur = el.querySelector(".cmd-cursor"); if (cur) cur.remove();
       const badge = el.querySelector(".cmd-badge"); if (badge) badge.remove();
     }
     this.cmdSeq = null;
+    this.cmdTargetSide = null;
+    this.cmdTargetKind = null;
   },
 
   // ── 指示窓（ロマサガ流、2026-09-12） ──
@@ -1794,6 +1818,16 @@ const BattleScene = {
   // たたかう／技を選ぶと窓が細くなり、敵をタップして狙いを決める（敵が1体なら省く）。
   // 最後の一人が決めた瞬間にラウンド開始。「もどる」で一人前へ。味方の札をタップすればその者へ飛べる。
   CMD_ICON: { attack: "⚔", guard: "🛡", skill: "✨", auto: "🤖" },
+  // 敵の役（5節）。札の名前の前に小さく出す。fighter は印を出さない（既定なので）。
+  ROLE_ICON: { brute: "💪", shield: "🛡", priest: "✚", caster: "🔥", archer: "🏹", rogue: "🗡", commander: "🎖" },
+  ROLE_LABEL: { brute: "大男", shield: "盾役", priest: "僧侶", caster: "術士", archer: "弓", rogue: "斥候", commander: "隊長" },
+  // 敵の構え。次のラウンドに何が来るかを印と一行で予告する。
+  INTENT: {
+    big: { mark: "⚠", word: "大技を放つ" },
+    heal: { mark: "✚", word: "仲間を癒やそうとしている" },
+    aoe: { mark: "🔥", word: "全体への術を練っている" },
+    guard: { mark: "🛡", word: "守りに入っている" }
+  },
 
   renderCommandPanel(prompt) {
     const panel = document.getElementById("command-panel");
@@ -1810,8 +1844,15 @@ const BattleScene = {
     const scene = document.getElementById("scene");
     if (scene) { scene.classList.add("awaiting-commands"); scene.classList.toggle("picking-target", seq.mode === "target"); }
     // 味方の札：指示中はカーソル、決めた者には印
+    const allyPick = seq.mode === "target" && this.cmdTargetSide === "ally";
+    // 味方を狙う技（かばう・癒やす・起こす）は味方の札が光る。倒れた者だけを狙う技は倒れた札だけ。
+    for (const f of (prompt.fallen || [])) {
+      const u = this.units[f.id]; if (!u) continue;
+      u.el.classList.toggle("cmd-pick", allyPick && this.cmdTargetKind !== "ally-alive");
+    }
     for (const al of allies) {
       const u = this.units[al.id]; if (!u) continue;
+      u.el.classList.toggle("cmd-pick", allyPick && this.cmdTargetKind !== "fallen");
       u.el.classList.toggle("cmd-active", al.id === a.id);
       const done = seq.commands[al.id];
       u.el.classList.toggle("cmd-decided", !!done && al.id !== a.id);
@@ -1828,26 +1869,35 @@ const BattleScene = {
     for (const e of prompt.enemies) {
       const u = this.units[e.id]; if (!u) continue;
       u.el.classList.toggle("intent-big", e.intent === "big");
-      u.el.classList.toggle("cmd-pick", seq.mode === "target");
+      for (const kind of Object.keys(this.INTENT)) u.el.classList.toggle("intent-" + kind, e.intent === kind);
+      u.el.classList.toggle("cmd-pick", seq.mode === "target" && this.cmdTargetSide !== "ally");
     }
-    const bigOnes = prompt.enemies.filter(e => e.intent === "big").map(e => e.name);
+    const warnings = prompt.enemies
+      .filter(e => this.INTENT[e.intent])
+      .map(e => `${this.INTENT[e.intent].mark} ${e.name}が${this.INTENT[e.intent].word}`);
     const spirit = typeof a.spirit === "number" ? `<small class="cmd-spirit">気合 ${"●".repeat(a.spirit)}${"○".repeat(Math.max(0, 3 - a.spirit))}</small>` : "";
     const state = a.winded ? `<small class="cmd-state">息切れ</small>` : a.stuffed ? `<small class="cmd-state">食事中</small>` : "";
     const head = `<div class="cmd-head"><span class="cmd-round">ラウンド ${prompt.round}　${seq.idx + 1}/${allies.length}人目</span>
         <b>${U.esc(a.name)}</b> <small>HP ${a.hp}/${a.maxHp}</small> ${spirit} ${state}
-        ${bigOnes.length ? `<span class="cmd-warn">⚠ ${U.esc(bigOnes.join("、"))}が大技を放つ</span>` : ""}</div>`;
+        ${warnings.map(w => `<span class="cmd-warn">${U.esc(w)}</span>`).join("")}</div>`;
     let body;
     if (seq.mode === "target") {
-      body = `<div class="cmd-pick-hint">狙う敵をタップ</div>
+      body = `<div class="cmd-pick-hint">${this.cmdTargetSide === "ally"
+          ? (this.cmdTargetKind === "fallen" ? "起こす者をタップ（倒れた味方）" : "かける相手をタップ（味方）")
+          : "狙う敵をタップ"}</div>
         <div class="cmd-foot">
-          <button type="button" class="cmd-btn" data-pick="">前から</button>
+          <button type="button" class="cmd-btn" data-pick="">${this.cmdTargetSide === "ally" ? "おまかせ" : "前から"}</button>
           <button type="button" class="cmd-btn cmd-back" data-nav="back">もどる</button>
         </div>`;
     } else {
-      const skill = a.skill;
-      const skillBtn = skill
-        ? `<button type="button" class="cmd-btn ${sel.cmd === "skill" ? "on" : ""}" data-cmd="skill" ${skill.ready ? "" : "disabled"} title="${U.esc(skill.note)}">技「${U.esc(skill.label)}」<small>気合${skill.cost}</small></button>`
-        : "";
+      // 技は種族技→上位技の順に最大2つ。一行に「技「名」　効き　気合n」。
+      // 選べないときは薄くして理由（why）をそのまま出す（何が足りないのかを窓の中で答える）。
+      const list = (a.skills && a.skills.length ? a.skills : (a.skill ? [a.skill] : [])).slice(0, 2);
+      const skillBtn = list.map(sk => {
+        const on = sel.cmd === "skill" && (sel.skill || list[0].id) === sk.id;
+        return `<button type="button" class="cmd-btn cmd-skill ${on ? "on" : ""}" data-cmd="skill" data-skill="${U.esc(sk.id)}"
+          ${sk.ready ? "" : "disabled"} title="${U.esc(sk.note || "")}">技「${U.esc(sk.label || sk.name)}」<small>${U.esc(sk.note || "")}　気合${sk.cost}${sk.ready ? "" : "・" + U.esc(sk.why || "")}</small></button>`;
+      }).join("");
       const first = seq.idx === 0;
       body = `<div class="cmd-menu">
           <button type="button" class="cmd-btn ${sel.cmd === "attack" ? "on" : ""}" data-cmd="attack">たたかう</button>
@@ -1878,14 +1928,27 @@ const BattleScene = {
         const cur = prompt.allies[seq.idx];
         if (btn.dataset.cmd) {
           const cmd = btn.dataset.cmd;
-          this.cmdSel[cur.id] = Object.assign(this.cmdSel[cur.id] || {}, { cmd });
-          if ((cmd === "attack" || cmd === "skill") && prompt.enemies.length > 1) {
+          const skillId = btn.dataset.skill || null;
+          this.cmdSel[cur.id] = Object.assign(this.cmdSel[cur.id] || {}, { cmd, skill: skillId });
+          // 狙いを選ぶのは「敵を1体」か「味方を1体」の技だけ。自分・全体・なしは即決定。
+          const picked = skillId && (cur.skills || []).find(s => s.id === skillId);
+          const want = cmd === "attack" ? "enemy" : (picked ? picked.target : (cmd === "skill" ? "enemy" : null));
+          this.cmdTargetSide = want === "ally" || want === "fallen" ? "ally" : want === "enemy" ? "enemy" : null;
+          this.cmdTargetKind = want === "fallen" ? "fallen" : want === "ally" ? "ally-alive" : null;
+          const allies = this.cmdTargetSide === "ally";
+          const choices = allies
+            ? (want === "fallen" ? (prompt.fallen || []).length : prompt.allies.length)
+            : prompt.enemies.length;
+          if (this.cmdTargetSide && choices > 1) {
             seq.mode = "target";
             return this.renderCommandPanel(prompt);
           }
-          return this.decideCommand(cur.id, cmd, null);
+          return this.decideCommand(cur.id, cmd, null, skillId);
         }
-        if (btn.dataset.pick !== undefined) return this.decideCommand(cur.id, this.cmdSel[cur.id].cmd, btn.dataset.pick || null);
+        if (btn.dataset.pick !== undefined) {
+          const sel = this.cmdSel[cur.id] || {};
+          return this.decideCommand(cur.id, sel.cmd, btn.dataset.pick || null, sel.skill || null);
+        }
         if (btn.dataset.nav === "back") {
           if (seq.mode === "target") seq.mode = "menu";
           else if (seq.idx > 0) seq.idx -= 1;
@@ -1906,19 +1969,30 @@ const BattleScene = {
     if (seq.mode === "menu" && typeof Sound !== "undefined") Sound.cue("mormo", { index: 1 });
   },
 
+  // 気合が高まった者の表示を一瞬光らせる（窓が開いていればその中の気合、無ければ札だけ）。
+  flashSpirit(unitId) {
+    const panel = document.getElementById("command-panel");
+    if (!panel || panel.hidden || panel.dataset.unit !== unitId) return;
+    const el = panel.querySelector(".cmd-spirit");
+    if (!el) return;
+    el.classList.add("gain");
+    setTimeout(() => el.classList.remove("gain"), 700);
+  },
+
   // 一人ぶん決めて次へ。最後の一人ならラウンド開始。
-  decideCommand(unitId, cmd, target) {
+  decideCommand(unitId, cmd, target, skill) {
     const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
     if (!seq || !prompt) return;
-    this.cmdSel[unitId] = { cmd, target };
-    seq.commands[unitId] = { cmd, target };
+    this.cmdSel[unitId] = { cmd, target, skill: skill || null };
+    seq.commands[unitId] = { cmd, target, skill: skill || null };
     seq.mode = "menu";
+    this.cmdTargetSide = null; this.cmdTargetKind = null;
     if (seq.idx >= prompt.allies.length - 1) {
       const commands = {};
       for (const al of prompt.allies) {
         const c = seq.commands[al.id];
         if (!c || c.cmd === "auto") continue;
-        commands[al.id] = { cmd: c.cmd, target: c.target || undefined };
+        commands[al.id] = { cmd: c.cmd, target: c.target || undefined, skill: c.skill || undefined };
       }
       return this.submitCommands(commands);
     }
@@ -1945,9 +2019,15 @@ const BattleScene = {
       const card = ev.target.closest(".bu");
       if (!card) return;
       const id = card.id.replace(/^bu-/, "");
-      if (seq.mode === "target" && prompt.enemies.some(e => e.id === id)) {
+      if (seq.mode === "target") {
         const cur = prompt.allies[seq.idx];
-        return this.decideCommand(cur.id, this.cmdSel[cur.id].cmd, id);
+        const sel = this.cmdSel[cur.id] || {};
+        const ally = this.cmdTargetSide === "ally";
+        const hit = ally
+          ? (this.cmdTargetKind === "fallen" ? (prompt.fallen || []) : prompt.allies).some(x => x.id === id)
+          : prompt.enemies.some(e => e.id === id);
+        if (hit) return this.decideCommand(cur.id, sel.cmd, id, sel.skill || null);
+        if (ally) return;      // 味方を選んでいる最中に敵を押しても何も起きない（誤爆を作らない）
       }
       const at = prompt.allies.findIndex(al => al.id === id);
       if (at >= 0 && at !== seq.idx) { seq.idx = at; seq.mode = "menu"; this.renderCommandPanel(prompt); }

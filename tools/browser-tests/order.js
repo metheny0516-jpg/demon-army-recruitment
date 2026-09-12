@@ -7,7 +7,7 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
 const SETUP = (spirit) => {
   Game.state.roster = [
     { uid: 901, tplId: 'ogre', name: 'ガロ', race: 'オーガ', job: '', hp: 260, atk: 14, def: 6, spd: 3,
-      salary: 2, loyalty: 70, traits: ['brute'], tags: [], quote: '', unpaid: false, injured: 0, spirit }
+      salary: 2, loyalty: 70, traits: ['ogre_charge'], skills: ['ogre_smash'], tags: [], quote: '', unpaid: false, injured: 0, spirit }
   ];
   Game.state.activeUids = [901];
   Game.state.stage = 1; Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation';
@@ -52,13 +52,13 @@ async function decideRest(page) {
   }));
   ok(/ラウンド 1/.test(panel.head), `ラウンド1の指示待ち（${panel.head}）`);
   ok(panel.unit === 'p0' && panel.active === 1, `先頭の者の窓が開き、その札にカーソルが乗る（${panel.unit}, active=${panel.active}）`);
-  ok(/怪力を必ず/.test(panel.skill) && /気合1/.test(panel.skill), `技のボタン（${panel.skill.replace(/\\n/g, ' ')}）`);
+  ok(/振り下ろす/.test(panel.skill) && /気合1/.test(panel.skill), `技のボタン（${panel.skill.replace(/\n/g, ' ')}）`);
   ok(!panel.disabled, '気合が足りるので技は選べる');
   ok(/気合 ●●●/.test(panel.spirit), `気合の表示（${panel.spirit}）`);
   ok(panel.paused && panel.pending && panel.phase === 'battle', '戦闘は指示待ちで止まり、決着は保留');
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/order-offer.png' });
 
-  console.log('▼ 技を選んで決定すると、気合を払って怪力が必ず出る');
+  console.log('▼ 技を選んで決定すると、気合を払って技が必ず出る');
   await page.evaluate(() => { document.querySelector('.cmd-btn[data-cmd="skill"]').click(); });
   // 敵が複数なら狙い選びに移る（窓が細くなり、敵の札が光る）。「前から」で確定。
   const picking = await page.evaluate(() => document.getElementById('command-panel').dataset.mode === 'target'
@@ -73,13 +73,13 @@ async function decideRest(page) {
   const after = await page.evaluate(() => ({
     log: document.getElementById('log').innerText,
     execs: BattleScene.timeline.filter(e => e.type === 'order_exec' && e.manual).length,
-    firstAtk: (BattleScene.timeline.find(e => e.type === 'attack' && e.fromId === 'p0') || {}).traits || [],
+    skillUse: BattleScene.timeline.filter(e => e.type === 'order_exec' && e.species).length,
     pending: !!Game.state.pendingBattle, phase: Game.state.phase,
     spirit: (Game.state.roster.find(m => m.uid === 901) || {}).spirit
   }));
-  ok(/魔王「ガロ、怪力を必ず！」/.test(after.log), '戦況記録に魔王の指示が残る');
+  ok(/魔王「ガロ、振り下ろす！」/.test(after.log), `戦況記録に魔王の指示が残る`);
   ok(after.execs === 1, `技の実行が1回（${after.execs}）`);
-  ok(after.firstAtk.includes('怪力') && !after.firstAtk.includes('号令'), `怪力が必ず出て、号令の+50%は無い（${after.firstAtk.join('/')}）`);
+  ok(after.skillUse === 1, `種族技として実行された（species=${after.skillUse}）`);
   ok(!after.pending && ['result', 'defeat', 'clear', 'gameover'].includes(after.phase), `決着した（${after.phase}）`);
   ok(after.spirit === 3, `気合は技で1減り、出撃の決着で1戻る（3 → ${after.spirit}）`);
 

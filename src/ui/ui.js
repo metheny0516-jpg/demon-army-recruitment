@@ -184,9 +184,22 @@ const UI = {
         }
       }
     }
-    if (!skill) return "";
-    const battles = (typeof SKILL_RULES !== "undefined" && SKILL_RULES.unlockBattles) || 6;
-    return `<div class="skill-hint">🗡 ${battles}戦で【${U.esc(skill.name)}】</div>`;
+    // 種族技（誰でも3戦で覚える）と、上位技（8戦。裏方は倍かかる）を1行ずつ。
+    // 戦闘数は Game に聞く（遅咲きの倍率もそこで決まる。二か所で数えない）。
+    const rules = typeof Game !== "undefined" && Game.skillRules ? Game.skillRules()
+      : { speciesUnlockBattles: 3, unlockBattles: 8 };
+    const need = key => (typeof Game !== "undefined" && Game.unlockBattlesFor)
+      ? Game.unlockBattlesFor(m, key)
+      : (key === "species" ? rules.speciesUnlockBattles : rules.unlockBattles);
+    const species = typeof Game !== "undefined" && Game.speciesSkillFor ? Game.speciesSkillFor(m) : null;
+    const lines = [];
+    if (species) lines.push(`<div class="skill-hint">✨ ${need("species")}戦で技【${U.esc(species.name)}】</div>`);
+    if (skill) lines.push(`<div class="skill-hint">🗡 ${need("order")}戦で【${U.esc(skill.name)}】</div>`);
+    // 遅咲き（裏方の職）。何が起きるかは言わない。「隠している」ことだけ伝える。
+    if (typeof Game !== "undefined" && Game.isLateBloomer && Game.isLateBloomer(m)) {
+      lines.push(`<div class="skill-hint late-bloomer">？？？（この者は何かを隠している）</div>`);
+    }
+    return lines.join("");
   },
 
   // 名簿の戦歴。0戦の者（応募直後）には出さない。伸び幅は出さない（伸びた後の値だけ）。

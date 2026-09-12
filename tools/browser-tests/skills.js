@@ -1,4 +1,4 @@
-// 種族技と小成長（画面側）：札の🗡、面接の「6戦で【…】」、結果画面の「覚えた」と一言、
+// 種族技と小成長（画面側）：札の🗡、面接の「3戦で技【…】」「8戦で【…】」、結果画面の「覚えた」と一言、
 // 戦闘のキャプションに lines.use。仕様 docs/SPEC_SKILLS_2026-09-10.md 5.4・6・7節。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
@@ -65,7 +65,7 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   ok(cardsCount === 3 && /出撃 0戦/.test(rookieDetail), `3人目の詳細は0戦と分かる（名簿${cardsCount}行）`);
   await page.locator('[data-action="closemember"]').click();
 
-  console.log('▼ 面接：応募者に「6戦で【…】」（数値は出さない）');
+  console.log('▼ 面接：応募者に「3戦で技【…】」「8戦で【…】」（数値は出さない）');
   await page.evaluate(() => {
     Game.state.phase = 'recruit';
     Game.state.applicants = Game.state.applicants && Game.state.applicants.length
@@ -75,19 +75,20 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     a.bond = null; a.relicId = null; a.veteran = false;
     App.render();
   });
-  const hint = await page.locator('.skill-hint').first().textContent();
-  ok(/6戦で【ぶちかまし】/.test(hint), `応募者札に「6戦で【ぶちかまし】」（${hint}）`);
-  ok(!/\d+\s*(HP|攻撃|防御)/.test(hint) && !/12|10/.test(hint), '能力値の数字は出さない');
+  const hints = (await page.locator('.applicant-member').first().locator('.skill-hint').allTextContents()).join(' / ');
+  ok(/3戦で技【振り下ろす】/.test(hints), `応募者札に種族技「3戦で技【振り下ろす】」（${hints}）`);
+  ok(/8戦で【ぶちかまし】/.test(hints), `応募者札に上位技「8戦で【ぶちかまし】」（${hints}）`);
+  ok(!/\d+\s*(HP|攻撃|防御)/.test(hints), '能力値の数字は出さない');
 
-  console.log('▼ 面接：既に上位技を持つ応募者には出さない');
+  console.log('▼ 面接：既に上位技を持つ応募者に「8戦で」は出さない（種族技はまだ覚えられる）');
   await page.evaluate(() => {
     const a = Game.state.applicants[0];
     a.name = '上位技持ち応募者';
     a.traits = ['ogre_charge'];
     App.render();
   });
-  const firstCardHint = await page.locator('.applicant-member').first().locator('.skill-hint').count();
-  ok(firstCardHint === 0, '上位技を既に持つ応募者には「6戦で」を出さない');
+  const afterHints = (await page.locator('.applicant-member').first().locator('.skill-hint').allTextContents()).join(' / ');
+  ok(!/戦で【/.test(afterHints), `上位技を既に持つ応募者には「8戦で【…】」を出さない（${afterHints || 'なし'}）`);
 
   console.log('▼ 結果画面：技を覚えた本人の一言');
   await page.evaluate(() => {
