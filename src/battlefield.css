@@ -14,6 +14,52 @@
 .projectile-magic::before { width: 20px; height: 20px; left: -10px; top: -10px; border-radius: 50%; background: radial-gradient(circle, #fff 0 12%, #edd4ff 22%, #b57cff 48%, #6630b100 72%); box-shadow: 0 0 15px #bc81ff, -14px 0 15px #9d5ce888; }
 .projectile-magic::after { width: 42px; height: 8px; top: -4px; left: -45px; border-radius: 50%; background: linear-gradient(90deg, transparent, #bf86ffa0); }
 .battlefield .bu-vfx.impact-magic { filter: hue-rotate(225deg); }
+/* Skill FX art only. Timing, motion, visibility and cleanup belong to BattleScene.
+   Use an empty span.bu-vfx.fx-<name> inside .bu-vfx-anchor (not a legacy img).
+   Dimensions set the resting scale without competing with animated transforms. */
+.bu-vfx.fx-heavy,
+.bu-vfx.fx-slash_multi,
+.bu-vfx.fx-fire,
+.bu-vfx.fx-dark,
+.bu-vfx.fx-holy,
+.bu-vfx.fx-nature,
+.bu-vfx.fx-wind,
+.bu-vfx.fx-aura,
+.bu-vfx.fx-shield,
+.bu-vfx.fx-summon {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  filter: none;
+  pointer-events: none;
+}
+.bu-vfx.fx-heavy { background-image: url('../assets/battle/effects/heavy.webp'); width: 150%; height: 150%; }
+.bu-vfx.fx-slash_multi { background-image: url('../assets/battle/effects/slash_multi.webp'); width: 142%; height: 142%; }
+.bu-vfx.fx-fire { background-image: url('../assets/battle/effects/fire.webp'); width: 132%; height: 132%; }
+.bu-vfx.fx-dark { background-image: url('../assets/battle/effects/dark.webp'); width: 145%; height: 145%; }
+.bu-vfx.fx-holy { background-image: url('../assets/battle/effects/holy.webp'); width: 130%; height: 165%; top: 42%; }
+.bu-vfx.fx-nature { background-image: url('../assets/battle/effects/nature.webp'); width: 120%; height: 120%; }
+.bu-vfx.fx-wind { background-image: url('../assets/battle/effects/wind.webp'); width: 145%; height: 125%; }
+.bu-vfx.fx-aura {
+  background-image: url('../assets/battle/effects/aura.webp');
+  width: 138%; height: 100%; top: 72%;
+  /* The caller can tint either side without an animation/filter being imposed. */
+  filter: var(--fx-aura-filter, none);
+}
+.bu-vfx.fx-shield { background-image: url('../assets/battle/effects/shield.webp'); width: 115%; height: 135%; }
+.bu-vfx.fx-summon { background-image: url('../assets/battle/effects/summon.webp'); width: 155%; height: 175%; top: 40%; }
+/* Right-facing source sprites; projectileMotion rotates the zero-sized parent.
+   Keep the artwork centered on that parent's trajectory point. */
+.projectile-fire::before,
+.projectile-wind::before {
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+.projectile-fire::before { background-image: url('../assets/battle/effects/projectile-fire.webp'); width: 44px; height: 44px; left: -22px; top: -22px; }
+.projectile-wind::before { background-image: url('../assets/battle/effects/projectile-wind.webp'); width: 52px; height: 52px; left: -26px; top: -26px; }
 .game-scene-battle .scene.battlefield {
   display: block;
   min-height: 560px;
