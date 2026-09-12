@@ -381,7 +381,7 @@ const Battle = {
     let ledgerBoost = null;
     let lootPairBoost = null;
     // ── 技（SKILLS）と敵の役割。仕様 docs/SPEC_SKILLS_2026-09-12.md ──
-    const SK = typeof SKILLS !== "undefined" ? SKILLS : {};
+    const SK = Object.assign({}, typeof SKILL_CATALOG !== "undefined" ? SKILL_CATALOG : {}, typeof SKILLS !== "undefined" ? SKILLS : {});
     const SPIRIT_MAX = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit && MONSTER_RULES.spirit.max) || 3;
     const spiritGained = {};            // uid → 戦闘中に増えた気合（run.js が名簿へ反映）
     let scatterUntil = 0;               // かく乱：このラウンドまで敵の狙いが散る
@@ -902,6 +902,28 @@ const Battle = {
     };
 
     // ── 技の解決（指示窓で選んだ技）。cover/buff/scatter は指示の直後に効き、ほかは本人の手番で ──
+    // 技・敵の役割の差し込み口（2026-09-12）。src/core/skill_effects.js の SKILL_EFFECTS / ENEMY_ROLES が
+    // 新しい kind / role を登録できる。battle.js を触らずに技と行動パターンを増やすための口。
+    const FX = typeof SKILL_EFFECTS !== "undefined" ? SKILL_EFFECTS : {};
+    const ROLES = typeof ENEMY_ROLES !== "undefined" ? ENEMY_ROLES : {};
+    const hookCtx = (unit, sk, cmd, allies, enemies, round) => ({
+      unit, skill: sk, cmd: cmd || {}, allies, enemies, round, options,
+      living: enemies.filter(onField), onField, timeline, U, rand: U.rand, chance: U.chance, pick: U.pick,
+      playerUnits, enemyUnits,
+      applyDamage, act, note, emit, emitCausal, pickTarget, lowestAlly, moveBack, gainBattleResource, gainSpirit,
+      pickEnemy: () => (cmd && cmd.targetId && enemies.find(e => e.id === cmd.targetId && onField(e))) || (enemies.some(onField) ? pickTarget(unit, enemies.filter(onField), round) : null),
+      heal: (t, ratio, label) => {
+        const amount = Math.min(t.maxHp - t.hp, Math.ceil(t.maxHp * ratio));
+        if (amount <= 0) return 0;
+        t.hp += amount;
+        emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: label || (sk && sk.name) || null, emphasis: 1 }, null);
+        return amount;
+      },
+      damage: (target, mult, label, extra) => {
+        const raw = unit.atk * mult * (0.9 + U.rand() * 0.2) * (unit.mods.dmgMult || 1);
+        return applyDamage(unit, target, Math.max(1, Math.round(raw) - Math.floor(target.def / 2)), "attack", Object.assign({ label, traits: label ? [label] : [] }, extra || {})).dmg;
+      }
+    });
     const resolveSkill = (unit, sk, cmd, allies, enemies, round) => {
       if (!sk) return;
       const living = enemies.filter(onField);
@@ -980,11 +1002,17 @@ const Battle = {
           resolveSkill(unit, Object.assign({ name: sk.name, lines: {} }, pick), cmd, allies, enemies, round);
           break;
         }
-        default: break;
+        default: {
+          const fx = FX[sk.kind];
+          if (fx && typeof (fx.resolve || fx) === "function") (fx.resolve || fx)(hookCtx(unit, sk, cmd, allies, enemies, round));
+          break;
+        }
       }
     };
     // 指示の直後に効く技（かばう・鬨の声・かく乱）。本人の手番では身構えるだけ。
     const applyImmediateSkill = (unit, sk, cmd, round) => {
+      const fx = FX[sk.kind];
+      if (fx && fx.immediate) { fx.immediate(hookCtx(unit, sk, cmd, playerUnits, enemyUnits, round)); return true; }
       if (sk.kind === "cover") {
         const t = (cmd.targetId && playerUnits.find(a => a.id === cmd.targetId && onField(a) && a !== unit)) || lowestAlly(playerUnits, unit);
         if (t) { unit.flags.covering = t.id; unit.flags.coverRatio = sk.power || 0.6; note(`　${unit.name}が${t.name}の前に立つ`, "trait"); }
@@ -999,6 +1027,11 @@ const Battle = {
     };
     // 敵の役割：次のラウンドの行動を決める（構えは prompt の intent に出る）。乱数は指示のあとで消費する。
     const planEnemy = (e, nextRound) => {
+      const custom = ROLES[e.role];
+      if (custom && typeof custom.plan === "function") {
+        const plan = custom.plan(hookCtx(e, null, null, enemyUnits, playerUnits, nextRound), nextRound);
+        if (plan !== undefined) return plan;      // undefined＝既定の規則に任せる
+      }
       const mates = enemyUnits.filter(onField);
       if (e.role === "priest") {
         const hurt = mates.filter(m => m.hp < m.maxHp * 0.6).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
@@ -1017,13 +1050,18 @@ const Battle = {
       for (const e of enemyUnits.filter(onField)) {
         e.flags.plan = planEnemy(e, nextRound);
         if (e.flags.plan && e.flags.plan.intent) {
-          const word = { heal: "仲間を癒やそうとしている", aoe: "全体への術を練っている", guard: "盾を構えた" }[e.flags.plan.intent];
+          const word = e.flags.plan.text || { heal: "仲間を癒やそうとしている", aoe: "全体への術を練っている", guard: "盾を構えた" }[e.flags.plan.intent] || "何かを企んでいる";
           emit("intent", { unitId: e.id, name: e.name, intent: e.flags.plan.intent, emphasis: 1, text: `　${e.name}が${word}`, cls: "trait" });
         }
       }
     };
     // 敵の計画の実行。true を返したら通常攻撃はしない。
     const runEnemyPlan = (unit, plan, allies, enemies, round) => {
+      const custom = ROLES[unit.role];
+      if (custom && typeof custom.run === "function") {
+        const handled = custom.run(hookCtx(unit, null, null, allies, enemies, round), plan);
+        if (handled !== undefined) return !!handled;
+      }
       if (plan.kind === "heal") {
         const t = allies.find(a => a.id === plan.targetId && onField(a)) || lowestAlly(allies, null);
         if (!t) return false;

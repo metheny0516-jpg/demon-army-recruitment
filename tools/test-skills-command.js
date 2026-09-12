@@ -2,7 +2,7 @@
 //   node tools/test-skills-command.js
 const fs = require('fs'), vm = require('vm');
 const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js',
-  'src/data/synergies.js','src/data/enemies.js','src/core/util.js','src/core/synergy.js','src/core/battle.js'];
+  'src/data/synergies.js','src/data/enemies.js','src/core/util.js','src/core/synergy.js','src/core/skill_effects.js','src/core/battle.js'];
 const ctx = { console, Math: Object.create(Math) };
 vm.createContext(ctx);
 for (const f of files) vm.runInContext(fs.readFileSync(f, 'utf8'), ctx, { filename: f });
@@ -213,6 +213,31 @@ console.log('▼ 8. 自動戦闘（simulate）は技を勝手に使わない。�
   const r = Battle.simulate(p, foes(2), opts({ seed: 9 }));
   assert(!r.timeline.some(ev => ev.type === 'order_exec' && ev.species), '種族技は指示でだけ出る');
   assert(r.spiritGained !== undefined, 'result に spiritGained がある');
+}
+
+console.log('▼ 9. 差し込み口：SKILL_EFFECTS の新しい kind と ENEMY_ROLES の新しい role が呼ばれる');
+{
+  const FX = vm.runInContext('SKILL_EFFECTS', ctx), ROLES = vm.runInContext('ENEMY_ROLES', ctx);
+  FX.test_drain = { resolve(c) { const t = c.pickEnemy(); const d = c.damage(t, 0.5, 'テスト吸収'); c.heal(c.unit, 0.1, 'テスト吸収'); c.note('　吸収した', 'trait'); } };
+  FX.test_stance = { immediate(c) { c.unit.flags.guarding = true; } };
+  ROLES.test_bomber = {
+    plan(c, nextRound) { return nextRound === 2 ? { kind: 'bomb', intent: 'bomb', text: '爆薬を取り出した' } : undefined; },
+    run(c, plan) { if (plan.kind !== 'bomb') return undefined; for (const p of c.enemies.filter(c.onField)) c.damage(p, 0.3, '爆発'); return true; }
+  };
+  SKILLS.test_drain = { name: 'テスト吸収', cost: 1, kind: 'test_drain', target: 'enemy', note: 'x' };
+  SKILLS.test_stance = { name: 'テスト構え', cost: 1, kind: 'test_stance', target: 'none', note: 'x' };
+  const p = [mk('A', { skills: ['test_drain', 'test_stance'], hp: 100, spd: 9 })];
+  p[0].hp = 50;
+  const e = [mk('爆弾兵', { race: '人間', hp: 300, atk: 5, spd: 1, role: 'test_bomber', spirit: undefined }, 'enemy')];
+  const h = Battle.start(p, e, opts({ seed: 6 }));
+  h.next();
+  let pr = h.next({ p0: { cmd: 'skill', skill: 'test_drain' } });
+  assert(events(h, 'attack').some(ev => ev.label === 'テスト吸収') && events(h, 'heal').some(ev => ev.label === 'テスト吸収'), '登録した kind の resolve が呼ばれる（damage/heal の道具が使える）');
+  assert(pr.enemies[0].intent === 'bomb' && events(h, 'intent').some(ev => /爆薬/.test(ev.text)), `登録した role の plan が予告になる（${pr.enemies[0].intent}）`);
+  h.next({ p0: { cmd: 'skill', skill: 'test_stance' } });
+  const bomb = events(h, 'attack').find(ev => ev.label === '爆発');
+  assert(bomb && bomb.traits.includes('まもる'), '登録した role の run が動き、immediate の構え（まもる）が効いている');
+  delete SKILLS.test_drain; delete SKILLS.test_stance; delete FX.test_drain; delete FX.test_stance; delete ROLES.test_bomber;
 }
 
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
