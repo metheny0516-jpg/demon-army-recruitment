@@ -3624,3 +3624,21 @@ button.primary::first-letter { color: var(--gold); }
 .bu-mark { font-size: 11px; line-height: 1; filter: drop-shadow(0 1px 2px #000); animation: markIn .3s ease-out; }
 .bu.covering { outline: 1px solid rgba(190, 215, 255, .7); }
 @keyframes markIn { from { opacity: 0; transform: translateY(3px) scale(.6); } to { opacity: 1; transform: none; } }
+
+/* ── 城下町（2026-09-12） ── */
+.town-summary { font-size: 15px; margin: 4px 0 2px; }
+.town-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin: 10px 0; }
+.town-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: rgba(31,23,39,.6); }
+.town-card.built { border-color: rgba(232,189,104,.55); }
+.town-head { display: flex; gap: 6px; align-items: baseline; font-size: 15px; }
+.town-icon { font-size: 18px; }
+.town-lv { margin-left: auto; color: var(--gold); font-weight: bold; }
+.town-line { font-size: 13px; color: #f6e6c2; margin: 2px 0; }
+.town-effect { font-size: 12px; }
+.town-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; }
+.town-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.town-bank, .town-ledger { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.town-bank h3, .town-ledger h3 { margin: 0 0 4px; font-size: 15px; }
+.town-table { border-collapse: collapse; font-size: 12px; }
+.town-table th, .town-table td { padding: 3px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+.town-table td:first-child, .town-table th:first-child { text-align: left; }

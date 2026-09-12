@@ -148,6 +148,7 @@ const Game = {
       traces: [],
       checkpoint: null
     };
+    if (typeof Town !== "undefined") Town.init(this.state);   // 城下町（2026-09-12）
     // 仕様2.5「開幕の勇者襲来を最初の反撃にする」は**開幕3日間プロトタイプ限定**にした。
     // 開幕モードは 2026-09-03 に撤廃されていて `openingPrototype` は常に false なので、
     // ここは今のところ動かない。通常ループの1戦目をいきなり防衛戦にすると、
@@ -434,6 +435,7 @@ const Game = {
       }
     }
     if (!Array.isArray(st.departed)) st.departed = [];
+    if (typeof Town !== "undefined") Town.init(st);   // 城下町（2026-09-12）。旧セーブには無い
     if (!Array.isArray(st.relics)) st.relics = [];
     if (!Array.isArray(st.traces)) st.traces = [];
     // 答える前の戦闘が保存されていたら、続行として決着させる。
@@ -1405,7 +1407,7 @@ const Game = {
       atk: vary(tpl.base.atk),
       def: Math.max(0, Math.round(tpl.base.def * (0.8 + U.rand() * 0.4))),
       spd: Math.max(1, Math.round(tpl.base.spd * (0.85 + U.rand() * 0.3))),
-      salary: U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(level / 4),
+      salary: Math.max(1, U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(level / 4) - (typeof Town !== "undefined" ? Town.salaryDiscount(st) : 0)),   // 酒場
       loyalty: U.randInt(tpl.loyalty[0], tpl.loyalty[1]),
       traits,
       // 技（SKILLS）は誰でも3戦で覚える。採用時は空。
@@ -1636,7 +1638,8 @@ const Game = {
   },
 
   // ── 採用・解雇・編成 ──────────────────────
-  canHire() { return this.state.roster.length < this.MAX_ARMY; },
+  maxArmy() { return this.MAX_ARMY + (typeof Town !== "undefined" ? Town.armyBonus(this.state) : 0); },   // 宿舎
+  canHire() { return this.state.roster.length < this.maxArmy(); },
 
   additionalHireCost() {
     return this.EXTRA_HIRE_BASE_COST * Math.pow(2, this.state.extraHiresThisPhase || 0);
@@ -1848,9 +1851,10 @@ const Game = {
   unlockBattlesFor(monster, key) {
     const rules = this.skillRules();
     const species = key === "species";
-    const base = species ? rules.speciesUnlockBattles : rules.unlockBattles;
-    if (!this.isLateBloomer(monster)) return base;
-    return Math.round(base * this.LATE_BLOOMER_MULT[species ? "species" : "order"]);
+    const raw = species ? rules.speciesUnlockBattles : rules.unlockBattles;
+    const base = this.isLateBloomer(monster) ? Math.round(raw * this.LATE_BLOOMER_MULT[species ? "species" : "order"]) : raw;
+    const lab = typeof Town !== "undefined" ? Town.unlockBonus(this.state, key) : 0;   // 研究所
+    return Math.max(1, base - lab);
   },
   // 遅咲きが代わりに持つ内政の伸び。採用時に決めて monster.homeBonus に控える。
   // Aptitude（departments.js）は種族と職業だけを見るので、加算はこちら側で行う。
@@ -2066,7 +2070,8 @@ const Game = {
   // 気合（号令の限定）の規則。data に置く（MONSTER_RULES.spirit）。
   spiritRules() {
     const r = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit) || {};
-    return { start: r.start ?? 1, max: r.max ?? 3, perBattle: r.perBattle ?? 1, perHomeTurn: r.perHomeTurn ?? 2 };
+    const bonus = typeof Town !== "undefined" && this.state ? Town.spiritMaxBonus(this.state) : 0;   // 鍛冶場
+    return { start: r.start ?? 1, max: (r.max ?? 3) + bonus, perBattle: r.perBattle ?? 1, perHomeTurn: r.perHomeTurn ?? 2 };
   },
   gainSpirit(monster, amount) {
     if (!monster) return;
@@ -2284,7 +2289,8 @@ const Game = {
       offerOrder: !!options.offerRetreat && !openingBattle,
       seed: options.offerRetreat ? Math.floor(U.rand() * 2147483647) : undefined,
       // 痕跡・遺物・去った者。技の派生行動（skill_effects.js）が読む。戦闘計算の既定では使わない
-      traces: st.traces || [], relics: st.relics || [], departed: st.departed || []
+      traces: st.traces || [], relics: st.relics || [], departed: st.departed || [],
+      spiritMax: this.spiritRules().max
     };
     // コマンドバトル（UI の既定、2026-09-11）。指示を受けながらラウンドごとに解決するので、ここでは計算しない。
     // 決着は finishManualBattle()。リロードで戻ったときは replay からおまかせで計算して続行として決着する。
@@ -2492,6 +2498,8 @@ const Game = {
     this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);   // 号令で保留した戦闘はここで初めて確定する（済んでいれば何もしない）
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
+    // 城下町：防衛戦に負けた決着は税収が無い（processDepartments が読む）。勝ちも遠征も false
+    st.lastRansacked = this.isDefenseBattle(stageData) && !result.victory;
     const goldBefore = st.gold;
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
     // 判定負け（30ラウンド経過。全滅ではない）は撤退と同じ結末にする。
@@ -2746,6 +2754,7 @@ const Game = {
     this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
+    st.lastRansacked = this.isDefenseBattle(stageData);   // 城下町：防衛戦から退いた決着も税収は無い
     const goldBefore = st.gold;
     const lostOnPoints = !!options.lostOnPoints;
     // 提案時点の戦果。倒れていた軍団員は survived: true / injured: true になっている。
@@ -3041,7 +3050,7 @@ const Game = {
   // 負傷は次の1戦だけ。戦闘が一つ決着するたびに1つ減らす（勝利・敗北・撤退を問わない）。
   recoverInjuries() {
     for (const m of this.state.roster) {
-      if (m.injured) m.injured = Math.max(0, m.injured - 1);
+      if (m.injured) m.injured = Math.max(0, m.injured - 1 - (typeof Town !== "undefined" ? Town.healBonus(this.state) : 0));   // 宿舎Lv2で1決着早い
     }
   },
 
@@ -3170,6 +3179,8 @@ const Game = {
     }
     notes.push(`留守番の建設：建材 +${materialReward} / 投入 ${materialUsed}`
       + `（施工能力 ${buildCapacity}・備蓄 ${st.materials}）`);
+    // 城下町：税・利子・酒場（決着ごと。開幕の日割りでは呼ばない）。荒らされたかは settleContinue が st.lastRansacked に控える
+    if (dailyDay === undefined && typeof Town !== "undefined") Town.settle(this, notes, { ransacked: !!st.lastRansacked });
     if (st.facilityLevel > beforeLevel) {
       const facility = this.facilityInfo();
       notes.push(`施設完成【${facility.name}】稼働中の大型施設が1戦闘に ${facility.works} 回まで働く`);
