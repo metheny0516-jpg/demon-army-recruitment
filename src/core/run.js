@@ -489,7 +489,7 @@ const Game = {
       m.department = DEPARTMENT_ID(m.department);  // 旧3部門（建設・生活）は留守番へ
       if (!DEPARTMENTS[m.department]) m.department = "combat";
       if (!Array.isArray(m.traits)) m.traits = [];
-      if (m.tplId === "goblin" && !m.traits.includes("pickpocket")) m.traits.push("pickpocket");
+      // （旧移行「ゴブリンに追い剥ぎを足す」は 2026-09-12 に削除。追い剥ぎは技へ移り、上の移行で名簿から外している）
       if (m.tplId === "ogre" && !m.traits.includes("big_eater")) m.traits.push("big_eater");
       if (m.tplId === "necromancer" && !m.traits.includes("gravekeeper")) m.traits.push("gravekeeper");
       if ((m.job || "").includes("料理人") && !m.traits.includes("demon_cook")) m.traits.push("demon_cook");
