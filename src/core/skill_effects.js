@@ -200,3 +200,88 @@ Object.assign(SKILL_EFFECTS, {
     CatalogEffects.say(c, "担がれる痛みは知っている。後ろへ");
   } }
 });
+
+// planは予告だけ（乱数・状態変更なし）。runで現在の生存状態を確かめて実行する。
+Object.assign(ENEMY_ROLES, {
+  bomber: {
+    plan(c, nextRound) {
+      if (nextRound === 2) return { kind: "bomber_prime", intent: "aoe", text: "導火線に火をつけた" };
+      if (nextRound === 3) return { kind: "bomber_blast", intent: "aoe", text: "爆薬を投げようとしている" };
+      return null;
+    },
+    run(c, plan) {
+      if (plan.kind === "bomber_prime") { CatalogEffects.say(c, "火薬を抱え、機を待っている"); return true; }
+      if (plan.kind !== "bomber_blast") return undefined;
+      for (const t of c.enemies.filter(c.onField)) {
+        if (!c.onField(c.unit)) break;
+        if (c.onField(t)) c.damage(t, 0.8, "爆薬投げ");
+      }
+      return true;
+    }
+  },
+  summoner: {
+    plan(c) {
+      return c.unit.hp <= c.unit.maxHp * 0.5 && !c.unit.flags.summoner_used
+        ? { kind: "summoner_call", intent: "summon", text: "援軍を呼ぼうとしている" } : null;
+    },
+    run(c, plan) {
+      if (plan.kind !== "summoner_call") return undefined;
+      if (c.unit.hp <= c.unit.maxHp * 0.5 && !c.unit.flags.summoner_used) {
+        c.unit.flags.summoner_used = true; CatalogEffects.minion(c);
+      }
+      return true;
+    }
+  },
+  assassin: {
+    plan(c) {
+      const t = c.lowestAlly(c.enemies, null);
+      return t ? { kind: "assassin_strike", targetId: t.id, intent: "big", text: "最も弱った者を狙っている" } : null;
+    },
+    run(c, plan) {
+      if (plan.kind !== "assassin_strike") return undefined;
+      const t = c.lowestAlly(c.enemies, null);
+      if (t) c.damage(t, 1.3, "急所狙い");
+      return true;
+    }
+  },
+  berserker: {
+    plan() { return { kind: "berserker_rage", intent: "big", text: "傷を怒りに変えている" }; },
+    run(c, plan) {
+      if (plan.kind !== "berserker_rage") return undefined;
+      const mult = 1 + Math.max(0, Math.min(1, 1 - c.unit.hp / c.unit.maxHp));
+      c.unit.flags.buff = { mult, until: c.round, name: "傷の怒り" };
+      const t = c.pickEnemy();
+      if (t) c.act(c.unit, c.allies, c.enemies, c.round, { target: t, label: "怒りの一撃" });
+      return true;
+    }
+  },
+  healer_guard: {
+    plan(c) {
+      const t = c.lowestAlly(c.allies, null);
+      return t && t.hp <= t.maxHp * 0.3
+        ? { kind: "healer_guard_heal", targetId: t.id, intent: "heal", text: "瀕死の仲間を癒やそうとしている" }
+        : { kind: "guard", intent: "guard", text: "盾を構えた" };
+    },
+    run(c, plan) {
+      if (plan.kind === "guard") { c.unit.flags.guarding = true; CatalogEffects.say(c, "盾を構え、仲間を待つ"); return true; }
+      if (plan.kind !== "healer_guard_heal") return undefined;
+      const t = c.allies.find(a => a.id === plan.targetId && c.onField(a)) || c.lowestAlly(c.allies, null);
+      if (t) c.heal(t, 0.25, "救急の祈り");
+      return true;
+    }
+  },
+  duelist: {
+    plan(c) {
+      const first = c.timeline.find(e => e.type === "attack" && e.toId === c.unit.id && c.enemies.some(t => t.id === e.fromId));
+      const t = first && c.enemies.find(t => t.id === first.fromId && c.onField(t));
+      return t ? { kind: "duelist_lock", targetId: t.id, intent: "duel", text: "最初に殴った相手を見据えた" } : null;
+    },
+    run(c, plan) {
+      if (plan.kind !== "duelist_lock") return undefined;
+      const t = c.enemies.find(t => t.id === plan.targetId && c.onField(t));
+      if (!t) return false;
+      c.act(c.unit, c.allies, c.enemies, c.round, { target: t, label: "一騎打ち" });
+      return true;
+    }
+  }
+});

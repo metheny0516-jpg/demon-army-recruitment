@@ -214,4 +214,68 @@ test('全痕跡kind: options未指定相当で安全、凍結済み履歴を変�
   }
 });
 
+test('bomber: 2R予告と待機、3R全体80%、4Rは通常', () => {
+  const c = context('double'), role = ROLES.bomber;
+  assert.equal(role.plan(c, 1), null); const prime = role.plan(c, 2); assert.equal(prime.text, '導火線に火をつけた');
+  assert.equal(role.run(c, prime), true); assert.equal(damage(c).length, 0);
+  assert.equal(role.run(c, role.plan(c, 3)), true); assert.equal(damage(c).length, 2); assert(damage(c).every(x => x.dmg === 16));
+  assert.equal(role.plan(c, 4), null);
+});
+test('summoner: HP半分で一回だけ。予告後に回復していたら召喚しない', () => {
+  const c = context('double'), role = ROLES.summoner; assert.equal(role.plan(c, 1), null);
+  c.unit.hp = 50; const plan = role.plan(c, 2); assert.equal(plan.intent, 'summon');
+  role.run(c, plan); role.run(c, plan); assert.equal(c.calls.filter(x => x.type === 'summon').length, 1);
+  assert.equal(role.plan(c, 3), null);
+  const d = context('double'); role.run(d, plan); assert(!d.calls.some(x => x.type === 'summon'));
+});
+test('assassin: HP割合が最低の生存者を実行時に再選択', () => {
+  const c = context('double'), role = ROLES.assassin; c.enemies[1].hp = 40;
+  const plan = role.plan(c, 1); assert.equal(plan.targetId, 'e1');
+  c.enemies[1].alive = false; role.run(c, plan); assert.equal(damage(c)[0].target.id, 'e0'); assert.equal(damage(c)[0].dmg, 26);
+});
+test('berserker: 傷の割合で今R鼓舞を更新、回復すれば倍率も下がる', () => {
+  const c = context('double'), role = ROLES.berserker; c.unit.hp = 25;
+  role.run(c, role.plan(c, 1)); assert.equal(c.unit.flags.buff.mult, 1.75); assert.equal(c.unit.flags.buff.until, 1);
+  c.unit.hp = 100; c.round = 2; role.run(c, role.plan(c, 2)); assert.equal(c.unit.flags.buff.mult, 1);
+});
+test('healer_guard: 30%境界で仲間回復、それ以外はguard予告', () => {
+  const c = context('double'), role = ROLES.healer_guard;
+  const guard = role.plan(c, 1); assert.equal(guard.kind, 'guard'); role.run(c, guard); assert.equal(c.unit.flags.guarding, true);
+  c.allies[1].hp = 30; const heal = role.plan(c, 2); assert.equal(heal.targetId, 'p1'); role.run(c, heal); assert.equal(c.allies[1].hp, 55);
+});
+test('duelist: 最初の攻撃元を保持し、後の攻撃元へ乗り換えない', () => {
+  const c = context('double'), role = ROLES.duelist; c.timeline = [
+    { type: 'attack', fromId: 'e1', toId: 'p0' }, { type: 'attack', fromId: 'e0', toId: 'p0' }];
+  const plan = role.plan(c, 2); assert.equal(plan.targetId, 'e1'); role.run(c, plan); assert.equal(damage(c)[0].target.id, 'e1');
+  c.enemies[1].alive = false; assert.equal(role.plan(c, 3), null); assert.equal(role.run(c, plan), false);
+});
+test('全role: planは乱数・戦場・履歴を変更せず、無関係な計画を処理しない', () => {
+  for (const [id, role] of Object.entries(ROLES)) {
+    const c = context('double'); c.rand = c.chance = c.pick = () => { throw new Error('予告は乱数禁止'); };
+    c.unit.hp = 20;
+    freezeDeep(c.allies); freezeDeep(c.enemies); freezeDeep(c.timeline); freezeDeep(c.options);
+    assert.doesNotThrow(() => role.plan(c, 2), id); assert.equal(role.run(c, { kind: 'unrelated' }), undefined, id);
+  }
+});
+test('実戦: 六役割の予告・行動・同seed再現', () => {
+  for (const id of Object.keys(ROLES)) {
+    const run = () => {
+      const b = battle('double', id);
+      if (id === 'summoner') b.e[0].hp = 230;
+      if (id === 'healer_guard') b.e[1].hp = 100;
+      for (let round = 1; round <= 3 && !b.h.done; round++) b.h.next({ p0: { cmd: 'attack', target: 'e0' }, p1: { cmd: 'guard' } });
+      return b;
+    };
+    const b = run(), events = b.h.timeline;
+    assert.equal(JSON.stringify(events), JSON.stringify(run().h.timeline), id);
+    assert(events.some(x => x.type === 'intent' && x.unitId === 'e0'), id);
+    if (id === 'bomber') assert.equal(events.filter(x => x.type === 'attack' && x.label === '爆薬投げ').length, 2);
+    if (id === 'summoner') assert.equal(events.filter(x => x.type === 'summon' && x.sourceUnitId === 'e0').length, 1);
+    if (id === 'assassin') assert(events.some(x => x.type === 'attack' && x.label === '急所狙い' && x.toId === 'p1'));
+    if (id === 'berserker') assert(events.some(x => x.type === 'attack' && x.label === '怒りの一撃' && x.traits.includes('傷の怒り')));
+    if (id === 'healer_guard') assert(events.some(x => x.type === 'heal' && x.label === '救急の祈り'));
+    if (id === 'duelist') assert(events.some(x => x.type === 'attack' && x.label === '一騎打ち' && x.toId === 'p0'));
+  }
+});
+
 console.log(`カタログ ${tests}テスト通過`);
