@@ -1159,6 +1159,7 @@ const Game = {
     const st = this.state;
     st.hiresLeft = 0;
     st.applicants = [];
+    st.lateBloomerHint = null;     // 採用画面の一行（モルモの遅咲きのほのめかし）は面接を閉じたら消える
     if (st.openingPrototype) {
       this.beginOpeningPreparation();
       return;

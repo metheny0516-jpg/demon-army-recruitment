@@ -1427,6 +1427,7 @@ const UI = {
           ? `<div class="muted wipe-rebuild-line">軍団は全滅した。ここから建て直す。${
               (st.relics || []).length ? `　🏺 蔵に ${st.relics.length}品` : ""}</div>` : ""}
         ${this.armyHistoryLine()}
+        ${st.lateBloomerHint ? `<p class="first-guide late-bloomer-hint">モルモ：${U.esc(st.lateBloomerHint)}</p>` : ""}
         ${st.generation === 1 && st.turn <= 2 ?`<p class="first-guide">モルモ：${st.roster.length ? "「今の軍団との接続」は、仲間の能力とつながる手がかりデス。" : "まずは能力の発動条件を一つ見てみましょう。どんな仲間がいれば活かせそうですか？"}</p>` : ""}
         <div class="muted">${
           st.turn === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`

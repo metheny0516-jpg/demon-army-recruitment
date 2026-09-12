@@ -278,12 +278,13 @@ const App = {
         const hired = Game.state.applicants[Number(data.index)];
         Game.hire(Number(data.index));
         this.render();
-        // 遅咲き（裏方の職）を初めて採ったとき、モルモが一度だけほのめかす（技は6戦・12戦で開く。履歴書は「？？？」）
+        // 遅咲き（裏方の職）を初めて採ったとき、モルモが一度だけほのめかす（技は6戦・12戦で開く。履歴書は「？？？」）。
+        // 画面を覆う報告にはしない（採用の流れを止めない）。採用画面の一行として出す（UI 側が lateBloomerHint を読む）。
         if (hired && hired.lateBloomer && !Game.state.lateBloomerHinted && Game.state.roster.some(m => m.uid === hired.uid)) {
           Game.state.lateBloomerHinted = true;
+          Game.state.lateBloomerHint = `${hired.name}殿……履歴書に書いていないことがありそうデス。戦場に出すと化けるかもしれませんヨ。`;
           Game.save();
-          return this.report("report", `${hired.name}殿……履歴書に書いていないことがありそうデス。あの者、戦場に出すと化けるかもしれませんヨ。`,
-            { kicker: "宰相の勘", title: "宰相モルモ" });
+          this.render();
         }
         if (Game.state.phase === "preparation" && Game.state.day === 1) {
           return this.report("report", "魔王様、勇者到着まであと2日デス。\n配置と給与方針はそのまま翌日へ持ち越せます。今日は仕込みに徹するか、辺境へ遠征するかお選びください。",
