@@ -134,8 +134,9 @@ assert(Game.state.gold === goldBefore && Game.state.lastBattle.lootGold === 0,
 
 Game.newRun();
 const applicant = Game.rollApplicant('goblin');
-assert(applicant.traits.includes('coward') && applicant.traits.includes('pickpocket'),
-  '新しいゴブリンは既存の卑怯者を保ったまま追い剥ぎを持つ');
+// 2026-09-12：追い剥ぎは癖から技（インプの imp_rob）へ移った。ゴブリンは卑怯者を保ち、種族技は鬨の声。
+assert(applicant.traits.includes('coward') && !applicant.traits.includes('pickpocket'),
+  '新しいゴブリンは卑怯者を保ち、追い剥ぎは持たない（技へ移った。3戦で鬨の声を覚える）');
 
 Game.state = {
   roster: [Object.assign(goblin(8, 20), { traits: ['coward'] })],

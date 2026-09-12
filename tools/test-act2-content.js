@@ -48,7 +48,10 @@ for (const id of SPECIES) {
     assert(Array.isArray(t.voices[key]) && t.voices[key].length >= 3,
       `${id} の voices.${key} が3本以上（${(t.voices[key] || []).length}）`);
   }
-  assert(t.fixedTraits.includes(TIER1[id]), `${id} の1段目の技は ${TIER1[id]}`);
+  // 2026-09-12：1段目の癖のうち行動だったもの（誘惑・突進）は技（SKILLS）へ移った。テンプレートは skills で種族技を持つ。
+  const SPECIES_SKILL = vm.runInContext('SPECIES_SKILL', ctx);
+  assert((t.skills || []).includes(SPECIES_SKILL[id]) || t.fixedTraits.includes(TIER1[id]),
+    `${id} は種族技 ${SPECIES_SKILL[id]} を持つ（旧1段目 ${TIER1[id]} は技へ移った）`);
   assert(t.traitPool.every(p => TRAITS[p]), `${id} の traitPool は既存の特性だけ`);
   assert(t.base && t.base.hp > 0 && t.base.atk > 0, `${id} に base がある`);
 }
