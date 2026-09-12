@@ -83,7 +83,7 @@ const UI = {
     const opening = st.openingPrototype;
     const fb = Game.foodBalance();
     const recordsButton = ["recruit", "mission", "formation", "preparation", "result", "facility", "event"].includes(st.phase)
-      ? `<button class="small hud-records" data-action="castle" data-tab="${U.esc(this.castleTab || "army")}">🏰 城</button>` : "";
+      ? `<button class="small hud-records" data-action="castle" data-tab="${U.esc(this.castleTab || "army")}">🏰 城のメニュー <small>軍団・城下町・記録・参謀</small></button>` : "";
     return `<div class="hud">
       <div class="hud-row hud-resources">
         <span class="gold">所持金 <b>${st.gold}G</b></span>
@@ -94,8 +94,8 @@ const UI = {
         <span class="army-level">魔王軍 <b>Lv.${Game.armyLevel()}</b></span>
         <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b>${Game.outpostCleared && Game.outpostCleared() ? `<small class="outpost-done"> ▸前哨済</small>` : ""}</span>
         <span>警戒度 <b>${st.alert}</b>${this.counterattackGauge()}</span>
-        ${recordsButton}
       </div>
+      ${recordsButton ? `<div class="hud-row hud-menu-row">${recordsButton}</div>` : ""}
       <div class="hud-extra">
         <span>第 <b>${st.generation}</b> 代魔王軍</span>
         ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}

@@ -27,6 +27,7 @@ const BattleScene = {
   // 全体技は同時に着弾させる。総尺は単体の1.6倍まで（3体でも「長い」と感じさせない）。
   AOE_TOTAL_MULT: 1.6,
   missingSprites: new Set(),
+  traitQuoteShown: new Set(),   // 癖の台詞は1戦闘1回（play() で空にする）
   preloadedSprites: new Set(),
   vfxPreloaded: false,
   BATTLE_SPRITES: {
@@ -264,6 +265,7 @@ const BattleScene = {
         <button class="small" data-action="pausebattle" id="pause-btn">⏸ 読むために停止</button>
         <button class="small" data-action="skiplog">▶▶ 最後まで飛ばす</button>
         <button class="small" data-action="autobattle" id="auto-btn">指示：手動（押して自動へ）</button>
+        <button class="primary" data-action="resumecommands" id="resume-btn" style="display:none">✋ 指示に戻る</button>
         <button class="primary" data-action="afterbattle" id="next-btn" style="display:none">結果を見る</button>
       </div>
       </section>
@@ -381,6 +383,7 @@ const BattleScene = {
   // ── 再生 ──────────────────────────────────
   play(timeline, onDone) {
     this.bindBattlefieldTaps();   // 事件のタップ送り（自動再生でも効く）
+    this.traitQuoteShown = new Set();   // 癖の台詞は1戦闘1回
     this.stop();
     if (typeof Sound !== "undefined") Sound.stopAll();
     this.loadSpeed();
@@ -517,7 +520,8 @@ const BattleScene = {
   BEAT_TYPES: new Set(["trait_trigger", "order_exec", "cover", "intent", "incident", "revive", "summon", "synergy_trigger", "facility_trigger", "retreat_offer"]),
   isBeat(ev) {
     if (!ev) return false;
-    if (this.BEAT_TYPES.has(ev.type)) return !(ev.type === "trait_trigger" && !ev.quote && (ev.emphasis || 0) < 2);
+    if (ev.type === "trait_trigger") return (ev.emphasis || 0) >= 3 || (!!ev.quote && !this.traitQuoteShown.has(ev.traitId));
+    if (this.BEAT_TYPES.has(ev.type)) return true;
     if (ev.type === "death") { const u = this.units[ev.unitId]; return !!(u && u.side === "player"); }
     if (ev.type === "note") return !!(ev.skillMiss || ev.spiritGain || ev.stunned || ev.buff);
     return false;
@@ -875,9 +879,16 @@ const BattleScene = {
           // 飛んだ手番。何が起きているか本人にも浮かせる
           this.float(u, "食事中", "guard");
           this.showAction(`${u.name}「${ev.quote}」（食事中で動けない）`, 1400);
-        } else this.showAction(propagating
-          ? `【${ev.name}】連鎖${ev.propagationDepth || 1}段目！　余剰の${ev.ratio || 35}%が流れ込む`
-          : ev.quote ? `${u ? u.name : ""}「${ev.quote}」` : `【${ev.name}】発動！`, ev.quote ? 1400 : 1000);
+        } else {
+          // 癖の台詞は1戦闘に1回まで。毎回「さわった……」と言われると意味が分からない（オーナー試遊 2026-09-13）。
+          // 2回目以降は何が起きたかだけを短く（【腐敗】など）。
+          const first = !this.traitQuoteShown.has(ev.traitId);
+          if (ev.quote && first) this.traitQuoteShown.add(ev.traitId);
+          this.showAction(propagating
+            ? `【${ev.name}】連鎖${ev.propagationDepth || 1}段目！　余剰の${ev.ratio || 35}%が流れ込む`
+            : ev.quote && first ? `${u ? u.name : ""}「${ev.quote}」　【${ev.name}】`
+            : `【${ev.name}】${ev.note ? "　" + ev.note : ""}`, ev.quote && first ? 1400 : 900);
+        }
         this.pulse(ev.traitId);
         if (propagating) {
           this.flash(1);
@@ -1949,6 +1960,18 @@ const BattleScene = {
       // 指示待ちの最中に自動へ切り替えたら、今のラウンドをおまかせで進める
       if (on && this.index >= this.timeline.length && this.paused) this.submitCommands({});
     }
+    this.showResumeButton(on && !!this.manual && !this.manual.done);
+  },
+  // おまかせで流している最中に「指示に戻る」（この戦いだけのおまかせも、以後もおまかせも解く）。次のラウンドの頭から窓が出る。
+  resumeCommands() {
+    this.autoRest = false;
+    if (this.loadAutoBattle()) this.saveAutoBattle(false);
+    this.showResumeButton(false);
+    this.showAction("次のラウンドから指示に戻る", 1200);
+  },
+  showResumeButton(on) {
+    const b = document.getElementById("resume-btn");
+    if (b) b.style.display = on ? "" : "none";
   },
 
   playManual(handle, onEnd, onDone) {
@@ -1983,9 +2006,11 @@ const BattleScene = {
     const handle = this.manual;
     if (!handle || handle.done) return this.finish();
     if (this.autoRest) {
+      this.showResumeButton(true);
       this.submitCommands({});
       return;
     }
+    this.showResumeButton(false);
     this.paused = true;
     this.renderCommandPanel(handle.prompt);
   },
@@ -2174,8 +2199,8 @@ const BattleScene = {
           for (const al of prompt.allies) { this.cmdSel[al.id] = { cmd: "attack", target: null }; commands[al.id] = { cmd: "attack" }; }
           return this.submitCommands(commands);
         }
-        if (all === "autorest") { this.autoRest = true; return this.submitCommands({}); }
-        if (all === "autoalways") { this.saveAutoBattle(true); this.autoRest = true; return this.submitCommands({}); }
+        if (all === "autorest") { this.autoRest = true; this.showResumeButton(true); return this.submitCommands({}); }
+        if (all === "autoalways") { this.saveAutoBattle(true); this.autoRest = true; this.showResumeButton(true); return this.submitCommands({}); }
         if (all === "retreat") return this.submitCommands({ retreat: true });
       });
     }

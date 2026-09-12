@@ -449,6 +449,10 @@ const App = {
         BattleScene.skip();
         return;
 
+      case "resumecommands":
+        BattleScene.resumeCommands();
+        return;
+
       case "autobattle":
         BattleScene.toggleAutoBattle();
         return;
