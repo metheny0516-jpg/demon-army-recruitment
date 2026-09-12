@@ -910,3 +910,7 @@ LocalStorage のみ（ゲーム進行は3キー、ほかに音量・速度など
    `storage.js`（31行）だけが LocalStorage に触れており、ネイティブ保存への差し替え口になっている。
 
 `prefers-reduced-motion: reduce` の端末では演出を自動的に抑制する。
+
+## 素材のクレジット
+
+外部素材の表示は `CREDITS.md` を参照。

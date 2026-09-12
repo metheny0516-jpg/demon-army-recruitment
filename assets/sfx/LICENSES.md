@@ -55,7 +55,8 @@
 
 ## 2026-09-13 魔王軍の勝利歓声（`recorded/fanfare-win-roar.wav`）
 
-- 採用: `candidates/candidate-win-roar-craigsmith-cheer.wav`。男性集団の歓声を3半音下げ、魔王軍の勝利を短く重く区切る。採用WAVはこの候補と同一。太鼓の追加はなし。
+- 採用（2026-09-13 オーナー試聴後）: `candidates/candidate-win-roar-quendel-crowd.wav`（大群衆寄り、下記 Gregor Quendel、**CC-BY 4.0**）。採用WAVはこの候補と同一。クレジットは `CREDITS.md` に記載。
+- 初回案は `candidates/candidate-win-roar-craigsmith-cheer.wav`。男性集団の歓声を3半音下げたもの。以下の原題・変換の記述はこの初回案のもの。
 - 原題: [S12-03 Small group men cheering; encouraging.wav](https://freesound.org/people/craigsmith/sounds/675103/)／作者: craigsmith／取得日: 2026-09-13（日本時間）／ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（同日に配布ページのCC0表記を確認）。
 - 取得音源: 配布ページに掲載された[高品質MP3プレビュー](https://cdn.freesound.org/previews/675/675103_2524442-hq.mp3)。原配布WAVではなくMP3からの変換。
 - 変換: 44.1kHzへリサンプル後、ピッチを3半音下げてテンポを補正。70Hzハイパス／5.5kHzローパス、前後無音を除去（ピーク比−45dB）、加工後の約0.15624秒から2.29秒を切り出し。端フェード（先頭25ms／末尾180ms）、ピーク0.85へ正規化、44.1kHz・16bit・stereo WAV（原音monoの左右複製）。
