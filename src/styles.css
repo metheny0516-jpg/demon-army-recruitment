@@ -3534,3 +3534,8 @@ button.primary::first-letter { color: var(--gold); }
 /* 味方を狙う技：味方の札もタップ対象として光る（cmd-pick は既存の光り方を使う） */
 #band-player .bu.cmd-pick { cursor: pointer; }
 .skill-hint.late-bloomer { opacity: .8; font-style: italic; }
+
+/* 去りかけ（逃亡の予告、2026-09-12） */
+.member-row .leaving, .leaving-line { color: #ffb36b; }
+.leaving-line { font-size: 13px; margin: 6px 0; }
+.member-row .leaving { font-size: 11px; margin-left: 6px; }

@@ -81,7 +81,8 @@ resetRng();
 {
   const st = freshRun([member(201, 'ニゲル', { loyalty: 0 })], [201]);
   const notes = [];
-  Game.processDepartures(notes);
+  Game.processDepartures(notes);   // 一度目は荷物をまとめるだけ（2026-09-12 の猶予）
+  Game.processDepartures(notes);   // 次の決着まで忠誠0のままなら去る
   const gone = st.departed.find(d => d.name === 'ニゲル');
   assert(!!gone && gone.cause === 'deserted', '逃亡 → cause が deserted');
   assert(!st.roster.some(m => m.uid === 201), '名簿から消える');

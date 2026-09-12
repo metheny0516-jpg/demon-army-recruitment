@@ -677,6 +677,7 @@ const UI = {
       .find(entry => entry.trait && this.isSkillTrait(entry.id));
     const marks = [
       m.injured > 0 ? `<span class="injured">🩹 負傷</span>` : "",
+      m.leaving ? `<span class="leaving">🎒 去りかけ</span>` : "",
       m.unpaid ? `<span class="unpaid">給与未払い</span>` : "",
       this.memberRelics(m).length ? `<span class="relic-chip">🏺 遺物</span>` : ""
     ].filter(Boolean).join("");
@@ -734,7 +735,9 @@ const UI = {
     const active = !isApplicant && st.activeUids.includes(m.uid);
     const actions = isApplicant
       ? `<button class="primary wide" data-action="hire" data-index="${index}" ${Game.canHireApplicant(index) ? "" : "disabled"}>採用する</button>`
-      : `<div class="row"><button data-action="toggledeploy" data-uid="${m.uid}">${active ? "留守番へ" : "出撃隊へ"}</button>
+      : `${m.leaving ? `<p class="leaving-line">🎒 ${U.esc(m.name)}は荷物をまとめている。次の決着までに忠誠が戻らなければ軍を去る。</p>` : ""}
+        <div class="row"><button data-action="toggledeploy" data-uid="${m.uid}">${active ? "留守番へ" : "出撃隊へ"}</button>
+          ${(m.leaving || m.loyalty <= Game.RETAIN_THRESHOLD) ? `<button class="primary" data-action="retain" data-uid="${m.uid}" ${Game.canRetain(m) ? "" : "disabled"}>慰留する（${Game.retainCost(m)}G・忠誠+${Game.RETAIN_LOYALTY}）</button>` : ""}
           <button class="danger" data-action="fire" data-confirm="1" data-uid="${m.uid}">解雇</button></div>`;
     this.set(`<div class="member-overlay"><article class="member-detail">
       <button class="small member-close" data-action="closemember">× 閉じる</button>

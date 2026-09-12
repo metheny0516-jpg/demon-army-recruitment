@@ -393,6 +393,15 @@ const App = {
         Game.setPayrollPolicy(data.policy);
         return this.render();
 
+      case "retain": {
+        const m = Game.state.roster.find(x => x.uid === Number(data.uid));
+        const out = m ? Game.retain(m.uid) : null;
+        this.renderMenuContext();
+        if (out && m) return this.report("joy", `${m.name}殿に慰留金 ${out.cost}G を握らせました。忠誠 ${out.loyalty}。荷物は解いたようデス。`,
+          { kicker: "慰留", title: "宰相モルモ" });
+        return;
+      }
+
       case "fire":
         if (data.confirm === "1" && !window.confirm("この者を解雇しますか？ 城の記録には残ります。")) return;
         Game.fire(Number(data.uid));
