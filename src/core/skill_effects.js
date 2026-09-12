@@ -156,3 +156,47 @@ Object.assign(SKILL_EFFECTS, {
     CatalogEffects.say(c, "敵の鼓舞を消し、守りに転じた");
   } }
 });
+
+// 痕跡は人物uidで照合する。戦場の一時idや同名人物から履歴を推測しない。
+Object.assign(SKILL_EFFECTS, {
+  mourning: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    const dead = (c.options.departed || []).find(d => d.cause === "fallen" && d.race && d.race === c.unit.race);
+    if (dead) CatalogEffects.say(c, `${[...(dead.name || "仲間")].slice(0, 23).join("")}の仇！`);
+    c.damage(t, dead ? 1.5 : 1, c.skill.name);
+  } },
+  carried_debt: { immediate(c) {
+    // 現行run.jsのcarriedはobject=null。担ぎ手が未記録なら恩人を捏造しない。
+    const traces = c.options.traces || [];
+    const trace = c.unit.uid && [...traces].reverse().find(t => t.kind === "carried" && t.subject === c.unit.uid
+      && t.object && c.allies.some(a => a.uid === t.object && a !== c.unit && c.onField(a)));
+    const carrier = trace && c.allies.find(a => a.uid === trace.object && a !== c.unit && c.onField(a));
+    if (!carrier) { CatalogEffects.say(c, "担ぎ手の記録がないか、ここにいない"); return; }
+    c.unit.flags.covering = carrier.id; c.unit.flags.coverRatio = 0.6;
+    CatalogEffects.say(c, "あの時の恩を返す。今度は私が守る");
+  } },
+  veteran: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    const count = c.unit.uid ? (c.options.traces || []).filter(t => t.kind === "downed" && t.subject === c.unit.uid).length : 0;
+    c.damage(t, 1 + Math.min(5, count) * 0.1, c.skill.name);
+  } },
+  relic_weight: { immediate(c) {
+    const count = (c.options.relics || []).length;
+    if (!count) { CatalogEffects.say(c, "まだ預かる遺物はない"); return; }
+    for (const a of c.allies.filter(c.onField)) {
+      const mult = 1 + count * 0.05;
+      // 強い鼓舞を弱いもので上書きしない。期限を延長せず、今Rだけ置き換える。
+      if (!a.flags.buff || a.flags.buff.until < c.round || a.flags.buff.mult < mult)
+        a.flags.buff = { mult, until: c.round, name: c.skill.name };
+    }
+    CatalogEffects.say(c, "預かった遺物が背を押す");
+  } },
+  carried_resolve: { immediate(c) {
+    const carried = c.unit.uid && (c.options.traces || []).some(t => t.kind === "carried" && t.subject === c.unit.uid);
+    const t = CatalogEffects.ally(c, true);
+    if (!carried || !t) { CatalogEffects.say(c, "担がれた記憶か、守る仲間がない"); return; }
+    // 担ぎ手は未記録でも、自分が担がれた事実は確定している。
+    c.unit.flags.covering = t.id; c.unit.flags.coverRatio = 0.4;
+    CatalogEffects.say(c, "担がれる痛みは知っている。後ろへ");
+  } }
+});

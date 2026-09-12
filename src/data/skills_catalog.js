@@ -106,3 +106,31 @@ Object.assign(SKILL_CATALOG, {
     lines: { use: ["勢いはそこまで", "少し静かにしてくれ"], miss: ["声に負けた", "勢いが止まらない"] }
   }
 });
+
+Object.assign(SKILL_CATALOG, {
+  catalog_mourning: {
+    name: "弔い合戦", species: "", cost: 1, kind: "mourning", target: "enemy", order: "last",
+    note: "同族の戦死者がいれば×1.5　最後に動く",
+    lines: { use: ["あいつの名前を覚えている", "空いた席の分まで"], miss: ["力みすぎたか", "仇は逃がさない……次こそ"] }
+  },
+  catalog_carried_debt: {
+    name: "担がれの恩", species: "", cost: 2, kind: "carried_debt", target: "none",
+    note: "記録された担ぎ手を60%でかばう　気合2",
+    lines: { use: ["あの時の借りを返す", "今度は私が背中を守る"], miss: ["恩人が見当たらない", "誰に担がれたのだったか"] }
+  },
+  catalog_veteran: {
+    name: "常連の勘", species: "", cost: 1, kind: "veteran", target: "enemy", hit: 0.85,
+    note: "被撃倒毎に攻撃10%増、最大50%　命中85%",
+    lines: { use: ["この痛みは知っている", "前はここで倒れたんだ"], miss: ["覚え違いだったか", "同じところをやられた"] }
+  },
+  catalog_relic_weight: {
+    name: "遺物の重み", species: "", cost: 2, kind: "relic_weight", target: "all_allies",
+    note: "遺物1個毎に味方今R攻撃5%増　気合2",
+    lines: { use: ["これは置いていけない", "預かった物の分も進む"], miss: ["荷が重すぎる", "まだ預かる物がない"] }
+  },
+  catalog_carried_resolve: {
+    name: "担がれた者の盾", species: "", cost: 2, kind: "carried_resolve", target: "ally",
+    note: "担がれ歴があれば仲間を40%でかばう　気合2",
+    lines: { use: ["もう誰も置いていかない", "担がれる痛みは知っている"], miss: ["守る相手がいない", "まだ背中を預けられないか"] }
+  }
+});

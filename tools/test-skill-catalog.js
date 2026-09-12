@@ -164,4 +164,54 @@ test('実戦: 最後順と命中失敗はエンジンが処理', () => {
   } finally { data.catalog_drain.hit = old; }
 });
 
+function freezeDeep(value) {
+  if (value && typeof value === 'object' && !Object.isFrozen(value)) {
+    Object.freeze(value); Object.values(value).forEach(freezeDeep);
+  }
+  return value;
+}
+test('mourning: 同族の戦死だけ。退職は対象外、長い名前も28字以内', () => {
+  const c = context('mourning'); c.options = freezeDeep({ departed: [{ race: 'オーク', cause: 'retired', name: '先輩' }] }); use(c);
+  assert.equal(damage(c)[0].dmg, 20);
+  const d = context('mourning'); d.options = freezeDeep({ departed: [{ race: 'オーク', cause: 'fallen', name: '長'.repeat(50) }] }); use(d);
+  assert.equal(damage(d)[0].dmg, 30); assert(d.calls.filter(x => x.type === 'note').every(x => [...x.text].length <= 28));
+});
+test('carried_debt: subject本人・object恩人のuid照合、未記録ならかばわない', () => {
+  const c = context('carried_debt'); c.options = freezeDeep({ traces: [{ kind: 'carried', subject: 'p0', object: 'p1', data: {} }] }); use(c);
+  assert.equal(c.unit.flags.covering, 'p1'); assert.equal(c.unit.flags.coverRatio, 0.6);
+  for (const object of [null, '不在']) {
+    const d = context('carried_debt'); d.options = freezeDeep({ traces: [{ kind: 'carried', subject: 'p0', object }] }); use(d);
+    assert.equal(d.unit.flags.covering, undefined);
+  }
+});
+test('veteran: 本人のdownedのみ、50%上限、uidなしで他人の履歴を使わない', () => {
+  const c = context('veteran'); c.options = freezeDeep({ traces: Array.from({ length: 9 }, () => ({ kind: 'downed', subject: 'p0' })) }); use(c);
+  assert.equal(damage(c)[0].dmg, 30);
+  const d = context('veteran'); d.unit.uid = null; d.options = freezeDeep({ traces: [{ kind: 'downed', subject: null }] }); use(d);
+  assert.equal(damage(d)[0].dmg, 20);
+});
+test('relic_weight: 遺物数・今R期限・強い鼓舞を保存・入力不変', () => {
+  const c = context('relic_weight'); c.options = freezeDeep({ relics: [{ id: 'a' }, { id: 'b' }] });
+  c.allies[1].flags.buff = { mult: 1.5, until: 3, name: '強い鼓舞' }; use(c);
+  assert.equal(c.unit.flags.buff.mult, 1.1); assert.equal(c.unit.flags.buff.until, 1); assert.equal(c.allies[1].flags.buff.mult, 1.5);
+  assert.equal(c.allies[1].flags.buff.until, 3);
+});
+test('carried_resolve: 現行carried(object=null)で発動、他人の記録は使わない', () => {
+  const c = context('carried_resolve'); c.options = freezeDeep({ traces: [{ kind: 'carried', subject: 'p0', object: null, data: { army: '討伐軍' } }] }); use(c);
+  assert.equal(c.unit.flags.covering, 'p1'); assert.equal(c.unit.flags.coverRatio, 0.4);
+  const d = context('carried_resolve'); d.options = c.options; d.unit.uid = '別人'; use(d); assert.equal(d.unit.flags.covering, undefined);
+});
+test('全痕跡kind: options未指定相当で安全、凍結済み履歴を変更しない', () => {
+  const options = freezeDeep({ traces: [{ kind: 'downed', subject: 'hero' }, { kind: 'carried', subject: 'hero', object: 'mate' }],
+    departed: [{ cause: 'fallen', race: 'オーク', name: '古参' }], relics: [{ id: '剣' }] });
+  const before = JSON.stringify(options);
+  for (const kind of ['mourning', 'carried_debt', 'veteran', 'relic_weight', 'carried_resolve']) {
+    use(context(kind));
+    const b = battle(kind, 'fighter', 7, options); b.h.next({ p0: { cmd: 'skill' }, p1: { cmd: 'guard' } });
+    assert.equal(JSON.stringify(options), before);
+    if (kind === 'relic_weight') assert.equal(b.p[0].flags.buff, undefined, '実戦のラウンド末で鼓舞解除');
+    if (kind === 'carried_debt' || kind === 'carried_resolve') assert(b.h.timeline.some(x => x.type === 'note' && /かばった/.test(x.text)));
+  }
+});
+
 console.log(`カタログ ${tests}テスト通過`);
