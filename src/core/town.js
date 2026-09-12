@@ -85,13 +85,24 @@ const Town = {
     if (t.exchangedTurn !== st.turn) return lv;
     return Math.max(0, lv - (t.exchanged || 0));
   },
-  canExchange(st) { return this.exchangeLeft(st) > 0 && (st.materials || 0) >= 2; },
+  EXCHANGE: { toGold: { materials: 2, gold: 3 }, toMaterials: { gold: 4, materials: 2 } },   // 建材2→金3／金4→建材2（建材は渋いので逆向きも、2026-09-13）
+  canExchange(st) { return this.exchangeLeft(st) > 0 && (st.materials || 0) >= this.EXCHANGE.toGold.materials; },
+  canExchangeBack(st) { return this.exchangeLeft(st) > 0 && (st.gold || 0) >= this.EXCHANGE.toMaterials.gold; },
   exchange(game) {
     const st = game.state, t = this.init(st);
     if (!this.canExchange(st)) return false;
     if (t.exchangedTurn !== st.turn) { t.exchangedTurn = st.turn; t.exchanged = 0; }
-    st.materials -= 2; st.gold += 3; t.exchanged += 1;
-    this.ledger(st).exchange += 3;
+    st.materials -= this.EXCHANGE.toGold.materials; st.gold += this.EXCHANGE.toGold.gold; t.exchanged += 1;
+    this.ledger(st).exchange += this.EXCHANGE.toGold.gold;
+    game.save();
+    return true;
+  },
+  exchangeBack(game) {
+    const st = game.state, t = this.init(st);
+    if (!this.canExchangeBack(st)) return false;
+    if (t.exchangedTurn !== st.turn) { t.exchangedTurn = st.turn; t.exchanged = 0; }
+    st.gold -= this.EXCHANGE.toMaterials.gold; st.materials += this.EXCHANGE.toMaterials.materials; t.exchanged += 1;
+    this.ledger(st).exchange -= this.EXCHANGE.toMaterials.gold;
     game.save();
     return true;
   },

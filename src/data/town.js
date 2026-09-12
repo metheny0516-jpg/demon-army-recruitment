@@ -23,8 +23,8 @@ const TOWN_FACILITIES = [
   { id: "hostel", icon: "🏚️", name: "宿舎", line: "もっと雇える。早く治る",
     effect: lv => `軍団の上限 +${lv}${lv >= 2 ? "・負傷の回復が1決着早い" : ""}`, jobs: [],
     cost: [{ gold: 10, materials: 5 }, { gold: 16, materials: 8 }, { gold: 22, materials: 11 }] },
-  { id: "factory", icon: "🏭", name: "工場", line: "余った建材を金に",
-    effect: lv => `建材2 → 金3 の両替を決着ごとに${lv}回まで`, jobs: ["倉庫", "配達", "備品"],
+  { id: "factory", icon: "🏭", name: "工場", line: "金と建材を両替する",
+    effect: lv => `建材2→金3、または金4→建材2 の両替を決着ごとに${lv}回まで`, jobs: ["倉庫", "配達", "備品"],
     cost: [{ gold: 15, materials: 2 }, { gold: 24, materials: 3 }, { gold: 33, materials: 4 }] }
 ];
 

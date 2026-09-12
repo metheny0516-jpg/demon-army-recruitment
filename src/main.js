@@ -272,6 +272,9 @@ const App = {
       case "townexchange":
         Town.exchange(Game);
         return UI.castle("town");
+      case "townexchangeback":
+        Town.exchangeBack(Game);
+        return UI.castle("town");
       case "townborrow": {
         const out = Town.borrow(Game, Number(data.amount));
         UI.castle("town");

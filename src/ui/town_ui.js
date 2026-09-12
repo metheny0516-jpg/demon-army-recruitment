@@ -19,8 +19,9 @@ const TownUI = {
       </div>`;
     }).join("");
     const exLeft = Town.exchangeLeft(st);
-    const factory = Town.lv(st, "factory") ? `<div class="town-row"><span>工場の両替：建材2 → 金3（あと${exLeft}回）</span>
-      <button class="small" data-action="townexchange" ${Town.canExchange(st) ? "" : "disabled"}>両替する</button></div>` : "";
+    const factory = Town.lv(st, "factory") ? `<div class="town-row"><span>工場の両替（あと${exLeft}回）</span>
+      <button class="small" data-action="townexchange" ${Town.canExchange(st) ? "" : "disabled"}>建材2 → 金3</button>
+      <button class="small" data-action="townexchangeback" ${Town.canExchangeBack(st) ? "" : "disabled"}>金4 → 建材2</button></div>` : "";
     const bank = `<section class="town-bank"><h3>🏦 魔界銀行</h3>
       <div class="muted">借金 <b>${t.debt}G</b>${t.debt ? `（利子 ${sum.interest}G／決着）` : ""}　上限 ${Town.rules().bank.cap}G。利子は決着ごとに残高の1割。払えないと施設が1段落ちる。</div>
       <div class="town-row">${Town.rules().bank.choices.map(a => `<button class="small" data-action="townborrow" data-amount="${a}" ${Town.canBorrow(st, a) ? "" : "disabled"}>${a}G 借りる</button>`).join("")}

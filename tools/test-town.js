@@ -47,7 +47,11 @@ assert(!Town.canBuild(Game, 'tavern').ok && /金が足りない/.test(Town.canBu
 // 両替：建材2→金3、Lv回まで
 st.gold = 0; st.materials = 10; st.turn = 9;
 assert(Town.exchangeLeft(st) === 1 && Town.exchange(Game) && st.gold === 3 && st.materials === 8, '工場Lv1：両替1回（建材2→金3）');
-assert(!Town.canExchange(st), '同じ決着では2回目はできない');
+assert(!Town.canExchange(st) && !Town.canExchangeBack(st), '同じ決着では2回目はできない（逆向きも）');
+st.turn = 12; st.gold = 4; st.materials = 0;
+assert(Town.canExchangeBack(st) && Town.exchangeBack(Game) && st.gold === 0 && st.materials === 2, '逆向き：金4→建材2（建材が渋いときの入口）');
+assert(!Town.canExchangeBack(st), '金が無ければ逆向きはできない');
+st.turn = 9; st.gold = 0; st.materials = 8;
 
 // 銀行：3択・上限50・利子1割・返済
 st.gold = 0; st.turn = 10;
