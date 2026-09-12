@@ -26,3 +26,262 @@ const SKILL_EFFECTS = {};
 const ENEMY_ROLES = {};
 
 if (typeof module !== "undefined") module.exports = { SKILL_EFFECTS, ENEMY_ROLES };
+
+// 共通処理は対象の選択と既存APIへの接続だけ。継続効果の独自フックは作らない。
+const CatalogEffects = {
+  ally(c, exceptSelf = false) {
+    return c.allies.find(a => a.id === c.cmd.targetId && c.onField(a) && (!exceptSelf || a !== c.unit))
+      || c.lowestAlly(c.allies, exceptSelf ? c.unit : null);
+  },
+  say(c, text) {
+    c.emit("note", { unitId: c.unit.id, text: [...text].slice(0, 28).join(""), cls: "trait" });
+  },
+  recoil(c, amount) {
+    if (c.onField(c.unit) && amount > 0) c.applyDamage(c.unit, c.unit, amount, "splash", { label: "反動", incident: true });
+  },
+  minion(c) {
+    const u = c.unit;
+    return c.summon({ name: `${u.name}の分身`, race: u.race, tplId: u.tplId,
+      maxHp: Math.max(1, Math.round(u.maxHp * 0.3)), atk: Math.max(1, Math.round(u.atk * 0.5)),
+      def: 0, spd: u.spd, job: "臨時の手下" });
+  }
+};
+
+Object.assign(SKILL_EFFECTS, {
+  drain: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    // オーバーキルで過剰回復しない。heal は最大HP比を取る。
+    const hp = t.hp, dealt = c.damage(t, 1, c.skill.name);
+    if (c.onField(c.unit)) c.heal(c.unit, Math.max(0, Math.floor(Math.min(hp, dealt) * 0.3) - 1e-9) / c.unit.maxHp, c.skill.name);
+  } },
+  pierce: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    const raw = c.unit.atk * (0.9 + c.rand() * 0.2) * (c.unit.mods.dmgMult || 1);
+    c.applyDamage(c.unit, t, Math.max(1, Math.round(raw)), "attack", { label: c.skill.name });
+  } },
+  double: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    for (let i = 0; i < 2 && c.onField(t) && c.onField(c.unit); i++) c.damage(t, 0.7, c.skill.name);
+  } },
+  execute: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    if (t.hp <= t.maxHp * 0.3) c.damage(t, 3, c.skill.name);
+    else {
+      CatalogEffects.say(c, "まだ早い！ 反撃を受けた");
+      c.act(t, c.enemies, c.allies, c.round, { target: c.unit, label: "反撃", isExtra: true });
+    }
+  } },
+  quake: { resolve(c) {
+    for (const t of c.enemies.filter(c.onField).sort((a, b) => a.spd - b.spd)) {
+      if (!c.onField(c.unit)) break;
+      if (c.onField(t)) c.damage(t, 0.5, c.skill.name);
+    }
+    const rear = c.allies.filter(c.onField).slice(-1)[0];
+    if (rear) c.applyDamage(c.unit, rear, Math.max(1, Math.round(rear.maxHp * 0.1)), "splash", { label: "地響きの巻き添え", incident: true });
+  } },
+  mend_all: { resolve(c) {
+    for (const a of c.allies.filter(c.onField)) c.heal(a, 0.15, c.skill.name);
+  } },
+  sacrifice: { resolve(c) {
+    const t = CatalogEffects.ally(c, true); if (!t) return;
+    const amount = Math.min(c.unit.hp - 1, Math.floor(c.unit.hp / 2), t.maxHp - t.hp);
+    if (amount <= 0) return;
+    c.unit.hp -= amount;
+    c.emit("note", { unitId: c.unit.id, text: `HP${amount}を分けた`, hp: c.unit.hp, maxHp: c.unit.maxHp, cls: "trait" });
+    c.heal(t, (amount - 1e-9) / t.maxHp, c.skill.name);
+  } },
+  wall_all: { immediate(c) {
+    for (const a of c.allies.filter(c.onField)) a.flags.guarding = true;
+    CatalogEffects.say(c, "全員で壁を作った");
+  } },
+  gamble: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    if (c.chance(0.5)) c.damage(t, 3, c.skill.name);
+    else { CatalogEffects.say(c, "裏目だ！ 自分に跳ね返った"); CatalogEffects.recoil(c, c.unit.atk); }
+  } },
+  rally_fallen: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    const n = c.allies.filter(a => !a.alive && !a.flags.summoned).length;
+    c.damage(t, n ? 1 + n * 0.5 : 0.5, c.skill.name);
+  } },
+  summon_minion: { resolve(c) {
+    if (c.unit.flags.summon_minion_used) { CatalogEffects.say(c, "分身はもう呼べない"); return; }
+    c.unit.flags.summon_minion_used = true;
+    CatalogEffects.minion(c);
+  } },
+  disarm: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    t.atk = Math.max(1, t.atk - 3);
+    CatalogEffects.say(c, "武器をはじいた。攻撃力が3低下");
+  } },
+  cleanse: { immediate(c) {
+    const t = CatalogEffects.ally(c); if (!t) return;
+    for (const key of ["stunned", "charmed", "burn"]) delete t.flags[key];
+    CatalogEffects.say(c, "気付けで足止め・魅了・燃焼を解除");
+  } },
+  rescue: { immediate(c) {
+    const t = CatalogEffects.ally(c, true); if (!t) return;
+    c.moveBack(c.allies, t);
+    c.unit.flags.covering = t.id; c.unit.flags.coverRatio = 0.6;
+    CatalogEffects.say(c, "仲間を後ろへ。身代わりを引き受けた");
+  } },
+  burn_touch: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    c.damage(t, 0.5, c.skill.name);
+    if (c.onField(t)) t.flags.burn = { at: c.round + 1, source: c.unit, parentEvent: null };
+  } },
+  shatter_guard: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    t.flags.guarding = false;
+    c.damage(t, 0.8, c.skill.name);
+    CatalogEffects.say(c, "守りの構えを崩した");
+  } },
+  spirit_gift: { resolve(c) {
+    const t = CatalogEffects.ally(c, true); if (t) c.gainSpirit(t, 1, c.skill.name);
+  } },
+  finishing_loot: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    c.damage(t, 0.8, c.skill.name);
+    if (!t.alive) c.gainBattleResource(c.unit, "gold", 1, c.skill.name, null);
+  } },
+  flank: { resolve(c) {
+    const t = c.enemies.filter(c.onField).slice(-1)[0]; if (!t) return;
+    c.damage(t, 1.2, c.skill.name);
+    if (c.onField(c.unit)) c.moveBack(c.allies, c.unit);
+  } },
+  siphon_guard: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    delete t.flags.buff;
+    c.unit.flags.guarding = true;
+    CatalogEffects.say(c, "敵の鼓舞を消し、守りに転じた");
+  } }
+});
+
+// 痕跡は人物uidで照合する。戦場の一時idや同名人物から履歴を推測しない。
+Object.assign(SKILL_EFFECTS, {
+  mourning: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    const dead = (c.options.departed || []).find(d => d.cause === "fallen" && d.race && d.race === c.unit.race);
+    if (dead) CatalogEffects.say(c, `${[...(dead.name || "仲間")].slice(0, 23).join("")}の仇！`);
+    c.damage(t, dead ? 1.5 : 1, c.skill.name);
+  } },
+  carried_debt: { immediate(c) {
+    // 現行run.jsのcarriedはobject=null。担ぎ手が未記録なら恩人を捏造しない。
+    const traces = c.options.traces || [];
+    const trace = c.unit.uid && [...traces].reverse().find(t => t.kind === "carried" && t.subject === c.unit.uid
+      && t.object && c.allies.some(a => a.uid === t.object && a !== c.unit && c.onField(a)));
+    const carrier = trace && c.allies.find(a => a.uid === trace.object && a !== c.unit && c.onField(a));
+    if (!carrier) { CatalogEffects.say(c, "担ぎ手の記録がないか、ここにいない"); return; }
+    c.unit.flags.covering = carrier.id; c.unit.flags.coverRatio = 0.6;
+    CatalogEffects.say(c, "あの時の恩を返す。今度は私が守る");
+  } },
+  veteran: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    const count = c.unit.uid ? (c.options.traces || []).filter(t => t.kind === "downed" && t.subject === c.unit.uid).length : 0;
+    c.damage(t, 1 + Math.min(5, count) * 0.1, c.skill.name);
+  } },
+  relic_weight: { immediate(c) {
+    const count = (c.options.relics || []).length;
+    if (!count) { CatalogEffects.say(c, "まだ預かる遺物はない"); return; }
+    for (const a of c.allies.filter(c.onField)) {
+      const mult = 1 + count * 0.05;
+      // 強い鼓舞を弱いもので上書きしない。期限を延長せず、今Rだけ置き換える。
+      if (!a.flags.buff || a.flags.buff.until < c.round || a.flags.buff.mult < mult)
+        a.flags.buff = { mult, until: c.round, name: c.skill.name };
+    }
+    CatalogEffects.say(c, "預かった遺物が背を押す");
+  } },
+  carried_resolve: { immediate(c) {
+    const carried = c.unit.uid && (c.options.traces || []).some(t => t.kind === "carried" && t.subject === c.unit.uid);
+    const t = CatalogEffects.ally(c, true);
+    if (!carried || !t) { CatalogEffects.say(c, "担がれた記憶か、守る仲間がない"); return; }
+    // 担ぎ手は未記録でも、自分が担がれた事実は確定している。
+    c.unit.flags.covering = t.id; c.unit.flags.coverRatio = 0.4;
+    CatalogEffects.say(c, "担がれる痛みは知っている。後ろへ");
+  } }
+});
+
+// planは予告だけ（乱数・状態変更なし）。runで現在の生存状態を確かめて実行する。
+Object.assign(ENEMY_ROLES, {
+  bomber: {
+    plan(c, nextRound) {
+      if (nextRound === 2) return { kind: "bomber_prime", intent: "aoe", text: "導火線に火をつけた" };
+      if (nextRound === 3) return { kind: "bomber_blast", intent: "aoe", text: "爆薬を投げようとしている" };
+      return null;
+    },
+    run(c, plan) {
+      if (plan.kind === "bomber_prime") { CatalogEffects.say(c, "火薬を抱え、機を待っている"); return true; }
+      if (plan.kind !== "bomber_blast") return undefined;
+      for (const t of c.enemies.filter(c.onField)) {
+        if (!c.onField(c.unit)) break;
+        if (c.onField(t)) c.damage(t, 0.8, "爆薬投げ");
+      }
+      return true;
+    }
+  },
+  summoner: {
+    plan(c) {
+      return c.unit.hp <= c.unit.maxHp * 0.5 && !c.unit.flags.summoner_used
+        ? { kind: "summoner_call", intent: "summon", text: "援軍を呼ぼうとしている" } : null;
+    },
+    run(c, plan) {
+      if (plan.kind !== "summoner_call") return undefined;
+      if (c.unit.hp <= c.unit.maxHp * 0.5 && !c.unit.flags.summoner_used) {
+        c.unit.flags.summoner_used = true; CatalogEffects.minion(c);
+      }
+      return true;
+    }
+  },
+  assassin: {
+    plan(c) {
+      const t = c.lowestAlly(c.enemies, null);
+      return t ? { kind: "assassin_strike", targetId: t.id, intent: "big", text: "最も弱った者を狙っている" } : null;
+    },
+    run(c, plan) {
+      if (plan.kind !== "assassin_strike") return undefined;
+      const t = c.lowestAlly(c.enemies, null);
+      if (t) c.damage(t, 1.3, "急所狙い");
+      return true;
+    }
+  },
+  berserker: {
+    plan() { return { kind: "berserker_rage", intent: "big", text: "傷を怒りに変えている" }; },
+    run(c, plan) {
+      if (plan.kind !== "berserker_rage") return undefined;
+      const mult = 1 + Math.max(0, Math.min(1, 1 - c.unit.hp / c.unit.maxHp));
+      c.unit.flags.buff = { mult, until: c.round, name: "傷の怒り" };
+      const t = c.pickEnemy();
+      if (t) c.act(c.unit, c.allies, c.enemies, c.round, { target: t, label: "怒りの一撃" });
+      return true;
+    }
+  },
+  healer_guard: {
+    plan(c) {
+      const t = c.lowestAlly(c.allies, null);
+      return t && t.hp <= t.maxHp * 0.3
+        ? { kind: "healer_guard_heal", targetId: t.id, intent: "heal", text: "瀕死の仲間を癒やそうとしている" }
+        : { kind: "guard", intent: "guard", text: "盾を構えた" };
+    },
+    run(c, plan) {
+      if (plan.kind === "guard") { c.unit.flags.guarding = true; CatalogEffects.say(c, "盾を構え、仲間を待つ"); return true; }
+      if (plan.kind !== "healer_guard_heal") return undefined;
+      const t = c.allies.find(a => a.id === plan.targetId && c.onField(a)) || c.lowestAlly(c.allies, null);
+      if (t) c.heal(t, 0.25, "救急の祈り");
+      return true;
+    }
+  },
+  duelist: {
+    plan(c) {
+      const first = c.timeline.find(e => e.type === "attack" && e.toId === c.unit.id && c.enemies.some(t => t.id === e.fromId));
+      const t = first && c.enemies.find(t => t.id === first.fromId && c.onField(t));
+      return t ? { kind: "duelist_lock", targetId: t.id, intent: "duel", text: "最初に殴った相手を見据えた" } : null;
+    },
+    run(c, plan) {
+      if (plan.kind !== "duelist_lock") return undefined;
+      const t = c.enemies.find(t => t.id === plan.targetId && c.onField(t));
+      if (!t) return false;
+      c.act(c.unit, c.allies, c.enemies, c.round, { target: t, label: "一騎打ち" });
+      return true;
+    }
+  }
+});
