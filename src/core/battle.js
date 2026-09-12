@@ -593,7 +593,9 @@ const Battle = {
         const coverer = side.find(u => onField(u) && u !== target && u.flags.covering === target.id && !u.flags.guarding);
         if (coverer) {
           const ratio = coverer.flags.coverRatio || 0.6;
-          note(`　${coverer.name}が${target.name}をかばった`, "trait");
+          // 構造化して出す（描画側が字幕にする。狙った敵と違う者に当たる理由を見せないと「バグ」に見える）
+          emit("cover", { unitId: coverer.id, forId: target.id, name: coverer.name, forName: target.name, emphasis: 2,
+            text: `　${coverer.name}が${target.name}をかばった！`, cls: "trait" });
           target = coverer;
           dmg = Math.max(1, Math.round(amount * ratio * target.mods.takenMult));
           opts.traits = [...(opts.traits || []), "かばう"];
@@ -1274,7 +1276,9 @@ const Battle = {
           fallen: playerUnits.filter(u => !u.alive && !u.flags.summoned).map(u => ({ id: u.id, name: u.name })),
           enemies: enemyUnits.filter(onField).map(u => ({
             id: u.id, name: u.name, hp: u.hp, maxHp: u.maxHp, role: u.role,
-            intent: u.flags.charging ? "big" : (u.flags.plan && u.flags.plan.intent) || "attack"
+            intent: u.flags.charging ? "big" : (u.flags.plan && u.flags.plan.intent) || "attack",
+            // 盾役に守られている敵。狙っても盾役が受ける（狙い選びで見せる）
+            coveredBy: (enemyUnits.find(c => onField(c) && c !== u && c.flags.covering === u.id && !c.flags.guarding) || {}).id || null
           })),
           canRetreat, downed: downed.map(u => u.name), timelineLength: timeline.length
         };
