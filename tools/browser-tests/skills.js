@@ -73,6 +73,8 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     const a = Game.state.applicants[0];
     a.tplId = 'ogre'; a.race = 'オーガ'; a.traits = ['brute']; a.mercenary = false;
     a.bond = null; a.relicId = null; a.veteran = false;
+    // 遅咲き（裏方の職）だと 6戦・12戦になる。ここは普通の応募者を見る（遅咲きは test-skill-unlock）
+    a.job = '兵'; a.lateBloomer = false; a.homeBonus = null;
     App.render();
   });
   const hints = (await page.locator('.applicant-member').first().locator('.skill-hint').allTextContents()).join(' / ');
