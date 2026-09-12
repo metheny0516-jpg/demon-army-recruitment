@@ -108,7 +108,48 @@ const SKILLS = {
   }
 };
 
-// 種族 → 3戦目で覚える技。run.js の開放と、面接の札（「3戦で【…】」）が読む。
-const SPECIES_SKILL = Object.fromEntries(Object.entries(SKILLS).map(([id, s]) => [s.species, id]));
+// ── 上位技（8戦目。効果は TRAITS 側の癖として動く）──
+// 指示窓に並ぶ「技としての顔」（名・気合・一行）はここが正本。battle.js は TRAITS.order を読まない
+// （TRAITS.order は号令エンジン＝sim・旧テストの土台。号令を消すときに一緒に消す）。
+// kind: "trait" ＝ 気合を払うと、その戦いの次の一撃で trait の条件を飛ばして必ず出す（flags.ordered）。
+// 条件が無い上位技（分裂・骨の壁・腐敗・火遊び・大召集・大波）は勝手に効く癖なので、ここには載せない。
+const UPPER_SKILLS = {
+  enthrall: {
+    name: "魅了", species: "succubus", cost: 2, kind: "trait", trait: "enthrall", target: "enemy", upper: true,
+    label: "魅了せよ", note: "次の一撃で、相手が必ず仲間を殴る"
+  },
+  rampage: {
+    name: "暴走", species: "minotaur", cost: 2, kind: "trait", trait: "rampage", target: "enemy", upper: true,
+    label: "暴れろ", note: "HPに関係なく、次の一撃を暴走させる"
+  },
+  death_pulse: {
+    name: "死の波動", species: "lich", cost: 3, kind: "trait", trait: "death_pulse", target: "enemy", upper: true,
+    label: "波動を放て", note: "ラウンドを待たず、次の終わりに全体へ放つ"
+  },
+  ogre_charge: {
+    name: "ぶちかまし", species: "ogre", cost: 3, kind: "trait", trait: "ogre_charge", target: "enemy", upper: true,
+    label: "ぶちかませ", note: "敵の数に関係なく、次の一撃が全体に及ぶ"
+  },
+  great_fireball: {
+    name: "大火球", species: "mage", cost: 3, kind: "trait", trait: "great_fireball", target: "enemy", upper: true,
+    label: "大火球を放て", note: "偶数ラウンドでも大火球が出る"
+  },
+  blood_howl: {
+    name: "血の雄叫び", species: "orc", cost: 3, kind: "trait", trait: "blood_howl", target: "enemy", upper: true,
+    label: "吠えろ", note: "倒せなくても、もう一撃が出る"
+  },
+  goblin_tactics: {
+    name: "集団戦法", species: "goblin", cost: 2, kind: "trait", trait: "goblin_tactics", target: "enemy", upper: true,
+    label: "囲め", note: "ゴブリンが少なくても集団戦法が出る"
+  },
+  gale: {
+    name: "疾風", species: "kobold", cost: 2, kind: "trait", trait: "gale", target: "enemy", upper: true,
+    label: "疾風で駆けろ", note: "ラウンドに関係なく疾風が乗り、真っ先に動く"
+  }
+};
+Object.assign(SKILLS, UPPER_SKILLS);
 
-if (typeof module !== "undefined") module.exports = { SKILL_RULES, SKILLS, SPECIES_SKILL };
+// 種族 → 3戦目で覚える技。run.js の開放と、面接の札（「3戦で【…】」）が読む。上位技は含めない。
+const SPECIES_SKILL = Object.fromEntries(Object.entries(SKILLS).filter(([, s]) => !s.upper).map(([id, s]) => [s.species, id]));
+
+if (typeof module !== "undefined") module.exports = { SKILL_RULES, SKILLS, UPPER_SKILLS, SPECIES_SKILL };

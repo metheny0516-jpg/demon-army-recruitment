@@ -411,6 +411,12 @@ const Battle = {
       return next >= 0;
     };
     const lowestAlly = (allies, except) => allies.filter(u => onField(u) && u !== except).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] || null;
+    // その者が窓に並べる技の id：種族技（skills）のあとに、持っている癖の上位技（kind "trait"）
+    const unitSkillIds = (u) => {
+      const ids = (u.skills || []).filter(id => SK[id] && !SK[id].upper);
+      for (const [id, sk] of Object.entries(SK)) if (sk.kind === "trait" && sk.trait && u.traits.includes(sk.trait) && !ids.includes(id)) ids.push(id);
+      return ids;
+    };
     // 技が今選べない理由。null なら選べる。
     const skillWhy = (u, sk, spirit) => {
       if (u.flags.mercenary) return "傭兵";
@@ -1248,19 +1254,12 @@ const Battle = {
           allies: playerUnits.filter(onField).map(u => {
             const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
             // 技の一覧：種族技（SKILLS）→ 上位技（TRAITS.order）。skill は先頭（互換）。
+            // 技の一覧は SKILLS が正本：種族技（u.skills）→ 上位技（kind "trait"：その癖を持っていれば並ぶ）
             const skills = [];
-            for (const sid of (u.skills || [])) {
+            for (const sid of unitSkillIds(u)) {
               const sk = SK[sid]; if (!sk) continue;
               const why = skillWhy(u, sk, spirit);
-              skills.push({ id: sid, name: sk.name, label: sk.name, note: sk.note || "", cost: sk.cost || 0, kind: sk.kind, target: sk.target, ready: !why, why });
-            }
-            // 上位技（tier 2）だけを技として並べる。1段目の癖に残る order は号令エンジン（sim・テスト）用で、窓には出さない
-            const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order && TRAITS[tid].skill && TRAITS[tid].skill.tier === 2);
-            const tr = skillId ? TRAITS[skillId] : null;
-            if (tr) {
-              const cost = Math.max(0, Number(tr.order.cost) || 0);
-              const why = u.flags.mercenary ? "傭兵" : u.flags.winded ? "息切れ" : (spirit !== null && spirit < cost) ? "気合不足" : null;
-              skills.push({ id: skillId, name: tr.name, label: tr.order.label, note: tr.order.note || "", cost, kind: "trait", target: "enemy", ready: !why, why });
+              skills.push({ id: sid, name: sk.name, label: sk.label || sk.name, note: sk.note || "", cost: sk.cost || 0, kind: sk.kind, target: sk.target, ready: !why, why });
             }
             return {
               id: u.id, uid: u.uid, name: u.name, hp: u.hp, maxHp: u.maxHp, spirit,
@@ -1299,10 +1298,25 @@ const Battle = {
             u.flags.guarding = true;
           } else if (c.cmd === "skill") {
             const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
-            const speciesIds = (u.skills || []).filter(id => SK[id]);
-            const traitId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order && TRAITS[tid].skill && TRAITS[tid].skill.tier === 2);
-            const sid = c.skill || speciesIds[0] || traitId;
-            const sk = SK[sid];
+            const ids = unitSkillIds(u);
+            const sid = c.skill || ids[0];
+            const sk = ids.includes(sid) ? SK[sid] : null;
+            if (sk && sk.kind === "trait") {
+              // 上位技：気合を払い、次の一撃で癖の条件を飛ばす（号令の manual 版。+50% も息切れも無い）
+              if (!skillWhy(u, sk, spirit)) {
+                const tr = TRAITS[sk.trait] || {};
+                const cost = sk.cost || 0;
+                if (spirit !== null) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
+                u.flags.ordered = true;
+                u.flags.orderedManual = true;
+                const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
+                emit("order_exec", {
+                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, cost, manual: true, emphasis: 3,
+                  text: `　魔王「${u.name}、${sk.label || sk.name}！」 ${u.name}「${quote}」`, cls: "order"
+                });
+              }
+              continue;
+            }
             if (sk) {
               // 種族技。理由があれば「たたかう」に落ちる。
               if (!skillWhy(u, sk, spirit)) {
@@ -1318,19 +1332,6 @@ const Battle = {
                 u.flags.skillCmd = cmd;
               }
               continue;
-            }
-            const skillId = sid === traitId ? traitId : null;
-            const tr = skillId ? TRAITS[skillId] : null;
-            const cost = tr ? Math.max(0, Number(tr.order.cost) || 0) : 0;
-            if (tr && !u.flags.winded && !u.flags.mercenary && (spirit === null || spirit >= cost)) {
-              if (spirit !== null) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
-              u.flags.ordered = true;
-              u.flags.orderedManual = true;
-              const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
-              emit("order_exec", {
-                unitId: u.id, name: u.name, skillId, skillName: tr.name, label: tr.order.label, quote, cost, manual: true, emphasis: 3,
-                text: `　魔王「${u.name}、${tr.order.label}！」 ${u.name}「${quote}」`, cls: "order"
-              });
             }
           }
         }
