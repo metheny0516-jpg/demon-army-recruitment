@@ -27,8 +27,8 @@ const assert = require('node:assert/strict');
           BattleScene.float(u, '12');
           return [...document.querySelectorAll('.bu-vfx, .fnum')].map(el => parseFloat(getComputedStyle(el).animationDuration) * 1000);
         }, { speed, scale });
-        [500, 460, 680, 860, 860, 900].forEach((ms, i) => assert.ok(Math.abs(durations[i] - ms * scale / speed) < 1));
-        await page.waitForTimeout(950 * scale / speed + 50);
+        [500, 460, 680, 860, 860, 1500].forEach((ms, i) => assert.ok(Math.abs(durations[i] - ms * scale / speed) < 1));   // fnum は 1500ms（余韻、2026-09-12）
+        await page.waitForTimeout(1500 * scale / speed + 50);
         assert.equal(await page.locator('.bu-vfx, .fnum').count(), 0);
         assert.equal(await page.locator('.bu-sprite-img').getAttribute('data-pose'), 'idle');
       }

@@ -44,16 +44,17 @@ const BattleScene = {
   motions: new Set(),
   pendingHits: new Set(),
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
-  DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
+  // 余韻（2026-09-12 オーナー試遊「台詞と数字がすぐ消えて追いつかない」）：x1 の基礎尺を約2割伸ばした。急ぐ人は x2/x4。
+  DURATION: { 0: 560, 1: 740, 2: 960, 3: 1200 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
   // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
   // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
     battle_start: 500, round_start: 1150, synergy: 1650, synergy_trigger: 1050, facility_trigger: 1250,
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
-    heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
+    heal: 600, summon: 1250, trait_trigger: 1350, resource_gain: 1000,
     resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200,
-    order_offer: 1200, order_exec: 1600, cover: 1300
+    order_offer: 1200, order_exec: 1900, cover: 1300
   },
   // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
   ANSWER_READ_MS: 2200,
@@ -2211,7 +2212,7 @@ const BattleScene = {
     const n = document.createElement("span");
     n.className = "fnum " + (cls || "");
     n.textContent = text;
-    const life = this.visualDuration(900);
+    const life = this.visualDuration(1500);
     n.style.animationDuration = `${life}ms`;
     u.pop.appendChild(n);
     this.timers.push(setTimeout(() => n.remove(), life));
