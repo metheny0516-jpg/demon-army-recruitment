@@ -4,11 +4,12 @@
 // fixedTrait/fixedTraits: 必ず持つ特性 / traitPool: 50%で追加される特性候補
 const MONSTER_TEMPLATES = [
   {
+    skills: ["goblin_warcry"],
     id: "goblin", race: "ゴブリン", tier: 1, tags: [],
     jobs: ["盗賊", "斥候", "暴れ者", "会計係（どんぶり勘定）", "見張り（居眠り可）", "魔界料理人（味見が多い）"],
     base: { hp: 20, atk: 8, def: 3, spd: 7 },
     salary: [2, 3], loyalty: [55, 80],
-    fixedTraits: ["coward", "pickpocket"], traitPool: ["pack", "greedy"],
+    fixedTraits: ["coward"], traitPool: ["pack", "greedy"],
     prevJobs: ["村の物置荒らし（3年）", "街道の追いはぎ（見習い）", "ゴブリン兵（前魔王軍・2ヶ月）", "きのこ採取（無給）",
       "隣村のスパイ（バレて解雇）", "宝箱の番人（居眠りで解雇）", "山賊団の下っ端（分け前が少なくて退団）", "冒険者パーティのモブ（台詞なし）"],
     motives: ["安定した職場を探してます", "前の職場、潰れちゃって……", "福利厚生に惹かれました", "友達に誘われたので",
@@ -40,11 +41,12 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["slime_cling"],
     id: "slime", race: "スライム", tier: 1, tags: [],
     jobs: ["雑用", "壁", "掃除係", "つみあげ（せんもん）", "みはりだい（うごかない）"],
     base: { hp: 26, atk: 5, def: 2, spd: 4 },
     salary: [1, 2], loyalty: [70, 95],
-    fixedTrait: "slime_body", traitPool: ["regen"],
+    fixedTraits: [], traitPool: [],
     prevJobs: ["よくわからない（たぶん沼）", "洞窟の床（10年）", "井戸の掃除係", "なし（うまれたて）",
       "コップの、そこ（しばらく）", "したじき、の、した", "だれかの、なみだ（かもしれない）", "まだ、なにか、わからない"],
     motives: ["たべものが、でるときいて", "あたたかい、から", "なかまが、いた", "………（無言でうなずいている）",
@@ -76,6 +78,7 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["kobold_feint"],
     id: "kobold", race: "コボルト", tier: 1, tags: [],
     jobs: ["歩兵", "伝令", "猟犬係", "巡邏隊", "受付（噛みつき注意）"],
     base: { hp: 18, atk: 7, def: 3, spd: 9 },
@@ -112,11 +115,12 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["orc_cleave"],
     id: "orc", race: "オーク", tier: 2, tags: [],
     jobs: ["戦士", "破壊兵", "用心棒", "取り立て屋", "解体屋"],
     base: { hp: 34, atk: 11, def: 5, spd: 5 },
     salary: [4, 6], loyalty: [50, 75],
-    fixedTrait: "brute", traitPool: ["rage_unpaid", "tough_skin", "drunkard"],
+    fixedTraits: [], traitPool: ["rage_unpaid", "tough_skin", "drunkard"],
     prevJobs: ["傭兵（渡り歩き・年数不明）", "採石場の人足（8年）", "酒場の用心棒（クビ）", "前魔王軍・第三破壊部隊",
       "闘技場の雇われ剣士（賭けに負けて解雇）", "山賊団のリーダー（内部分裂で解散）", "港の荷役（喧嘩が絶えずクビ）", "前魔王軍・第三破壊部隊（給料未払いで離反）"],
     motives: ["金払いがいいと聞いた", "暴れられる職場を探してる", "前の雇い主が金を払わなかった", "飯が出るのか？",
@@ -148,11 +152,12 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["skeleton_wall"],
     id: "skeleton", race: "骸骨兵", tier: 2, tags: ["undead"],
     jobs: ["剣士", "槍兵", "番兵", "遺跡警備", "礼装係（骨だけに映える）"],
     base: { hp: 22, atk: 9, def: 6, spd: 6 },
     salary: [3, 4], loyalty: [85, 99],
-    fixedTrait: "bone", traitPool: ["tough_skin", "soul_harvest"],
+    fixedTraits: [], traitPool: ["tough_skin", "soul_harvest"],
     prevJobs: ["王国騎士団・第二中隊（生前12年）", "墓地の警備（死後200年）", "古戦場に埋まっていた", "博物館の展示品（3年）",
       "先代魔王軍・第一騎士団（滅亡と共に離散）", "地下墓所の管理人（後任なし）", "美術館の骨格標本（契約満了）", "冒険者に掘り起こされ、そのまま就職活動"],
     motives: ["再び剣を執る機会を求めて", "経費がかからぬ点をご評価いただきたく", "忠義を尽くす主を探しております", "暇でしたので",
@@ -184,11 +189,12 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["zombie_bite"],
     id: "zombie", race: "ゾンビ", tier: 2, tags: ["undead"],
     jobs: ["前衛", "肉壁", "夜勤", "夜間巡回……", "在庫管理……（腐らない）"],
     base: { hp: 30, atk: 8, def: 2, spd: 3 },
     salary: [2, 3], loyalty: [85, 99],
-    fixedTrait: "tenacity", traitPool: ["regen"],
+    fixedTrait: "tenacity", traitPool: [],
     prevJobs: ["農夫（生前）", "墓穴（配属期間5年）", "実験体（研究所・逃亡）", "夜警（死後も継続）",
       "実験体……（研究所から脱走……）", "畑仕事……（生前、20年……）", "墓地の……住人……（無許可）", "冒険者パーティの……荷物持ち……（歩みが遅く解雇……）"],
     motives: ["はたらき……たい……", "夜勤なら、いける", "やすまなくて、いい", "どうせ、ひまなので……",
@@ -220,11 +226,12 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["imp_rob"],
     id: "imp", race: "インプ", tier: 2, tags: ["caster"],
     jobs: ["妖術師", "斥候", "いたずら屋", "契約書偽造係", "呪いの品カタログ営業"],
     base: { hp: 16, atk: 7, def: 2, spd: 10 },
     salary: [3, 4], loyalty: [40, 70],
-    fixedTrait: "mischief", traitPool: ["coward", "hunger_demon"],
+    fixedTraits: [], traitPool: ["coward", "hunger_demon"],
     prevJobs: ["契約書の作成補助（悪魔法務）", "通行料の徴収（無許可）", "祭りの案内係（迷わせた）", "前魔王軍・嫌がらせ課",
       "詐欺同然の福引係（村八分）", "呪いのアイテム販売員（返品殺到）", "小悪魔養成学校（成績最下位で除籍）", "占い師（当たらなさすぎて廃業）"],
     motives: ["面白そうだったので", "人間が困る顔が見たくて", "実は前の職場を追われまして。ヒヒッ", "契約内容、確認させてもらえます？",
@@ -256,11 +263,12 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["mage_fireball"],
     id: "mage", race: "魔法使い", tier: 3, tags: ["caster"],
     jobs: ["炎術師", "宮廷魔導士（左遷）", "研究者", "実験主任（要注意人物）", "災害級魔術デモンストレーター"],
     base: { hp: 15, atk: 12, def: 1, spd: 6 },
     salary: [6, 8], loyalty: [55, 80],
-    fixedTrait: "fireball", traitPool: ["coward"],
+    fixedTraits: [], traitPool: ["coward"],
     prevJobs: ["王立宮廷魔導士（罷免）", "魔法学院・助教（爆発事故により）", "薬屋の店番（在庫を燃やした）", "独立研究者（無収入）",
       "宮廷魔導士見習い（試験会場を半分燃やす）", "魔法薬局の開発担当（店ごと吹き飛ばす）", "独立系研究所（出資者が全員逃げた）", "家庭教師（生徒の家を燃やし出禁）"],
     motives: ["研究費の出る環境を求めて", "火力を評価してくださる職場を", "人間の宮廷は狭量でした", "同業者と組んでみたいのです",
@@ -292,11 +300,12 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["necro_hand"],
     id: "necromancer", race: "死霊術師", tier: 3, tags: ["caster"],
     jobs: ["死霊術師", "墓守", "人事担当（死者）", "人事部長（採用専門）", "供養代行業"],
     base: { hp: 17, atk: 9, def: 2, spd: 5 },
     salary: [7, 9], loyalty: [50, 75],
-    fixedTraits: ["necromancy", "gravekeeper"], traitPool: ["mischief"],
+    fixedTraits: ["gravekeeper"], traitPool: [],
     prevJobs: ["葬儀屋（顧客が起き上がり廃業）", "墓地管理人（12年）", "医学部・解剖助手（除籍）", "前魔王軍・人事部（死者担当）",
       "国立墓地の管理人（規則違反で解雇）", "医学部の解剖学講師（教材が動き出し休職）", "遺品整理業（遺品が動き出し独立）", "前魔王軍・福利厚生課（担当が全員故人）"],
     motives: ["死者を活かせる職場を探して", "人材の再雇用に興味があります", "アンデッドの部下がいると伺い", "墓地が近いのが決め手でした",
@@ -328,11 +337,12 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["ogre_smash"],
     id: "ogre", race: "オーガ", tier: 3, tags: [],
     jobs: ["重戦士", "破城槌", "門番", "重量物運搬", "壁（本業）"],
     base: { hp: 45, atk: 14, def: 6, spd: 4 },
     salary: [7, 9], loyalty: [45, 70],
-    fixedTraits: ["brute", "big_eater"], traitPool: ["tough_skin", "chain_massacre"],
+    fixedTraits: ["big_eater"], traitPool: ["tough_skin", "chain_massacre"],
     prevJobs: ["城門の門番（30年）", "岩運び（採掘場）", "見世物小屋（脱走）", "橋の下（住居兼職場）",
       "橋の下の住人（家賃滞納なし・そこが家）", "見世物小屋の看板怪物（脱走してそのまま職探し）", "食堂の食べ放題テスター（出禁）", "岩運び（採掘場を素手で崩し独立）"],
     motives: ["メシが多いと聞いた", "門番なら任せろ", "壊す仕事はあるか", "寝床があればいい",
@@ -364,6 +374,7 @@ const MONSTER_TEMPLATES = [
     ]
   },
   {
+    skills: ["harpy_dive"],
     id: "harpy", race: "ハーピー", tier: 2, tags: [],
     jobs: ["伝令", "広報係", "見張り", "配達員"], base: { hp: 17, atk: 7, def: 2, spd: 11 },
     salary: [3, 5], loyalty: [55, 85], fixedTraits: ["first_strike"], traitPool: ["gale", "coward"],
@@ -374,9 +385,10 @@ const MONSTER_TEMPLATES = [
     quotes: ["急ぎの連絡、あります？", "高所手当は出ますよね？", "城の外の評判、集めてきますよ。"]
   },
   {
+    skills: ["mimic_box"],
     id: "mimic", race: "ミミック", tier: 2, tags: [],
     jobs: ["倉庫番", "会計係（宝箱型）", "備品管理", "受付箱"], base: { hp: 28, atk: 9, def: 5, spd: 3 },
-    salary: [2, 4], loyalty: [45, 75], fixedTraits: ["pickpocket"], traitPool: ["greedy", "tough_skin"],
+    salary: [2, 4], loyalty: [45, 75], fixedTraits: [], traitPool: ["greedy", "tough_skin"],
     prevJobs: ["ダンジョン入口の備品箱", "王国税関の押収箱", "宝物庫の見せ金"],
     motives: ["中身を空にされない職場を希望", "金庫としてなら役に立てる", "開けられる前に雇われたい"],
     flaws: ["褒められると勝手に口を開ける", "人の財布が気になる", "椅子と間違われる"],
@@ -384,9 +396,10 @@ const MONSTER_TEMPLATES = [
     quotes: ["中身？　それは面接が終わってから。", "会計係なら、噛みつく理由も減りますよね？", "金貨の保管はお任せください。たぶん。"]
   },
   {
+    skills: ["troll_rest"],
     id: "troll", race: "トロル", tier: 2, tags: [],
     jobs: ["石工", "橋守", "工事現場監督", "壁（補修可）"], base: { hp: 38, atk: 10, def: 5, spd: 3 },
-    salary: [4, 6], loyalty: [50, 78], fixedTraits: ["regen"], traitPool: ["tough_skin", "brute"],
+    salary: [4, 6], loyalty: [50, 78], fixedTraits: [], traitPool: ["tough_skin"],
     prevJobs: ["山道の橋番", "採石場の夜勤", "城壁の穴埋め"],
     motives: ["壊れた物を直す仕事がしたい", "日陰の現場を希望", "橋を守るより城を作りたい"],
     flaws: ["火を見ると動揺する", "細かい図面は読めない", "休憩が長い"],
@@ -401,11 +414,12 @@ const MONSTER_TEMPLATES = [
 // 第二幕に入ったタイミングでこの配列を合流させる（未実装）。
 const MONSTER_TEMPLATES_ACT2 = [
   {
+    skills: ["succubus_charm"],
     id: "succubus", race: "サキュバス", tier: 4, tags: ["caster"], act: 2,
     jobs: ["交渉役", "接待担当", "秘書（兼・査定担当）", "スカウト", "広報（裏）"],
     base: { hp: 22, atk: 15, def: 3, spd: 8 },
     salary: [8, 10], loyalty: [50, 75],
-    fixedTraits: ["allure"], traitPool: ["coward", "greedy"],
+    fixedTraits: [], traitPool: ["coward", "greedy"],
     prevJobs: ["人間界の高級クラブ（源泉徴収でもめて退店）", "商談要員（相手を丸め込みすぎて契約無効に）", "冒険者ギルドの受付（勧誘しすぎて出禁）",
       "王城の社交担当（王を口説いて更迭）", "占い師（当たりすぎて廃業）", "劇団の看板女優（共演者を全員惚れさせ解散）",
       "投資顧問（顧客を惚れさせて解約させない手口が発覚）", "前魔王軍・広報部（経費の使い方で監査が入った）"],
@@ -447,11 +461,12 @@ const MONSTER_TEMPLATES_ACT2 = [
     ]
   },
   {
+    skills: ["mino_rush"],
     id: "minotaur", race: "ミノタウロス", tier: 4, tags: [], act: 2,
     jobs: ["重装突撃兵", "荷役", "案内係（自称）", "解体作業員", "壁（強化版）"],
     base: { hp: 55, atk: 17, def: 8, spd: 3 },
     salary: [9, 11], loyalty: [45, 70],
-    fixedTraits: ["charge"], traitPool: ["tough_skin", "chain_massacre"],
+    fixedTraits: [], traitPool: ["tough_skin", "chain_massacre"],
     prevJobs: ["迷宮の番人（出口を自分も見失い解雇）", "運送業（配達先に一度も着かず契約打ち切り）", "闘技場の花形（控室に戻れず失格）",
       "牧場の見回り（毎回柵の中で迷子）", "建設現場の解体担当（狭い足場に入れず配置転換）", "道案内ガイド（客より先に自分が遭難）",
       "前魔王軍・突撃部隊（集合場所に来たことがない）", "迷宮案内所の受付（自分の持ち場すら覚えられず解雇）"],
@@ -493,6 +508,7 @@ const MONSTER_TEMPLATES_ACT2 = [
     ]
   },
   {
+    skills: ["lich_pulse"],
     id: "lich", race: "リッチ", tier: 4, tags: ["undead", "caster"], act: 2,
     jobs: ["死霊術の権威", "顧問（不死担当）", "書類仕事の代行", "退職金交渉人", "図書館の主"],
     base: { hp: 20, atk: 16, def: 2, spd: 5 },
