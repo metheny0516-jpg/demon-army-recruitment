@@ -13,7 +13,7 @@ const Sound = {
     "assets/sfx/candidates/candidate-antum-thwack-08.wav",
     "assets/sfx/candidates/candidate-antum-thwack-09.wav"
   ],
-  WIN_SAMPLE: "assets/sfx/recorded/fanfare-win.wav",
+  WIN_SAMPLE: "assets/sfx/recorded/fanfare-win-roar.wav",
   winSample: null,
   physicalSeq: 0,
   volume: 0.55,

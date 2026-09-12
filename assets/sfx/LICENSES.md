@@ -52,3 +52,32 @@
 - 変換: 44.1kHz・24bit・stereo WAVを、試聴条件に合わせて44.1kHz・16bit・mono WAVへ機械的に変換しただけ。音の加工・編集・正規化は行っていない。
 
 候補は比較試聴のためだけに分離してあり、採用するまで `src/ui/sound.js` から読み込まない。採用時は、元ページ・取得日・ライセンスをこの台帳に残したまま、ゲーム用に切り出し・レイヤーした成果物を別名で追加する。
+
+## 2026-09-13 魔王軍の勝利歓声（`recorded/fanfare-win-roar.wav`）
+
+- 採用: `candidates/candidate-win-roar-craigsmith-cheer.wav`。男性集団の歓声を3半音下げ、魔王軍の勝利を短く重く区切る。採用WAVはこの候補と同一。太鼓の追加はなし。
+- 原題: [S12-03 Small group men cheering; encouraging.wav](https://freesound.org/people/craigsmith/sounds/675103/)／作者: craigsmith／取得日: 2026-09-13（日本時間）／ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（同日に配布ページのCC0表記を確認）。
+- 取得音源: 配布ページに掲載された[高品質MP3プレビュー](https://cdn.freesound.org/previews/675/675103_2524442-hq.mp3)。原配布WAVではなくMP3からの変換。
+- 変換: 44.1kHzへリサンプル後、ピッチを3半音下げてテンポを補正。70Hzハイパス／5.5kHzローパス、前後無音を除去（ピーク比−45dB）、加工後の約0.15624秒から2.29秒を切り出し。端フェード（先頭25ms／末尾180ms）、ピーク0.85へ正規化、44.1kHz・16bit・stereo WAV（原音monoの左右複製）。
+- 長さ: 2.29秒。既存の `CUE_LENGTH.win` と揃え、BGM復帰タイミングは変更しない。旧 `recorded/fanfare-win.wav` は保持。
+
+### 比較候補 `candidate-win-roar-craigsmith-shout.wav`
+
+- 原題: [R15-73-Small Group of Men Shouting.wav](https://freesound.org/people/craigsmith/sounds/480805/)
+- 作者: craigsmith
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（同日に配布ページで確認）
+- 取得音源: [高品質MP3プレビュー](https://cdn.freesound.org/previews/480/480805_2524442-hq.mp3)。原配布WAVではなくMP3からの変換。
+- 変換: 採用候補と同じリサンプル・3半音低下・テンポ補正・フィルター・無音除去・端フェード・ピーク0.85・44.1kHz／16bit／stereo処理。加工後の約5.25229秒から2.29秒。原音monoの左右複製。
+- 比較意図: 男性の掛け声寄り。配布説明が怒声寄りのため、勝利の歓声を明示する675103を採用した。
+
+### 比較候補 `candidate-win-roar-quendel-crowd.wav`
+
+- 原題: [Free Crowd Cheering Sounds](https://opengameart.org/content/free-crowd-cheering-sounds) 内 `04 - Strong cheering - II - Short`
+- 作者: Gregor Quendel
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)（同日に配布ページで確認）
+- 取得音源: 配布ZIP `gregor_quendel_-_free_crowd_cheering_sounds_-_mp3.zip` 内の `Gregor Quendel - Crowd Cheering Sounds - 04 - Strong cheering - II - Short.mp3`。
+- 変換: 採用候補と同じリサンプル・3半音低下・テンポ補正・フィルター・無音除去・端フェード・ピーク0.85・44.1kHz／16bit／stereo処理。加工後の約5.74063秒から2.29秒。
+- 比較意図: 大群衆寄り。今回は男性集団の短い歓声を優先。
+- クレジット: “Free Crowd Cheering Sounds” by Gregor Quendel, licensed under CC BY 4.0. Source and license linked above. Modified: excerpt, pitch/tempo, filtering, trimming, fades, normalization and WAV conversion.
