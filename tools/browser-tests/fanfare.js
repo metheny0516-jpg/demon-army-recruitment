@@ -82,16 +82,16 @@ async function toBattle(page) {
     let page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
     await toBattle(page);
-    await page.waitForFunction(() => [...Sound.media].some(a => a.src.endsWith('/assets/sfx/recorded/fanfare-win.wav')),
+    await page.waitForFunction(() => [...Sound.media].some(a => a.src.endsWith('/' + Sound.WIN_SAMPLE)),
       null, { timeout: 5000 });
     await page.waitForTimeout(150);
     const sample = await page.evaluate(() => {
-      const audio = [...Sound.media].find(a => a.src.endsWith('/assets/sfx/recorded/fanfare-win.wav'));
+      const audio = [...Sound.media].find(a => a.src.endsWith('/' + Sound.WIN_SAMPLE));
       return audio ? { src: audio.src, paused: audio.paused, currentTime: audio.currentTime,
         volumeRatio: audio.volume / Sound.volume, duration: audio.duration,
         cueLength: Sound.cueLength('win') } : null;
     });
-    ok(!!sample && sample.src.endsWith('/assets/sfx/recorded/fanfare-win.wav'), '勝利時に fanfare-win.wav を選ぶ');
+    ok(!!sample && sample.src.endsWith('/assets/sfx/recorded/fanfare-win-roar.wav'), '勝利時に fanfare-win-roar.wav（歓声）を選ぶ');
     ok(!!sample && !sample.paused && sample.currentTime > 0, '録音WAVの再生位置が実際に進む');
     ok(!!sample && sample.volumeRatio >= .8 && sample.volumeRatio <= .84,
       `共通音量に追従する（比率 ${sample ? sample.volumeRatio.toFixed(2) : 'なし'}）`);
@@ -123,7 +123,7 @@ async function toBattle(page) {
     // ── 3. ファイルを読めないときだけ従来音へ戻る ────────────
     console.log('▼ 録音WAVの読み込み失敗時は合成音へ戻る');
     page = await browser.newPage({ viewport: { width: 390, height: 844 } });
-    await page.route('**/assets/sfx/recorded/fanfare-win.wav', route => route.abort());
+    await page.route('**/assets/sfx/recorded/fanfare-win-roar.wav', route => route.abort());
     await autoDismissMormo(page);
     await page.goto('file://' + process.env.GAME + '/index.html');
     await page.click('[data-action="new"]');
