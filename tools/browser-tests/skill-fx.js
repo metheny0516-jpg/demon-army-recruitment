@@ -154,6 +154,8 @@ const FX = ['heavy', 'slash_multi', 'fire', 'dark', 'holy', 'nature', 'wind', 'a
   console.log('\n▼ スキップで残骸が残らない');
   await page.evaluate(() => {
     for (const fx of ['heavy', 'dark', 'aura']) BattleScene.render({ type: 'attack', fromId: 'p0', toId: 'e0', dmg: 7, hp: 40, maxHp: 100, fx, skillId: 'x', emphasis: 2 });
+    // 前の節で戦闘は決着済み（finished）。skip() は決着後は何もしない設計なので、飛ばす前の状態に戻してから押す
+    BattleScene.finished = false; BattleScene.index = 0;
     BattleScene.skip();
   });
   await page.waitForTimeout(1200);
