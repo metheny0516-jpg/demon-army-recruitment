@@ -53,7 +53,18 @@
 - 表示：HUD に「借金 20G（利子 2G/決着）」。
 - 銀行員は魔物（ミミックの親戚）。台詞はくすっと。
 
-## 5. 触るもの（実装のときの見取り図。今は設計だけ）
+## 5. 実装（2026-09-12 深夜・Claude、ブランチ `claude/economy-town`。前哨戦（Opus）が入ってから本線へ）
+
+- `src/data/town.js`（施設6・銀行・税の規則・銀行員の台詞）、`src/core/town.js`（税・建設・両替・借入・返済・利子・差し押さえ・家計簿・効果の読み口）、`src/ui/town_ui.js`（札）。
+- run.js への差し込みは最小：`newRun`／`migrateState` で `Town.init`、`processDepartments` の末尾で `Town.settle`（防衛戦に負けた決着は `st.lastRansacked`）、
+  `spiritRules().max`（鍛冶場）、`unlockBattlesFor`（研究所）、`maxArmy()`（宿舎）、負傷回復（宿舎Lv2）、`rollApplicant` の給与（酒場）。battle.js は `options.spiritMax` を読む。
+- 鍛冶場の効果は設計の「防御+1」をやめ「気合の上限+1／Lv」にした（設計憲法：施設の一律ステータス補正は撤去済みのため）。
+- テスト：`tools/test-town.js`（26件）、`tools/browser-tests/town.js`。
+- 未実装：市場の絵・全体マップ（CodeX の設計待ち）、sim の「城下町に投資する」戦略（税は自動で入るので sim はそのまま通る）。
+- sim（20ラン）：税だけで未払い率が 30〜58% → 13〜27%（精鋭は 4%）に下がった。前哨戦で戦闘数が増えて給与の圧が上がる分の余裕として、まずこのまま。
+  試遊で「金が余る」なら領地1つあたりの税を 2G→1G に落とす（`TOWN_RULES.taxPerTerritory`）。
+
+## 5-旧. 触るもの（設計時の見取り図）
 
 - データ：`src/data/town.js`（新）：施設6・銀行・職業一致・値段。
 - run.js：税収（`applyMissionOutcome` の隣）、建設、両替、借入・返済・利子、差し押さえ、家計簿（`st.ledger`：決着ごとの入り出）。

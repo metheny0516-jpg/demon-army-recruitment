@@ -383,7 +383,7 @@ const Battle = {
     let lootPairBoost = null;
     // ── 技（SKILLS）と敵の役割。仕様 docs/SPEC_SKILLS_2026-09-12.md ──
     const SK = Object.assign({}, typeof SKILL_CATALOG !== "undefined" ? SKILL_CATALOG : {}, typeof SKILLS !== "undefined" ? SKILLS : {});
-    const SPIRIT_MAX = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit && MONSTER_RULES.spirit.max) || 3;
+    const SPIRIT_MAX = Number(options.spiritMax) || (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit && MONSTER_RULES.spirit.max) || 3;   // 鍛冶場で上がる
     // 演出プリセット（fx）。技のイベントに載せる。描画側が読む（無ければ通常攻撃の見た目）。
     const FXK = typeof FX_BY_KIND !== "undefined" ? FX_BY_KIND : {};
     const fxOf = sk => (sk && (sk.fx || FXK[sk.kind])) || null;

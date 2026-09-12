@@ -262,6 +262,29 @@ const App = {
       case "castletab":
         return UI.castle(data.tab);
 
+      // 城下町（2026-09-12）
+      case "townbuild": {
+        const out = Town.build(Game, data.id);
+        UI.castle("town");
+        if (out) { const f = Town.facility(out.id); return this.report("joy", `${f.name}が Lv${out.lv} になりました。${f.line}、デス。`, { kicker: "城下町", title: "宰相モルモ" }); }
+        return;
+      }
+      case "townexchange":
+        Town.exchange(Game);
+        return UI.castle("town");
+      case "townborrow": {
+        const out = Town.borrow(Game, Number(data.amount));
+        UI.castle("town");
+        if (out) return this.report("worry", `銀行員「${out.line}」　借金は ${out.debt}G デス。`, { kicker: "魔界銀行", title: "宰相モルモ" });
+        return;
+      }
+      case "townrepay": {
+        const out = Town.repay(Game, Number(data.amount));
+        UI.castle("town");
+        if (out) return this.report("joy", `${out.paid}G 返しました。銀行員「${out.line}」　残り ${out.debt}G。`, { kicker: "魔界銀行", title: "宰相モルモ" });
+        return;
+      }
+
       case "backcastle":
         return this.render();
 

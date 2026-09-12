@@ -102,7 +102,8 @@ const UI = {
         <span>作戦 <b>${st.turn}</b></span>
         <span>施設 <b>Lv.${st.facilityLevel}${Game.activeFacility() ? ` ${U.esc(Game.activeFacility().name)}` : ""}</b></span>
         <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
-        <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
+        <span>軍団 <b>${st.roster.length}/${Game.maxArmy()}</b></span>
+        ${typeof Town !== "undefined" ? `<span>税 <b>${Town.taxPerSettle(st)}G</b>/戦${Town.init(st).debt ? `　借金 <b>${Town.init(st).debt}G</b>` : ""}</span>` : ""}
         <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
         <span class="muted">${U.esc(sd.region)}</span>
         <span class="muted hud-slot">保存中：スロット ${Storage.activeSlot()}</span>
@@ -640,18 +641,19 @@ const UI = {
   },
 
   castle(tab = "army", options = {}) {
-    const allowed = ["army", "records", "advisor"];
+    const allowed = ["army", "records", "advisor", "town"];
     tab = allowed.includes(tab) ? tab : "army";
     if (!options.formation && this.root && this.root.dataset.scene !== "castle") this.castleFrom = Game.state.phase;
     this.castleTab = tab;
     let content = tab === "records" ? this.recordsCastlePanel()
-      : tab === "advisor" ? this.advisorCastlePanel() : this.armyPanel({ controls: true });
+      : tab === "advisor" ? this.advisorCastlePanel()
+      : tab === "town" && typeof TownUI !== "undefined" ? TownUI.panel() : this.armyPanel({ controls: true });
     if (options.formation) content += `<div class="formation-decisions">
       ${this.payrollPanel()}${this.debtPanel()}${this.feastPanel()}${this.mercenaryPanel()}
       ${this.kingSlimePanel()}${this.vaultPanel()}
     </div>`;
     const tabs = options.formation ? "" : `<nav class="castle-tabs" aria-label="城のメニュー">
-      ${[["army", "軍団"], ["records", "記録"], ["advisor", "参謀"]].map(([id, label]) =>
+      ${[["army", "軍団"], ["town", "城下町"], ["records", "記録"], ["advisor", "参謀"]].map(([id, label]) =>
         `<button class="castle-tab${tab === id ? " active" : ""}" data-action="castletab" data-tab="${id}">${label}</button>`).join("")}
     </nav>`;
     const empty = Game.activeRoster().length === 0;
@@ -663,7 +665,7 @@ const UI = {
     </div>` : `<button class="wide ghost castle-back" data-action="backcastle">← 戻る</button>`;
     this.set(`${this.hud()}<div class="castle-screen${options.formation ? " formation-shell" : ""}">
       <header class="castle-header"><div><h1>${options.formation ? "編成" : "🏰 城のメニュー"}</h1>
-        <div class="muted">${options.formation ? "出撃する者と城に残る者を決める。詳しい作戦情報は城の参謀札へ。" : "いつでも見るものを、三つの札にまとめました。"}</div></div>${tabs}</header>
+        <div class="muted">${options.formation ? "出撃する者と城に残る者を決める。詳しい作戦情報は城の参謀札へ。" : "いつでも見るものを、四つの札にまとめました。"}</div></div>${tabs}</header>
       <main class="castle-content ${options.formation ? "formation-army" : ""}">${content}</main>${formationActions}
     </div>`, options.formation ? "formation" : "castle");
   },
@@ -1398,7 +1400,7 @@ const UI = {
     })}</div>`).join("");
     // 面接中も比較できる軍団一覧。操作は人物詳細へ集約し、ここでは一行を読むだけ。
     const rosterPanel = st.roster.length ? `<div class="panel">
-      <h3>現在の軍団 <span class="muted">（${st.roster.length}/${Game.MAX_ARMY}）</span></h3>
+      <h3>現在の軍団 <span class="muted">（${st.roster.length}/${Game.maxArmy()}）</span></h3>
       <div class="muted">応募者と比べる。人物をタップすると詳しく見られる。</div>
       <div class="spacer" style="height:8px"></div>
       <div class="member-rows">${st.roster.map(m => this.memberRow(m, { controls: false })).join("")}</div>
