@@ -88,5 +88,16 @@ assert(cheaper > 0, `酒場Lv3で応募者の希望給与 -2（20人中 ${cheape
 delete st.town;
 Game.migrateState();
 assert(st.town && typeof st.town.debt === 'number', '旧セーブに town が無ければ migrateState が用意する');
+// 工場が無くても金4→建材2 は決着ごと1回（建材0で工場が建てられない詰みを防ぐ、2026-09-13 試遊）
+{
+  const t = st.town; t.buildings = {}; t.exchangedTurn = null; t.exchanged = 0; st.gold = 10; st.materials = 0; st.turn = (st.turn || 0) + 1;
+  assert(Town.lv(st, 'factory') === 0 && Town.exchangeLeft(st) === 0, '工場なし：建材→金は 0 回');
+  assert(Town.exchangeLeft(st, 'toMaterials') === 1 && Town.canExchangeBack(st), '工場なし：金→建材は 1 回できる');
+  assert(Town.exchangeBack(Game) && st.gold === 6 && st.materials === 2, '行商：金4→建材2');
+  assert(!Town.canExchangeBack(st), '同じ決着で 2 回目はできない');
+  st.turn += 1;
+  assert(Town.canExchangeBack(st), '次の決着でまた 1 回');
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

@@ -79,15 +79,17 @@ const Town = {
   },
 
   // ── 工場の両替（建材2 → 金3。決着ごとに Lv 回まで） ──
-  exchangeLeft(st) {
+  // 工場が無くても「金4 → 建材2」だけは決着ごとに 1 回できる（行商）。建材 0 で工場が建てられない詰みを防ぐ（2026-09-13 試遊）。
+  exchangeLeft(st, dir) {
     const t = this.init(st);
     const lv = this.lv(st, "factory");
-    if (t.exchangedTurn !== st.turn) return lv;
-    return Math.max(0, lv - (t.exchanged || 0));
+    const cap = dir === "toMaterials" ? Math.max(lv, 1) : lv;
+    if (t.exchangedTurn !== st.turn) return cap;
+    return Math.max(0, cap - (t.exchanged || 0));
   },
   EXCHANGE: { toGold: { materials: 2, gold: 3 }, toMaterials: { gold: 4, materials: 2 } },   // 建材2→金3／金4→建材2（建材は渋いので逆向きも、2026-09-13）
   canExchange(st) { return this.exchangeLeft(st) > 0 && (st.materials || 0) >= this.EXCHANGE.toGold.materials; },
-  canExchangeBack(st) { return this.exchangeLeft(st) > 0 && (st.gold || 0) >= this.EXCHANGE.toMaterials.gold; },
+  canExchangeBack(st) { return this.exchangeLeft(st, "toMaterials") > 0 && (st.gold || 0) >= this.EXCHANGE.toMaterials.gold; },
   exchange(game) {
     const st = game.state, t = this.init(st);
     if (!this.canExchange(st)) return false;
