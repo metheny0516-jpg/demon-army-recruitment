@@ -30,7 +30,8 @@ const ENEMY_ROLES = {};
 SKILL_EFFECTS.might = {
   resolve(c) {
     const sk = c.skill || {};
-    const line = sk.lines && sk.lines.use ? c.pick(sk.lines.use) : null;
+    const lines = (typeof GENERAL_LINES !== "undefined" && GENERAL_LINES.length) ? GENERAL_LINES : (sk.lines && sk.lines.use);   // 台詞は src/data/epithets.js（CodeX）優先
+    const line = lines && lines.length ? c.pick(lines) : null;
     if (line) c.emit("note", { unitId: c.unit.id, skillId: c.cmd.id || null, text: `　${c.unit.name}「${line}」`, cls: "trait" });
     for (const e of c.living) c.damage(e, sk.power || 0.9, sk.name, { aoe: true });
     for (const a of c.allies) if (a !== c.unit && c.onField(a)) c.gainSpirit(a, 1, "将軍の魔力");

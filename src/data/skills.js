@@ -151,6 +151,7 @@ Object.assign(SKILLS, UPPER_SKILLS);
 
 // 将軍技（2026-09-13、docs/SPEC_GENERAL_2026-09-13.md 2.3）。種族を問わず、転身した将軍が1本だけ持つ。
 // run.js が転身時に m.skills へ id を足す。効きは src/core/skill_effects.js の SKILL_EFFECTS.might。
+// 台詞は src/data/epithets.js の GENERAL_LINES が優先。ここの lines.use はそれが無いときの予備。
 const GENERAL_SKILL = {
   general_might: {
     name: "魔王の力", general: true, cost: 2, kind: "might", power: 0.9, target: "enemy", fx: "dark",
