@@ -82,3 +82,61 @@
 - 変換: 採用候補と同じリサンプル・3半音低下・テンポ補正・フィルター・無音除去・端フェード・ピーク0.85・44.1kHz／16bit／stereo処理。加工後の約5.74063秒から2.29秒。
 - 比較意図: 大群衆寄り。今回は男性集団の短い歓声を優先。
 - クレジット: “Free Crowd Cheering Sounds” by Gregor Quendel, licensed under CC BY 4.0. Source and license linked above. Modified: excerpt, pitch/tempo, filtering, trimming, fades, normalization and WAV conversion.
+
+## 2026-09-13 城下町・地図・将軍の音（チケット I-1）
+
+全5本ともCC0。取得日: 2026-09-13（日本時間）、同日に各配布ページのCC0表記を確認。`town-build` はFreesoundの公開高品質MP3プレビュー、残りはOpenGameArtの配布ファイルを取得。
+
+各音は単一原音の連続区間のみを使用。合成・重ね合わせ・打撃の複製・リピートなし。44.1kHz・16bit・stereo WAV、ピーク0.85（PCM16実測0.849976）、前後無音をピーク比−45dBで除去し端フェード。元音がmonoの場合は左右へ同じ音を複製。フィルター後、所定長へ再サンプルして再生速度と音高を同時に調整。
+
+### `recorded/town-build.wav`
+
+- 原題: [Wooden mallet](https://freesound.org/people/leo153/sounds/535629/)
+- 作者: leo153
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: 高品質MP3プレビュー。木槌で板を叩く無加工録音。[配布ファイル](https://cdn.freesound.org/previews/535/535629_2535988-hq.mp3)
+- 切り出し: 元音の約7.53844〜8.21986秒（フィルター後の無音判定）。木槌の連続2打。
+- 変換: 80Hzハイパス／6500Hzローパス（2次Butterworth）、再生速度0.908571倍（約-1.66半音）、0.75秒へ。端フェード5ms／30ms。共通仕様へ正規化・WAV出力。
+
+### `recorded/town-coin.wav`
+
+- 原題: [coin sounds](https://opengameart.org/content/coin-sounds)
+- 作者: syncopika
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: coinsounds011015.wav（実物硬貨の録音）。[配布ファイル](https://opengameart.org/sites/default/files/coinsounds011015.wav)
+- 切り出し: 元音の約7.04005〜7.49000秒（フィルター後の無音判定）。硬貨録音の3つの短い衝突。
+- 変換: 120Hzハイパス／10500Hzローパス（2次Butterworth）、再生速度0.999899倍（約-0.00半音）、0.45秒へ。端フェード4ms／25ms。共通仕様へ正規化・WAV出力。
+
+### `recorded/town-bank.wav`
+
+- 原題: [Fantasy Accessory SFX Library](https://opengameart.org/content/fantasy-accessory-sfx-library)
+- 作者: Vehicle (Jan Schupke)
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: accessory.zip / sfx/keyhole-lockbox-turn-01.wav（錠前を回す実録音）。[配布ファイル](https://opengameart.org/sites/default/files/accessory.zip)
+- 切り出し: 元音の約0.01785〜0.71658秒（フィルター後の無音判定）。金庫の錠前を回す音。
+- 変換: 65Hzハイパス／4800Hzローパス（2次Butterworth）、再生速度0.873413倍（約-2.34半音）、0.80秒へ。端フェード8ms／25ms。共通仕様へ正規化・WAV出力。
+
+### `recorded/map-open.wav`
+
+- 原題: [100 CC0 SFX](https://opengameart.org/content/100-cc0-sfx)
+- 作者: rubberduck
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: 100-CC0-SFX_0.zip / paper_03.ogg（Android端末で録音した紙の音）。[配布ファイル](https://opengameart.org/sites/default/files/100-CC0-SFX_0.zip)
+- 切り出し: 元音の約0.02288〜0.54621秒（フィルター後の無音判定）。紙が擦れて広がる短い部分。
+- 変換: 100Hzハイパス／8500Hzローパス（2次Butterworth）、再生速度1.046667倍（約+0.79半音）、0.50秒へ。端フェード8ms／20ms。共通仕様へ正規化・WAV出力。
+
+### `recorded/general-rise.wav`
+
+- 原題: [16 Monster Growls](https://opengameart.org/content/16-monster-growls)
+- 作者: StarNinjas
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: monster_-_starninjas.zip / monster.11.ogg（作者が口で録音した唸り）。[配布ファイル](https://opengameart.org/sites/default/files/monster_-_starninjas.zip)
+- 切り出し: 元音の約0.00023〜1.66449秒（フィルター後の無音判定）。単独の唸りを低くし、立ち上げて短く止める。
+- 変換: 55Hzハイパス／1500Hzローパス（2次Butterworth）、再生速度0.899602倍（約-1.83半音）、1.85秒へ。端フェード320ms／18ms。共通仕様へ正規化・WAV出力。
+
+検査: 5本のWAVヘッダー・長さ・ピーク・両端ゼロを確認。建設音は連続2打の波形、硬貨は短い3衝突を選定。ゲームへの配線・ブラウザ検証は本チケットの範囲外。

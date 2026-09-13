@@ -1,0 +1,5 @@
+- `town-build.wav`（0.75秒）: leo153「Wooden mallet」から木槌の連続2打、元音約7.538〜8.220秒を使用。
+- `town-coin.wav`（0.45秒）: syncopika「coin sounds」から硬貨録音の3つの短い衝突、元音約7.040〜7.490秒を使用。
+- `town-bank.wav`（0.80秒）: Vehicle (Jan Schupke)「Fantasy Accessory SFX Library」から金庫の錠前を回す音、元音約0.018〜0.717秒を使用。
+- `map-open.wav`（0.50秒）: rubberduck「100 CC0 SFX」から紙が擦れて広がる短い部分、元音約0.023〜0.546秒を使用。
+- `general-rise.wav`（1.85秒）: StarNinjas「16 Monster Growls」から単独の唸りを低くし、立ち上げて短く止める、元音約0.000〜1.664秒を使用。
