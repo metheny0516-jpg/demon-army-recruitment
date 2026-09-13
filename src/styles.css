@@ -3690,3 +3690,47 @@ button.primary::first-letter { color: var(--gold); }
 .hud-records { min-width: 0; padding: 6px 14px; white-space: nowrap; }
 .hud-records small { color: var(--muted); font-size: 10px; margin-left: 4px; }
 @media (max-width: 420px) { .hud-records small { display: none; } }
+
+/* ── 将軍への転身（docs/SPEC_GENERAL_2026-09-13.md 2.2・2.6） ───── */
+/* 名簿・詳細・戦場の札：紫の炎の縁。ゆっくり脈打つ（低モーションでは静止） */
+.rank-badge.rank-general {
+  background: linear-gradient(90deg, rgba(150, 80, 220, .45), rgba(90, 40, 150, .25));
+  border: 1px solid rgba(190, 130, 255, .8); color: #f0dcff;
+}
+.card:has(.rank-general), .bu.rank-general, .promotion-row.promotion-general {
+  box-shadow: 0 0 0 1px rgba(190, 130, 255, .55), 0 0 14px rgba(150, 80, 220, .45);
+  animation: generalAura 2.6s ease-in-out infinite;
+}
+@keyframes generalAura {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(190, 130, 255, .45), 0 0 10px rgba(150, 80, 220, .35); }
+  50% { box-shadow: 0 0 0 2px rgba(190, 130, 255, .9), 0 0 22px rgba(150, 80, 220, .7); }
+}
+.promotion-row.promotion-general { border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+
+/* 転身のカットイン。2.5秒で自分から消える。タップでも消える */
+.general-cutin {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at center, rgba(60, 20, 100, .55), rgba(8, 4, 16, .85));
+  opacity: 0; transition: opacity .26s ease-out; cursor: pointer;
+}
+.general-cutin.show { opacity: 1; }
+.general-cutin.out { opacity: 0; }
+.general-cutin .gc-flame {
+  position: absolute; width: min(70vw, 320px); aspect-ratio: 1; border-radius: 50%;
+  background: radial-gradient(circle, rgba(210, 160, 255, .85) 0 12%, rgba(150, 60, 230, .55) 38%, transparent 72%);
+  animation: gcFlame 2.5s ease-out;
+}
+.general-cutin .gc-copy { position: relative; text-align: center; color: #f6e6ff; padding: 0 16px; }
+.general-cutin .gc-kicker { display: block; font-size: 12px; letter-spacing: .4em; color: #d9b8ff; }
+.general-cutin .gc-name { display: block; font-size: clamp(24px, 8vw, 40px); margin: 6px 0; text-shadow: 0 0 18px rgba(190, 130, 255, .9); }
+.general-cutin .gc-desc { display: block; font-size: 13px; color: #e3d0ff; }
+@keyframes gcFlame {
+  0% { transform: scale(.3); opacity: 0; }
+  25% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1.25); opacity: .5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card:has(.rank-general), .bu.rank-general, .promotion-row.promotion-general { animation: none; }
+  .general-cutin .gc-flame { animation: none; opacity: 1; }
+  .general-cutin { transition: none; }
+}

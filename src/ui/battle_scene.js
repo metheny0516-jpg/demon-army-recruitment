@@ -276,12 +276,24 @@ const BattleScene = {
       </div>`;
   },
 
+  // 名簿の本人を引く（将軍の縁と二つ名のため）。**タイムラインの snap には uid も階級も無い**ので
+  // 名前で引く（同じ軍団に同名は居ない＝ Game.uniqueName が保証している）。
+  // 引けなくても（傭兵・召喚・敵・テストの直作り）今までどおりの札になるだけ。
+  rosterOf(u) {
+    if (!u || u.side !== "player" || u.summoned) return null;
+    const roster = (typeof Game !== "undefined" && Game.state && Game.state.roster) || [];
+    return roster.find(m => m.name === u.name) || null;
+  },
+
   unitHtml(u) {
-    return `<div class="bu" id="bu-${u.id}" data-side="${u.side}">
+    const mine = this.rosterOf(u);
+    const general = !!mine && mine.rankId === "general";
+    const shown = general && typeof Game !== "undefined" && Game.displayName ? Game.displayName(mine) : u.name;
+    return `<div class="bu${general ? " rank-general" : ""}" id="bu-${u.id}" data-side="${u.side}">
       <div class="bu-vfx-anchor" aria-hidden="true"></div>
       <div class="bu-flash"></div>
       <div class="bu-actor"><div class="bu-icon">${this.portraitHtml(u)}</div></div>
-      <div class="bu-name">${u.side === "enemy" && this.ROLE_ICON[u.role] ? `<i class="bu-role" title="${U.esc(this.ROLE_LABEL[u.role] || "")}">${this.ROLE_ICON[u.role]}</i>` : ""}${U.esc(u.name)}</div>
+      <div class="bu-name">${u.side === "enemy" && this.ROLE_ICON[u.role] ? `<i class="bu-role" title="${U.esc(this.ROLE_LABEL[u.role] || "")}">${this.ROLE_ICON[u.role]}</i>` : ""}${U.esc(shown)}</div>
       <div class="bu-hp"><div class="bu-hpfill" id="hp-${u.id}"></div></div>
       <span class="bu-state"></span>
       <span class="bu-marks" aria-hidden="true"></span>

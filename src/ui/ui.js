@@ -317,7 +317,7 @@ const UI = {
       <div class="card-head">
         ${this.avatarHtml(m, opts.resume ? "photo" : "")}
         <div class="card-identity">
-          <div class="card-name">${U.esc(m.name)} <span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span></div>
+          <div class="card-name">${U.esc(Game.displayName(m))} <span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span></div>
           <div class="card-job">${U.esc(m.race)} / ${U.esc(m.job)}${secondGen ? ` <span class="second-gen">${secondGen}</span>` : ""}</div>
         </div>
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
@@ -693,7 +693,7 @@ const UI = {
     </div>` : "";
     return `<div class="member-row${active ? " active" : " home"}" data-action="member" data-uid="${m.uid}" role="button" tabindex="0">
       ${this.avatarHtml(m)}
-      <div class="member-row-main"><b>${U.esc(m.name)}</b><span>${U.esc(m.race)} / ${U.esc(m.job)}</span>
+      <div class="member-row-main"><b>${U.esc(Game.displayName(m))}</b><span>${U.esc(m.race)} / ${U.esc(m.job)}</span>
         <small>${U.esc(rank.name)}　HP${m.hp} 攻${m.atk} 防${m.def} 速${m.spd}</small></div>
       <div class="member-row-state">${marks}<small>気合 ${typeof m.spirit === "number" ? m.spirit : "-"}</small>
         ${skillEntry ? `<small>🗡 ${U.esc(skillEntry.trait.name)}</small>` : ""}</div>${controls}
@@ -745,7 +745,7 @@ const UI = {
     this.set(`<div class="member-overlay"><article class="member-detail">
       <button class="small member-close" data-action="closemember">× 閉じる</button>
       <button class="small ghost member-home" data-action="home">⌂ メインへ</button>
-      <header>${this.avatarHtml(m, "photo")}<div><h2>${U.esc(m.name)}</h2><div>${U.esc(m.race)} / ${U.esc(m.job)}${this.secondGenLabel(m)}</div>
+      <header>${this.avatarHtml(m, "photo")}<div><h2>${U.esc(Game.displayName(m))}</h2><div>${U.esc(m.race)} / ${U.esc(m.job)}${this.secondGenLabel(m)}</div>
         <div><span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span>　戦功 ${m.merit || 0}${nextRank ? ` / ${nextRank.threshold}` : "・最高位"}</div></div></header>
       <div class="stats member-detail-stats">${stat("HP", "hp")}${stat("攻撃", "atk")}${stat("防御", "def")}${stat("速度", "spd")}</div>
       <div class="meta"><span>気合 ${typeof m.spirit === "number" ? m.spirit : "-"}</span><span>忠誠 ${m.loyalty}</span><span>給与 ${m.salary}G</span></div>
@@ -1859,9 +1859,16 @@ const UI = {
         ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}
       ${(st.lastPromotions && st.lastPromotions.length) ? `<div class="panel promotion-panel">
         <h3>👑 魔王軍人事</h3>
-        ${st.lastPromotions.map(p => `<div class="promotion-row promotion-${U.esc(p.rankId)}"><b>${U.esc(p.name)}</b> を
-          <span class="rank-badge rank-${U.esc(p.rankId)}">${U.esc(p.rankName)}</span> に任ずる！
-          <div class="muted">${U.esc(p.message)}</div></div>`).join("")}
+        ${st.lastPromotions.some(p => p.general) && typeof MORMO_LINES !== "undefined" && (MORMO_LINES.general || []).length
+          ? `<div class="mormo-brief">宰相モルモ「${U.esc(MORMO_LINES.general[0])}」</div>` : ""}
+        ${st.lastPromotions.map(p => p.general
+          ? `<div class="promotion-row promotion-general"><b>${U.esc(p.displayName || p.name)}</b> へ転身！
+              <span class="rank-badge rank-general">将軍</span>
+              <div class="muted">${U.esc(p.message)}</div>
+              <div class="muted">魔王の魔力で体が変わった。気合の上限が1増え、将軍技【魔王の力】を得た。</div></div>`
+          : `<div class="promotion-row promotion-${U.esc(p.rankId)}"><b>${U.esc(p.name)}</b> を
+              <span class="rank-badge rank-${U.esc(p.rankId)}">${U.esc(p.rankName)}</span> に任ずる！
+              <div class="muted">${U.esc(p.message)}</div></div>`).join("")}
       </div>` : ""}
       ${(st.lastFallen && st.lastFallen.length) ? `<div class="panel fallen-panel">
         <h3>🕯 戦没者</h3>
@@ -1874,6 +1881,32 @@ const UI = {
       </div>
       <button class="primary wide" data-action="afterresult">次へ</button>`, "report");
     if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
+    // 転身は「事件」なので一枚見せる。人事の欄より先に目に入る。
+    const general = (st.lastPromotions || []).find(p => p.general);
+    if (general) this.generalCutin(general);
+  },
+
+  // 将軍への転身のカットイン（2.5秒、タップで飛ばせる）。紫の炎が札を包み、二つ名が浮かぶ。
+  // 低モーションでは動かさず、同じ札を静止で出す。
+  generalCutin(entry) {
+    if (!entry || !this.root) return;
+    const old = document.getElementById("general-cutin");
+    if (old) old.remove();
+    const box = document.createElement("div");
+    box.id = "general-cutin";
+    box.className = "general-cutin";
+    box.innerHTML = `<div class="gc-flame" aria-hidden="true"></div>
+      <div class="gc-copy">
+        <span class="gc-kicker">転身</span>
+        <b class="gc-name">${U.esc(entry.displayName || entry.name)}</b>
+        <span class="gc-desc">魔王の魔力を受け、将軍となった</span>
+      </div>`;
+    this.root.appendChild(box);
+    if (typeof Sound !== "undefined") Sound.cue("revive");
+    const close = () => { box.classList.add("out"); setTimeout(() => box.remove(), 260); };
+    box.addEventListener("click", close);
+    setTimeout(close, 2500);
+    requestAnimationFrame(() => box.classList.add("show"));
   },
 
   // 敗北したが、まだ再起できる状態の画面
@@ -2072,7 +2105,7 @@ const UI = {
           <dt>最終警戒度</dt><dd>${record.alert || 0}</dd>
           <dt>最大戦力</dt><dd>${record.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${record.maxArmySize || (record.finalRoster || []).length}体</dd>
-          <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
+          <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.epithet ? `${g.epithet}・${g.name}` : g.name)).join("、") || "なし"}</dd>
           <dt>殿堂入り</dt><dd>${record.hallOfFame ? `${U.esc(record.hallOfFame.name)}（戦功 ${record.hallOfFame.merit || 0}）` : "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${record.battleIncidentTotal || 0}件</dd>
           <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(record))}</dd>
@@ -2135,7 +2168,7 @@ const UI = {
           <dt>魔王</dt><dd>${U.esc(r.demonKingName || "若き魔王")}</dd>
           <dt>最大戦力</dt><dd>${r.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
-          <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
+          <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.epithet ? `${g.epithet}・${g.name}` : g.name)).join("、") || "なし"}</dd>
           <dt>殿堂入り</dt><dd>${r.hallOfFame ? `${U.esc(r.hallOfFame.name)}（戦功 ${r.hallOfFame.merit || 0}）` : "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${r.battleIncidentTotal || 0}件</dd>
           <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(r))}</dd>
