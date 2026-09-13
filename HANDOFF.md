@@ -1,6 +1,6 @@
 # 引き継ぎメモ（Claude → CodeX）
 
-最終更新: 2026-09-12（§0 の古い項と §1・§3・§4・§5 は docs/HANDOFF_ARCHIVE.md へ移した）
+最終更新: 2026-09-13 夜（§0 の古い項と §1・§3・§4・§5 は docs/HANDOFF_ARCHIVE.md へ移した）
 
 このファイルは開発を引き継ぐ人（AI含む）向けのメモ。
 ここには「READMEに書ききれない、踏むと痛い所」と「次にやること」を書く。
@@ -19,7 +19,16 @@
 
 ---
 
-## 0. 次チャットの開始点（最新が上。2026-09-12 現在）
+## 0. 次チャットの開始点（最新が上。2026-09-13 夜 現在）
+
+### いま動いているもの（2026-09-13 夜・Claude）
+
+- **Opus**：城下町統合 `docs/SPEC_TOWN_MERGE_2026-09-13.md`（巨大厨房・墓地を城下町へ、旧「施工」の撤去、恐喝帳簿は廃止）。run.js を50か所ほど書き換える。上がったら旧セーブの移行と荒らし（`Town.demolishOne`）を重点確認。
+- **CodeX**：`docs/TICKET_NIGHT_ASSETS_2026-09-13.md`（音5本 `codex/sfx-town-general`、地図の小物と転身の炎 `codex/map-props-general-fx`）。素材だけ。配線は取り込み時に Claude。
+- **判断待ち（オーナー）**：`docs/PROPOSAL_CATALOG_ASSIGNMENT_2026-09-13.md`（カタログ25本の割り当て）、`docs/IDEA_BANK_2026-09-13.md`（新種族・敵・技の採用）。
+- 今日入ったもの：将軍への転身（2段階級・二つ名・将軍技「魔王の力」、`docs/SPEC_GENERAL_2026-09-13.md`）、全体マップ（`src/ui/map.js`・`src/data/map.js`、施設8の絵）、勝利の歓声（CC-BY、`CREDITS.md`）、トロル・ミミックの履歴書写真、行商（工場なしでも金4→建材2）、旧施工の自動積み上げ停止（`st.autoBuild`）。
+- 落とし穴：`st.autoBuild` は応急処置。統合で flag ごと消す。`options.facilityWorks` は数値でもオブジェクトでも受ける（battle.js）。二つ名は `EPITHETS[m.race]`（tplId ではない）。
+
 
 ### 済み：地図の施設名と残り2区画（2026-09-13・CodeX）
 
