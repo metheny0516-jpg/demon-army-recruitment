@@ -22,11 +22,12 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   ok(await page.locator('.town-card').count() === 6, '施設6つ');
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '390px で横に溢れない');
   if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, 'town-390.png'), fullPage: true });
-  await page.locator('[data-action="townbuild"][data-id="market"]').click();
+  // 地図（2026-09-13）にも同じ data-action の区画があるので、ここは**一覧の側**を名指しする
+  await page.locator('.town-card [data-action="townbuild"][data-id="market"]').click();
   await page.waitForTimeout(150);
   const after = await page.evaluate(() => ({ lv: Town.lv(Game.state, 'market'), gold: Game.state.gold, materials: Game.state.materials, tax: Town.taxPerSettle(Game.state) }));
   ok(after.lv === 1 && after.gold === 45 && after.materials === 9 && after.tax === 6, `市場を建てた（Lv${after.lv}・所持金${after.gold}・建材${after.materials}・税${after.tax}）`);
-  ok(await page.locator('[data-action="townbuild"]:not([disabled])').count() === 0, '同じ決着ではもう建てられない（全部 disabled）');
+  ok(await page.locator('.town-card [data-action="townbuild"]:not([disabled])').count() === 0, '同じ決着ではもう建てられない（一覧は全部 disabled）');
   await page.locator('[data-action="townborrow"][data-amount="20"]').click();
   await page.waitForTimeout(150);
   ok(await page.evaluate(() => Game.state.town.debt === 20 && Game.state.gold === 65), '20G 借りた');

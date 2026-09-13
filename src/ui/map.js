@@ -69,8 +69,12 @@ const MapUI = {
       return `<span class="map-lot mp-empty" style="${this.pct(lot.x, lot.y)}" aria-hidden="true"></span>`;
     }
     const lv = Town.lv(st, id);
+    // 建てられないときは押せなくする（理由は一覧と同じ文言）。
+    // Town.build() 側でも弾かれるが、押せる顔をして何も起きないのは嘘になる。
+    const can = Town.canBuild(Game, id);
     return `<button type="button" class="map-lot${lv ? " built" : ""} lot-lv${lv}" style="${this.pct(lot.x, lot.y)}"
       data-action="townbuild" data-id="${U.esc(id)}" data-lot="${lot.slot}"
+      ${can.ok ? "" : "disabled"} title="${U.esc(can.ok ? `${facility.name}を建てる` : (can.why || ""))}"
       aria-label="${U.esc(facility.name)} Lv${lv}">
       <i class="lot-icon">${facility.icon}</i>
       <span class="lot-name">${U.esc(facility.name)}<i class="lot-lv">Lv${lv}</i></span>

@@ -3820,3 +3820,4 @@ button.primary::first-letter { color: var(--gold); }
   .map-point.mp-next .mp-pin, .map-defend-road { animation: none; }
   .world-map { scroll-behavior: auto; }
 }
+.map-lot[disabled] { cursor: default; opacity: .8; }
