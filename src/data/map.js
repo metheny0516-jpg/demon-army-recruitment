@@ -30,7 +30,7 @@ const MAP_POINTS = [
 ];
 
 // 城下町の区画8。背景の空き地（杭と縄）の中心。左列と右列に4段。
-// 施設は6つなので、余る2区画は空き地のまま（後から施設が増えてもここに置ける）。
+// 8施設に1区画ずつ割り当てる。城下町に未登録の施設は表示側で空き地になる。
 const MAP_LOTS = [
   { slot: 1, x: 135, y: 1682 }, { slot: 2, x: 255, y: 1682 },
   { slot: 3, x: 135, y: 1728 }, { slot: 4, x: 255, y: 1728 },
@@ -43,7 +43,8 @@ const MAP_LOTS = [
 const MAP_FACILITY_ART = ["market", "tavern", "smithy", "lab", "hostel", "factory", "grand_kitchen", "graveyard"];
 
 const MAP_FACILITY_SLOTS = {
-  market: 1, tavern: 2, smithy: 3, lab: 4, hostel: 5, factory: 6
+  market: 1, tavern: 2, smithy: 3, lab: 4, hostel: 5, factory: 6,
+  grand_kitchen: 7, graveyard: 8
 };
 
 // 魔王城と金庫（魔界銀行）。金庫は城の隣（設計3節）。

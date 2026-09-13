@@ -3808,7 +3808,11 @@ button.primary::first-letter { color: var(--gold); }
 .map-lot .lot-art { width: 64px; height: 64px; display: block; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55)); }
 .map-lot.has-art { border-color: transparent; background: none; padding: 0; }
 .map-lot.has-art .lot-icon { display: none; }
-.map-lot.has-art .lot-name { margin-top: -6px; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+.map-lot.has-art .lot-name {
+  margin-top: 2px;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+    0 2px 3px #000, 0 0 5px #000;
+}
 .map-lot.has-art:disabled { opacity: .8; cursor: default; }
 .map-bank {
   position: absolute; transform: translate(-50%, -50%); text-decoration: none;
