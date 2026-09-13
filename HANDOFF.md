@@ -23,11 +23,12 @@
 
 ### いま動いているもの（2026-09-13 夜・Claude）
 
-- **Opus**：城下町統合 `docs/SPEC_TOWN_MERGE_2026-09-13.md`（巨大厨房・墓地を城下町へ、旧「施工」の撤去、恐喝帳簿は廃止）。run.js を50か所ほど書き換える。上がったら旧セーブの移行と荒らし（`Town.demolishOne`）を重点確認。
+- **済（Opus、2026-09-13 夜）**：城下町統合 `docs/SPEC_TOWN_MERGE_2026-09-13.md`。旧3欄と `st.autoBuild` は撤去、旧セーブは `migrateState` で城下町へ写す（帳簿は建材で返す）。荒らし・差し押さえは `Town.demolishOne`。node 84本・town/map/report/counterattack のブラウザテスト通過（Claude 確認）。
+- **次の候補（オーナー判断）**：訓練場 `docs/DESIGN_TRAINING_2026-09-13.md`（第2版）、施設の詳細画面 `docs/SPEC_FACILITY_DETAIL_2026-09-13.md`、カタログ割り当て `docs/PROPOSAL_CATALOG_ASSIGNMENT_2026-09-13.md`。
 - **CodeX**：`docs/TICKET_NIGHT_ASSETS_2026-09-13.md`（音5本 `codex/sfx-town-general`、地図の小物と転身の炎 `codex/map-props-general-fx`）。素材だけ。配線は取り込み時に Claude。
 - **判断待ち（オーナー）**：`docs/PROPOSAL_CATALOG_ASSIGNMENT_2026-09-13.md`（カタログ25本の割り当て）、`docs/IDEA_BANK_2026-09-13.md`（新種族・敵・技の採用）。
 - 今日入ったもの：将軍への転身（2段階級・二つ名・将軍技「魔王の力」、`docs/SPEC_GENERAL_2026-09-13.md`）、全体マップ（`src/ui/map.js`・`src/data/map.js`、施設8の絵）、勝利の歓声（CC-BY、`CREDITS.md`）、トロル・ミミックの履歴書写真、行商（工場なしでも金4→建材2）、旧施工の自動積み上げ停止（`st.autoBuild`）。
-- 落とし穴：`st.autoBuild` は応急処置。統合で flag ごと消す。`options.facilityWorks` は数値でもオブジェクトでも受ける（battle.js）。二つ名は `EPITHETS[m.race]`（tplId ではない）。
+- 落とし穴：`options.facilityWorks` は数値でもオブジェクトでも受ける（battle.js）。二つ名は `EPITHETS[m.race]`（tplId ではない）。
 
 
 ### 済み：地図の施設名と残り2区画（2026-09-13・CodeX）
