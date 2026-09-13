@@ -26,7 +26,8 @@ const member = (over) => Object.assign({
   hp: 30, atk: 8, def: 3, spd: 8, salary: 2, loyalty: 60,
   traits: [], tags: [], quote: 'また雇ってくださいよ。',
   prevJob: '前魔王軍の斥候', motive: '魔界史にもう一度名を残したい', flaw: '昔話が長い',
-  unpaid: false, department: 'combat', merit: 18, rankId: 'demon_lord'
+  // 階級は「兵卒 → 将軍」の2段（2026-09-13）。殿堂の照合は名前と戦功なので階級は兵卒でよい。
+  unpaid: false, department: 'combat', merit: 18, rankId: 'soldier'
 }, over || {});
 
 Game.newRun();

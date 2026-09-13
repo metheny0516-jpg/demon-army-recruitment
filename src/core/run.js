@@ -400,6 +400,10 @@ const Game = {
     st.hiresLeft = Math.max(0, Number(st.hiresLeft) || 0);
     st.extraHiresThisPhase = Math.max(0, Number(st.extraHiresThisPhase) || 0);
     if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
+    // 殿堂に残る廃止階級は兵卒に丸める（表示だけの値。照合には使っていない）。
+    for (const entry of st.departed || []) {
+      if (entry && entry.formerRankId && !PROMOTION_RANKS.some(r => r.id === entry.formerRankId)) entry.formerRankId = "soldier";
+    }
     if (!Array.isArray(st.recruitedTplIds)) st.recruitedTplIds = [];
     if (!Array.isArray(st.discoveredSynergyIds)) st.discoveredSynergyIds = [];
     for (const m of st.roster) {
@@ -413,6 +417,13 @@ const Game = {
       if (!m.skillTier) m.skillTier = (m.traits || []).some(id => ((TRAITS[id] || {}).skill || {}).tier === 2) ? 2 : 1;
       if (typeof m.spirit !== "number") m.spirit = this.spiritRules().start;   // 気合（2026-09-10）。旧セーブには無い
       if (m.debutSkill === undefined) m.debutSkill = null;                     // 旧セーブ：上位技は号令でだけ出る
+      // 階級2段（2026-09-13）。小隊長・魔将は廃止して兵卒へ戻す。
+      // **能力は巻き戻さない**（既に掛かった +5%／+8% は据え置き。戻す方が壊れる）。
+      if (m.rankId && !PROMOTION_RANKS.some(r => r.id === m.rankId)) m.rankId = "soldier";
+      // 既に将軍だった者には、転身の中身（気合上限・将軍技・二つ名）を付け直す。
+      // HP・攻撃は再度掛けない（transformToGeneral は数値以外だけを持つ）。
+      if (m.rankId === "general" && !m.epithet) this.transformToGeneral(m);
+      if (m.spiritMaxBonus === undefined) m.spiritMaxBonus = m.rankId === "general" ? 1 : 0;
       // 技（2026-09-12）。癖として持っていた種族固有の効果は技へ移した。
       // 旧セーブからはその癖を取り除き、3戦以上出ている者には種族技を持たせる
       // （何も持たない者が出来ないよう、癖を消すのと技を渡すのは必ず同じ移行で行う）。
@@ -954,6 +965,22 @@ const Game = {
     return PROMOTION_RANKS.find(rank => rank.id === monster.rankId) || PROMOTION_RANKS[0];
   },
 
+  // 転身した将軍の二つ名。種族ごとに1本（src/data/epithets.js。CodeX が入れるまでは仮の「将軍」）。
+  epithetFor(monster) {
+    const fallback = (typeof GENERAL_TRANSFORM !== "undefined" && GENERAL_TRANSFORM.fallbackEpithet) || "将軍";
+    if (!monster) return fallback;
+    if (typeof EPITHETS === "undefined") return fallback;
+    return EPITHETS[monster.tplId] || EPITHETS[monster.race] || fallback;
+  },
+  // 画面に出す名前。**m.name は変えない**（殿堂・遺物・記録・テストが名前で照合している）。
+  displayName(monster) {
+    if (!monster) return "";
+    return monster.epithet ? `${monster.epithet}・${monster.name}` : monster.name;
+  },
+  isGeneral(monster) {
+    return !!monster && monster.rankId === "general";
+  },
+
   nextRank(monster) {
     const index = PROMOTION_RANKS.findIndex(rank => rank.id === this.rankOf(monster).id);
     return PROMOTION_RANKS[index + 1] || null;
@@ -1316,7 +1343,8 @@ const Game = {
         legacy: {
           generation: legacy.generation,
           formerMerit: legacy.merit || 0,
-          formerRankId: legacy.rankId || "soldier"
+          // 階級は2段になった（2026-09-13）。廃止した階級で残っている記録は兵卒に丸める。
+          formerRankId: PROMOTION_RANKS.some(r => r.id === legacy.rankId) ? legacy.rankId : "soldier"
         }
       });
       const sameName = st.applicants.findIndex(m => m.name === returning.name);
@@ -1474,7 +1502,9 @@ const Game = {
       unpaid: false,
       department: "combat",
       merit: 0,
-      rankId: "soldier"
+      rankId: "soldier",
+      spiritMaxBonus: 0,
+      epithet: null
     };
   },
 
@@ -3291,13 +3321,34 @@ const Game = {
     monster.def = Math.max(0, monster.def + (boost.def || 0));
     monster.loyalty = U.clamp(monster.loyalty + (boost.loyalty || 0), 0, 100);
     monster.salary += boost.salary || 0;
-    const entry = { uid: monster.uid, name: monster.name, rankId: rank.id, rankName: rank.name, message: rank.message };
+    // 将軍は昇進ではなく転身。数値以外（気合の上限・将軍技・二つ名）もここで付ける。
+    if (rank.id === "general") this.transformToGeneral(monster);
+    const entry = { uid: monster.uid, name: monster.name, rankId: rank.id, rankName: rank.name, message: rank.message,
+      epithet: monster.epithet || null, displayName: this.displayName(monster), general: rank.id === "general" };
     this.state.lastPromotions.push(entry);
     if (rank.id === "general" && !this.state.generalsMade.some(g => g.uid === monster.uid)) {
-      this.state.generalsMade.push({ uid: monster.uid, name: monster.name, race: monster.race });
+      this.state.generalsMade.push({ uid: monster.uid, name: monster.name, race: monster.race, epithet: monster.epithet || null });
     }
-    notes.push(`昇進！ ${monster.name} は【${rank.name}】となった。${rank.message}`);
+    notes.push(rank.id === "general"
+      ? `転身！ ${monster.name} は魔王の魔力を受け【${this.displayName(monster)}】となった。${rank.message}`
+      : `昇進！ ${monster.name} は【${rank.name}】となった。${rank.message}`);
     this.trace("promoted", monster.uid, null, { rank: rank.name });
+  },
+
+  // 転身の「数値以外」。付け直し（旧セーブ）からも呼ぶので、**二重に掛からないものだけ**を置く。
+  // HP・攻撃の ×1.4 は promote() の boost が持つ（ここでやると付け直しで二度掛かる）。
+  transformToGeneral(monster) {
+    const rules = (typeof GENERAL_TRANSFORM !== "undefined" && GENERAL_TRANSFORM) || {};
+    monster.spiritMaxBonus = rules.spiritMaxBonus || 1;
+    const skillId = rules.skillId || "general_might";
+    if (typeof SKILLS !== "undefined" && SKILLS[skillId]) {
+      monster.skills = monster.skills || [];
+      if (!monster.skills.includes(skillId)) monster.skills.push(skillId);
+    }
+    if (!monster.epithet) monster.epithet = this.epithetFor(monster);
+    // 気合は転身の瞬間に満タン（次の戦いで将軍技をすぐ見せられる）。
+    monster.spirit = this.spiritRules().max + (monster.spiritMaxBonus || 0);
+    return monster;
   },
 
   // 戦果に応じて各モンスターの一言を選ぶ。

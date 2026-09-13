@@ -1,4 +1,4 @@
-// 戦功・三段階昇進・将軍シナジーをブラウザなしで検証する。
+// 戦功・将軍への転身・将軍シナジーをブラウザなしで検証する。
 const fs = require('fs'), vm = require('vm');
 const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js', 'src/data/counterattack.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
   'src/core/util.js','src/core/storage.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/run.js'];
@@ -29,17 +29,12 @@ Game.state.activeUids = [veteran.uid];
 const contribution = [{ uid: veteran.uid, name: veteran.name, dealt: 20, taken: 10, kills: 0, survived: true }];
 const notes = [];
 
+// 階級は「兵卒 → 将軍」の2段だけになった（2026-09-13）。中間の階段は無い。
 Game.awardMerit(contribution, notes);
 Game.awardMerit(contribution, notes);
-assert(veteran.merit === 6 && veteran.rankId === 'squad_leader', '戦功4以上で小隊長へ昇進');
-Game.awardMerit(contribution, notes);
-Game.awardMerit(contribution, notes);
-assert(veteran.merit === 12 && veteran.rankId === 'demon_lord', '戦功10以上で魔将へ昇進');
-Game.awardMerit(contribution, notes);
-Game.awardMerit(contribution, notes);
-Game.awardMerit(contribution, notes);
-Game.awardMerit(contribution, notes);
-assert(veteran.merit === 24 && veteran.rankId === 'general', '戦功22で将軍へ昇進');
+assert(veteran.merit === 6 && veteran.rankId === 'soldier', '戦功6ではまだ兵卒（中間の階級は無い）');
+for (let i = 0; i < 6; i++) Game.awardMerit(contribution, notes);
+assert(veteran.merit === 24 && veteran.rankId === 'general', `戦功22で将軍へ転身（${veteran.merit}）`);
 assert(Game.state.generalsMade[0].name === veteran.name, '輩出した将軍を魔界史用に記録');
 
 // ここから先は「将軍の号令」単体の検査。他のシナジーが混ざると、
