@@ -550,8 +550,9 @@ const EVENTS = [
     title: "施設完成の功績争い",
     weight: 4,
     check(st) {
-      const report = st.lastDepartmentReport;
-      return !!report && report.facilityAfter > report.facilityBefore
+      // 城下町で施設を建てた決着に出す（2026-09-13。旧「施工で Lv が上がった」判定の置き換え）。
+      const t = st.town || {};
+      return (t.builtTurn === st.turn) && (t.builtCount || 0) > 0
         && Game.departmentRoster("construction").length > 0;
     },
     cast(st) {
@@ -561,9 +562,11 @@ const EVENTS = [
       return { actor: U.pick(builders.filter(m => Aptitude.of(m).material === best)).uid };
     },
     text(st, c) {
-      const facility = FACILITIES.find(f => f.id === st.activeFacilityId)
-        || FACILITY_LEVELS[st.facilityLevel] || FACILITY_LEVELS[0];
-      return `新施設「${facility.name}」が完成した。${c.actor.name}が泥だらけで表彰を待っている。\n`
+      const built = typeof Town !== "undefined"
+        ? Town.facilities().map(f => ({ f, lv: Town.level(st, f.id) })).filter(x => x.lv > 0)
+          .sort((a, b) => b.lv - a.lv)[0] : null;
+      const name = built ? built.f.name : "新しい建物";
+      return `城下町に「${name}」が建った。${c.actor.name}が泥だらけで表彰を待っている。\n`
         + `一方、モルモは完成報告書の功績欄に、すでに魔王様の名前を書いてしまった。`;
     },
     options: [
@@ -995,7 +998,7 @@ const EVENTS = [
     id: "kitchen_blaze",
     title: "厨房の大暴走",
     weight: 3,
-    check(st) { return st.activeFacilityId === "grand_kitchen" && (st.facilityLevel || 0) >= 1; },
+    check(st) { return typeof Town !== "undefined" && Town.level(st, "grand_kitchen") >= 1; },
     cast(st) {
       const actor = EV_PICK(Game.departmentRoster("life").concat(st.roster), "ogre");
       return actor ? { actor: actor.uid } : null;
@@ -1156,7 +1159,8 @@ const EVENTS = [
     title: "禁断の契約",
     weight: 3,
     check(st) {
-      return st.activeFacilityId === "graveyard" && st.roster.some(m => m.tplId === "necromancer");
+      return typeof Town !== "undefined" && Town.level(st, "graveyard") >= 1
+        && st.roster.some(m => m.tplId === "necromancer");
     },
     cast(st) {
       const actor = EV_PICK(st.roster.filter(m => m.tplId === "necromancer"), "necromancer");
@@ -1284,7 +1288,9 @@ const EVENTS = [
     id: "ledger_fraud",
     title: "帳簿の不正",
     weight: 3,
-    check(st) { return st.activeFacilityId === "extortion_ledger" && st.roster.length > 0; },
+    // 恐喝帳簿は施設ではなくなった（2026-09-13）。もう起きない事件だが、
+    // 定義を消すと EVENTS の件数を数えている記録・テストが動くので、check だけ閉じる。
+    check() { return false; },
     cast(st) {
       const actor = EV_PICK(st.roster.filter(m => (m.job || "").includes("会計")).length
         ? st.roster.filter(m => (m.job || "").includes("会計")) : st.roster, "imp");
@@ -1311,8 +1317,7 @@ const EVENTS = [
         check(st) { return st.gold >= 10; },
         apply(st) {
           st.gold -= 10;
-          st.facilityLevel = (st.facilityLevel || 0) + 1;
-          return `調査費10Gを投じ、帳簿を締め直した。施設Lv.${st.facilityLevel}。\n`
+          return `調査費10Gを投じ、帳簿を締め直した。\n`
             + `恐喝は、信用商売である。`;
         }
       }

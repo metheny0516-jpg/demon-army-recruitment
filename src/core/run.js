@@ -60,10 +60,8 @@ const Game = {
       gold: demonKing.start.gold,
       food: demonKing.start.food,
       materials: demonKing.start.materials,
-      buildProgress: 0,
-      facilityLevel: 0,
-      activeFacilityId: null,
-      pendingFacilityChoiceLevel: null,
+      // 施設は城下町ただ1系統（2026-09-13、docs/SPEC_TOWN_MERGE_2026-09-13.md）。
+      // 旧「戦闘の施設」の3欄（facilityLevel / activeFacilityId / buildProgress）は消した。
       seizeUsed: false,
       lastDepartmentReport: null,
       payrollPolicy: "regular",
@@ -362,7 +360,6 @@ const Game = {
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
-      buildProgress: 0, facilityLevel: 0, activeFacilityId: null, pendingFacilityChoiceLevel: null,
       seizeUsed: false, lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
@@ -390,13 +387,7 @@ const Game = {
     if (!Array.isArray(st.applicants)) st.applicants = [];
     if (!Array.isArray(st.debts)) st.debts = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
-    if (!FACILITIES.some(f => f.id === st.activeFacilityId)) st.activeFacilityId = null;
-    if (st.pendingFacilityChoiceLevel !== null) {
-      st.pendingFacilityChoiceLevel = U.clamp(Number(st.pendingFacilityChoiceLevel) || 0, 1, FACILITY_LEVELS.length - 1);
-    }
-    if (!st.activeFacilityId && !st.pendingFacilityChoiceLevel && Number(st.facilityLevel) >= 1) {
-      st.pendingFacilityChoiceLevel = U.clamp(Number(st.facilityLevel), 1, FACILITY_LEVELS.length - 1);
-    }
+    this.migrateOldFacility(st);
     st.hiresLeft = Math.max(0, Number(st.hiresLeft) || 0);
     st.extraHiresThisPhase = Math.max(0, Number(st.extraHiresThisPhase) || 0);
     if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
@@ -450,7 +441,7 @@ const Game = {
     }
     if (!Array.isArray(st.departed)) st.departed = [];
     if (typeof Town !== "undefined") Town.init(st);   // 城下町（2026-09-12）。旧セーブには無い
-    if (st.autoBuild === undefined) st.autoBuild = false;   // 旧セーブも施工を止める（建材が毎決着2減る、オーナー試遊 2026-09-13）
+    delete st.autoBuild;   // 旧「施工」ごと撤去した（2026-09-13）。flag も残さない
     if (!Array.isArray(st.relics)) st.relics = [];
     if (!Array.isArray(st.traces)) st.traces = [];
     // 答える前の戦闘が保存されていたら、続行として決着させる。
@@ -644,7 +635,7 @@ const Game = {
 
   battleRationQuote() {
     const foodBefore = Math.max(0, this.state.food || 0);
-    const kitchen = this.state.activeFacilityId === "grand_kitchen";
+    const kitchen = this.facilityReady("grand_kitchen");
     const totalNeed = this.foodNeed() + (kitchen ? 1 : 0);
     const need = this.foodNeedFor(this.activeRoster()) + (kitchen ? 1 : 0);
     const consumed = Math.min(foodBefore, need);
@@ -783,32 +774,91 @@ const Game = {
     return out;
   },
 
-  facilityInfo(level) {
-    const wanted = level === undefined ? this.state.facilityLevel : level;
-    return FACILITY_LEVELS[U.clamp(Number(wanted) || 0, 0, FACILITY_LEVELS.length - 1)];
+  // 旧「戦闘の施設」→ 城下町（2026-09-13、仕様3節）。**一度だけ**動く移行。
+  //   巨大厨房・墓地 → 同じ Lv で城下町に建てた扱い（金も建材も取らない）
+  //   恐喝帳簿      → 施設ではなくなったので Lv×3 の建材で返す
+  //   buildProgress → 途中の積み上げは建材で返す（半分・上限6）
+  // 済んだら3欄を消す。**旧セーブで activeFacilityId が城下町の id だったことは無い**ので衝突しない。
+  migrateOldFacility(st) {
+    if (!st) return null;
+    const had = st.facilityLevel !== undefined || st.activeFacilityId !== undefined
+      || st.buildProgress !== undefined || st.pendingFacilityChoiceLevel !== undefined;
+    if (!had) return null;
+    const lv = U.clamp(Number(st.facilityLevel) || 0, 0, 3);
+    const id = st.activeFacilityId || null;
+    const notes = [];
+    if (typeof Town !== "undefined") {
+      const t = Town.init(st);
+      if (lv >= 1 && (id === "grand_kitchen" || id === "graveyard")) {
+        t.lv[id] = Math.max(t.lv[id] || 0, lv);
+        const f = Town.facility(id);
+        notes.push(`${f ? f.name : id}は城下町へ移した（Lv${lv}のまま）`);
+      } else if (lv >= 1 && id === "extortion_ledger") {
+        const back = lv * 3;
+        st.materials = (st.materials || 0) + back;
+        notes.push(`帳簿は閉じた。紙代は建材で戻った（建材 +${back}）`);
+      }
+    }
+    const left = Math.min(6, Math.floor((Number(st.buildProgress) || 0) / 2));
+    if (left > 0) { st.materials = (st.materials || 0) + left; notes.push(`建てかけの資材が戻った（建材 +${left}）`); }
+    delete st.facilityLevel;
+    delete st.activeFacilityId;
+    delete st.buildProgress;
+    delete st.pendingFacilityChoiceLevel;
+    // 日誌には次の決着で一行ずつ出す（移行はロードの最中に起きるので、その場に出す画面が無い）。
+    if (notes.length) st.lastFacilityMigration = notes;
+    return notes;
   },
 
-  // 施設Lv.は大型Jokerが1戦闘に働ける回数として効く。稼働施設が無ければ0。
+  // 城下町のまとめ（記録・軍風・教訓・sim が読む）。
+  townLevelTotal() {
+    if (typeof Town === "undefined") return 0;
+    return Town.facilities().reduce((sum, f) => sum + Town.level(this.state, f.id), 0);
+  },
+  townTopLevel() {
+    if (typeof Town === "undefined") return { id: null, lv: 0 };
+    const top = Town.facilities().map(f => ({ id: f.id, lv: Town.level(this.state, f.id) }))
+      .sort((a, b) => b.lv - a.lv)[0];
+    return top && top.lv > 0 ? top : { id: null, lv: 0 };
+  },
+  // 「同じ決断か」を見分ける指紋（decision の記録用）。施設の顔ぶれが変われば別の決断。
+  townSignature() {
+    if (typeof Town === "undefined") return "none";
+    const built = Town.facilities().map(f => [f.id, Town.level(this.state, f.id)])
+      .filter(([, lv]) => lv > 0).map(([id, lv]) => `${id}${lv}`);
+    return built.length ? built.join(",") : "none";
+  },
+
+  // 戦果に残す施設の要約（2026-09-13）。旧「共通補正 Lv＋稼働施設1つ」から
+  // 「城下町の軍施設それぞれの Lv」へ。decision の記録と結果画面が読む。
+  facilityReport() {
+    const list = this.ARMY_FACILITIES.map(id => {
+      const f = typeof Town !== "undefined" ? Town.facility(id) : null;
+      return { id, name: f ? f.name : id, icon: f ? f.icon : "", lv: this.facilityLv(id), ready: this.facilityReady(id) };
+    }).filter(x => x.lv > 0);
+    return { level: list.reduce((a, x) => a + x.lv, 0), facilities: list };
+  },
+
+  // 戦場で効く施設は城下町の2つ（巨大厨房・墓地）。Lv がそのまま「1戦闘に働ける回数」。
+  ARMY_FACILITIES: ["grand_kitchen", "graveyard"],
+  facilityLv(id) {
+    return typeof Town !== "undefined" ? Town.level(this.state, id) : 0;
+  },
+  // battle.js へ渡す works。施設ごとの Lv を持たせる（battle.js は数値でもオブジェクトでも読む）。
   facilityWorks() {
-    const st = this.state;
-    if (!st.activeFacilityId) return 0;
-    const info = this.facilityInfo();
-    return Math.max(0, Number(info.works) || 0);
+    const out = {};
+    for (const id of this.ARMY_FACILITIES) out[id] = this.facilityLv(id);
+    return out;
   },
 
-  activeFacility() {
-    return FACILITIES.find(f => f.id === this.state.activeFacilityId) || null;
-  },
-
-  // 選んだ施設が「この出撃で実際に働けるか」。
+  // その施設が「この出撃で実際に働けるか」。
   // deploy() が Battle へ渡す条件と同じ判定をここへ置き、編成画面の見取り図が
   // 同じ答えを読む。二重に書くと、片方だけ直したときに画面だけ嘘をつく。
   facilityReady(facilityId) {
-    const id = facilityId || this.state.activeFacilityId;
-    if (!id) return false;
-    if (id === "extortion_ledger") return this.activeRoster().some(m => (m.job || "").includes("会計"));
-    if (id === "graveyard") return this.departmentRoster("home").some(m => m.tplId === "necromancer");
-    if (id === "grand_kitchen") return true;
+    if (!facilityId || this.facilityLv(facilityId) < 1) return false;
+    // 墓地は留守番に死霊術師がいるときだけ発火する（城下町に建てただけでは働かない）。
+    if (facilityId === "graveyard") return this.departmentRoster("home").some(m => m.tplId === "necromancer");
+    if (facilityId === "grand_kitchen") return true;
     return false;
   },
 
@@ -816,56 +866,41 @@ const Game = {
   // 勝利した拠点をそのまま接収することで、施工役なしでも1ランに一度だけ最初の施設へ届く。
   // ただし奪った拠点は目立つ（警戒度+3＝以後の敵が約6%強くなる）。
   // Lv.2以降は従来どおり建設部門の仕事であり、この入口は「最初のJokerを試す」ためだけにある。
+  // 拠点接収。もとは「勝った拠点をそのまま最初の施設にする」入口だったが、
+  // 施設が城下町の1系統になったので **建材の一度きりの追い風** に置き換えた（2026-09-13）。
+  // 奪った拠点は目立つ（警戒度+1）という代償はそのまま。
   SEIZE_ALERT_COST: 1,
+  SEIZE_MATERIALS: 3,
 
   seizeQuote() {
-    const st = this.state;
-    const target = FACILITY_LEVELS[1];
-    const need = Math.max(0, target.buildThreshold - (st.buildProgress || 0));
     return {
-      need,
-      have: st.materials || 0,
+      gain: this.SEIZE_MATERIALS,
+      have: this.state.materials || 0,
       alertCost: this.SEIZE_ALERT_COST,
-      affordable: (st.materials || 0) >= need
+      affordable: true            // 払うものが無くなったので常に受けられる（残すのは表示の互換）
     };
   },
 
-  // 表示・sim・実プレイで同じ条件を使う。結果画面でのみ、施設ゼロのときだけ提示する。
+  // 表示・sim・実プレイで同じ条件を使う。結果画面でのみ、1ランに一度だけ提示する。
   canSeizeStronghold() {
     const st = this.state;
     if (!st || st.phase !== "result") return false;
     if (st.seizeUsed) return false;
-    if ((st.facilityLevel || 0) >= 1 || st.pendingFacilityChoiceLevel) return false;
     if (!st.lastBattle || !st.lastBattle.victory) return false;
-    return this.seizeQuote().affordable;
+    return true;
   },
 
   seizeStronghold() {
     if (!this.canSeizeStronghold()) return false;
     const st = this.state;
-    const quote = this.seizeQuote();
-    st.materials -= quote.need;
-    st.buildProgress += quote.need;
-    st.facilityLevel = 1;
-    st.pendingFacilityChoiceLevel = 1;
+    st.materials += this.SEIZE_MATERIALS;
     st.seizeUsed = true;
     st.alert = Math.max(0, st.alert + this.SEIZE_ALERT_COST);
     if (st.lastBattle && Array.isArray(st.lastBattle.notes)) {
-      st.lastBattle.notes.push(`拠点接収：建材 ${quote.need} を投じて敵拠点を接収した`
-        + `（施設Lv.1／王国警戒度+${this.SEIZE_ALERT_COST} 現在 ${st.alert}）`);
+      st.lastBattle.notes.push(`拠点接収：敵拠点から資材を運び出した（建材 +${this.SEIZE_MATERIALS}`
+        + `／王国警戒度+${this.SEIZE_ALERT_COST} 現在 ${st.alert}）`);
     }
     this.save();
-    return true;
-  },
-
-  chooseFacility(id) {
-    const st = this.state;
-    if (st.phase !== "facility" || !st.pendingFacilityChoiceLevel) return false;
-    if (!FACILITIES.some(f => f.id === id)) return false;
-    st.activeFacilityId = id;
-    st.pendingFacilityChoiceLevel = null;
-    if (this.maybeEvent()) return true;
-    this.nextRecruit();
     return true;
   },
 
@@ -1263,7 +1298,7 @@ const Game = {
     { id: "mason", name: "石工の記憶", icon: "🧱",
       when: "城をひとつも建てられずに滅びた",
       effect: "建設に向く者が応募に来やすくなる",
-      test: r => (r.facilityLevel || 0) === 0,
+      test: r => (r.townLevels || 0) === 0,
       favor: ["orc", "ogre"] },
     { id: "mourning", name: "弔いの記憶", icon: "🕯",
       when: "あまりに多くの戦死者を出した",
@@ -2352,8 +2387,9 @@ const Game = {
       boostTargetUid: mealPlan ? mealPlan.targetUid : null,
       boostAmount: mealPlan ? mealPlan.boost : 0
     } : null;
-    const extortionLedger = st.activeFacilityId === "extortion_ledger" && this.facilityReady("extortion_ledger");
-    const graveyard = st.activeFacilityId === "graveyard" && this.facilityReady("graveyard");
+    // 恐喝帳簿は廃止（2026-09-13）。エンジン側の発火コードは残っているが、run.js が渡さないので眠る。
+    const extortionLedger = false;
+    const graveyard = this.facilityReady("graveyard");
     // 前回出撃との差分（R2）。戦闘へ入る前の確定値で撮る。
     // 戦闘の結果は一切見ないので、「変えたから勝った」の材料にはならない。
     const buildSnapshot = this.buildSnapshot(stageData);
@@ -2776,15 +2812,7 @@ const Game = {
       summonCount: result.summonCount || 0,
       // 施設は「誰の手柄か」を個人へ付けない代わりに、戦果へ短い要約として残す。
       // 共通補正（Lv）と稼働施設（Joker）を分けて書き、どちらを体感したか読めるようにする。
-      facility: (() => {
-        const info = this.facilityInfo();
-        const active = this.activeFacility();
-        return {
-          level: st.facilityLevel || 0, name: info.name, works: this.facilityWorks(),
-          hpMult: info.hpMult, defBonus: info.defBonus,
-          activeId: active ? active.id : null, activeName: active ? active.name : null
-        };
-      })(),
+      facility: this.facilityReport(),
       facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
       deathChains: result.deathChains || [],
       // 戦果の1文の材料（B1）。「誰の能力が誰の何を動かし、結果どうなったか」を
@@ -2975,15 +3003,7 @@ const Game = {
       momentumPeak: (result.timeline || []).reduce((max, e) =>
         e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
-      facility: (() => {
-        const info = this.facilityInfo();
-        const active = this.activeFacility();
-        return {
-          level: st.facilityLevel || 0, name: info.name, works: this.facilityWorks(),
-          hpMult: info.hpMult, defBonus: info.defBonus,
-          activeId: active ? active.id : null, activeName: active ? active.name : null
-        };
-      })(),
+      facility: this.facilityReport(),
       facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
       deathChains: result.deathChains || [],
       buildChanges: pending.buildChanges,
@@ -3096,13 +3116,14 @@ const Game = {
   ransack(notes) {
     const st = this.state;
     const rules = this.counterRules().ransack;
-    const before = { facility: st.facilityLevel || 0, food: st.food || 0 };
-    if (st.facilityLevel > 0) {
-      st.facilityLevel = Math.max(0, st.facilityLevel - (rules.facilityLevels || 1));
-      // 進捗はその段階の入口まで戻す（次の1投入で上がり直すのは早すぎる）
-      st.buildProgress = (FACILITY_LEVELS[st.facilityLevel] || {}).buildThreshold || 0;
-      if (st.facilityLevel === 0) st.activeFacilityId = null;
-      notes.push(`城が荒らされた。施設レベル ${before.facility} → ${st.facilityLevel}`);
+    const before = { food: st.food || 0 };
+    // 荒らし：城下町の施設が1つ、1段落ちる（銀行の差し押さえと同じ入口）。
+    let razed = null;
+    for (let i = 0; i < (rules.facilityLevels || 1); i++) {
+      const lost = typeof Town !== "undefined" ? Town.demolishOne(st) : null;
+      if (!lost) break;
+      razed = razed || lost;
+      notes.push(`城下町が荒らされた。${lost.name} Lv${lost.from} → Lv${lost.to}`);
     }
     if (st.food > 0) {
       st.food = Math.floor(st.food * (rules.foodRatio !== undefined ? rules.foodRatio : 0.5));
@@ -3119,7 +3140,7 @@ const Game = {
       notes.push(`蔵から【${relic.name}】が持ち去られた`);
     }
     st.ransackCount = (st.ransackCount || 0) + 1;
-    return { facilityBefore: before.facility, facilityAfter: st.facilityLevel,
+    return { razed, facilityBefore: razed ? razed.from : 0, facilityAfter: razed ? razed.to : 0,
       foodBefore: before.food, foodAfter: st.food, relic: relic ? relic.name : null };
   },
 
@@ -3228,27 +3249,14 @@ const Game = {
     const adapted = this.advanceHunger(foodShortage > 0, notes);
 
     st.materials += materialReward;
-    const beforeLevel = st.facilityLevel;
-    const maxLevel = FACILITY_LEVELS.length - 1;
-    // 旧「施工」。st.autoBuild === false のラン（新規・移行済み）では建材を積まない。建材は城下町で使う。
-    // 直作りの state（テスト）は autoBuild が無いので今までどおり積む。
-    const canBuild = st.facilityLevel < maxLevel && st.autoBuild !== false;
+    // 旧「施工」（建材を進捗に変えて施設 Lv を上げる）は撤去した（2026-09-13）。
+    // 留守番は建材を**運ぶ**だけで、使い道は城下町ただ一つ。st.autoBuild の flag ごと消してある。
     // 供養代行：建設部門の死霊術師は、直前の戦没者を建材へ変える（墓石も城壁も石である）。
     // 戦死という損失が別部門の資源になる、いちばん短い接続。
     const mourners = builders.filter(m => m.tplId === "necromancer").length;
     const salvageTotal = mourners > 0 ? mourners * (st.pendingVacancies || 0) * 2 : 0;
     const salvage = normalized ? this.dailyShare(salvageTotal, dailyDay) : salvageTotal;
     st.materials += salvage;
-    const buildCapacity = normalized ? this.dailyShare(output.material, dailyDay) : output.material;
-    const materialUsed = canBuild ? Math.min(st.materials, buildCapacity) : 0;
-    st.materials -= materialUsed;
-    st.buildProgress += materialUsed;
-    while (st.facilityLevel < maxLevel
-      && st.buildProgress >= FACILITY_LEVELS[st.facilityLevel + 1].buildThreshold) {
-      st.facilityLevel += 1;
-    }
-    if (st.facilityLevel > beforeLevel) st.pendingFacilityChoiceLevel = st.facilityLevel;
-
     const spoiled = this.spoilFood(notes);
     st.lastDepartmentReport = {
       foodReward,
@@ -3260,13 +3268,9 @@ const Game = {
       adapted,
       loyaltyDelta,
       materialReward,
-      materialUsed,
-      buildCapacity,
       salvage,
       wageDiscount: output.wage,
       recruitBonus: output.recruit,
-      facilityBefore: beforeLevel,
-      facilityAfter: st.facilityLevel,
       builders: builders.length,
       lifeWorkers: lifeWorkers.length
     };
@@ -3281,13 +3285,13 @@ const Game = {
     if (salvage > 0) {
       notes.push(`供養代行：戦没者を弔い、墓石ぶんの建材 +${salvage} を得た……`);
     }
-    notes.push(`留守番の建設：建材 +${materialReward} / 投入 ${materialUsed}`
-      + `（施工能力 ${buildCapacity}・備蓄 ${st.materials}）`);
+    notes.push(`留守番の建設：建材 +${materialReward}（備蓄 ${st.materials}）`);
     // 城下町：税・利子・酒場（決着ごと。開幕の日割りでは呼ばない）。荒らされたかは settleContinue が st.lastRansacked に控える
     if (dailyDay === undefined && typeof Town !== "undefined") Town.settle(this, notes, { ransacked: !!st.lastRansacked });
-    if (st.facilityLevel > beforeLevel) {
-      const facility = this.facilityInfo();
-      notes.push(`施設完成【${facility.name}】稼働中の大型施設が1戦闘に ${facility.works} 回まで働く`);
+    // 旧施設の移行の報せ（ロード中には出す画面が無いので、次の決着の報告で一度だけ）。
+    if (st.lastFacilityMigration && st.lastFacilityMigration.length) {
+      for (const line of st.lastFacilityMigration) notes.push(line);
+      delete st.lastFacilityMigration;
     }
   },
 
@@ -3669,12 +3673,13 @@ const Game = {
 
   // 上にあるものほど「そのランを言い表している」と判断する。
   BUILD_TRAITS: [
-    { id: "facility_max", test: r => r.facilityLevel >= 3 && r.activeFacilityId,
+    { id: "facility_max", test: r => (r.townTop || 0) >= 3,
       phrase: r => ({
         graveyard: "墓地を三度も回した",
-        extortion_ledger: "帳簿を三度めくった",
-        grand_kitchen: "厨房を焚き続けた"
-      }[r.activeFacilityId] || "城を建てきった") },
+        grand_kitchen: "厨房を焚き続けた",
+        market: "市場を三度広げた",
+        tavern: "酒場を三度建て増した"
+      }[r.townTopId] || "城下町を建てきった") },
     { id: "overkill", test: r => (r.maxOverkill || 0) >= 200, phrase: () => "過剰殺戮の" },
     { id: "chain", test: r => (r.maxChain || 0) >= (Chain.versionOf(r) >= 2 ? 4 : 6),
       phrase: r => `${r.maxChain}連鎖を通した` },
@@ -3749,7 +3754,7 @@ const Game = {
       roster: (st.roster || []).map(m => m.uid).sort((a, b) => a - b),
       departments: Object.fromEntries((st.roster || []).map(m => [m.uid, this.departmentOf(m).id])),
       mercenaries: (st.mercenaries || []).map(m => m.name),
-      facility: `${st.facilityLevel || 0}:${st.activeFacilityId || "none"}`,
+      facility: this.townSignature(),
       payroll: st.payrollPolicy || "regular",
       merge: st.kingSlimeMerge !== false,
       mission: (stageData && stageData.missionKind) || null
@@ -3886,8 +3891,11 @@ const Game = {
       })),
       generalsMade: (st.generalsMade || []).map(g => ({ name: g.name, race: g.race })),
       battleIncidentTotal: st.battleIncidentTotal || 0,
-      facilityLevel: st.facilityLevel || 0,
-      activeFacilityId: st.activeFacilityId || null,
+      // 城下町（2026-09-13）。旧 facilityLevel / activeFacilityId の置き換え。
+      // 魔界史・軍風・教訓が読む。townTop は一番高い施設の Lv、townTopId はその id。
+      townLevels: this.townLevelTotal(),
+      townTop: this.townTopLevel().lv,
+      townTopId: this.townTopLevel().id,
       finalResources: { food: st.food || 0, materials: st.materials || 0 },
       departmentCounts: Object.fromEntries(DEPARTMENT_ORDER.map(id => [id, this.departmentRoster(id).length])),
       finalRoster: st.roster.map(m => ({
@@ -3992,12 +4000,11 @@ const Game = {
         st.alert = Math.max(0, st.alert + debt.amount);
         return `${head}王国警戒度 +${debt.amount}（現在 ${st.alert}）`;
       case "facilityLevel": {
-        // 稼働中の施設を 0 まで落とすと、選んだ施設が宙に浮く。最低 Lv.1 は残す。
-        const floor = st.activeFacilityId ? 1 : 0;
-        const before = st.facilityLevel || 0;
-        st.facilityLevel = Math.max(floor, before + debt.amount);
-        if (st.facilityLevel === before) return `${head}施設は無傷で済んだ（Lv.${before}）`;
-        return `${head}施設Lv.${before} → Lv.${st.facilityLevel}`;
+        // ツケの種類名は互換のまま（events.js のデータが持っている）。中身は
+        // 「城下町の施設が1つ、1段落ちる」——荒らし・差し押さえと同じ入口を通す。
+        const lost = typeof Town !== "undefined" ? Town.demolishOne(st) : null;
+        if (!lost) return `${head}落とせる施設が無かった（城下町は空き地のまま）`;
+        return `${head}${lost.name} Lv${lost.from} → Lv${lost.to}`;
       }
       case "loyalty_all":
         for (const m of st.roster) loyalty(m, debt.amount);
@@ -4127,11 +4134,6 @@ const Game = {
       st.selectedMission = null;
       this.save();
       return "preparation";
-    }
-    if (st.pendingFacilityChoiceLevel) {
-      st.phase = "facility";
-      this.save();
-      return "facility";
     }
     if (this.maybeEvent()) return "event";
     this.nextRecruit();
