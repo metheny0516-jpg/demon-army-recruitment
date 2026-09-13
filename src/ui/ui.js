@@ -691,7 +691,7 @@ const UI = {
         <button class="small" data-action="front" data-uid="${m.uid}" ${opts.index === 0 ? "disabled" : ""}>⏫</button>` : ""}
       <button class="small danger" data-action="fire" data-confirm="1" data-uid="${m.uid}">解雇</button>
     </div>` : "";
-    return `<div class="member-row${active ? " active" : " home"}" data-action="member" data-uid="${m.uid}" role="button" tabindex="0">
+    return `<div class="member-row${active ? " active" : " home"}${Game.isGeneral(m) ? " rank-general" : ""}" data-action="member" data-uid="${m.uid}" role="button" tabindex="0">
       ${this.avatarHtml(m)}
       <div class="member-row-main"><b>${U.esc(Game.displayName(m))}</b><span>${U.esc(m.race)} / ${U.esc(m.job)}</span>
         <small>${U.esc(rank.name)}　HP${m.hp} 攻${m.atk} 防${m.def} 速${m.spd}</small></div>

@@ -3697,7 +3697,7 @@ button.primary::first-letter { color: var(--gold); }
   background: linear-gradient(90deg, rgba(150, 80, 220, .45), rgba(90, 40, 150, .25));
   border: 1px solid rgba(190, 130, 255, .8); color: #f0dcff;
 }
-.card:has(.rank-general), .bu.rank-general, .promotion-row.promotion-general {
+.card:has(.rank-general), .bu.rank-general, .member-row.rank-general, .promotion-row.promotion-general {
   box-shadow: 0 0 0 1px rgba(190, 130, 255, .55), 0 0 14px rgba(150, 80, 220, .45);
   animation: generalAura 2.6s ease-in-out infinite;
 }
@@ -3730,7 +3730,7 @@ button.primary::first-letter { color: var(--gold); }
   100% { transform: scale(1.25); opacity: .5; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .card:has(.rank-general), .bu.rank-general, .promotion-row.promotion-general { animation: none; }
+  .card:has(.rank-general), .bu.rank-general, .member-row.rank-general, .promotion-row.promotion-general { animation: none; }
   .general-cutin .gc-flame { animation: none; opacity: 1; }
   .general-cutin { transition: none; }
 }
