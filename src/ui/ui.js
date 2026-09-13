@@ -1851,7 +1851,7 @@ const UI = {
         <span class="gc-desc">魔王の魔力を受け、将軍となった</span>
       </div>`;
     this.root.appendChild(box);
-    if (typeof Sound !== "undefined") Sound.cue("revive");
+    if (typeof Sound !== "undefined") { if (!(Sound.playRecorded && Sound.playRecorded("general-rise"))) Sound.cue("revive"); }
     const close = () => { box.classList.add("out"); setTimeout(() => box.remove(), 260); };
     box.addEventListener("click", close);
     setTimeout(close, 2500);

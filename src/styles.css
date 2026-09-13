@@ -3717,7 +3717,8 @@ button.primary::first-letter { color: var(--gold); }
 .general-cutin.out { opacity: 0; }
 .general-cutin .gc-flame {
   position: absolute; width: min(70vw, 320px); aspect-ratio: 1; border-radius: 50%;
-  background: radial-gradient(circle, rgba(210, 160, 255, .85) 0 12%, rgba(150, 60, 230, .55) 38%, transparent 72%);
+  background: url('../assets/battle/effects/general-aura.webp') center / contain no-repeat,
+    radial-gradient(circle, rgba(210, 160, 255, .85) 0 12%, rgba(150, 60, 230, .55) 38%, transparent 72%);
   animation: gcFlame 2.5s ease-out;
 }
 .general-cutin .gc-copy { position: relative; text-align: center; color: #f6e6ff; padding: 0 16px; }
@@ -3786,7 +3787,9 @@ button.primary::first-letter { color: var(--gold); }
   background: radial-gradient(circle, rgba(190, 50, 90, .38) 0 35%, rgba(120, 30, 80, .18) 62%, transparent 78%);
 }
 .map-point.mp-next .mp-pin { animation: mapPulse 1.8s ease-in-out infinite; }
-.map-point .mp-smoke { position: absolute; top: -6px; right: -10px; font-size: 13px; }
+.map-point .mp-smoke { position: absolute; top: -14px; right: -14px; width: 28px; height: 28px; pointer-events: none; }
+.map-point .mp-star { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); width: 22px; height: 22px; pointer-events: none; }
+.map-bank .mp-vault { width: 40px; height: 40px; display: block; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55)); }
 @keyframes mapPulse {
   0%, 100% { transform: none; filter: drop-shadow(0 1px 3px #000); }
   50% { transform: translateY(-2px); filter: drop-shadow(0 0 8px rgba(255, 155, 84, .9)); }

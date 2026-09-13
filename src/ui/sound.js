@@ -151,6 +151,25 @@ const Sound = {
     }
   },
 
+  // 録音の単発キュー（城下町・地図・将軍、2026-09-13）。name → assets/sfx/recorded/<name>.wav。
+  // 合成音の cue() とは別口。無ければ黙って false（配線先は fallback の cue を鳴らしてよい）。
+  RECORDED_CUES: ["town-build", "town-coin", "town-bank", "map-open", "general-rise"],
+  playRecorded(name, boost = 1) {
+    if (this.muted || typeof Audio === "undefined" || !this.RECORDED_CUES.includes(name)) return false;
+    const url = `assets/sfx/recorded/${name}.wav`;
+    let prototype = this.samples.get(url);
+    if (!prototype) { prototype = new Audio(url); prototype.preload = "auto"; this.samples.set(url, prototype); }
+    const audio = prototype.cloneNode ? prototype.cloneNode() : new Audio(url);
+    audio.volume = Math.min(1, this.volume * .82 * boost);
+    while (this.media.size >= 4) { const oldest = this.media.values().next().value; oldest.pause(); this.media.delete(oldest); }
+    this.media.add(audio);
+    const cleanup = () => this.media.delete(audio);
+    if (audio.addEventListener) audio.addEventListener("ended", cleanup, { once: true });
+    const played = audio.play();
+    if (played && played.catch) played.catch(cleanup);
+    return true;
+  },
+
   playSample(family, data = {}) {
     if (this.muted || typeof Audio === "undefined") return false;
     this.preloadSamples();

@@ -54,7 +54,8 @@ const MapUI = {
       ${clickable ? `data-action="mission"` : "disabled"}
       aria-label="${U.esc(label)}">
       <img class="mp-pin" src="${this.DIR}${pin}.webp" alt="">
-      ${ransacked ? `<i class="mp-smoke" aria-hidden="true">💨</i>` : ""}
+      ${ransacked ? `<img class="mp-smoke" src="${this.DIR}props/smoke.webp" alt="" aria-hidden="true">` : ""}
+      ${point.act === 1 && point.stage === 8 && state !== "fogged" ? `<img class="mp-star" src="${this.DIR}props/star.webp" alt="" aria-hidden="true">` : ""}
       <span class="mp-name">${U.esc(label)}${note}</span>
     </button>`;
   },
@@ -117,7 +118,7 @@ const MapUI = {
         ${this.points().map(p => this.pointHtml(st, p, sum.perTerritory)).join("")}
         ${this.lots().map(l => this.lotHtml(st, l)).join("")}
         ${lm.bank ? `<a class="map-bank" style="${this.pct(lm.bank.x, lm.bank.y)}" href="#town-bank"
-          aria-label="魔界銀行へ">🏦<span class="lot-name">魔界銀行</span></a>` : ""}
+          aria-label="魔界銀行へ"><img class="mp-vault" src="${this.DIR}props/vault.webp" alt=""><span class="lot-name">魔界銀行</span></a>` : ""}
         ${/* 魔王城は背景がもう描いている。印を重ねると二重になるので置かない（座標は map.js に残してある） */ ""}
       </div>
     </div>`;
