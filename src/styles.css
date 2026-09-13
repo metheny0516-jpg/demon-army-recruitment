@@ -3734,3 +3734,89 @@ button.primary::first-letter { color: var(--gold); }
   .general-cutin .gc-flame { animation: none; opacity: 1; }
   .general-cutin { transition: none; }
 }
+
+/* ── 全体マップ（docs/WORLD_MAP_DESIGN_2026-09-13.md 2・3） ─────────
+   縦スクロール1本だけ。**横スクロールは作らない**（背景を幅いっぱいに縮めて置く）。
+   印の位置は原寸の座標を % に直したもの（src/ui/map.js）。 */
+.world-map {
+  position: relative;
+  max-height: 62vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0 0 12px;
+  border: 1px solid var(--line, #3a3550);
+  border-radius: 8px;
+  background: #14101c;
+  -webkit-overflow-scrolling: touch;
+}
+.map-strip {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; gap: 10px; justify-content: space-between; flex-wrap: wrap;
+  padding: 6px 10px; font-size: 12px; color: #f2e4c6;
+  background: linear-gradient(rgba(14, 10, 22, .92), rgba(14, 10, 22, .72));
+  border-bottom: 1px solid rgba(232, 189, 104, .25);
+}
+.map-stage { position: relative; width: 100%; }
+.map-bg { display: block; width: 100%; height: auto; }
+
+/* 地点。印は絵、名前は下に小さく。押せるのは次の地点だけ */
+.map-point {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 0; border: 0; background: none; color: #f6e6c2; cursor: pointer;
+  font: inherit; line-height: 1;
+}
+.map-point .mp-pin { display: block; width: 26px; height: 26px; filter: drop-shadow(0 1px 3px #000); }
+.map-point .mp-name {
+  font-size: 10px; white-space: nowrap; padding: 1px 5px; border-radius: 3px;
+  background: rgba(12, 8, 20, .72); text-shadow: 0 1px 2px #000;
+}
+.map-point .mp-name i { font-style: normal; margin-left: 4px; font-size: 9px; }
+.map-point .mp-tax { color: #ffd479; }
+.map-point .mp-flag { color: #cfe0ff; }
+.map-point .mp-next { color: #ff9b54; }
+.map-point[disabled] { cursor: default; }
+.map-point.mp-far .mp-name, .map-point.mp-fogged .mp-name { opacity: .55; }
+.map-point.mp-fogged .mp-pin { opacity: .35; filter: grayscale(1) blur(.4px); }
+.map-point.mp-owned .mp-pin { filter: drop-shadow(0 0 6px rgba(190, 60, 90, .8)); }
+/* 領地は周りの土地も魔王軍の色に染まる */
+.map-point.mp-owned::before {
+  content: ""; position: absolute; left: 50%; top: 13px; transform: translate(-50%, -50%);
+  width: 62px; height: 62px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(190, 50, 90, .38) 0 35%, rgba(120, 30, 80, .18) 62%, transparent 78%);
+}
+.map-point.mp-next .mp-pin { animation: mapPulse 1.8s ease-in-out infinite; }
+.map-point .mp-smoke { position: absolute; top: -6px; right: -10px; font-size: 13px; }
+@keyframes mapPulse {
+  0%, 100% { transform: none; filter: drop-shadow(0 1px 3px #000); }
+  50% { transform: translateY(-2px); filter: drop-shadow(0 0 8px rgba(255, 155, 84, .9)); }
+}
+
+/* 城下町の区画。施設の絵はまだ無いので、いまは印と名前だけ（背景の空き地が見える） */
+.map-lot {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 2px 4px; border: 1px dashed rgba(232, 189, 104, .45); border-radius: 4px;
+  background: rgba(12, 8, 20, .35); color: #f6e6c2; font: inherit; line-height: 1.1; cursor: pointer;
+}
+.map-lot.built { border-style: solid; background: rgba(60, 30, 80, .55); }
+.map-lot .lot-icon { font-size: 15px; font-style: normal; }
+.map-lot .lot-name { font-size: 9px; white-space: nowrap; }
+.map-lot .lot-lv { font-style: normal; margin-left: 3px; color: #ffd479; }
+.map-lot.mp-empty { width: 46px; height: 26px; border-style: dotted; opacity: .5; }
+.map-bank {
+  position: absolute; transform: translate(-50%, -50%); text-decoration: none;
+  display: flex; flex-direction: column; align-items: center; font-size: 16px; color: #f6e6c2;
+}
+.map-bank .lot-name { font-size: 9px; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+/* 防衛戦が出ている間だけ、王国側から城への道に点線 */
+.map-defend-road {
+  position: absolute; left: 50%; top: 38%; bottom: 8%; width: 0;
+  border-left: 2px dashed rgba(255, 120, 120, .75); transform: translateX(-50%); pointer-events: none;
+  animation: mapDefend 1.6s linear infinite;
+}
+@keyframes mapDefend { 0% { opacity: .35; } 50% { opacity: .9; } 100% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .map-point.mp-next .mp-pin, .map-defend-road { animation: none; }
+  .world-map { scroll-behavior: auto; }
+}

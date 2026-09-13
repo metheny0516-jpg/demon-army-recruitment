@@ -1,4 +1,5 @@
-// 城下町の札（2026-09-12）。テキスト中心。施設6・魔界銀行・家計簿。絵は全体マップ（別チケット）で後から。
+// 城下町の札（2026-09-12）。先頭に全体マップ（2026-09-13）、その下に今までどおりの
+// 施設一覧・銀行・家計簿。**一覧は消さない**（文字で確かめたい人と、地図を開かない人のため）。
 const TownUI = {
   panel() {
     const st = Game.state;
@@ -24,7 +25,8 @@ const TownUI = {
       <button class="small" data-action="townexchangeback" ${Town.canExchangeBack(st) ? "" : "disabled"}>金4 → 建材2</button></div>`
       : `<div class="town-row"><span>行商から建材を買う（決着ごと1回。工場を建てると回数が増え、建材→金もできる）</span>
       <button class="small" data-action="townexchangeback" ${Town.canExchangeBack(st) ? "" : "disabled"}>金4 → 建材2${backLeft ? "" : "（今回は済み）"}</button></div>`;
-    const bank = `<section class="town-bank"><h3>🏦 魔界銀行</h3>
+    // 地図の金庫からここへ飛ぶ（新しい action を足さずに済ませる）
+    const bank = `<section class="town-bank" id="town-bank"><h3>🏦 魔界銀行</h3>
       <div class="muted">借金 <b>${t.debt}G</b>${t.debt ? `（利子 ${sum.interest}G／決着）` : ""}　上限 ${Town.rules().bank.cap}G。利子は決着ごとに残高の1割。払えないと施設が1段落ちる。</div>
       <div class="town-row">${Town.rules().bank.choices.map(a => `<button class="small" data-action="townborrow" data-amount="${a}" ${Town.canBorrow(st, a) ? "" : "disabled"}>${a}G 借りる</button>`).join("")}
         ${t.debt ? `<button class="small" data-action="townrepay" data-amount="${Math.ceil(t.debt / 2)}" ${st.gold > 0 ? "" : "disabled"}>半分返す（${Math.min(st.gold, Math.ceil(t.debt / 2))}G）</button>
@@ -34,7 +36,10 @@ const TownUI = {
     const ledger = `<section class="town-ledger"><h3>📒 家計簿（決着ごと）</h3>
       ${rows ? `<div class="table-wrap"><table class="town-table"><thead><tr><th></th><th>税</th><th>両替</th><th>建設</th><th>利子</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="muted">まだ決着が無い。</div>`}
       <div class="muted">給与と食料は結果画面の報告に。ここは城下町の分だけ。</div></section>`;
+    // 地図を先頭に。地図が無くても（データやCSSが欠けても）札はそのまま読める。
+    const map = typeof MapUI !== "undefined" ? MapUI.render(st) : "";
     return `<section class="town-panel">
+      ${map}
       <div class="town-summary">領地 <b>${sum.territories}</b> × <b>${sum.perTerritory}G</b> ＝ 税収 <b>${sum.tax}G</b>／決着　　所持金 <b>${st.gold}G</b>　建材 <b>${st.materials}</b></div>
       <div class="muted">領地は本戦で取った段階。施設は金と建材で建てる（1決着に1件）。足りなければ銀行へ。</div>
       <div class="town-grid">${facilities}</div>

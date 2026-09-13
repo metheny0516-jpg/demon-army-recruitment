@@ -107,7 +107,7 @@ const MapUI = {
         ${this.lots().map(l => this.lotHtml(st, l)).join("")}
         ${lm.bank ? `<a class="map-bank" style="${this.pct(lm.bank.x, lm.bank.y)}" href="#town-bank"
           aria-label="魔界銀行へ">🏦<span class="lot-name">魔界銀行</span></a>` : ""}
-        ${lm.castle ? `<span class="map-castle" style="${this.pct(lm.castle.x, lm.castle.y)}" aria-hidden="true">🏰</span>` : ""}
+        ${/* 魔王城は背景がもう描いている。印を重ねると二重になるので置かない（座標は map.js に残してある） */ ""}
       </div>
     </div>`;
   },

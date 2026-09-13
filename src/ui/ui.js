@@ -669,6 +669,8 @@ const UI = {
         <div class="muted">${options.formation ? "出撃する者と城に残る者を決める。詳しい作戦情報は城の参謀札へ。" : "いつでも見るものを、四つの札にまとめました。"}</div></div>${tabs}</header>
       <main class="castle-content ${options.formation ? "formation-army" : ""}">${content}</main>${formationActions}
     </div>`, options.formation ? "formation" : "castle");
+    // 地図は「次に戦う地点」が中央に来た状態で開く（描いたあとに一度だけ）。
+    if (tab === "town" && typeof MapUI !== "undefined") MapUI.focus(this.root);
   },
 
   // 軍団のどこでも使う一行表示。操作を隠す面接でも、行そのものから同じ人物詳細へ入る。
