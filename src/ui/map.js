@@ -60,7 +60,13 @@ const MapUI = {
   },
 
   // 城下町の区画。施設が建っていればレベル、まだなら空き地。
-  // 絵はまだ無いので、いまは枠と文字だけ（背景の空き地がそのまま見える）。
+  // 絵がある施設（MAP_FACILITY_ART）は Lv の絵を、まだ無い施設は枠と文字だけ（背景の空き地が見える）。
+  lotArt(id, lv) {
+    const art = (typeof MAP_FACILITY_ART !== "undefined" && MAP_FACILITY_ART) || [];
+    if (lv <= 0) return `<img class="lot-art" src="${this.DIR}facility/lot-0.webp" alt="">`;
+    if (!art.includes(id)) return "";
+    return `<img class="lot-art" src="${this.DIR}facility/${id}-${Math.min(3, lv)}.webp" alt="">`;
+  },
   lotHtml(st, lot) {
     const slots = (typeof MAP_FACILITY_SLOTS !== "undefined" && MAP_FACILITY_SLOTS) || {};
     const id = Object.keys(slots).find(key => slots[key] === lot.slot);
@@ -72,11 +78,12 @@ const MapUI = {
     // 建てられないときは押せなくする（理由は一覧と同じ文言）。
     // Town.build() 側でも弾かれるが、押せる顔をして何も起きないのは嘘になる。
     const can = Town.canBuild(Game, id);
-    return `<button type="button" class="map-lot${lv ? " built" : ""} lot-lv${lv}" style="${this.pct(lot.x, lot.y)}"
+    const art = this.lotArt(id, lv);
+    return `<button type="button" class="map-lot${lv ? " built" : ""}${art ? " has-art" : ""} lot-lv${lv}" style="${this.pct(lot.x, lot.y)}"
       data-action="townbuild" data-id="${U.esc(id)}" data-lot="${lot.slot}"
       ${can.ok ? "" : "disabled"} title="${U.esc(can.ok ? `${facility.name}を建てる` : (can.why || ""))}"
       aria-label="${U.esc(facility.name)} Lv${lv}">
-      <i class="lot-icon">${facility.icon}</i>
+      ${art}<i class="lot-icon">${facility.icon}</i>
       <span class="lot-name">${U.esc(facility.name)}<i class="lot-lv">Lv${lv}</i></span>
     </button>`;
   },

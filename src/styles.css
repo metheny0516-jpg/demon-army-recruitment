@@ -3804,6 +3804,12 @@ button.primary::first-letter { color: var(--gold); }
 .map-lot .lot-name { font-size: 9px; white-space: nowrap; }
 .map-lot .lot-lv { font-style: normal; margin-left: 3px; color: #ffd479; }
 .map-lot.mp-empty { width: 46px; height: 26px; border-style: dotted; opacity: .5; }
+/* 施設の絵（64px）。絵がある区画は枠を消し、名前は絵の下に小さく */
+.map-lot .lot-art { width: 64px; height: 64px; display: block; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55)); }
+.map-lot.has-art { border-color: transparent; background: none; padding: 0; }
+.map-lot.has-art .lot-icon { display: none; }
+.map-lot.has-art .lot-name { margin-top: -6px; text-shadow: 0 1px 2px #000, 0 0 4px #000; }
+.map-lot.has-art:disabled { opacity: .8; cursor: default; }
 .map-bank {
   position: absolute; transform: translate(-50%, -50%); text-decoration: none;
   display: flex; flex-direction: column; align-items: center; font-size: 16px; color: #f6e6c2;

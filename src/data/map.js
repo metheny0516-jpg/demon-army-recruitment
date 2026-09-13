@@ -39,6 +39,9 @@ const MAP_LOTS = [
 ];
 
 // 施設 → 区画。TOWN_FACILITIES の並びを変えてもここが正。
+// 絵がある施設（assets/map/facility/<id>-<lv>.webp、Lv1〜3。空き地は lot-0.webp）。CodeX が描いた順に足す。
+const MAP_FACILITY_ART = ["market", "hostel"];
+
 const MAP_FACILITY_SLOTS = {
   market: 1, tavern: 2, smithy: 3, lab: 4, hostel: 5, factory: 6
 };
@@ -50,5 +53,5 @@ const MAP_LANDMARKS = {
 };
 
 if (typeof module !== "undefined") {
-  module.exports = { MAP_SIZE, MAP_POINTS, MAP_LOTS, MAP_FACILITY_SLOTS, MAP_LANDMARKS };
+  module.exports = { MAP_SIZE, MAP_POINTS, MAP_LOTS, MAP_FACILITY_SLOTS, MAP_LANDMARKS, MAP_FACILITY_ART };
 }
