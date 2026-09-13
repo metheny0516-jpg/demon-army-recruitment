@@ -1429,9 +1429,10 @@ const EVENTS = [
       {
         label: "工期を1回遅らせる",
         apply(st, c) {
-          st.buildProgress = Math.max(0, (st.buildProgress || 0) - 2);
+          // 旧「工期（buildProgress）」は無くなった（2026-09-13）。遅らせた代わりに建材が2戻る。
+          st.materials = (st.materials || 0) + 2;
           c.actor.loyalty = U.clamp(c.actor.loyalty + 5, 0, 100);
-          return `工事の予定を1回遅らせた。${c.actor.name}の忠誠+5。\n`
+          return `工事の予定を1回遅らせた。資材は倉庫へ戻した（建材+2）。${c.actor.name}の忠誠+5。\n`
             + `急かされなかったことに、本人がいちばんほっとしていた。`;
         }
       },

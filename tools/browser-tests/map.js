@@ -46,7 +46,7 @@ const SAVE = () => {
   ok(shape.map && shape.first, '地図が札の先頭にある');
   ok(shape.points === 14, `地点が14（${shape.points}）`);
   ok(shape.lots === 8, `城下町の区画が8（${shape.lots}）`);
-  ok(shape.cards === 6, `施設一覧も下に残っている（${shape.cards}件）`);
+  ok(shape.cards === 8, `施設一覧も下に残っている（${shape.cards}件。2026-09-13 に8施設へ）`);
   ok(shape.bank, '魔界銀行の節がある（金庫の飛び先）');
   ok(shape.bgLoaded, '背景の絵が読める');
   ok(shape.pins === 14, `印の絵が全部読める（${shape.pins}/14）`);
@@ -103,7 +103,7 @@ const SAVE = () => {
   ok(lots.market && /市場/.test(lots.market.text) && /Lv2/.test(lots.market.text), `市場は Lv2（${lots.market && lots.market.text}）`);
   ok(lots.market && lots.market.built && lots.market.action === 'townbuild', '建った区画は押すと「建てる」へ');
   ok(lots.smithy && !lots.smithy.built && /Lv0/.test(lots.smithy.text), `建てていない施設は空き地（${lots.smithy && lots.smithy.text}）`);
-  ok(lots.empty === 2, `施設のない区画は空き地のまま（${lots.empty}／8）`);
+  ok(lots.empty === 0, `8区画すべてに施設が割り当たった（空き区画 ${lots.empty}／8）`);
 
   console.log('\n▼ 税と借金の一行、荒らされた印');
   const strip = await page.evaluate(() => document.querySelector('.map-strip').innerText.replace(/\n/g, ' '));

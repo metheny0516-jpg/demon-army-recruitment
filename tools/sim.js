@@ -14,6 +14,8 @@ const ctx = { console, Math, Date, JSON, localStorage: {
 vm.createContext(ctx);
 for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename:f});
 const Game = vm.runInContext('Game', ctx);
+// 城下町（2026-09-13 の統合で、施設はここ1系統になった）。SIM_NO_TOWN のときは未定義。
+const Town = vm.runInContext('typeof Town !== "undefined" ? Town : null', ctx);
 const KPI = vm.runInContext('KPI', ctx);
 const Synergy = vm.runInContext('Synergy', ctx);
 const TRAITS = vm.runInContext('TRAITS', ctx);
@@ -178,15 +180,18 @@ function runOnce(strat, stats){
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
     }
-    // 拠点接収：施設ゼロのまま条件を満たしたら必ず使う（入口が到達率をどれだけ動かすかを測る）
+    // 拠点接収：条件を満たしたら必ず使う（1ランに1度の建材の追い風）
     if (Game.canSeizeStronghold()) { Game.seizeStronghold(); stats.seizes++; }
-    if (st.phase === 'result') Game.afterResult();
-    if (st.phase === 'facility') {
-      const id = strat.kind === 'cheap' || strat.kind === 'race' && strat.race === 'ゴブリン'
-        ? 'extortion_ledger'
-        : strat.kind === 'caster' ? 'grand_kitchen' : 'graveyard';
-      Game.chooseFacility(id);
+    // 城下町：建てられるものがあれば建てる（施設は城下町の1系統になった。2026-09-13）。
+    // 戦略ごとの好みだけ変える。安い順に見て、最初に建てられるものを1件。
+    if (Town && st.phase === 'result') {
+      const want = strat.kind === 'caster' ? ['grand_kitchen', 'market', 'tavern']
+        : strat.kind === 'cheap' ? ['market', 'tavern', 'factory']
+        : ['graveyard', 'market', 'smithy', 'hostel', 'tavern', 'lab', 'factory', 'grand_kitchen'];
+      const order = want.concat(Town.facilities().map(f => f.id));
+      for (const id of order) { if (Town.canBuild(Game, id).ok) { Town.build(Game, id); break; } }
     }
+    if (st.phase === 'result') Game.afterResult();
     // ハプニングは無作為に選ぶ（人間の判断は再現できないため）
     if (st.phase === 'event') {
       if (st.pendingEvent) {
@@ -261,19 +266,20 @@ for (const s of strategies) {
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
   const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
-  const facility = (res.reduce((a,r)=>a+(r.facilityLevel||0),0)/N).toFixed(2);
+  const facility = (res.reduce((a,r)=>a+(r.townLevels||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  平均施設Lv ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン`);
-  const lv1Rate = (res.filter(r=>(r.facilityLevel||0) >= 1).length/N*100).toFixed(1);
-  const lv3Rate = (res.filter(r=>(r.facilityLevel||0) >= 3).length/N*100).toFixed(1);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン`);
+  const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
+  const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);
   const nameCount = new Map();
   for (const r of res) if (r.buildName) nameCount.set(r.buildName, (nameCount.get(r.buildName) || 0) + 1);
   const topNames = [...nameCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
     .map(([n, c]) => `${n}:${c}`).join(' / ');
   console.log(`  ビルド名: ${nameCount.size}種/${N}ラン　多い順 ${topNames || 'なし'}`);
-  const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
-  for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
+  // どの施設が「その軍団の顔」になったか（一番高い施設）
+  const facCount = {};
+  for (const r of res) if (r.townTopId) facCount[r.townTopId] = (facCount[r.townTopId] || 0) + 1;
   console.log(`  全滅 ${stats.wipes || 0}回／名簿が空で終わったラン ${stats.emptyEnds || 0}`);
   {
     const d = stats.defense || { won: 0, lost: 0, ransack: 0, fall: 0, byConquest: 0, byDefense: 0 };
@@ -281,7 +287,8 @@ for (const s of strategies) {
     console.log(`  防衛戦 ${total}回（勝ち ${d.won} 負け ${d.lost}${total ? `＝勝率 ${(d.won / total * 100).toFixed(0)}%` : ""}）`
       + `／荒らされた ${d.ransack}回／城陥落 ${d.fall}／クリア内訳 攻めた ${d.byConquest}・待った ${d.byDefense}`);
   }
-  console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}／拠点接収 ${stats.seizes}回`);
+  const facTop = Object.entries(facCount).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ') || 'なし';
+  console.log(`  城下町: 何か建てた ${lv1Rate}%（Lv3 到達 ${lv3Rate}%）／主役 ${facTop}／拠点接収 ${stats.seizes}回`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);

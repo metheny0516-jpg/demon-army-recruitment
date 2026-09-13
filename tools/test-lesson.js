@@ -7,8 +7,8 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
-  'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/data/departments.js', 'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -23,11 +23,11 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
 
 // ── 1. 敗北の内容が、提示される教訓を決める ─────────────────────
 const ids = r => Game.lessonOffers(r).map(l => l.id);
-assert(ids({ facilityLevel: 0, battlesWon: 8 })[0] === 'mason',
-  '城を建てられずに滅びたランは、まず石工の記憶を差し出す');
-assert(ids({ facilityLevel: 2, fallenTotal: 9, battlesWon: 8 })[0] === 'mourning',
+assert(ids({ townLevels: 0, battlesWon: 8 })[0] === 'mason',
+  '城下町に何も建てられずに滅びたランは、まず石工の記憶を差し出す');
+assert(ids({ townLevels: 2, fallenTotal: 9, battlesWon: 8 })[0] === 'mourning',
   '戦死者を多く出したランは、まず弔いの記憶を差し出す');
-assert(ids({ facilityLevel: 2, battlesWon: 2 }).includes('rout'),
+assert(ids({ townLevels: 2, battlesWon: 2 }).includes('rout'),
   '早々に敗走したランには敗走の記憶が並ぶ');
 assert(Game.lessonById('arcane').test({ chainDefVersion: 1, maxChain: 2 })
   && Game.lessonById('arcane').test({ chainDefVersion: 2, maxChain: 2 }),
@@ -37,7 +37,7 @@ assert(!Game.lessonById('arcane').test({ chainDefVersion: 2, maxChain: 3 }),
 
 // ── 2. どんな負け方でも必ず3つ出る ───────────────────────────
 // 「当てはまったものだけ」にすると、綺麗に負けたランで選択肢が消えてしまう。
-const clean = { facilityLevel: 3, fallenTotal: 0, battlesWon: 8, maxChain: 9,
+const clean = { townLevels: 3, fallenTotal: 0, battlesWon: 8, maxChain: 9,
   payrollChoices: {}, battleIncidentTotal: 0, finalResources: { food: 9 } };
 assert(Game.lessonOffers(clean).length === 3, '何にも当てはまらない負け方でも教訓は3つ提示される');
 assert(Game.lessonOffers({}).length === 3, '空の記録でも落ちずに3つ返す');

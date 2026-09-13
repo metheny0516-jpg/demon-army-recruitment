@@ -935,7 +935,8 @@ const Game = {
     const target = ranked[0] || null;
     const topAppetite = target ? Aptitude.of(target).appetite : 0;
     // 巨大厨房は Lv.+1 倍。Lv.1で従来どおりの2倍、Lv.3で4倍まで濃くなる。
-    const kitchenMult = rations && rations.kitchen ? 1 + this.facilityWorks() : 1;
+    // 巨大厨房は Lv＋1 倍（facilityWorks() は施設ごとの表を返すので、ここは Lv を直接引く）
+    const kitchenMult = rations && rations.kitchen ? 1 + this.facilityLv("grand_kitchen") : 1;
     const boost = cook && rations ? Math.min(0.8, consumed * 0.08 * kitchenMult) : 0;
     const bigEaterMult = 1 + 0.25 * kitchenMult;
     return {

@@ -15,8 +15,8 @@ const ACHIEVEMENTS = [
     }
   },
   {
-    id: "castle_complete", name: "城は現場が建てた", desc: "施設Lv.3でランを終える",
-    check(history) { return history.some(r => Number(r.facilityLevel || 0) >= 3); }
+    id: "castle_complete", name: "城は現場が建てた", desc: "城下町の施設をLv3まで育ててランを終える",
+    check(history) { return history.some(r => Number(r.townTop || r.facilityLevel || 0) >= 3); }
   },
   {
     id: "true_general", name: "伝説の人事記録", desc: "戦功22以上の人材を殿堂入りさせる",

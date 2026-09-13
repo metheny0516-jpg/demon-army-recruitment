@@ -19,7 +19,7 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   await page.waitForTimeout(100);
   ok(await page.locator('.town-panel').count() === 1, '城下町の札が開く');
   ok(/税収/.test(await page.locator('.town-summary').innerText()), `税収の一行（${(await page.locator('.town-summary').innerText()).replace(/\s+/g, ' ')}）`);
-  ok(await page.locator('.town-card').count() === 6, '施設6つ');
+  ok(await page.locator('.town-card').count() === 8, '施設8つ（町6・軍2。2026-09-13 の統合）');
   ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '390px で横に溢れない');
   if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, 'town-390.png'), fullPage: true });
   // 地図（2026-09-13）にも同じ data-action の区画があるので、ここは**一覧の側**を名指しする
@@ -35,6 +35,29 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   await page.locator('[data-action="townrepay"]').last().click();
   await page.waitForTimeout(150);
   ok(await page.evaluate(() => Game.state.town.debt === 0 && Game.state.gold === 45), '全部返した');
+  // ── 統合（2026-09-13）：8施設が「町（6）」「軍（2）」の2見出しで並ぶ ──
+  console.log('▼ 町と軍の2見出し');
+  const groups = await page.evaluate(() => ({
+    heads: [...document.querySelectorAll('.town-group')].map(h => h.textContent.replace(/\s+/g, ' ').trim()),
+    cards: document.querySelectorAll('.town-card').length,
+    army: [...document.querySelectorAll('.town-card')].map(c => c.textContent)
+      .filter(t => /巨大厨房|墓地/.test(t)).length,
+    ledger: [...document.querySelectorAll('.town-card')].some(c => /恐喝帳簿/.test(c.textContent))
+  }));
+  ok(groups.heads.length === 2 && /町（6）/.test(groups.heads[0]) && /軍（2）/.test(groups.heads[1]),
+    `見出しが2つ（${groups.heads.join(' / ')}）`);
+  ok(groups.cards === 8, `施設の札が8枚（${groups.cards}）`);
+  ok(groups.army === 2, `巨大厨房と墓地が「軍」に並ぶ（${groups.army}）`);
+  ok(!groups.ledger, '恐喝帳簿の札は無い');
+
+  console.log('▼ 軍団の札に施設パネルは無い（城下町へ寄せた）');
+  const moved = await page.evaluate(() => {
+    UI.castle('army');
+    return { facility: document.querySelectorAll('.castle-facility, .facility-blueprint').length,
+      town: document.querySelectorAll('.town-card').length };
+  });
+  ok(moved.facility === 0 && moved.town === 0, `軍団の札に施設の話は出ない（${moved.facility}）`);
+
   ok(errs.length === 0, `ページエラーなし${errs.length ? '：' + errs[0] : ''}`);
   await b.close();
   console.log(process.exitCode ? '失敗あり' : '全通過');

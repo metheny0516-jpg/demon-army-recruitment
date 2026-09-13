@@ -3831,3 +3831,5 @@ button.primary::first-letter { color: var(--gold); }
   .world-map { scroll-behavior: auto; }
 }
 .map-lot[disabled] { cursor: default; opacity: .8; }
+.town-group { margin: 14px 0 6px; font-size: 14px; border-bottom: 1px solid rgba(232, 189, 104, .25); padding-bottom: 3px; }
+.town-group small { margin-left: 8px; font-weight: normal; font-size: 11px; }

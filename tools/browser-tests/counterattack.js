@@ -118,6 +118,7 @@ const DEFEND_CARD = (overrides) => Object.assign({
   await page.evaluate(() => {
     Game.state.lastBattle = {
       victory: false, defense: true, ransacked: {
+        razed: { id: 'market', name: '市場', from: 2, to: 1 },
         facilityBefore: 2, facilityAfter: 1, foodBefore: 10, foodAfter: 5, relic: '古の指輪'
       },
       army: '聖騎士団討伐隊', region: '魔王城', reward: 0, lootGold: 0,
@@ -130,7 +131,7 @@ const DEFEND_CARD = (overrides) => Object.assign({
     body: document.querySelector('.banner').innerText
   }));
   ok(result.heading === '城が荒らされた', `見出しが「城が荒らされた」（${result.heading}）`);
-  ok(/2→1/.test(result.body), `施設Lv低下に触れる (${result.body.slice(0, 100)})`);
+  ok(/市場 Lv2→Lv1/.test(result.body), `落ちた施設の名前と Lv に触れる (${result.body.slice(0, 110)})`);
   ok(/10→5/.test(result.body), `食料低下に触れる`);
   ok(/古の指輪を奪われた/.test(result.body), `遺物の喪失に触れる`);
 

@@ -100,7 +100,7 @@ const UI = {
         <span>第 <b>${st.generation}</b> 代魔王軍</span>
         ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
         <span>作戦 <b>${st.turn}</b></span>
-        <span>施設 <b>Lv.${st.facilityLevel}${Game.activeFacility() ? ` ${U.esc(Game.activeFacility().name)}` : ""}</b></span>
+        <span>城下町 <b>Lv計 ${Game.townLevelTotal()}</b></span>
         <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
         <span>軍団 <b>${st.roster.length}/${Game.maxArmy()}</b></span>
         ${typeof Town !== "undefined" ? `<span>税 <b>${Town.taxPerSettle(st)}G</b>/戦${Town.init(st).debt ? `　借金 <b>${Town.init(st).debt}G</b>` : ""}</span>` : ""}
@@ -243,7 +243,9 @@ const UI = {
   },
 
   applicantConnections(m) {
-    const facility = Game.activeFacility();
+    // 城下町の「軍」施設のうち、建っているものを接続の材料にする（2026-09-13）。
+    // 旧 FACILITIES は links を持っていたが、TOWN_FACILITIES には無いので接続図には出ない。
+    const kitchenLv = Game.facilityLv("grand_kitchen");
     const active = Game.activeRoster();
     const builders = Game.departmentRoster("home");
     const appetiteByUid = {};
@@ -252,20 +254,19 @@ const UI = {
     const candidateAccountant = (m.job || "").includes("会計");
     const graveyardWorker = builders.some(unit => unit.tplId === "necromancer");
     const candidateNecromancer = m.tplId === "necromancer";
-    const rows = Synergy.connections(m, Game.state.roster, facility ? [facility] : [], {
+    const rows = Synergy.connections(m, Game.state.roster, [], {
       activeUids: Game.state.activeUids,
       maxDeploy: Game.MAX_DEPLOY,
       foodAvailableFor: units => {
-        const kitchenExtra = facility && facility.id === "grand_kitchen" ? 1 : 0;
+        const kitchenExtra = kitchenLv >= 1 ? 1 : 0;
         const need = Game.foodNeedFor(units) + kitchenExtra;
         return Math.min(Math.max(0, Game.state.food || 0), need) > 0;
       },
       appetiteByUid,
-      facilityNeeds: facility ? {
-        extortion_ledger: activeAccountant ? [] : [candidateAccountant ? "応募者を会計職として出撃" : "会計職を出撃"],
+      facilityNeeds: {
         grand_kitchen: Math.max(0, Game.state.food || 0) > 0 ? [] : ["戦闘糧食が必要"],
-        graveyard: graveyardWorker ? [] : [candidateNecromancer ? "応募者を建設部門へ配属" : "死霊術師を建設部門へ配属"]
-      } : {}
+        graveyard: graveyardWorker ? [] : [candidateNecromancer ? "応募者を留守番へ配属" : "死霊術師を留守番へ配属"]
+      }
     });
     if (!rows.length) return `<div class="applicant-links muted">現在の軍団との直接接続はまだない</div>`;
     const rowHtml = row => {
@@ -445,7 +446,7 @@ const UI = {
     if (c.recruit) parts.push(`📋 応募+${c.recruit}`);
     const traits = m.traits || [];
     if (traits.includes("tinkerer")) parts.push("🛢 樽で何か寝かせている");
-    if (m.tplId === "necromancer" && Game.state.activeFacilityId === "graveyard") parts.push("🪦 墓地を守る");
+    if (m.tplId === "necromancer" && Game.facilityLv("graveyard") >= 1) parts.push("🪦 墓地を守る");
     return parts.length ? parts.map(U.esc).join("　") : "手持ち無沙汰";
   },
 
@@ -628,12 +629,13 @@ const UI = {
       active.some(m => (m.traits || []).includes("soul_harvest")) ? "蘇生→魂消費→アンデッド強化" : ""
     ].filter(Boolean);
     const deathPanel = deathHints.length ? `<section class="panel"><h2>💀 死亡反応</h2><div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div></section>` : "";
-    const facility = Game.facilityInfo();
-    const next = FACILITY_LEVELS[Game.state.facilityLevel + 1];
-    const facilityStatus = `<section class="panel castle-facility"><h2>施設</h2>
-      <div><b>Lv.${Game.state.facilityLevel} ${U.esc(facility.name)}</b></div>
-      <div class="muted">${facility.works ? `1戦闘に${facility.works}回稼働` : "大型施設はまだない"}</div>
-      <div class="muted">${next ? `次の施設まで建設進捗 ${Game.state.buildProgress || 0}/${next.buildThreshold}` : "施設は最大レベル"}</div></section>`;
+    // 戦場で効く施設（城下町の「軍」2つ）。建てるのは城下町の札。ここは「今どう効くか」だけ。
+    const army = Game.ARMY_FACILITIES.map(id => ({ id, f: Town.facility(id), lv: Town.level(Game.state, id), ready: Game.facilityReady(id) }))
+      .filter(x => x.f);
+    const facilityStatus = `<section class="panel castle-facility"><h2>戦場で効く施設</h2>
+      ${army.map(x => `<div class="${x.lv ? "" : "muted"}">${x.f.icon} <b>${U.esc(x.f.name)} Lv${x.lv}</b>
+        <span class="muted">${x.lv ? (x.ready ? U.esc(x.f.effect(x.lv)) : "条件を満たしていない（今回は働かない）") : "まだ空き地"}</span></div>`).join("")}
+      <div class="muted">建てるのは城下町の札から。</div></section>`;
     return `<div class="castle-advisor">
       ${this.chainMapPanel(active)}${this.synergyPanel(active)}${deathPanel}${facilityStatus}
       ${Game.state.selectedMission ? this.enemyPreview() : `<section class="panel"><h2>敵情</h2><div class="muted">作戦を選ぶと敵情を確認できます。</div></section>`}
@@ -763,20 +765,15 @@ const UI = {
     const st = Game.state;
     const combat = Game.departmentRoster("combat").length;
     const home = Game.departmentRoster("home").length;
-    const facility = Game.facilityInfo();
-    const next = FACILITY_LEVELS[st.facilityLevel + 1];
-    const buildText = next
-      ? `次の施設まで ${Math.max(0, next.buildThreshold - st.buildProgress)} 建材投入`
-      : "施設は最大レベル";
     const output = Game.departmentOutput();
     const foodNeed = Game.foodNeed();
     const balance = output.food - foodNeed;
     return `<div class="department-overview">
       <div><b>⚔ ${combat}</b><span>出撃隊</span></div>
       <div><b>🏰 ${home}</b><span>留守番</span></div>
-      <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
+      <div><b>城下町 Lv計 ${Game.townLevelTotal()}</b><span>建てるのは城下町の札</span></div>
       <div class="${balance < 0 && st.food < -balance ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `赤字 ${-balance}（備蓄 ${st.food} であと${Math.floor(st.food / -balance)}戦）` : `余剰 +${balance}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）`}</span></div>
-      <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
+      <div><b>建材 ${st.materials}</b><span>留守番の調達 +${output.material} / 決着</span></div>
       ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>留守番の経理</span></div>` : ""}
       ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>留守番の人事</span></div>` : ""}
     </div>`;
@@ -947,23 +944,21 @@ const UI = {
   // 集計は Battle.summarizeFacility / summarizeDeathChains（タイムライン導出）を表示するだけ。
   facilityPanel(battle) {
     if (!battle) return "";
+    // 決着の施設報告は「発火した回数」だけ（2026-09-13。建てる話は城下町の札にある）。
     const facility = battle.facility || null;
     const summary = battle.facilitySummary || { facilities: [] };
     const chains = battle.deathChains || [];
     const lines = [];
-    if (facility && facility.level >= 1) {
-      lines.push(`🏗 施設Lv.${facility.level}（${U.esc(facility.name)}）：大型施設が1戦闘に ${facility.works || 1} 回まで働く`);
-    }
     const fired = new Map((summary.facilities || []).map(f => [f.facilityId, f]));
     const describe = f => {
       if (f.facilityId === "graveyard") return `骸骨従者${f.summons || 0}体を召喚${f.rescued ? "（全滅回避）" : ""}`;
-      if (f.facilityId === "extortion_ledger") return `予約金貨${f.amount}G到達 → 次の味方攻撃+40%`;
-      if (f.facilityId === "grand_kitchen") return "食事強化を2倍化（糧食+1）";
+      if (f.facilityId === "grand_kitchen") return "食事強化を倍化（糧食+1）";
       return `${f.count}回発火`;
     };
     for (const f of fired.values()) lines.push(`🔥 ${U.esc(f.name)}：${U.esc(describe(f))}`);
-    if (facility && facility.activeId && !fired.has(facility.activeId)) {
-      lines.push(`💤 ${U.esc(facility.activeName)}：今回は発火しなかった`);
+    // 建っているのに働かなかった施設は、その事実だけ
+    for (const x of (facility && facility.facilities) || []) {
+      if (!fired.has(x.id)) lines.push(`💤 ${U.esc(x.name)} Lv${x.lv}：今回は発火しなかった`);
     }
     if (!lines.length && !chains.length) return "";
     const chainRows = chains.map(c => `<div class="death-chain"><b>${U.esc(c.name)}</b>
@@ -1192,12 +1187,10 @@ const UI = {
   CHAIN_MAP_SIGNAL: "金貨獲得",
 
   chainMapPanel(roster) {
-    const facility = Game.activeFacility();
+    // 施設ノード（旧・恐喝帳簿）は廃止した（2026-09-13）。連鎖の図は人だけで組む。
     const map = Synergy.signalChain(this.CHAIN_MAP_SIGNAL, roster, {
       pool: Game.synergyPool(),
-      slots: Game.MAX_DEPLOY,
-      facility,
-      facilityReady: facility ? Game.facilityReady(facility.id) : false
+      slots: Game.MAX_DEPLOY
     });
     // 起点も反応も無く、手持ちで埋める案も無いなら、この編成に略奪連鎖の話は要らない
     if (!map.sources.length && !map.reactors.length && !map.missing.length) return "";
@@ -1470,21 +1463,11 @@ const UI = {
     const offers = st.missionOffers.length ? st.missionOffers : Game.prepareMissions(true);
     const salary = Game.salaryTotal();
     const construction = Game.departmentOutput().material;
-    const nextFacility = FACILITY_LEVELS[st.facilityLevel + 1];
     const cards = offers.map((m, i) => {
       const net = m.reward - salary;
-      const availableMaterials = (st.materials || 0) + (m.materialReward || 0);
-      const buildEstimate = nextFacility ? Math.min(availableMaterials, construction) : 0;
-      const buildRemaining = nextFacility
-        ? Math.max(0, nextFacility.buildThreshold - st.buildProgress)
-        : 0;
-      const buildText = !nextFacility
-        ? "施設は最大レベル"
-        : construction <= 0
-          ? (!st.seizeUsed && st.facilityLevel === 0
-              ? `施工役なし。建材${Math.max(0, 3 - (st.buildProgress || 0))}で勝利後に拠点接収できる（備蓄${st.materials || 0}）`
-              : `施工役なし（${m.materialReward || 0}建材は備蓄）`)
-          : `勝利後 最大${buildEstimate}投入／次施設まで${buildRemaining}`;
+      // 建材は城下町で使う（旧「施工で積む」は撤去した。2026-09-13）
+      const availableMaterials = (st.materials || 0) + (m.materialReward || 0) + construction;
+      const buildText = `勝利後の建材 ${availableMaterials}（城下町で使う）`;
       // 進軍は「前哨戦 → 本戦」の2戦（2026-09-12）。どちらの戦いなのかを最初に出す。
       const phase = m.twoStage
         ? (m.missionPhase === "outpost"
@@ -1561,41 +1544,8 @@ const UI = {
     return `<div class="mormo-brief">宰相モルモ「${U.esc(lines[0])}」</div>`;
   },
 
-  facility() {
-    const st = Game.state;
-    const current = Game.activeFacility();
-    const active = Game.activeRoster();
-    const builders = Game.departmentRoster("home");
-    const statusOf = f => {
-      if (f.id === "extortion_ledger") {
-        const n = active.filter(m => (m.job || "").includes("会計")).length;
-        return n ? `発火可能：会計職の出撃者 ${n}名` : "不足：会計職を出撃隊へ配置";
-      }
-      if (f.id === "grand_kitchen") {
-        const eaters = active.filter(m => (m.traits || []).includes("big_eater")).length;
-        const cooks = active.filter(m => (m.traits || []).includes("demon_cook")).length;
-        return eaters || cooks
-          ? `発火可能：大食漢 ${eaters}名／魔界料理人 ${cooks}名（出撃中）`
-          : "不足：大食漢か魔界料理人を出撃隊へ配置";
-      }
-      const n = builders.filter(m => m.tplId === "necromancer").length;
-      return n ? `発火可能：留守番の死霊術師 ${n}名` : "不足：死霊術師を留守番へ配置";
-    };
-    const cards = FACILITIES.map((f, i) => `<div class="mission-card facility-blueprint" data-plan="${i + 1}">
-      <div class="blueprint-stamp">設計案 ${i + 1}</div>
-      <div class="mission-kind">大型施設 ${current && current.id === f.id ? "・現在稼働中" : ""}</div>
-      <h3>${f.icon} ${U.esc(f.name)}</h3>
-      <p>${U.esc(f.desc)}</p>
-      <div class="mission-purpose"><b>現在の接続</b><br><span>${U.esc(statusOf(f))}</span></div>
-      <button class="primary wide" data-action="choosefacility" data-id="${U.esc(f.id)}">
-        ${current && current.id === f.id ? "この施設を維持する" : current ? "この施設へ建て替える" : "この施設を建てる"}</button>
-    </div>`).join("");
-    this.set(`${this.hud()}<div class="construction-yard"><div class="construction-crane" aria-hidden="true">⚒</div>
-      <div class="panel construction-order"><h2>🔨 大型施設の方針決定</h2>
-      <div>施設Lv.${st.pendingFacilityChoiceLevel}が完成した。稼働できる大型施設は1つだけ。現在のビルドをどの方向へ壊すか選べ。</div>
-    </div><div class="construction-label">魔王城増築計画 <small>採用した人材と接続する設計案を選べ</small></div>
-    <div class="mission-grid construction-plans">${cards}</div></div>`, "facility");
-  },
+  // 旧「大型施設の方針決定」画面（facility）は撤去した（2026-09-13）。
+  // 施設は城下町の札から金と建材で建てる。phase "facility" はもう作られない。
 
   formation() {
     const st = Game.state;
@@ -1647,9 +1597,9 @@ const UI = {
     const necromancerFrontWarning = necromancer && active[0] && active[0].uid === necromancer.uid
       ? `配置注意：${necromancer.name}は最前列。本人が倒れると《死霊術》は使えません。`
       : "";
-    const ledgerReady = st.activeFacilityId === "extortion_ledger" && active.some(m => (m.job || "").includes("会計"));
-    const graveyardReady = st.activeFacilityId === "graveyard" && builders.some(m => m.tplId === "necromancer");
-    const kitchenReady = st.activeFacilityId === "grand_kitchen";
+    // 戦場で効く施設（城下町の「軍」2つ）。恐喝帳簿は廃止した（2026-09-13）。
+    const graveyardReady = Game.facilityReady("graveyard");
+    const kitchenReady = Game.facilityReady("grand_kitchen");
     const deadline = st.day === 1 ? "勇者到着まであと2日"
       : st.day === 2 ? "明日、勇者が到着" : "本日、勇者襲来";
     const openingActions = st.day < Game.OPENING_DAYS
@@ -1672,12 +1622,10 @@ const UI = {
       ${!opening && deathHints.length ? `<div class="panel"><b>💀 死亡反応</b>
         <div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div>
         ${necromancerFrontWarning ? `<div class="warn">${U.esc(necromancerFrontWarning)}</div>` : ""}</div>` : ""}
-      ${!opening && ledgerReady ? `<div class="panel"><b>📒 恐喝帳簿</b>
-        <div class="synergy-hint">予約金貨3G到達 → 次の味方攻撃+40%</div></div>` : ""}
-      ${!opening && graveyardReady ? `<div class="panel"><b>🪦 墓地</b>
-        <div class="synergy-hint">最初の味方死亡 → ラウンド終了時に骸骨従者を1体召喚</div></div>` : ""}
-      ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房</b>
-        <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍にする。</span>
+      ${!opening && graveyardReady ? `<div class="panel"><b>🪦 墓地 Lv${Game.facilityLv("graveyard")}</b>
+        <div class="synergy-hint">味方死亡 → ラウンド終了時に骸骨従者を ${Game.facilityLv("graveyard")} 体まで召喚</div></div>` : ""}
+      ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房 Lv${Game.facilityLv("grand_kitchen")}</b>
+        <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を ${Game.facilityLv("grand_kitchen") + 1} 倍にする。</span>
       </div>` : ""}
       ${opening ? "" : this.debtPanel()}
       ${opening ? "" : this.feastPanel()}
@@ -1786,8 +1734,8 @@ const UI = {
           : `${U.esc(b.army)}に城を荒らされた。`}${carried.length
           ? `${U.esc(carried.join("、"))}は担いで戻った。` : ""}</div>
         <ul class="notes">
-          ${(b.ransacked.facilityBefore !== undefined && b.ransacked.facilityAfter !== undefined)
-            ? `<li>施設Lv${b.ransacked.facilityBefore}→${b.ransacked.facilityAfter}</li>` : ""}
+          ${b.ransacked.razed
+            ? `<li>${U.esc(b.ransacked.razed.name)} Lv${b.ransacked.razed.from}→Lv${b.ransacked.razed.to}</li>` : ""}
           ${(b.ransacked.foodBefore !== undefined && b.ransacked.foodAfter !== undefined)
             ? `<li>食料 ${b.ransacked.foodBefore}→${b.ransacked.foodAfter}</li>` : ""}
           ${b.ransacked.relic ? `<li>${U.esc(b.ransacked.relic)}を奪われた</li>` : ""}
@@ -1839,11 +1787,10 @@ const UI = {
         const q = Game.seizeQuote();
         return `<div class="panel seize-panel">
         <h3>🏴 この拠点を接収するか</h3>
-        <div class="muted">建設担当がいなくても、勝ち取った拠点をそのまま城へ組み込める。
-          <b>このランで1度きり</b>だ。<br>
-          代償：建材 <b>${q.need}</b>（備蓄 ${q.have}）を消費し、王国警戒度 <b>+${q.alertCost}</b>。
-          奪った拠点は目立つ。以後の敵は少し強くなる。</div>
-        <button class="primary wide" data-action="seize">🏴 接収して大型施設を選ぶ</button>
+        <div class="muted">勝ち取った拠点から資材を運び出す。<b>このランで1度きり</b>だ。<br>
+          得るもの：建材 <b>+${q.gain}</b>（備蓄 ${q.have}）。
+          代償：王国警戒度 <b>+${q.alertCost}</b>——奪った拠点は目立つ。以後の敵は少し強くなる。</div>
+        <button class="primary wide" data-action="seize">🏴 拠点から資材を運び出す</button>
       </div>`; })() : ""}
 
       <div class="panel payroll-result">
@@ -2111,7 +2058,7 @@ const UI = {
           <dt>殿堂入り</dt><dd>${record.hallOfFame ? `${U.esc(record.hallOfFame.name)}（戦功 ${record.hallOfFame.merit || 0}）` : "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${record.battleIncidentTotal || 0}件</dd>
           <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(record))}</dd>
-          <dt>最終施設</dt><dd>Lv.${record.facilityLevel || 0}</dd>
+          <dt>城下町</dt><dd>Lv計 ${record.townLevels || 0}</dd>
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
           <dt>死因</dt><dd>${U.esc(record.cause)}</dd>
@@ -2174,7 +2121,7 @@ const UI = {
           <dt>殿堂入り</dt><dd>${r.hallOfFame ? `${U.esc(r.hallOfFame.name)}（戦功 ${r.hallOfFame.merit || 0}）` : "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${r.battleIncidentTotal || 0}件</dd>
           <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(r))}</dd>
-          <dt>最終施設</dt><dd>Lv.${r.facilityLevel || 0}</dd>
+          <dt>城下町</dt><dd>Lv計 ${r.townLevels || 0}</dd>
           <dt>勝利数</dt><dd>${r.battlesWon || 0}戦</dd>
           <dt>王国攻略</dt><dd>${r.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>主力種族</dt><dd>${U.esc(r.mainRace)}</dd>

@@ -5,7 +5,7 @@ const TownUI = {
     const st = Game.state;
     const t = Town.init(st);
     const sum = Town.summary(st);
-    const facilities = Town.facilities().map(f => {
+    const cardOf = f => {
       const lv = Town.lv(st, f.id);
       const cost = Town.buildCost(Game, f.id);
       const can = Town.canBuild(Game, f.id);
@@ -18,7 +18,16 @@ const TownUI = {
           ${cost ? `<button class="small primary" data-action="townbuild" data-id="${f.id}" ${can.ok ? "" : "disabled"} title="${U.esc(can.why || "")}">${lv ? "増築" : "建てる"}</button>` : ""}
           ${!can.ok && cost ? `<small class="muted">${U.esc(can.why)}</small>` : ""}</div>
       </div>`;
-    }).join("");
+    };
+    // 8施設を2つの見出しに分ける（2026-09-13）。「町」は城下町の経済、「軍」は戦場で効く2つ。
+    const section = (group, title, note) => {
+      const list = Town.facilitiesOf(group);
+      if (!list.length) return "";
+      return `<h3 class="town-group">${U.esc(title)}（${list.length}）<small class="muted">${U.esc(note)}</small></h3>
+        <div class="town-grid">${list.map(cardOf).join("")}</div>`;
+    };
+    const facilities = section("town", "町", "税と暮らしに効く")
+      + section("army", "軍", "戦場で効く。建て方は町と同じ");
     const exLeft = Town.exchangeLeft(st), backLeft = Town.exchangeLeft(st, "toMaterials");
     const factory = Town.lv(st, "factory") ? `<div class="town-row"><span>工場の両替（あと${exLeft}回）</span>
       <button class="small" data-action="townexchange" ${Town.canExchange(st) ? "" : "disabled"}>建材2 → 金3</button>
@@ -42,7 +51,7 @@ const TownUI = {
       ${map}
       <div class="town-summary">領地 <b>${sum.territories}</b> × <b>${sum.perTerritory}G</b> ＝ 税収 <b>${sum.tax}G</b>／決着　　所持金 <b>${st.gold}G</b>　建材 <b>${st.materials}</b></div>
       <div class="muted">領地は本戦で取った段階。施設は金と建材で建てる（1決着に1件）。足りなければ銀行へ。</div>
-      <div class="town-grid">${facilities}</div>
+      ${facilities}
       ${factory}${bank}${ledger}
     </section>`;
   }

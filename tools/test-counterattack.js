@@ -6,9 +6,9 @@ const files = [
   'src/data/traits.js', 'src/data/skills.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/bonds.js', 'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js',
   'src/data/missions.js', 'src/data/counterattack.js', 'src/data/departments.js',
-  'src/data/events.js', 'src/data/demon_kings.js',
+  'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
   'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js',
-  'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -18,6 +18,7 @@ const ctx = { console, Math, Date, JSON, localStorage: {
 vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 const Game = vm.runInContext('Game', ctx);
+const Town = vm.runInContext('Town', ctx);
 const ENEMY_STAGES = vm.runInContext('ENEMY_STAGES', ctx);
 const COUNTERATTACK = vm.runInContext('COUNTERATTACK', ctx);
 let failed = 0;
@@ -116,19 +117,21 @@ function fightDefense(st) {
 // 4. 防衛戦で退く → 荒らされる
 {
   const st = freshRun([paper(301, 'ヨワシ'), tank(302, 'カタブツ'), member(303, 'ルスバン')],
-    [301, 302], { alert: COUNTERATTACK.threshold, facilityLevel: 2, buildProgress: 9, food: 10 });
+    [301, 302], { alert: COUNTERATTACK.threshold, food: 10 });
+  // 荒らしは城下町の施設を1つ落とす（2026-09-13）。市場 Lv2 を建てた状態にする。
+  Town.init(st); st.town.lv.market = 2;
   st.relics = [{ id: 'relic_1', name: 'ガロの杯', traitId: 'drunkard',
     from: { name: 'ガロ', race: 'オーク', cause: 'fallen', army: null, turn: 2 }, holderUid: null }];
   Game.checkCounterattack();
   Game.prepareMissions(true); Game.selectMission(0); st.phase = "formation";
   Game.deploy({ offerRetreat: true });
   Game.settleBattle('retreat');
-  assert(st.facilityLevel === 1, `施設レベルが下がる（2→${st.facilityLevel}）`);
-  assert(st.buildProgress === 3, `進捗はその段階の入口へ戻る（${st.buildProgress}）`);
+  assert(Town.level(st, 'market') === 1, `城下町の施設が1段落ちる（2→${Town.level(st, 'market')}）`);
   const r = st.lastBattle.ransacked;
   assert(!!r && r.foodAfter === Math.floor(r.foodBefore / 2),
     `食料が半減（${r && r.foodBefore}→${r && r.foodAfter}）`);
-  assert(r.facilityBefore === 2 && r.facilityAfter === 1, '荒らしの記録に施設の増減が残る');
+  assert(r.razed && r.razed.id === 'market' && r.razed.from === 2 && r.razed.to === 1,
+    `荒らしの記録に「何が落ちたか」が残る（${JSON.stringify(r.razed)}）`);
   assert(r.relic === 'ガロの杯', `奪われた品が記録される（${r.relic}）`);
   assert((st.relics || []).length === 0, '蔵の遺物が持ち去られる');
   assert(st.plundered.length === 1 && st.plundered[0].name === 'ガロの杯',
@@ -143,15 +146,15 @@ function fightDefense(st) {
 // 5. 何も無い城を荒らされても落ちない
 {
   const st = freshRun([paper(401, 'ヨワシ'), tank(402, 'カタブツ')], [401, 402],
-    { alert: COUNTERATTACK.threshold, facilityLevel: 0, food: 0 });
+    { alert: COUNTERATTACK.threshold, food: 0 });
   st.relics = [];
   Game.checkCounterattack();
   Game.prepareMissions(true); Game.selectMission(0); st.phase = "formation";
   Game.deploy({ offerRetreat: true });
   Game.settleBattle('retreat');
   const r0 = st.lastBattle.ransacked;
-  assert(st.facilityLevel === 0 && !!r0 && r0.foodBefore === 0 && r0.relic === null,
-    '施設0・食料0・遺物なしでも落ちない（奪うものが無いだけ）');
+  assert(!r0.razed && r0.foodBefore === 0 && r0.relic === null,
+    '施設なし・食料0・遺物なしでも落ちない（奪うものが無いだけ）');
   assert(st.ransackCount === 1, '荒らされた事実だけは残る');
 }
 

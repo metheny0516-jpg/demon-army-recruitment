@@ -3,9 +3,9 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js',
-  'src/data/missions.js', 'src/data/counterattack.js', 'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/data/missions.js', 'src/data/counterattack.js', 'src/data/departments.js', 'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
   'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js',
-  'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -142,10 +142,13 @@ for (const id of ['kitchen_takeover', 'surplus_rations', 'facility_credit',
     unit({ uid: 1 }),
     unit({ uid: 2, tplId: 'ogre', name: '棟梁', race: 'オーガ', job: '重量物運搬', department: 'construction' })
   ]);
-  st.facilityLevel = 1;
-  st.lastDepartmentReport = { foodShortage: 0, foodProduced: 0, facilityBefore: 0, facilityAfter: 1 };
+  // 城下町で建てた決着に出る（2026-09-13）
+  const Town = vm.runInContext('Town', ctx);
+  Town.init(st);
+  st.town.lv.market = 1; st.town.builtTurn = st.turn; st.town.builtCount = 1;
+  st.lastDepartmentReport = { foodShortage: 0, foodProduced: 0 };
   const ev = event('facility_credit');
-  assert(ev.check(st), '施設完成と建設担当が揃うと功績争いが候補になる');
+  assert(ev.check(st), '城下町で建てた決着に建設担当がいれば功績争いが候補になる');
   assert(ev.cast(st).actor === 2, '施工適性の高い担当者が功労者になる');
   const beforeLoyalty = st.roster[1].loyalty;
   resolve('facility_credit', 2);

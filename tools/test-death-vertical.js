@@ -11,9 +11,9 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
-  'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/data/departments.js', 'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
   'src/core/util.js', 'src/core/storage.js', 'src/core/kpi.js', 'src/core/synergy.js',
-  'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const assert = (condition, message) => { if (!condition) throw new Error(message); console.log(`✓ ${message}`); };
 
@@ -34,7 +34,8 @@ function boot(seed) {
   } };
   vm.createContext(ctx);
   for (const f of files) vm.runInContext(fs.readFileSync(f, 'utf8'), ctx, { filename: f });
-  return { Game: vm.runInContext('Game', ctx), MISSION_TYPES: vm.runInContext('MISSION_TYPES', ctx) };
+  return { Game: vm.runInContext('Game', ctx), MISSION_TYPES: vm.runInContext('MISSION_TYPES', ctx),
+    Town: vm.runInContext('Town', ctx) };
 }
 
 // 本番の生成器で作った個体に、職と特性だけを固定する（能力値は本番の範囲のまま）
@@ -62,7 +63,7 @@ const FULL = [
 
 // order: 'rear'（術師を最後＝後衛） / 'front'（術師を先頭＝最も狙われる）
 function trial(seed, specs, order, conquest, facility) {
-  const { Game, MISSION_TYPES } = boot(seed);
+  const { Game, MISSION_TYPES, Town } = boot(seed);
   Game.newRun();
   const st = Game.state;
   st.openingPrototype = false;
@@ -77,9 +78,9 @@ function trial(seed, specs, order, conquest, facility) {
     : [...deployed.filter(m => !m.traits.includes('necromancy')), ...deployed.filter(m => m.traits.includes('necromancy'))];
   st.activeUids = ordered.map(m => m.uid).slice(0, Game.MAX_DEPLOY);
   st.food = 12; st.gold = 200;
-  st.facilityLevel = facility ? 2 : 0;
-  st.activeFacilityId = facility || null;
-  st.pendingFacilityChoiceLevel = null;
+  // 墓地は城下町の施設になった（2026-09-13）。Lv がそのまま召喚の上限。
+  Town.init(st);
+  st.town.lv.graveyard = facility === 'graveyard' ? 2 : 0;
   // 進軍は2戦制になった（2026-09-12）。ここが見たいのは「本戦の厚さの敵と戦った結果」
   // なので、前哨は制した状態にしてから組む（前哨は敵が半分で、誰も倒れない）。
   st.outpost = { stage: st.conquest, cleared: true, formationId: null };
@@ -149,7 +150,7 @@ assert(sample.survives.every(e => e.type === 'survive'),
   '一度耐える（白骨）は蘇生ではなく survive');
 
 // ── 5. 召喚の回数上限は施設Lv.（働ける回数）を超えない ──────────
-const works = summonLimitRun => summonLimitRun.Game.facilityWorks();
+const works = summonLimitRun => summonLimitRun.Game.facilityLv('graveyard');
 assert(full.every(r => r.summons.length <= works(r)),
   `召喚の回数は施設Lv.の働ける回数を超えない（上限 ${works(full[0])}体）`);
 

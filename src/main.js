@@ -120,9 +120,7 @@ const App = {
       : work.facilityAfter > work.facilityBefore ? "joy" : "report";
     const workText = work.foodShortage
       ? `ただし食料が${work.foodShortage}不足！ 忠誠低下に注意デス！`
-      : work.facilityAfter > work.facilityBefore
-        ? `さらに施設が完成！ ${Game.facilityInfo().name}が次の出撃隊を支えます！`
-        : `現在、食料${st.food}・建材${st.materials}・施設Lv.${st.facilityLevel}デス。`;
+      : `現在、食料${st.food}・建材${st.materials}・城下町Lv計${Game.townLevelTotal()}デス。`;
     // 撤退は勝利ではない。phase === "result" を勝利と決めつけると
     // 「退いたのに撃退しました！」というウソの報告になる（オーナー試遊で発覚）。
     // 防衛戦の勝敗は、既定の「撃退しました！」より必ず先に見る（同じ穴）。
@@ -177,7 +175,6 @@ const App = {
       case "formation": return UI.formation();
       case "preparation": return UI.formation();
       case "result": return UI.result();
-      case "facility": return UI.facility();
       case "event": return UI.event();
       case "defeat": return UI.defeat();
       case "gameover":
@@ -347,12 +344,6 @@ const App = {
         if (!Game.chooseLesson(data.id)) return;
         this.render();
         return;
-
-      case "choosefacility":
-        Game.chooseFacility(data.id);
-        this.render();
-        return this.report("joy", `大型施設「${Game.activeFacility().name}」を稼働します！ この軍団の壊れ方を決める設備デス！`,
-          { kicker: "施設方針決定", title: "宰相モルモ・竣工報告" });
 
       case "endday": {
         const report = Game.advanceDay(Number(data.day));

@@ -8,8 +8,8 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
-  'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/data/departments.js', 'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -20,6 +20,7 @@ vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 vm.runInContext('U.chance = () => false; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
 const Game = vm.runInContext('Game', ctx), Battle = vm.runInContext('Battle', ctx);
+const Town = vm.runInContext('Town', ctx);
 const Aptitude = vm.runInContext('Aptitude', ctx);
 const assert = (condition, message) => { if (!condition) throw new Error(message); console.log(`✓ ${message}`); };
 const near = (a, b) => Math.abs(a - b) < 1e-9;
@@ -41,9 +42,9 @@ function setup(roster, food, facilityId) {
   st.activeUids = st.roster.map(m => m.uid);
   st.food = food;
   st.gold = 200;
-  st.facilityLevel = facilityId ? 1 : 0;
-  st.activeFacilityId = facilityId || null;
-  st.pendingFacilityChoiceLevel = null;
+  // 施設は城下町ただ1系統になった（2026-09-13）
+  Town.init(st);
+  st.town.lv.grand_kitchen = facilityId === 'grand_kitchen' ? 1 : 0;
   st.feastPending = null;
   return st;
 }
@@ -103,7 +104,7 @@ setup([
   monster(2, 'ogre', 'オーガ', '大食い', ['brute'])
 ], 12, 'grand_kitchen');
 const kitchenPlan = Game.mealPlan(Game.battleRationQuote());
-assert(kitchenPlan.kitchen && kitchenPlan.kitchenMult === 1 + Game.facilityWorks(),
+assert(kitchenPlan.kitchen && kitchenPlan.kitchenMult === 1 + Game.facilityLv('grand_kitchen'),
   '巨大厨房の倍率が伝票に載る');
 assert(kitchenPlan.boost > plan.boost, '厨房ありの方が効果量が大きい');
 

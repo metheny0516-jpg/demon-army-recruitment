@@ -99,5 +99,76 @@ assert(st.town && typeof st.town.debt === 'number', '旧セーブに town が無
   assert(Town.canExchangeBack(st), '次の決着でまた 1 回');
 }
 
+// ── 統合（2026-09-13、docs/SPEC_TOWN_MERGE_2026-09-13.md）──────────
+{
+  // 1. 8施設・2つの群
+  assert(Town.facilities().length === 8, `施設は8つ（${Town.facilities().length}）`);
+  assert(Town.facilitiesOf('town').length === 6 && Town.facilitiesOf('army').length === 2,
+    `町6・軍2（${Town.facilitiesOf('town').length}／${Town.facilitiesOf('army').length}）`);
+  assert(!Town.facility('extortion_ledger'), '恐喝帳簿は施設ではない（建てられない）');
+  assert(!!Town.facility('grand_kitchen') && !!Town.facility('graveyard'), '巨大厨房と墓地がある');
+
+  // 2. 建てれば戦場の options に乗る（2つ同時に持てる）
+  Game.newRun();
+  const s2 = Game.state;
+  Town.init(s2);
+  s2.town.lv.grand_kitchen = 2; s2.town.lv.graveyard = 1;
+  assert(Game.facilityLv('grand_kitchen') === 2 && Game.facilityLv('graveyard') === 1,
+    '2つの施設を同時に持てる');
+  const works = Game.facilityWorks();
+  assert(works.grand_kitchen === 2 && works.graveyard === 1,
+    `facilityWorks は施設ごとの Lv を渡す（${JSON.stringify(works)}）`);
+
+  // 3. 墓地は留守番に死霊術師がいないと働かない
+  s2.roster = []; s2.activeUids = [];
+  assert(Game.facilityReady('grand_kitchen') === true, '巨大厨房は建てれば働く');
+  assert(Game.facilityReady('graveyard') === false, '墓地は死霊術師が城に残っていないと働かない');
+  s2.roster = [{ uid: 1, tplId: 'necromancer', name: 'ホネ', race: '死霊術師', job: '墓守',
+    hp: 10, atk: 1, def: 1, spd: 1, salary: 1, loyalty: 50, traits: [], tags: [], department: 'home' }];
+  s2.activeUids = [];
+  Game.syncDepartments();
+  assert(Game.facilityReady('graveyard') === true, '留守番に死霊術師がいれば墓地が働く');
+
+  // 4. demolishOne：一番 Lv が高いもの、同点なら値段が高いもの
+  Town.init(s2);
+  s2.town.lv = { market: 2, graveyard: 2, tavern: 1, smithy: 0, lab: 0, hostel: 0, factory: 0, grand_kitchen: 0 };
+  const lost = Town.demolishOne(s2);
+  assert(lost && lost.id === 'graveyard' && lost.from === 2 && lost.to === 1,
+    `同点なら値段が高い方が落ちる（${lost && lost.id}）`);
+  s2.town.lv = { market: 0, tavern: 0, smithy: 0, lab: 0, hostel: 0, factory: 0, grand_kitchen: 0, graveyard: 0 };
+  assert(Town.demolishOne(s2) === null, '何も建っていなければ落とすものが無い（null）');
+
+  // 5. 旧セーブの移行：巨大厨房はそのまま、帳簿は建材で返る
+  Game.newRun();
+  const s3 = Game.state;
+  s3.facilityLevel = 2; s3.activeFacilityId = 'grand_kitchen'; s3.buildProgress = 7;
+  const beforeMat = s3.materials || 0;
+  Game.migrateState();
+  assert(Town.level(s3, 'grand_kitchen') === 2, `巨大厨房は同じ Lv で城下町へ（${Town.level(s3, 'grand_kitchen')}）`);
+  assert(s3.materials === beforeMat + 3, `建てかけは建材で返る（半分・上限6：${s3.materials - beforeMat}）`);
+  assert(s3.facilityLevel === undefined && s3.activeFacilityId === undefined && s3.buildProgress === undefined,
+    '旧3欄は消える');
+  Game.newRun();
+  const s4 = Game.state;
+  s4.facilityLevel = 3; s4.activeFacilityId = 'extortion_ledger';
+  const mat4 = s4.materials || 0;
+  Game.migrateState();
+  assert(Town.level(s4, 'extortion_ledger') === 0 || !Town.facility('extortion_ledger'), '帳簿は城下町に写らない');
+  assert(s4.materials === mat4 + 9, `帳簿は Lv×3 の建材で返る（+${s4.materials - mat4}）`);
+  assert((s4.lastFacilityMigration || []).some(l => /帳簿/.test(l)), '日誌に一行残る');
+
+  // 6. 拠点接収は建材 +3 の追い風になった
+  Game.newRun();
+  const s5 = Game.state;
+  s5.phase = 'result';
+  s5.lastBattle = { victory: true, notes: [] };
+  s5.materials = 0; s5.seizeUsed = false;
+  const alertBefore = s5.alert || 0;
+  assert(Game.canSeizeStronghold(), '勝った決着で1度だけ接収できる');
+  assert(Game.seizeStronghold() && s5.materials === 3, `接収で建材 +3（${s5.materials}）`);
+  assert(s5.alert === alertBefore + Game.SEIZE_ALERT_COST, '代償の警戒度は据え置き');
+  assert(!Game.canSeizeStronghold(), 'ランに1度きり');
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

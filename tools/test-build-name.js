@@ -7,8 +7,8 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
-  'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/data/departments.js', 'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -23,7 +23,7 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
 
 // ── 1. 起きたことが名前になる ──────────────────────────────
 const name = r => Game.buildName(r);
-assert(name({ facilityLevel: 3, activeFacilityId: 'graveyard',
+assert(name({ townTop: 3, townTopId: 'graveyard',
   discoveredSynergyIds: ['legion_of_dead'], maxArmySize: 9 }) === '墓地を三度も回した死の軍勢',
   '施設Lv.3の墓地と死の軍勢が、そのまま名前になる');
 assert(name({ payrollChoices: { withhold: 7 }, mainRace: 'ゴブリン', maxArmySize: 8 })
