@@ -450,6 +450,7 @@ const Game = {
     }
     if (!Array.isArray(st.departed)) st.departed = [];
     if (typeof Town !== "undefined") Town.init(st);   // 城下町（2026-09-12）。旧セーブには無い
+    if (st.autoBuild === undefined) st.autoBuild = false;   // 旧セーブも施工を止める（建材が毎決着2減る、オーナー試遊 2026-09-13）
     if (!Array.isArray(st.relics)) st.relics = [];
     if (!Array.isArray(st.traces)) st.traces = [];
     // 答える前の戦闘が保存されていたら、続行として決着させる。
@@ -3229,7 +3230,9 @@ const Game = {
     st.materials += materialReward;
     const beforeLevel = st.facilityLevel;
     const maxLevel = FACILITY_LEVELS.length - 1;
-    const canBuild = st.facilityLevel < maxLevel;
+    // 旧「施工」。st.autoBuild === false のラン（新規・移行済み）では建材を積まない。建材は城下町で使う。
+    // 直作りの state（テスト）は autoBuild が無いので今までどおり積む。
+    const canBuild = st.facilityLevel < maxLevel && st.autoBuild !== false;
     // 供養代行：建設部門の死霊術師は、直前の戦没者を建材へ変える（墓石も城壁も石である）。
     // 戦死という損失が別部門の資源になる、いちばん短い接続。
     const mourners = builders.filter(m => m.tplId === "necromancer").length;
