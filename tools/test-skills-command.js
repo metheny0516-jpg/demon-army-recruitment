@@ -313,5 +313,23 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   ENEMY_BIG_MOVE.chance = bigChance;
 }
 
+// ── 城下町統合（docs/SPEC_TOWN_MERGE_2026-09-13.md）：facilityWorks は数値でもオブジェクトでも効く ──
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const run = (fw) => {
+    const dead = mk('捨て石', { hp: 1, def: 0, tags: [] });
+    const necro = mk('術師', { tplId: 'necromancer', race: '死霊術師' });
+    const dead2 = mk('捨て石2', { hp: 1, def: 0 });
+    const h = Battle.start([dead, dead2, necro], foes(2, { atk: 30 }), opts({ graveyard: true, facilityWorks: fw, seed: 3 }));
+    let g = 0; while (!h.done && g++ < 40) h.next({});
+    return events(h, 'summon').length;
+  };
+  const one = run(1), obj2 = run({ graveyard: 2 }), num2 = run(2), other = run({ extortion_ledger: 3 });
+  assert(one <= 1, `数値1：召喚は1体まで（${one}）`);
+  assert(num2 <= 2 && obj2 <= 2 && obj2 >= one, `数値2とオブジェクト{graveyard:2}で同じ上限（${num2}/${obj2}）`);
+  assert(other <= 1, `別施設の Lv は墓地に効かない（${other}）`);
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

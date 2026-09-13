@@ -244,14 +244,20 @@ const Battle = {
     const note = (text, cls) => emit("note", { text, cls: cls || "info", emphasis: cls === "revive" ? 2 : 0 });
     const soulState = { player: { amount: 0 }, enemy: { amount: 0 } };
     // 施設Lv.＝Jokerが働ける回数。0/未指定なら従来どおり1回だけ働く。
-    const facilityWorks = Math.max(1, Number(options.facilityWorks) || 1);
+    // 施設Lv.＝Jokerが働ける回数。数値なら全施設共通（旧）、オブジェクトなら施設別（城下町統合 2026-09-13、
+    // docs/SPEC_TOWN_MERGE_2026-09-13.md 1節）。0/未指定なら従来どおり1回だけ働く。
+    const worksOf = (id) => {
+      const fw = options.facilityWorks;
+      const n = (fw && typeof fw === "object") ? fw[id] : fw;
+      return Math.max(1, Number(n) || 1);
+    };
     const graveyardQueue = [];
     let graveyardUsed = 0;
     let nextSummonId = 1;
 
     const reactToDeath = (target, deathEvent) => {
       if (target.flags.summoned) return;
-      if (options.graveyard && target.side === "player" && graveyardQueue.length < facilityWorks) {
+      if (options.graveyard && target.side === "player" && graveyardQueue.length < worksOf("graveyard")) {
         graveyardQueue.push({ target, deathEvent });
       }
       if (target.flags.soulCounted) return;
@@ -451,7 +457,7 @@ const Battle = {
           }, event);
         }
         const nextLedgerMark = (ledgerFires + 1) * 3;
-        if (options.extortionLedger && ledgerFires < facilityWorks
+        if (options.extortionLedger && ledgerFires < worksOf("extortion_ledger")
           && before < nextLedgerMark && reservedGold >= nextLedgerMark) {
           ledgerFires += 1;
           ledgerBoost = emitCausal("facility_trigger", {
@@ -1111,7 +1117,7 @@ const Battle = {
     const wiped = us => us.every(u => !u.alive);
     const all = () => [...playerUnits, ...enemyUnits];
     const tryGraveyardSummon = () => {
-      if (!options.graveyard || graveyardUsed >= facilityWorks) return null;
+      if (!options.graveyard || graveyardUsed >= worksOf("graveyard")) return null;
       const pending = graveyardQueue[graveyardUsed];
       if (!pending) return null;
       graveyardUsed += 1;
