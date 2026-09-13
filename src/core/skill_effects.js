@@ -25,6 +25,18 @@
 const SKILL_EFFECTS = {};
 const ENEMY_ROLES = {};
 
+// 将軍技「魔王の力」（kind: might）。敵全体に power 倍の一撃、そのあと本人以外の味方全員の気合 +1。
+// 気合は gainSpirit を通す（result.spiritGained に載り、run.js が名簿へ反映する）。
+SKILL_EFFECTS.might = {
+  resolve(c) {
+    const sk = c.skill || {};
+    const line = sk.lines && sk.lines.use ? c.pick(sk.lines.use) : null;
+    if (line) c.emit("note", { unitId: c.unit.id, skillId: c.cmd.id || null, text: `　${c.unit.name}「${line}」`, cls: "trait" });
+    for (const e of c.living) c.damage(e, sk.power || 0.9, sk.name, { aoe: true });
+    for (const a of c.allies) if (a !== c.unit && c.onField(a)) c.gainSpirit(a, 1, "将軍の魔力");
+  }
+};
+
 if (typeof module !== "undefined") module.exports = { SKILL_EFFECTS, ENEMY_ROLES };
 
 // 共通処理は対象の選択と既存APIへの接続だけ。継続効果の独自フックは作らない。

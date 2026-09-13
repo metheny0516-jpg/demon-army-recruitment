@@ -292,5 +292,26 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   ENEMY_BIG_MOVE.chance = bigChance;
 }
 
+// ── 将軍の転身（docs/SPEC_GENERAL_2026-09-13.md、2026-09-13）：気合上限 +1 と将軍技「魔王の力」 ──
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const general = mk('将軍', { rankId: 'general', spiritMaxBonus: 1, spirit: 3, skills: ['general_might'], atk: 20 });
+  const buddy = mk('相棒', { spirit: 1 });
+  const { h, prompt } = startWith([general, buddy], foes(3, { hp: 60 }), { manual: true });
+  const g = prompt.allies.find(a => a.name === '将軍');
+  assert(g && g.spiritMax === 4 && prompt.allies.find(a => a.name === '相棒').spiritMax === 3, `spiritMaxBonus で将軍だけ上限 4（${g && g.spiritMax}）`);
+  const sk = g && g.skills.find(s => s.id === 'general_might');
+  assert(sk && sk.ready && sk.cost === 2 && sk.kind === 'might', '将軍技「魔王の力」が窓に出て気合2で使える');
+  h.next({ p0: { cmd: 'skill', skill: 'general_might', target: 'e0' }, p1: { cmd: 'attack', target: 'e0' } });
+  const hits = events(h, 'attack').filter(ev => ev.fromId === 'p0' && ev.skillId === 'general_might');
+  assert(hits.length === 3 && hits.every(ev => ev.aoe && ev.fx === 'dark'), `敵3体すべてに当たる（${hits.length}、fx dark）`);
+  const gain = events(h, 'note').filter(ev => ev.spiritGain && ev.unitId === 'p1');
+  assert(gain.length >= 1 && gain.some(ev => ev.reason === '将軍の魔力'), '相棒の気合が +1（将軍の魔力）');
+  const res = finish(h);
+  assert(res.spiritGained && (res.spiritGained['相棒'] || 0) >= 1 && !res.spiritGained['将軍'], 'spiritGained に相棒だけ載る（本人は載らない）');
+  assert(res.spiritSpent && res.spiritSpent['将軍'] === 2, '将軍は気合2を払っている');
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

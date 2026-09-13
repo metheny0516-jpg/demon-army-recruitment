@@ -94,6 +94,7 @@ const Battle = {
       },
       // 技（気合を払って選ぶ行動。SKILLS の id 列）と、敵の役割（fighter/brute/shield/priest/caster/archer/rogue/commander）。
       skills: Array.isArray(m.skills) ? m.skills.slice() : [],
+      spiritMaxBonus: Number(m.spiritMaxBonus) || 0,   // 将軍の転身で +1（2026-09-13）。上限は SPIRIT_MAX に足す
       role: m.role || "fighter",
       flags: {},
       alive: true
@@ -393,7 +394,7 @@ const Battle = {
     const gainSpirit = (u, amount, reason) => {
       if (u.side !== "player" || u.flags.summoned || u.flags.mercenary || u.spirit === null || u.spirit === undefined) return;
       const before = u.spirit;
-      u.spirit = Math.min(SPIRIT_MAX, before + amount);
+      u.spirit = Math.min(SPIRIT_MAX + (u.spiritMaxBonus || 0), before + amount);
       const got = u.spirit - before;
       if (got <= 0) return;
       spiritGained[u.uid] = (spiritGained[u.uid] || 0) + got;
@@ -1276,7 +1277,7 @@ const Battle = {
               skills.push({ id: sid, name: sk.name, label: sk.label || sk.name, note: sk.note || "", cost: debut ? 0 : (sk.cost || 0), kind: sk.kind, target: sk.target, ready: !why, why, debut });
             }
             return {
-              id: u.id, uid: u.uid, name: u.name, hp: u.hp, maxHp: u.maxHp, spirit,
+              id: u.id, uid: u.uid, name: u.name, hp: u.hp, maxHp: u.maxHp, spirit, spiritMax: SPIRIT_MAX + (u.spiritMaxBonus || 0),
               winded: !!u.flags.winded, stuffed: !!u.flags.stuffed, mercenary: !!u.flags.mercenary, summoned: !!u.flags.summoned,
               skills, skill: skills[0] || null
             };

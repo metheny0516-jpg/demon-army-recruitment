@@ -149,13 +149,24 @@ const UPPER_SKILLS = {
 };
 Object.assign(SKILLS, UPPER_SKILLS);
 
+// 将軍技（2026-09-13、docs/SPEC_GENERAL_2026-09-13.md 2.3）。種族を問わず、転身した将軍が1本だけ持つ。
+// run.js が転身時に m.skills へ id を足す。効きは src/core/skill_effects.js の SKILL_EFFECTS.might。
+const GENERAL_SKILL = {
+  general_might: {
+    name: "魔王の力", general: true, cost: 2, kind: "might", power: 0.9, target: "enemy", fx: "dark",
+    label: "力を示せ", note: "敵全体をなぎ払い、仲間に気合を分ける",
+    lines: { use: ["魔王様の力、借りるぞ", "これが将軍の一撃だ", "下がっていろ、まとめて薙ぐ"] }
+  }
+};
+Object.assign(SKILLS, GENERAL_SKILL);
+
 // 演出プリセット（docs/TICKET_SKILL_FX_2026-09-12.md）。技に fx が無ければ kind から引く。battle.js が技のイベントに載せ、描画側が読む。
 const FX_BY_KIND = {
   strike: "slash", aoe: "dark", heal: "holy", rest: "holy", buff: "aura", debuff: "nature", cover: "shield",
-  stun: "nature", charm: "dark", push: "heavy", revive: "summon", random: "dark", steal: "wind", scatter: "wind", trait: "heavy"
+  stun: "nature", charm: "dark", push: "heavy", revive: "summon", random: "dark", steal: "wind", scatter: "wind", trait: "heavy", might: "dark"
 };
 
 // 種族 → 3戦目で覚える技。run.js の開放と、面接の札（「3戦で【…】」）が読む。上位技は含めない。
-const SPECIES_SKILL = Object.fromEntries(Object.entries(SKILLS).filter(([, s]) => !s.upper).map(([id, s]) => [s.species, id]));
+const SPECIES_SKILL = Object.fromEntries(Object.entries(SKILLS).filter(([, s]) => !s.upper && !s.general).map(([id, s]) => [s.species, id]));
 
-if (typeof module !== "undefined") module.exports = { SKILL_RULES, SKILLS, UPPER_SKILLS, SPECIES_SKILL, FX_BY_KIND };
+if (typeof module !== "undefined") module.exports = { SKILL_RULES, SKILLS, UPPER_SKILLS, GENERAL_SKILL, SPECIES_SKILL, FX_BY_KIND };
