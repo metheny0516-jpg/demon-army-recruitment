@@ -133,7 +133,7 @@ const member = (uid, name, x) => Object.assign({
   assert(!!e, `二つ名を引ける（${e}${hasEpithets ? '' : '：epithets.js がまだ無いので仮の名'}）`);
   if (hasEpithets) {
     const EPITHETS = vm.runInContext('EPITHETS', ctx);
-    assert(EPITHETS[m.tplId] === e, `種族ごとの二つ名（orc → ${e}）`);
+    assert((EPITHETS[m.race] === e || EPITHETS[m.tplId] === e), `種族ごとの二つ名（オーク → ${e}）`);
   }
   assert(Game.displayName(member(302, 'ヘイ')) === 'ヘイ', '兵卒に二つ名は付かない');
   assert(Game.isGeneral(member(303, 'X', { rankId: 'general' })) && !Game.isGeneral(member(304, 'Y')),
