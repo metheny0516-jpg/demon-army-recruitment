@@ -21,6 +21,27 @@ const Town = {
     return t;
   },
   lv(st, id) { return Number(((st.town || {}).lv || {})[id]) || 0; },
+  // 外（run.js・events.js・battle への options）から読む入口。lv と同じだが、
+  // 「城下町の施設のレベル」という意味で呼び分けられるようにしてある。
+  level(st, id) { return this.lv(st, id); },
+  // 町の6つ／軍の2つ。城下町の札の見出しと、決着の報告が読む。
+  groupOf(f) { return (f && f.group) || "town"; },
+  facilitiesOf(group) { return this.facilities().filter(f => this.groupOf(f) === group); },
+
+  // 施設を1つ、1段だけ落とす。**荒らし（防衛戦の負け）・銀行の差し押さえ・
+  // 事件の取り立ての3つが共用する唯一の入口**（通知の文は呼び元が書く）。
+  // 落とすのは一番 Lv が高いもの。同点なら値段が高いもの（失うと痛い方を残さない）。
+  demolishOne(st) {
+    const t = this.init(st);
+    const costOf = f => ((f.cost || [])[0] || {}).gold || 0;
+    const top = this.facilities()
+      .map(f => ({ f, lv: this.lv(st, f.id) }))
+      .filter(x => x.lv > 0)
+      .sort((a, b) => (b.lv - a.lv) || (costOf(b.f) - costOf(a.f)))[0];
+    if (!top) return null;
+    t.lv[top.f.id] -= 1;
+    return { id: top.f.id, name: top.f.name, icon: top.f.icon, from: top.lv, to: top.lv - 1 };
+  },
 
   // ── 税 ──
   territories(st) { return Math.max(0, Number(st.conquest) || 0); },
@@ -161,9 +182,9 @@ const Town = {
       if ((st.gold || 0) >= interest) { st.gold -= interest; row.interest += interest; notes.push(`魔界銀行へ利子 ${interest}G（残高 ${t.debt}G）`); }
       else {
         // 差し押さえ：いちばん高い施設が1段落ちる。人は取られない
-        const top = this.facilities().map(f => ({ f, lv: this.lv(st, f.id) })).filter(x => x.lv > 0).sort((a, b) => b.lv - a.lv)[0];
         st.gold = 0;
-        if (top) { t.lv[top.f.id] -= 1; t.seized += 1; row.seized = top.f.id; notes.push(`利子が払えず、${top.f.name}が差し押さえられた（Lv${top.lv}→${top.lv - 1}）`); }
+        const lost = this.demolishOne(st);
+        if (lost) { t.seized += 1; row.seized = lost.id; notes.push(`利子が払えず、${lost.name}が差し押さえられた（Lv${lost.from}→${lost.to}）`); }
         else notes.push(`利子が払えない……銀行員がため息をついた（残高 ${t.debt}G）`);
       }
     }

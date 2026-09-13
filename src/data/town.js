@@ -1,4 +1,6 @@
 // 城下町（2026-09-12・docs/DESIGN_ECONOMY_2026-09-12.md）。税で回し、施設に投資し、足りなければ借りる。
+// 2026-09-13：戦場で効く施設（巨大厨房・墓地）もここへ統合し、建て方を1種類にした（docs/SPEC_TOWN_MERGE_2026-09-13.md）。
+// group が "army" の2つは城下町の札で「軍」の見出しにまとまる。恐喝帳簿は施設ではないので廃止。
 // 覚えることは3つ：「領地＝税」「施設＝投資」「借金＝利子」。効果は一文で言えるものだけ、3段階まで。
 const TOWN_RULES = {
   taxPerTerritory: { 1: 2, 2: 3, 3: 3 },   // 幕ごとの、領地1つあたりの税（決着ごと）
@@ -25,7 +27,16 @@ const TOWN_FACILITIES = [
     cost: [{ gold: 10, materials: 5 }, { gold: 16, materials: 8 }, { gold: 22, materials: 11 }] },
   { id: "factory", icon: "🏭", name: "工場", line: "金と建材を両替する",
     effect: lv => `建材2→金3、または金4→建材2 の両替を決着ごとに${lv}回まで`, jobs: ["倉庫", "配達", "備品"],
-    cost: [{ gold: 15, materials: 2 }, { gold: 24, materials: 3 }, { gold: 33, materials: 4 }] }
+    cost: [{ gold: 15, materials: 2 }, { gold: 24, materials: 3 }, { gold: 33, materials: 4 }] },
+  // ── 軍（戦場で効く2施設。2026-09-13 に旧「戦闘の施設」から統合した） ──
+  // 建て方は町の6つと同じ（金と建材で即時・1決着1件）。旧の「施工で積む」仕組みは消した。
+  { id: "grand_kitchen", icon: "🍖", name: "巨大厨房", group: "army", line: "よく食べてよく殴る",
+    effect: lv => `戦闘糧食を追加で1消費し、大食漢と料理人の食事強化が ${lv + 1} 倍`, jobs: ["料理", "給食"],
+    cost: [{ gold: 15, materials: 3 }, { gold: 24, materials: 5 }, { gold: 33, materials: 7 }] },
+  { id: "graveyard", icon: "🪦", name: "墓地", group: "army", line: "死んだ仲間が骸骨になって戻る",
+    effect: lv => `留守番の死霊術師が、戦死者を骸骨従者として ${lv} 体まで召喚（死霊術師が城に残っていないと発火しない）`,
+    jobs: ["死霊術"],
+    cost: [{ gold: 18, materials: 3 }, { gold: 29, materials: 5 }, { gold: 40, materials: 7 }] }
 ];
 
 // 銀行員（ミミックの親戚）。台詞はくすっと。
