@@ -331,5 +331,28 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   ENEMY_BIG_MOVE.chance = bigChance;
 }
 
+// ── 火の粉（2026-09-14）：味方の全体技で前列の味方1体が巻き込まれる（HP-1、見える事故、result.sparked） ──
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const SPARK = require('vm').runInContext('SPARK', ctx);
+  const was = SPARK.chance;
+  SPARK.chance = 1;
+  const front = mk('前列', { hp: 60 }), mage = mk('術師', { tplId: 'mage', race: '魔法使い', skills: ['mage_fireball'], spirit: 3 });
+  const { h } = startWith([front, mage], foes(2), { manual: true });
+  h.next({ p0: { cmd: 'attack', target: 'e0' }, p1: { cmd: 'skill', skill: 'mage_fireball' } });
+  const sp = events(h, 'note').find(ev => ev.spark);
+  assert(sp && sp.unitId === 'p0' && /火の粉/.test(sp.text), `火の粉の字幕が前列に出る（${sp && sp.text.trim()}）`);
+  const hit = events(h, 'splash').find(ev => ev.label === '火の粉');
+  assert(hit && hit.toId === 'p0' && hit.dmg === 1, `前列の HP が 1 だけ減る（${hit && hit.dmg}）`);
+  const res = finish(h);
+  assert(res.sparked && res.sparked.some(x => x.uid === '前列' && x.byUid === '術師' && x.skillId === 'mage_fireball'), 'result.sparked に誰が誰の技で巻き込まれたかが載る');
+  SPARK.chance = 0;
+  const { h: h2 } = startWith([mk('前列2', { hp: 60 }), mk('術師2', { tplId: 'mage', race: '魔法使い', skills: ['mage_fireball'], spirit: 3 })], foes(2), { manual: true });
+  h2.next({ p0: { cmd: 'attack', target: 'e0' }, p1: { cmd: 'skill', skill: 'mage_fireball' } });
+  assert(!events(h2, 'note').some(ev => ev.spark), 'chance 0 なら火の粉は飛ばない');
+  SPARK.chance = was;
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

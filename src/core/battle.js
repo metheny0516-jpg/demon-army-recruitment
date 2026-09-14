@@ -36,6 +36,9 @@
 // ───────────────────────────────────────────────────────
 // 敵の大技：2ラウンド目以降、この確率で1ラウンド構え（攻撃しない）、次のラウンドに×1.8。まもるで受ける相手。
 const ENEMY_BIG_MOVE = { chance: 0.15, mult: 1.8 };
+// 火の粉（2026-09-14）：味方の全体技（aoe）を撃つと、前列の味方1体に火の粉が飛ぶことがある。HP は 1 減るだけ。
+// 「痕跡になる事故は画面で一度見えたことだけ」の規則のための、見える小さな事故。run.js が result.sparked を痕跡にする。
+const SPARK = { chance: 0.3, damage: 1 };
 
 const Battle = {
   MAX_ROUNDS: 30,
@@ -396,6 +399,7 @@ const Battle = {
     const fxOf = sk => (sk && (sk.fx || FXK[sk.kind])) || null;
     const spiritGained = {};            // uid → 戦闘中に増えた気合（run.js が名簿へ反映）
     const debutShown = [];              // お披露目を実際に使った者の uid
+    const sparked = [];                 // 火の粉を浴びた味方 { uid, byUid, skillId }（run.js が痕跡に）
     let scatterUntil = 0;               // かく乱：このラウンドまで敵の狙いが散る
     const gainSpirit = (u, amount, reason) => {
       if (u.side !== "player" || u.flags.summoned || u.flags.mercenary || u.spirit === null || u.spirit === undefined) return;
@@ -986,6 +990,15 @@ const Battle = {
             const raw = unit.atk * sk.power * (0.9 + U.rand() * 0.2) * (unit.mods.dmgMult || 1);
             applyDamage(unit, e, Math.max(1, Math.round(raw) - Math.floor(e.def / 2)), "attack", { label: sk.name, traits: [sk.name], skillId, fx, aoe: true });
             if (sk.burn && e.alive) e.flags.burn = { at: round + 1, source: unit, parentEvent: null };
+          }
+          // 火の粉：味方側の全体技は、前列（配置順で先頭）の味方1体を巻き込むことがある
+          if (unit.side === "player" && SPARK.chance > 0 && U.chance(SPARK.chance)) {
+            const front = allies.find(a => a !== unit && onField(a) && !a.flags.summoned);
+            if (front && front.hp > SPARK.damage) {
+              applyDamage(unit, front, SPARK.damage, "splash", { label: "火の粉", traits: ["火の粉"], skillId, fx, incident: true, spark: true });
+              emit("note", { unitId: front.id, spark: true, skillId, emphasis: 1, text: `　${unit.name}の【${sk.name}】の火の粉が${front.name}に飛んだ`, cls: "trait" });
+              if (front.uid !== null && front.uid !== undefined) sparked.push({ uid: front.uid, byUid: unit.uid, skillId });
+            }
           }
           if (sk.winded) unit.flags.winded = true;
           break;
@@ -1586,6 +1599,7 @@ const Battle = {
       spiritSpent,
       spiritGained,
       debutShown,
+      sparked,
       // 号令の節目（options.offerOrder のときだけ）。answered は答えの unitId か null。
       // orderOffer は最初の節目（互換）。節目は戦況が動くたびに来るので orderOffers を見る。
       orderOffer: orderOffers[0] || null,
