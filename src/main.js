@@ -186,6 +186,28 @@ const App = {
   onAction(action, data) {
     if (typeof Sound !== "undefined") Sound.ui(action);
     switch (action) {
+      case "incidentopen":
+      case "incidenttailview":
+        this.incidentFrom = UI.root?.dataset.scene === "castle" ? "castle" : null;
+        if (typeof Sound !== "undefined") Sound.cue("shuffle");
+        return action === "incidenttailview" ? UI.incidentTail() : UI.incident(data.id);
+      case "incidentpick": {
+        const result = Incidents.open(Game, data.id, data.uid == null ? undefined : Number(data.uid));
+        if (result && !result.pick && !result.busy && typeof Sound !== "undefined") Sound.cue("mormo");
+        return result ? UI.incident(data.id, result) : this.render();
+      }
+      case "incidenttail": {
+        const result = Incidents.finishTail(Game, data.accept === "yes");
+        if (typeof Sound !== "undefined") Sound.cue("mormo");
+        return result ? UI.incident(result.id, result) : this.render();
+      }
+      case "incidentdecline":
+        Incidents.decline(Game, data.id);
+        if (UI.root?.dataset.scene === "castle") return UI.castle(UI.castleTab);
+        // めくる前の画面へ戻る。通常のイベントのphaseは変えない。
+      case "incidentback":
+        if (this.incidentFrom === "castle") { this.incidentFrom = null; return UI.castle(UI.castleTab); }
+        return this.render();
       case "new":
         // 新規は必ずスロットを指定する。中身があるスロットは確認してから上書きする
         // （「続きから」を押し損ねて消える事故を無くすのが目的）。

@@ -49,6 +49,7 @@ const TownUI = {
     const map = typeof MapUI !== "undefined" ? MapUI.render(st) : "";
     return `<section class="town-panel">
       ${map}
+      ${typeof UI !== "undefined" && UI.incidentCards ? `<aside class="town-notices"><h3>張り紙</h3>${UI.incidentCards("A")}${UI.incidentScenes()}</aside>` : ""}
       <div class="town-summary">領地 <b>${sum.territories}</b> × <b>${sum.perTerritory}G</b> ＝ 税収 <b>${sum.tax}G</b>／決着　　所持金 <b>${st.gold}G</b>　建材 <b>${st.materials}</b></div>
       <div class="muted">領地は本戦で取った段階。施設は金と建材で建てる（1決着に1件）。足りなければ銀行へ。</div>
       ${facilities}

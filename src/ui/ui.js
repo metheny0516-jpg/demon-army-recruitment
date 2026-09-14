@@ -1544,7 +1544,7 @@ const UI = {
       <div class="panel mission-assets"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
       </header>
       <div class="mission-map-label"><span>王国周辺作戦図</span><small>${forced ? "迎撃準備" : "三本の進軍路から、次の一手を選ぶ"}</small></div>
-      <div class="mission-grid mission-routes">${cards}</div>
+      <div class="mission-grid mission-routes">${cards}${this.incidentCards("A")}</div>
       <div class="spacer"></div>
       ${forced ? "" : `<button class="wide ghost mission-return" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`}
       </div>`, "mission");
@@ -1805,6 +1805,9 @@ const UI = {
       </div>`;
     this.set(`${this.hud()}
       ${banner}
+      ${this.incidentCards("B")}
+      ${st.incidents?.tail?.ready ? '<p><button data-action="incidenttailview">📜 噂の続きが届いている</button></p>' : ""}
+      ${this.incidentResultHtml(st.incidents?.result)}
       ${/* 敗因メモ（ニアミス）は「どこまで届いたか」を残す。全滅と敗走のときだけ出す。
            再起画面がほぼ出なくなった（再建の仕様）ので、ここに無いと二度と読まれない。 */
         (wiped || b.lostOnPoints) ? this.nearMissPanel(b.nearMiss) : ""}
@@ -2020,6 +2023,50 @@ const UI = {
     </div>`).join("")}</div>`;
   },
 
+  incidentCards(door="A") {
+    if(typeof Incidents==="undefined"||!Game.state)return "";
+    const st=Game.state,s=Incidents.init(st);
+    const cards=Object.entries(s.offered).filter(([id,o])=>o.door===door&&o.expires>(st.turn||0));
+    const html=cards.map(([id,o])=>{
+      const card=Incidents.card(id); if(!card||!Incidents.alive(st,card,o))return "";
+      return `<article class="mission-card rumor"><h3>📜 ${U.esc(card.title)}</h3><p>${U.esc(Incidents.text(st,card.rumor,Incidents.context(st,o)))}</p>
+      <button data-action="incidentopen" data-id="${id}">${door==="B"?"話を聞く":"めくる"}</button>
+      <button data-action="incidentdecline" data-id="${id}">${U.esc(card.choices[1])}</button></article>`;
+    }).join("");
+    const tail=s.tail?.ready?`<article class="mission-card rumor"><h3>📜 噂の続き</h3><p>${U.esc(Incidents.card(s.tail.parent)?.title||"その後")}</p><button data-action="incidenttailview">その後を聞く</button></article>`:"";
+    return html+(door==="A"?tail:"");
+  },
+  incidentResultHtml(r) {
+    if(!r)return "";
+    return `<section class="panel incident-result"><h3>${U.esc(r.title)}</h3><p>${U.esc(r.text)}</p>
+      <p class="incident-mormo">モルモ「${U.esc(r.mormo)}」</p><details><summary>なぜこうなった？</summary><p>${U.esc(r.why)}</p></details></section>`;
+  },
+  incident(id, result) {
+    const st=Game.state,s=Incidents.init(st),card=Incidents.card(id),o=s.offered[id];
+    if(result&&!result.pick&&!result.busy) {
+      this.set(`${this.hud()}<div class="event-desk">${this.incidentResultHtml(result)}<button data-action="incidentback">戻る</button></div>`,"event");return;
+    }
+    if(!card||!o)return;
+    const choices=card.pick==="viewer"
+      ? st.roster.map(m=>`<button class="wide" data-action="incidentpick" data-id="${id}" data-uid="${m.uid}">${U.esc(Game.displayName(m))}</button>`).join("")
+      : `<button class="wide primary" data-action="incidentpick" data-id="${id}">${U.esc(card.choices[0])}</button>`;
+    this.set(`${this.hud()}<div class="event-desk"><section class="panel"><h2>${U.esc(card.title)}</h2><p>${U.esc(Incidents.text(st,card.rumor,Incidents.context(st,o)))}</p>
+      ${result?.busy?"<p>先に、進行中の噂の後始末をしよう。</p>":choices}
+      <button class="wide" data-action="incidentdecline" data-id="${id}">${U.esc(card.choices[1])}</button></section></div>`,"event");
+  },
+  incidentTail() {
+    const t=Game.state.incidents?.tail;if(!t?.ready)return;
+    const choice=t.parent==="slime_pond"?["正式採用の面接へ","池へ返す"]:t.parent==="necro_visitor"?["迎え撃つ","話をつける"]:["後始末をする","話を収める"];
+    this.set(`${this.hud()}<div class="event-desk"><h2>噂の続き</h2><p>${U.esc(Incidents.card(t.parent).title)}のその後を聞く。</p>
+      <button data-action="incidenttail" data-accept="yes">${choice[0]}</button><button data-action="incidenttail" data-accept="no">${choice[1]}</button></div>`,"event");
+  },
+  incidentScenes() {
+    const s=Game.state?.incidents;if(!s)return "";
+    return Object.entries(s.scenes||{}).map(([id,scene])=> {
+      const card=Incidents.card(id), subject=Game.state.roster.find(m=>m.uid===scene.subjectUid);
+      return `<p class="incident-scene">📌 ${U.esc(Incidents.text(Game.state,card?.branches[scene.branch]?.text||"",{subject}))}</p>`;
+    }).join("");
+  },
   event() {
     const st = Game.state;
     const ev = Game.currentEvent();

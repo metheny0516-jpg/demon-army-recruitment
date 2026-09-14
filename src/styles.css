@@ -3863,3 +3863,14 @@ button.primary::first-letter { color: var(--gold); }
 .training-note { font-size: 11px; }
 .training-terms { font-size: 12px; color: #d8f0d8; margin: 4px 0; }
 .banner.training { border-color: rgba(160, 220, 160, .6); }
+
+/* 噂の札は作戦と同じ入口。薄い紙の色で読み分ける。 */
+.mission-card.rumor { background: #e5dac0; color: #352b22; border: 1px dashed #88785f; }
+.mission-card.rumor p, .incident-result p { white-space: pre-line; line-height: 1.65; }
+.town-notices { margin: 12px 0; }
+.town-notices:has(h3:only-child) { display: none; }
+.incident-result details { margin-top: 14px; }
+.incident-result summary { cursor: pointer; text-decoration: underline; }
+.incident-mormo { border-left: 3px solid #99845f; padding-left: 12px; }
+.incident-scene { font-size: .9rem; }
+
