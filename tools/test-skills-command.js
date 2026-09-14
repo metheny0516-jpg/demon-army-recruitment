@@ -282,8 +282,8 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   assert(fire.length === 3 && fire.every(ev => ev.fx === 'fire' && ev.aoe === true), '火球：3体とも fx fire・aoe 印');
   const warcry = events(h, 'note').find(ev => ev.buff && ev.unitId === 'p2');
   assert(warcry && warcry.fx === 'aura' && Array.isArray(warcry.targets) && warcry.targets.length === 4, '鬨の声：fx aura と対象一覧');
-  const rest = events(h, 'heal').find(ev => ev.unitId === 'p3');
-  assert(rest && rest.fx === 'holy' && rest.skillId === 'troll_rest', '休む：heal に fx holy');
+  const wall = events(h, 'cover').find(ev => ev.unitId === 'p3');
+  assert(wall && wall.fx === 'shield', '壁になる：cover に fx shield');
   const ex = events(h, 'order_exec').find(ev => ev.skillId === 'mage_fireball');
   assert(ex && ex.fx === 'fire' && ex.target === 'all_enemies', 'order_exec に fx と対象の種類');
   h.next({ p0: { cmd: 'attack' }, p1: { cmd: 'attack' }, p2: { cmd: 'attack' }, p3: { cmd: 'attack' } });
@@ -375,12 +375,12 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   const { prompt: p0 } = startWith([mk('腹ぺこ')], foes(1), { manual: true, rations: Object.assign(rations(), { spare: 0 }) });
   assert(p0.allies[0].eat && !p0.allies[0].eat.ready, '備蓄が無ければ食べられない');
   // C. トロルの手当て（味方対象）、サキュバスの気付け（癖に紐づく上位技）、キングスライムの包む
-  const troll = mk('トロル', { tplId: 'troll', race: 'トロル', skills: ['troll_rest'], spirit: 3 });
-  const hurt = mk('けが人', { hp: 100 }); hurt.hp = 30;
-  const { h: h3 } = startWith([hurt, troll], foes(2, { atk: 1 }), { manual: true });
+  const troll = mk('トロル', { tplId: 'troll', race: 'トロル', skills: ['troll_rest'], spirit: 3, hp: 120 });
+  const frail = mk('弱い人', { hp: 100 });
+  const { h: h3 } = startWith([frail, troll], foes(2, { atk: 20 }), { manual: true });
   h3.next({ p0: { cmd: 'attack', target: 'e0' }, p1: { cmd: 'skill', skill: 'troll_rest', target: 'p0' } });
-  const th = events(h3, 'heal').find(ev => ev.unitId === 'p0' && ev.sourceId === 'p1');
-  assert(th && th.amount === 30, `トロルの手当てで味方が +30（${th && th.amount}）`);
+  const cov = events(h3, 'cover').find(ev => ev.unitId === 'p1' && ev.forId === 'p0');
+  assert(!!cov, 'トロルの「壁になる」で味方をかばう（cover イベント）');
   const suc = mk('サキュバス', { tplId: 'succubus', race: 'サキュバス', traits: ['enthrall'], spirit: 3 });
   const { prompt: ps } = startWith([suc, mk('前')], foes(2), { manual: true });
   const cl = ps.allies[0].skills.find(x => x.id === 'succubus_cleanse');

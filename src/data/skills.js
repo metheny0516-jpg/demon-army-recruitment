@@ -72,9 +72,9 @@ const SKILLS = {
     lines: { use: ["ねぇ、あなた……こっちを見て", "隣の人、嫌いでしょう？", "私のお願い、聞いてくださる？"], miss: ["あら、目を逸らすのね", "つれない方。聞いてもくださらない"] }
   },
   troll_rest: {
-    name: "手当て", species: "troll", cost: 1, kind: "heal", target: "ally", fx: "holy", power: 0.3,
-    label: "手当てしろ", note: "味方1体（自分も可）のHP30%回復　このラウンドは動かない",   // 2026-09-14 回復役へ（docs/DESIGN_BATTLE_DEPTH C）
-    lines: { use: ["……じっとしてろ", "石は待てる", "ひと息……つけ……"], miss: ["……落ち着かん", "手が……届かん"] }
+    name: "壁になる", species: "troll", cost: 1, kind: "cover", target: "ally", fx: "shield", power: 0.8,
+    label: "壁になれ", note: "味方1体をかばう（自分が80%で受ける）　トロルは硬い",   // 2026-09-14 オーナー「トロルはタンク役」。id は旧セーブ互換で troll_rest のまま
+    lines: { use: ["……おれの後ろに", "石は待てる", "壁の……修理は得意だ"], miss: ["……間に合わん", "足が……重い"] }
   },
   mino_rush: {
     name: "突進", species: "minotaur", cost: 1, kind: "strike", target: "enemy", fx: "heavy", power: 1.5, push: true, recoil: 0.1,

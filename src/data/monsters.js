@@ -398,7 +398,7 @@ const MONSTER_TEMPLATES = [
   {
     skills: ["troll_rest"],
     id: "troll", race: "トロル", tier: 2, tags: [],
-    jobs: ["石工", "橋守", "工事現場監督", "壁（補修可）"], base: { hp: 38, atk: 10, def: 5, spd: 3 },
+    jobs: ["石工", "橋守", "工事現場監督", "壁（補修可）"], base: { hp: 48, atk: 9, def: 7, spd: 3 },   // 2026-09-14 タンク役へ（HP 38→48、防御 5→7、攻撃 10→9）
     salary: [4, 6], loyalty: [50, 78], fixedTraits: [], traitPool: ["tough_skin"],
     prevJobs: ["山道の橋番", "採石場の夜勤", "城壁の穴埋め"],
     motives: ["壊れた物を直す仕事がしたい", "日陰の現場を希望", "橋を守るより城を作りたい"],
