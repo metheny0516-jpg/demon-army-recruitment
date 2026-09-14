@@ -14,12 +14,22 @@ const { autoDismissMormo } = require('./helpers.js');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  const click = async sel => { await page.locator(sel).first().click(); await page.waitForTimeout(40); };
+  // 固定HUDが伸びて（城下町Lv・将軍・前哨済…）札を覆うことがある。真ん中まで送ってから押し、
+  // それでも覆われていたらDOMのclickで逃げる。通し試遊が見たいのは「最後まで進むか」なので。
+  const click = async sel => { await clickOne(page.locator(sel).first()); };
+  const clickOne = async locator => {
+    await locator.evaluate(e => e.scrollIntoView({ block: 'center' })).catch(() => {});
+    try { await locator.click({ timeout: 5000 }); }
+    catch (_) { await locator.evaluate(e => e.click()); }
+    await page.waitForTimeout(40);
+  };
   let runs = 0;
   for (runs = 1; runs <= 3; runs++) {
     await click('[data-action="new"]');
     let steps = 0;
-    while (steps++ < 120) {
+    // 進軍が前哨戦＋本戦の2戦になり（2026-09-12）、1ランに要る手数が倍近くに増えた。
+    // 120手では決着前に打ち切られる。
+    while (steps++ < 300) {
       // 敗北しても再起可能なうちは確定していない。ここでは「ここで終わる」を選んで確定させる。
       if (await page.locator('[data-action="concede"]').count()) { await click('[data-action="concede"]'); continue; }
       // ハプニングは適当に選んで進める
@@ -27,7 +37,6 @@ const { autoDismissMormo } = require('./helpers.js');
       if (await page.locator('[data-action="eventdone"]').count()) { await click('[data-action="eventdone"]'); continue; }
       // 戦闘結果の「次へ」
       if (await page.locator('[data-action="afterresult"]').count()) { await click('[data-action="afterresult"]'); continue; }
-      if (await page.locator('[data-action="choosefacility"]').count()) { await click('[data-action="choosefacility"]'); continue; }
       // gameover(敗北確定 or 全クリア)画面だけを終端とみなす。result()の1戦ごとの勝利画面はスルーする。
       if (await page.locator('.banner').count()
           && !(await page.locator('[data-action="nextrecruit"], [data-action="afterresult"]').count())) break;
@@ -46,8 +55,11 @@ const { autoDismissMormo } = require('./helpers.js');
       }
 
       if (await page.locator('[data-action="missionpick"]').count()) {
-        await page.locator('[data-action="missionpick"]').last().click();
-        await page.waitForTimeout(40);
+        // 最後の札＝いちばん攻めた作戦を選ぶ。訓練（2026-09-13）は進行しないので除く
+        // （選び続けるとランが終わらず、この通し試遊が止まる）。
+        const real = page.locator('.mission-card:not(.mission-train) [data-action="missionpick"]');
+        const pick = await real.count() ? real.last() : page.locator('[data-action="missionpick"]').last();
+        await clickOne(pick);
         continue;
       }
 

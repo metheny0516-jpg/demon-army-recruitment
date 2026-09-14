@@ -131,13 +131,23 @@ function runOnce(strat, stats){
         if (lowLoyalty && (st.missionCounts.suppress || 0) < 2) kind = 'suppress';
         else if (st.gold < salary + 5 && (st.missionCounts.raid || 0) < 4) kind = 'raid';
       }
+      // 訓練（2026-09-13）：「進軍の前に訓練を1回」の戦略は、進軍を選ぶ手番の前に1回だけ稽古する。
+      // 死なないので判断は単純でよい。回数は stats.trainings に数える。
+      if (strat.train && kind === 'invade' && !st.trainedBeforeThisInvade
+        && st.missionOffers.some(m => m.missionKind === 'train')) {
+        kind = 'train';
+        st.trainedBeforeThisInvade = true;
+      } else if (kind !== 'train') {
+        st.trainedBeforeThisInvade = false;
+      }
       // 防衛戦（王国の反撃）は一択で来る。選ぶ余地は無いので、あればそれを受ける。
       const defendIndex = st.missionOffers.findIndex(m => m.missionKind === 'defend');
-      if (defendIndex >= 0) Game.selectMission(defendIndex);
+      if (defendIndex >= 0 && kind !== 'train') Game.selectMission(defendIndex);
       else {
         const index = st.missionOffers.findIndex(m => m.missionKind === kind);
         Game.selectMission(index >= 0 ? index : Math.min(2, st.missionOffers.length - 1));
       }
+      if (st.selectedMission && st.selectedMission.missionKind === 'train') stats.trainings = (stats.trainings || 0) + 1;
     }
     if (st.phase === 'formation') {
       // 出撃隊に入らない者は全員留守番（控えは無い）。「留守番2人」は弱い2人を出撃候補から外す
@@ -246,6 +256,8 @@ const strategies = [
   {name:'慎重経営', kind:'greedy', mission:'careful'},
   {name:'留守番2人', kind:'greedy', mission:'careful', departments:'balanced'},
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
+  // 訓練（2026-09-13）：進軍の前に1回だけ稽古を挟む。使用率と破産率だけを見る。
+  {name:'進軍の前に訓練を1回', kind:'greedy', train:true},
 ];
 const N = Number(process.argv[2] || 400);
 // KPIの書き出し先（任意）: node tools/sim.js 30 --kpi /tmp/kpi.json
@@ -261,7 +273,7 @@ const kpiOut = (() => {
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 const skillTriggerTotals = {};
 for (const s of strategies) {
-  const stats = { generals:0, syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
+  const stats = { generals:0, trainings:0, syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -269,7 +281,7 @@ for (const s of strategies) {
   const facility = (res.reduce((a,r)=>a+(r.townLevels||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン`);
   const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);
   const nameCount = new Map();

@@ -3568,6 +3568,8 @@ const Game = {
 
   // 訓練の決着は給与が半分（端数は切り上げ。未払いの判定も半額で行う）。
   salaryRatio(stageData) {
+    // 既定は半分（設計2.3、オーナーの指示）。2.4 の「破産率が5pt上がれば 1/3」は
+    // 実測で条件を満たしているが、数字の変更はオーナーの判断待ち（報告済み）。
     return this.isTraining(stageData || this.state.selectedMission) ? 0.5 : 1;
   },
   paySalaries(notes, dailyDay, stageData) {

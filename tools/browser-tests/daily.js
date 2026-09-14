@@ -16,7 +16,9 @@ const { dismissMormo } = require('./helpers.js');
   if (state.opening || state.phase !== 'mission') throw new Error('採用後に通常の作戦会議へ直行しない');
   if (await page.getByText(/勇者到着まで|本日、勇者襲来/).count()) throw new Error('撤廃した3日間の期限表示が残っている');
   if (await page.locator('[data-action="endday"], [data-action="openingbattle"]').count()) throw new Error('撤廃した日次操作が残っている');
-  if (await page.locator('[data-action="missionpick"]').count() !== 3) throw new Error('通常の作戦3択が出ない');
+  // 訓練の札が4枚目に加わった（2026-09-13）
+  if (await page.locator('[data-action="missionpick"]').count() !== 4) throw new Error('通常の作戦（3系統＋訓練）が出ない');
+  if (await page.locator('.mission-card.mission-train').count() !== 1) throw new Error('訓練の札が出ない');
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('✓ 開幕3日間を挟まず通常ループへ入る');
   await browser.close();

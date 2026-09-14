@@ -17,14 +17,16 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   await enterMissionPhase(page);   // 開幕3日は daily.js の担当。ここは作戦会議から先を見る
 
   const cards = page.locator('.mission-card');
-  ok(await cards.count() === 3, '作戦が3種類提示される');
-  ok(await page.locator('.mission-economy').count() === 3, '各作戦に収支見込が表示される');
-  ok(await page.locator('.mission-formation').count() === 3, '各作戦に敵編成名と特徴が事前表示される');
-  ok(await page.locator('.mission-purpose').count() === 3, '各作戦の戦略目的が表示される');
+  // 3系統＋訓練の4枚（2026-09-13）
+  ok(await cards.count() === 4, '作戦が3種類＋訓練の4枚提示される');
+  ok(await page.locator('.mission-card.mission-train').count() === 1, '4枚目は訓練');
+  ok(await page.locator('.mission-economy').count() === 4, '各作戦に収支見込が表示される');
+  ok(await page.locator('.mission-formation').count() === 4, '各作戦に敵編成名と特徴が事前表示される');
+  ok(await page.locator('.mission-purpose').count() === 4, '各作戦の戦略目的が表示される');
   const missionText = await page.locator('.mission-grid').innerText();
   ok(missionText.includes('資金・食料を補給') && missionText.includes('忠誠回復・建材確保')
     && missionText.includes('決戦へ進む'), '補給・再建・決戦進行の役割が区別される');
-  ok((missionText.match(/施設施工見込/g) || []).length === 3, '全作戦に勝利後の施工見込が表示される');
+  ok((missionText.match(/施設施工見込/g) || []).length === 4, '全作戦に勝利後の建材見込が表示される');
   ok(missionText.includes('決戦まであと8勝'), '王国侵攻に最終決戦までの距離が表示される');
   const before = await page.evaluate(() => ({ alert: Game.state.alert, conquest: Game.state.conquest, turn: Game.state.turn }));
 
@@ -71,6 +73,29 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   ok(/王国攻略 \+1/.test(main.text), '本戦は王国攻略+1');
   ok(/▸前哨済/.test(main.hud), `HUD に「▸前哨済」（${(main.hud.match(/王国攻略[^\n]*/) || [''])[0]}）`);
   ok(/宰相モルモ「前哨で見た顔ぶれ/.test(main.brief), '作戦会議にモルモの本戦の一言');
+
+  // 訓練（2026-09-13）：相手3つの小ボタンと、解放の段階
+  console.log('▼ 訓練の札');
+  const train = await page.evaluate(() => {
+    Game.state.conquest = 0; Game.prepareMissions(true); App.render();
+    const card = document.querySelector('.mission-card.mission-train');
+    const picks = [...card.querySelectorAll('[data-action="trainpick"]')];
+    return { text: card.innerText.replace(/\s+/g, ' '),
+      picks: picks.map(b => ({ id: b.dataset.id, disabled: b.disabled })) };
+  });
+  ok(train.picks.length === 3, `相手が3つ並ぶ（${train.picks.length}）`);
+  ok(!train.picks[0].disabled && train.picks[1].disabled && train.picks[2].disabled,
+    `征服0では案山子だけ選べる（${train.picks.map(p => p.id + (p.disabled ? '×' : '○')).join(' ')}）`);
+  ok(/死なない。金は入らない/.test(train.text), `条件が書いてある（${train.text.slice(0, 60)}）`);
+  const opened = await page.evaluate(() => {
+    Game.state.conquest = 4; Game.prepareMissions(true); App.render();
+    const picks = [...document.querySelectorAll('[data-action="trainpick"]')];
+    picks.find(b => b.dataset.id === 'scarecrow').click();
+    const card = document.querySelector('.mission-card.mission-train');
+    return { disabled: picks.filter(b => b.disabled).length, title: card.querySelector('h3').innerText };
+  });
+  ok(opened.disabled === 0, '征服4で3つとも選べる');
+  ok(/案山子/.test(opened.title), `選んだ相手が題に出る（${opened.title}）`);
 
   console.log(errors.length ? '✗ JSエラー: ' + errors.join(', ') : '✓ JSエラーなし');
   await browser.close();
