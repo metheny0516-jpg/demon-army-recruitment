@@ -109,7 +109,13 @@ const Incidents = {
       ? (card.subject.uid ?? (this.pickSubject(st, card) || {}).uid ?? null) : null;
     if (card.subject && card.subject.kind === "unit" && subjectUid === null) return null;
     if (!this.subjectAlive(st, card, subjectUid)) return null;
-    if (typeof card.state === "function" && !card.state(st)) return null;
+    // 「いまの状態」はデータ側の式。読めない場面（sim の SIM_NO_TOWN で Town が無い等）は
+    // **その札を出さない**だけにする。器の都合で決着を止めない。
+    if (typeof card.state === "function") {
+      let okNow = false;
+      try { okNow = !!card.state(st); } catch (e) { okNow = false; }
+      if (!okNow) return null;
+    }
     const by = this.openKinds(st, card, need, subjectUid);
     if (!by) return null;
     return { id: card.id, by, subjectUid };
