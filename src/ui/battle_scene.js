@@ -63,7 +63,8 @@ const BattleScene = {
     dragoon_heavy: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     inquisitor: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     chorister: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    artillery: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    artillery: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    mandragora: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])      // 回復役の新種族（2026-09-14）
   },
   motions: new Set(),
   pendingHits: new Set(),
