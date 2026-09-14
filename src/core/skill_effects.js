@@ -132,6 +132,13 @@ Object.assign(SKILL_EFFECTS, {
     for (const key of ["stunned", "charmed", "burn"]) delete t.flags[key];
     CatalogEffects.say(c, "気付けで足止め・魅了・燃焼を解除");
   } },
+  // 目覚めの声（マンドラゴラの上位技、docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md D）：全員の足止め・魅了・燃焼を払い、次の自分の手番は休む
+  cleanse_all: { immediate(c) {
+    let n = 0;
+    for (const a of c.allies) { if (!c.onField(a)) continue; for (const key of ["stunned", "charmed", "burn"]) if (a.flags[key]) { delete a.flags[key]; n++; } }
+    c.unit.flags.skillCmd = { id: c.cmd.id || null, done: true };   // 手番は身構えるだけ
+    CatalogEffects.say(c, n ? `目覚めの声。${n}つの足止め・魅了・燃焼が解けた` : "目覚めの声。誰も眠っていなかった");
+  } },
   rescue: { immediate(c) {
     const t = CatalogEffects.ally(c, true); if (!t) return;
     c.moveBack(c.allies, t);

@@ -354,5 +354,58 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   ENEMY_BIG_MOVE.chance = bigChance;
 }
 
+// ── 食べる・回復役（docs/DESIGN_BATTLE_DEPTH_2026-09-14.md A・C、2026-09-14） ──
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  // A. 食べる：備蓄があれば窓に出て、食べると HP 30% 戻り、隊で2回まで
+  const a = mk('食べ手', { hp: 100 }), b = mk('相棒', { hp: 100 });
+  a.hp = 40; b.hp = 40;
+  const { h, prompt } = startWith([a, b], foes(2, { atk: 1 }), { manual: true, rations: Object.assign(rations(), { spare: 5, kitchenLv: 0 }) });
+  const pa = prompt.allies.find(x => x.name === '食べ手');
+  assert(pa.eat && pa.eat.ready && pa.eat.left === 2, `食べるが窓に出る（あと ${pa.eat.left} 回）`);
+  h.next({ p0: { cmd: 'eat' }, p1: { cmd: 'eat' } });
+  const heals = events(h, 'heal').filter(ev => ev.eat);
+  assert(heals.length === 2 && heals.every(ev => ev.amount === 30), `二人とも携行食で +30（${heals.map(ev => ev.amount).join(',')}）`);
+  const p2 = h.next({ p0: { cmd: 'attack', target: 'e0' }, p1: { cmd: 'attack', target: 'e0' } });
+  const again = p2 && p2.allies ? p2.allies[0].eat : null;
+  assert(again && !again.ready && again.left === 0, '隊の上限2回で食べられなくなる');
+  const res = finish(h);
+  assert(res.rationsEaten === 2, `result.rationsEaten に 2（${res.rationsEaten}）`);
+  // 備蓄0なら出ない
+  const { prompt: p0 } = startWith([mk('腹ぺこ')], foes(1), { manual: true, rations: Object.assign(rations(), { spare: 0 }) });
+  assert(p0.allies[0].eat && !p0.allies[0].eat.ready, '備蓄が無ければ食べられない');
+  // C. トロルの手当て（味方対象）、サキュバスの気付け（癖に紐づく上位技）、キングスライムの包む
+  const troll = mk('トロル', { tplId: 'troll', race: 'トロル', skills: ['troll_rest'], spirit: 3 });
+  const hurt = mk('けが人', { hp: 100 }); hurt.hp = 30;
+  const { h: h3 } = startWith([hurt, troll], foes(2, { atk: 1 }), { manual: true });
+  h3.next({ p0: { cmd: 'attack', target: 'e0' }, p1: { cmd: 'skill', skill: 'troll_rest', target: 'p0' } });
+  const th = events(h3, 'heal').find(ev => ev.unitId === 'p0' && ev.sourceId === 'p1');
+  assert(th && th.amount === 30, `トロルの手当てで味方が +30（${th && th.amount}）`);
+  const suc = mk('サキュバス', { tplId: 'succubus', race: 'サキュバス', traits: ['enthrall'], spirit: 3 });
+  const { prompt: ps } = startWith([suc, mk('前')], foes(2), { manual: true });
+  const cl = ps.allies[0].skills.find(x => x.id === 'succubus_cleanse');
+  assert(cl && cl.kind === 'cleanse' && cl.target === 'ally' && !ps.allies[0].skills.some(x => x.id === 'enthrall'), '癖「魅了」持ちの窓に上位技「気付け」が出て、旧「魅了」の指示は出ない');
+  const ks = mk('王', { tplId: 'king_slime', race: 'キングスライム', traits: ['tidal_wave'], spirit: 3 });
+  const { prompt: pk } = startWith([ks, mk('前2')], foes(2), { manual: true });
+  assert(pk.allies[0].skills.some(x => x.id === 'king_slime_wrap' && x.kind === 'heal'), 'キングスライム（大波持ち）の窓に「包む」が出る');
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
+// ── 目覚めの声（cleanse_all）：全員の足止め・魅了・燃焼を払う。本人の手番は身構えるだけ ──
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const SKILL_EFFECTS = require('vm').runInContext('SKILL_EFFECTS', ctx);
+  assert(typeof SKILL_EFFECTS.cleanse_all.immediate === 'function', 'cleanse_all が登録されている');
+  SKILLS.test_wake = { name: '目覚めの声', species: 'test', cost: 1, kind: 'cleanse_all', target: 'all_allies', fx: 'holy' };
+  const voice = mk('声', { skills: ['test_wake'], spirit: 3 }), s1 = mk('眠り手'), s2 = mk('燃え手');
+  const { h } = startWith([voice, s1, s2], foes(2, { atk: 1 }), { manual: true });
+  s1.flags.stunned = true; s2.flags.burn = { at: 2 };
+  h.next({ p0: { cmd: 'skill', skill: 'test_wake' }, p1: { cmd: 'attack', target: 'e0' }, p2: { cmd: 'attack', target: 'e0' } });
+  assert(!s1.flags.stunned && !s2.flags.burn, '足止めと燃焼が全員から解けた');
+  assert(events(h, 'note').some(ev => /目覚めの声/.test(ev.text || '')), '字幕が出る');
+  delete SKILLS.test_wake;
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

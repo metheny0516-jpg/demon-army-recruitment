@@ -72,9 +72,9 @@ const SKILLS = {
     lines: { use: ["ねぇ、あなた……こっちを見て", "隣の人、嫌いでしょう？", "私のお願い、聞いてくださる？"], miss: ["あら、目を逸らすのね", "つれない方。聞いてもくださらない"] }
   },
   troll_rest: {
-    name: "休む", species: "troll", cost: 1, kind: "rest", target: "self", fx: "holy", power: 0.3,
-    note: "自分のHP30%回復　このラウンドは動かない",
-    lines: { use: ["……少し寝る", "石は待てる", "ひと息……つく……"], miss: ["……落ち着かん", "寝床が……とがってる"] }
+    name: "手当て", species: "troll", cost: 1, kind: "heal", target: "ally", fx: "holy", power: 0.3,
+    label: "手当てしろ", note: "味方1体（自分も可）のHP30%回復　このラウンドは動かない",   // 2026-09-14 回復役へ（docs/DESIGN_BATTLE_DEPTH C）
+    lines: { use: ["……じっとしてろ", "石は待てる", "ひと息……つけ……"], miss: ["……落ち着かん", "手が……届かん"] }
   },
   mino_rush: {
     name: "突進", species: "minotaur", cost: 1, kind: "strike", target: "enemy", fx: "heavy", power: 1.5, push: true, recoil: 0.1,
@@ -114,9 +114,15 @@ const SKILLS = {
 // kind: "trait" ＝ 気合を払うと、その戦いの次の一撃で trait の条件を飛ばして必ず出す（flags.ordered）。
 // 条件が無い上位技（分裂・骨の壁・腐敗・火遊び・大召集・大波）は勝手に効く癖なので、ここには載せない。
 const UPPER_SKILLS = {
-  enthrall: {
-    name: "魅了", species: "succubus", cost: 2, kind: "trait", trait: "enthrall", target: "enemy", upper: true, fx: "dark",
-    label: "魅了せよ", note: "次の一撃で、相手が必ず仲間を殴る"
+  // サキュバスの上位技は「魅了」から「気付け」へ差し替え（2026-09-14 オーナー決定。魅了は癖として残る）
+  succubus_cleanse: {
+    name: "気付け", species: "succubus", cost: 2, kind: "cleanse", trait: "enthrall", target: "ally", upper: true, fx: "holy",
+    label: "目を覚ませ", note: "味方1体の足止め・魅了・燃焼を解く",
+    lines: { use: ["正気に戻りなさい", "まだ勤務中よ"], miss: ["声が届かない"] }
+  },
+  king_slime_wrap: {
+    name: "包む", species: "king_slime", cost: 1, kind: "heal", trait: "tidal_wave", target: "ally", upper: true, fx: "nature", power: 0.2,
+    label: "包め", note: "味方1体をHP20%回復　大きいから包める"
   },
   rampage: {
     name: "暴走", species: "minotaur", cost: 2, kind: "trait", trait: "rampage", target: "enemy", upper: true, fx: "heavy",
@@ -164,7 +170,7 @@ Object.assign(SKILLS, GENERAL_SKILL);
 // 演出プリセット（docs/TICKET_SKILL_FX_2026-09-12.md）。技に fx が無ければ kind から引く。battle.js が技のイベントに載せ、描画側が読む。
 const FX_BY_KIND = {
   strike: "slash", aoe: "dark", heal: "holy", rest: "holy", buff: "aura", debuff: "nature", cover: "shield",
-  stun: "nature", charm: "dark", push: "heavy", revive: "summon", random: "dark", steal: "wind", scatter: "wind", trait: "heavy", might: "dark"
+  stun: "nature", charm: "dark", push: "heavy", revive: "summon", random: "dark", steal: "wind", scatter: "wind", trait: "heavy", might: "dark", cleanse_all: "holy"
 };
 
 // 種族 → 3戦目で覚える技。run.js の開放と、面接の札（「3戦で【…】」）が読む。上位技は含めない。

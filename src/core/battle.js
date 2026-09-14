@@ -39,6 +39,9 @@ const ENEMY_BIG_MOVE = { chance: 0.15, mult: 1.8 };
 // 火の粉（2026-09-14）：味方の全体技（aoe）を撃つと、前列の味方1体に火の粉が飛ぶことがある。HP は 1 減るだけ。
 // 「痕跡になる事故は画面で一度見えたことだけ」の規則のための、見える小さな事故。run.js が result.sparked を痕跡にする。
 const SPARK = { chance: 0.3, damage: 1 };
+// 食べる（2026-09-14、docs/DESIGN_BATTLE_DEPTH_2026-09-14.md A）：戦闘中に携行食を1つ食べて HP を戻す。
+// 隊で1戦に limit 回まで（巨大厨房 Lv2 で +1）。options.rations.spare（備蓄の残り）が無ければ出ない。run.js が result.rationsEaten を食料から引く。
+const EAT = { heal: 0.3, healKitchen3: 0.4, limit: 2, limitKitchen2: 3 };
 
 const Battle = {
   MAX_ROUNDS: 30,
@@ -400,6 +403,13 @@ const Battle = {
     const spiritGained = {};            // uid → 戦闘中に増えた気合（run.js が名簿へ反映）
     const debutShown = [];              // お披露目を実際に使った者の uid
     const sparked = [];                 // 火の粉を浴びた味方 { uid, byUid, skillId }（run.js が痕跡に）
+    const eatRules = (() => {
+      const r = options.rations || {};
+      const lv = Number(r.kitchenLv) || 0;
+      return { spare: Math.max(0, Number(r.spare) || 0), limit: lv >= 2 ? EAT.limitKitchen2 : EAT.limit, heal: lv >= 3 ? EAT.healKitchen3 : EAT.heal };
+    })();
+    let rationsEaten = 0;               // 食べた携行食の数（run.js が食料から引く）
+    const canEat = () => eatRules.spare - rationsEaten > 0 && rationsEaten < eatRules.limit;
     let scatterUntil = 0;               // かく乱：このラウンドまで敵の狙いが散る
     const gainSpirit = (u, amount, reason) => {
       if (u.side !== "player" || u.flags.summoned || u.flags.mercenary || u.spirit === null || u.spirit === undefined) return;
@@ -430,7 +440,8 @@ const Battle = {
     // その者が窓に並べる技の id：種族技（skills）のあとに、持っている癖の上位技（kind "trait"）
     const unitSkillIds = (u) => {
       const ids = (u.skills || []).filter(id => SK[id] && !SK[id].upper);
-      for (const [id, sk] of Object.entries(SK)) if (sk.kind === "trait" && sk.trait && u.traits.includes(sk.trait) && !ids.includes(id)) ids.push(id);
+      // 上位技：癖（tier2 の trait）を持つ者に紐づく指示。kind が trait なら号令、それ以外（heal/cleanse…）は通常の技として解決する
+      for (const [id, sk] of Object.entries(SK)) if (sk.trait && u.traits.includes(sk.trait) && !ids.includes(id)) ids.push(id);
       return ids;
     };
     // 技が今選べない理由。null なら選べる。
@@ -1268,7 +1279,7 @@ const Battle = {
       }
       // ── コマンド（手動）。ラウンドの頭で止まり、味方それぞれの指示を受ける ──
       // 乱数はここでは消費しない。指示：attack（target 任意）／guard／skill／auto。retreat: true で退く。
-      for (const u of all()) { u.flags.guarding = false; u.flags.covering = null; u.flags.skillCmd = null; }
+      for (const u of all()) { u.flags.guarding = false; u.flags.eating = false; u.flags.covering = null; u.flags.skillCmd = null; }
       if (round === 1) planEnemies(1);
       // 敵の守り（盾役の計画）はラウンドの頭から効く
       for (const e of enemyUnits.filter(onField)) {
@@ -1298,7 +1309,8 @@ const Battle = {
             return {
               id: u.id, uid: u.uid, name: u.name, hp: u.hp, maxHp: u.maxHp, spirit, spiritMax: SPIRIT_MAX + (u.spiritMaxBonus || 0),
               winded: !!u.flags.winded, stuffed: !!u.flags.stuffed, mercenary: !!u.flags.mercenary, summoned: !!u.flags.summoned,
-              skills, skill: skills[0] || null
+              skills, skill: skills[0] || null,
+              eat: { ready: canEat() && !u.flags.mercenary && !u.flags.summoned, left: Math.max(0, Math.min(eatRules.spare, eatRules.limit) - rationsEaten), heal: eatRules.heal }
             };
           }),
           fallen: playerUnits.filter(u => !u.alive && !u.flags.summoned).map(u => ({ id: u.id, name: u.name })),
@@ -1332,6 +1344,9 @@ const Battle = {
           if (!c || !onField(u)) continue;
           if (c.cmd === "guard") {
             u.flags.guarding = true;
+          } else if (c.cmd === "eat") {
+            // 食べる：手番で携行食を1つ食べる。隊の上限と備蓄を見て、無理なら「たたかう」に落とす
+            if (canEat() && !u.flags.mercenary && !u.flags.summoned) { u.flags.eating = true; rationsEaten += 1; }
           } else if (c.cmd === "skill") {
             const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
             const ids = unitSkillIds(u);
@@ -1412,6 +1427,15 @@ const Battle = {
         // まもる：この手番は攻撃しない（被ダメ半減は applyDamage）。
         if (unit.side === "player" && unit.flags.guarding) {
           emit("note", { unitId: unit.id, guarding: true, emphasis: 1, text: `　${unit.name}は身を守っている`, cls: "trait" });
+          continue;
+        }
+        // 食べる：この手番は携行食を食べて HP を戻す（攻撃しない）
+        if (unit.side === "player" && unit.flags.eating) {
+          unit.flags.eating = false;
+          const amount = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * eatRules.heal));
+          if (amount > 0) unit.hp += amount;
+          emitCausal("heal", { unitId: unit.id, amount, hp: unit.hp, maxHp: unit.maxHp, sourceId: unit.id, label: "携行食", eat: true, fx: "holy", emphasis: 2 }, null);
+          emit("note", { unitId: unit.id, eat: true, emphasis: 1, text: `　${unit.name}は携行食を食べた（+${amount}）`, cls: "food" });
           continue;
         }
         // 動けない（粘りつく）／魅入られた（同僚を殴る）
@@ -1600,6 +1624,7 @@ const Battle = {
       spiritGained,
       debutShown,
       sparked,
+      rationsEaten,
       // 号令の節目（options.offerOrder のときだけ）。answered は答えの unitId か null。
       // orderOffer は最初の節目（互換）。節目は戦況が動くたびに来るので orderOffers を見る。
       orderOffer: orderOffers[0] || null,
