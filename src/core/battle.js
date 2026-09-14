@@ -1281,7 +1281,7 @@ const Battle = {
       }
       // ── コマンド（手動）。ラウンドの頭で止まり、味方それぞれの指示を受ける ──
       // 乱数はここでは消費しない。指示：attack（target 任意）／guard／skill／auto。retreat: true で退く。
-      for (const u of all()) { u.flags.guarding = false; u.flags.eating = false; u.flags.covering = null; u.flags.skillCmd = null; }
+      for (const u of all()) { u.flags.guarding = false; u.flags.eating = false; u.flags.covering = null; u.flags.skillCmd = null; u.flags.orderCall = null; }
       if (round === 1) planEnemies(1);
       // 敵の守り（盾役の計画）はラウンドの頭から効く
       for (const e of enemyUnits.filter(onField)) {
@@ -1365,8 +1365,10 @@ const Battle = {
                 u.flags.ordered = true;
                 u.flags.orderedManual = true;
                 const quote = U.pick(debut ? ((tr.lines && (tr.lines.unlock || tr.lines.order)) || ["……体が、覚えている"]) : ((tr.lines && tr.lines.order) || ["……はっ！"]));
+                // 台詞と技名は本人の手番（skill_call）で出す。order_exec は指示の記録として残す（quiet）
+                u.flags.orderCall = { skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, fx: fxOf(sk), target: "enemy", debut, cost };
                 emit("order_exec", {
-                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, cost, manual: true, debut, fx: fxOf(sk), target: "enemy", emphasis: 3,
+                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, cost, manual: true, debut, fx: fxOf(sk), target: "enemy", emphasis: 3, quiet: true,
                   text: `　魔王「${u.name}、${sk.label || sk.name}！」 ${u.name}「${quote}」`, cls: "order"
                 });
               }
@@ -1379,11 +1381,14 @@ const Battle = {
                 if (spirit !== null) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
                 const quote = U.pick((sk.lines && sk.lines.use) || ["……はっ！"]);
                 const cmd = { id: sid, targetId: c.target || null };
+                const call = { skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, fx: fxOf(sk), target: sk.target, debut: false, cost };
                 emit("order_exec", {
-                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.name, quote, cost, manual: true, species: true, fx: fxOf(sk), target: sk.target, emphasis: 3,
+                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.name, quote, cost, manual: true, species: true, fx: fxOf(sk), target: sk.target, emphasis: 3, quiet: true,
                   text: `　魔王「${u.name}、${sk.name}！」 ${u.name}「${quote}」`, cls: "order"
                 });
-                if (applyImmediateSkill(u, sk, cmd, round)) cmd.done = true;
+                // 指示の直後に効く技（かばう・鬨の声・かく乱）は今ここで台詞。それ以外は本人の手番で
+                if (applyImmediateSkill(u, sk, cmd, round)) { cmd.done = true; emit("skill_call", Object.assign({ unitId: u.id, name: u.name, emphasis: 3, text: `　${u.name}「${quote}」【${sk.name}】`, cls: "order" }, call)); }
+                else u.flags.orderCall = call;
                 u.flags.skillCmd = cmd;
               }
               continue;
@@ -1481,6 +1486,11 @@ const Battle = {
           }
         }
         const manualCmd = options.manual ? commands[unit.id] : null;
+        // 技の台詞と技名は、本人が実際に繰り出す瞬間に出す（ラウンド頭に言って、出す前に倒れる、を防ぐ）
+        if (unit.flags.orderCall && unit.alive) {
+          const call = unit.flags.orderCall; unit.flags.orderCall = null;
+          emit("skill_call", Object.assign({ unitId: unit.id, name: unit.name, emphasis: 3, text: `　${unit.name}「${call.quote}」【${call.skillName}】`, cls: "order" }, call));
+        }
         if (unit.flags.skillCmd) {
           const cmd = unit.flags.skillCmd;
           unit.flags.skillCmd = null;

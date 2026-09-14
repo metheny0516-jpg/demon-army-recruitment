@@ -421,5 +421,27 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   ENEMY_BIG_MOVE.chance = bigChance;
 }
 
+// ── 技の台詞は本人の手番で（skill_call）。指示の記録 order_exec は quiet ──
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const slow = mk('のろま', { tplId: 'mage', race: '魔法使い', skills: ['mage_fireball'], spirit: 3, spd: 1, hp: 200 });
+  const { h } = startWith([slow], foes(2, { spd: 9, atk: 5 }), { manual: true });
+  h.next({ p0: { cmd: 'skill', skill: 'mage_fireball' } });
+  const tl = h.timeline;
+  const iExec = tl.findIndex(ev => ev.type === 'order_exec'), iCall = tl.findIndex(ev => ev.type === 'skill_call');
+  const iEnemyHit = tl.findIndex(ev => ev.type === 'attack' && ev.toId === 'p0');
+  const iFire = tl.findIndex(ev => ev.type === 'attack' && ev.fromId === 'p0' && ev.skillId === 'mage_fireball');
+  assert(iExec >= 0 && tl[iExec].quiet === true, 'order_exec は quiet（記録だけ）');
+  assert(iCall > iEnemyHit && iCall < iFire, `skill_call は敵の先攻のあと、火球の直前（${iEnemyHit} < ${iCall} < ${iFire}）`);
+  assert(tl[iCall].skillName === '火球' && /「.+」/.test(tl[iCall].text) && tl[iCall].quote, '台詞と技名が載る');
+  // 指示直後に効く技（かばう）は指示の時点で台詞
+  const sk = mk('骸骨', { tplId: 'skeleton', race: '骸骨兵', skills: ['skeleton_wall'], spirit: 3 });
+  const { h: h2 } = startWith([sk, mk('前')], foes(1, { atk: 1 }), { manual: true });
+  h2.next({ p0: { cmd: 'skill', skill: 'skeleton_wall', target: 'p1' }, p1: { cmd: 'attack', target: 'e0' } });
+  const calls = h2.timeline.filter(ev => ev.type === 'skill_call' && ev.unitId === 'p0');
+  assert(calls.length === 1 && calls[0].skillName === '骨の壁', 'かばうは1回だけ台詞（指示の直後）');
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;
