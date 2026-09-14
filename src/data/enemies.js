@@ -242,3 +242,23 @@ const ENEMY_STAGES_ACT2 = [
 // （現状は ENEMY_STAGES.length を直接見ているため未接続）。第一幕は8で据え置き、
 // 第二幕を実装するときに ACT_STAGE_CAP[2] と ENEMY_STAGES_ACT2 をつなぐ。
 const ACT_STAGE_CAP = { 1: 8, 2: 14 };
+
+// 魔界の反乱軍の見た目（2026-09-14 オーナー「反乱軍が人間の絵なのは変」）。
+// 鎮圧（suppress）の敵は段階表の人間の隊列を借りているので、数値はそのまま**姿だけ**魔物に差し替える。
+// 先頭は首謀者（強面の魔物）、残りは初期種族の雑魚から乱数で。tplId は assets/battle/units/<tplId>/ の絵。
+const REBEL_LOOKS = {
+  leaders: [
+    { tplId: "minotaur", race: "ミノタウロス", icon: "🐂" },
+    { tplId: "ogre", race: "オーガ", icon: "👹" },
+    { tplId: "lich", race: "リッチ", icon: "☠️" }
+  ],
+  grunts: [
+    { tplId: "goblin", race: "ゴブリン", icon: "👺" },
+    { tplId: "slime", race: "スライム", icon: "🟢" },
+    { tplId: "kobold", race: "コボルト", icon: "🐕" },
+    { tplId: "imp", race: "インプ", icon: "😈" },
+    { tplId: "skeleton", race: "骸骨兵", icon: "💀" },
+    { tplId: "zombie", race: "ゾンビ", icon: "🧟" }
+  ]
+};
+if (typeof module !== "undefined" && module.exports) module.exports.REBEL_LOOKS = REBEL_LOOKS;

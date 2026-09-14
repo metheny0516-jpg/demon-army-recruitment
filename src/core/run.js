@@ -1147,6 +1147,14 @@ const Game = {
     return picked;
   },
 
+  // 鎮圧（suppress）の敵の姿。人間の隊列を借りているので tplId / race / icon だけ魔物に差し替える（数値・役は触らない）。
+  rebelLook(type, index) {
+    if (!type || type.id !== "suppress" || typeof REBEL_LOOKS === "undefined") return {};
+    const pool = index === 0 ? REBEL_LOOKS.leaders : REBEL_LOOKS.grunts;
+    const look = U.pick(pool) || {};
+    return { tplId: look.tplId, race: look.race, icon: look.icon, rebel: true };
+  },
+
   buildMission(type, previousFormationId) {
     const st = this.state;
     // 敵も魔王軍レベルに連動する（仕様2.3）。征服段階だけで引いていた頃は、
@@ -1185,7 +1193,9 @@ const Game = {
       hp: stat(unit.hp, 1),
       atk: stat(unit.atk, 1),
       def: stat(unit.def, 0),
-      spd: stat(unit.spd, 1)
+      spd: stat(unit.spd, 1),
+      // 反乱軍は魔物の姿（数値と役はそのまま。先頭が首謀者、残りは初期種族の雑魚）
+      ...this.rebelLook(type, index)
     }));
     // 進軍だけが2戦制。前哨戦は敵が半分・報酬も半分・征服度は進まない。
     const isOutpost = type.id === "invade" && !counter
