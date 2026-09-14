@@ -26,8 +26,6 @@ const PORTRAITS = [
   "lich",
   "harpy",
   "troll",
-  // 絵は CodeX 待ち（無い間は自動で絵文字 🌱 に落ちる）
-  "mandragora",
   "mimic",
 ];
 
