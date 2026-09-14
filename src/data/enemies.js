@@ -248,6 +248,8 @@ const ACT_STAGE_CAP = { 1: 8, 2: 14 };
 // 先頭は首謀者（強面の魔物）、残りは初期種族の雑魚から乱数で。tplId は assets/battle/units/<tplId>/ の絵。
 const REBEL_LOOKS = {
   leaders: [
+    { tplId: "rebel_boss", race: "反乱の首魁", icon: "🎖" },   // 専用の絵（2026-09-14 CodeX）。他は代用
+    { tplId: "rebel_boss", race: "反乱の首魁", icon: "🎖" },   // 2枠で出やすく
     { tplId: "minotaur", race: "ミノタウロス", icon: "🐂" },
     { tplId: "ogre", race: "オーガ", icon: "👹" },
     { tplId: "lich", race: "リッチ", icon: "☠️" }
