@@ -169,10 +169,12 @@ const Aptitude = {
   contribution(monster, departmentId) {
     const apt = this.of(monster);
     const home = DEPARTMENT_ID(departmentId) !== "combat";
-    // 城の主：この城の勝手を知っている者は、留守番のとき食料を1多く調達する。
-    // 経験で身についた特性なので、応募者には付かない（run.js が決着ごとに付ける）。
-    const keeper = home && (monster.traits || []).includes("castle_keeper")
-      ? ((typeof TRAITS !== "undefined" && TRAITS.castle_keeper && TRAITS.castle_keeper.homeFood) || 0) : 0;
+    // 留守番のとき食料を多く調達する癖（城の主、マンドラゴラの根の声・目覚めの声）。
+    // 癖の側が `homeFood` を持つので、ここは**持っている癖を合算するだけ**にしてある
+    // （名指しで1つだけ見ていると、癖を足すたびにここを直すことになる）。
+    const keeper = home
+      ? (monster.traits || []).reduce((sum, id) => sum
+        + (((typeof TRAITS !== "undefined" && TRAITS[id]) || {}).homeFood || 0), 0) : 0;
     return {
       food: home ? apt.food + keeper : 0,
       material: home ? apt.material : 0,

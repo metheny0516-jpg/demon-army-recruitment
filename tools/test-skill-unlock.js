@@ -226,5 +226,49 @@ const fresh = () => { Game.newRun(); const st = Game.state; st.roster = []; st.a
   assert(!!SKILLS[SPECIES_SKILL.orc], '技の定義がある');
 }
 
+// ── 7. マンドラゴラ（docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md D）──────
+{
+  const st = fresh();
+  const TRAITS = vm.runInContext('TRAITS', ctx);
+  const MONSTER_TEMPLATES = vm.runInContext('MONSTER_TEMPLATES', ctx);
+  const tpl = MONSTER_TEMPLATES.find(t => t.id === 'mandragora');
+  assert(!!tpl && tpl.race === 'マンドラゴラ' && tpl.tier === 2, '種族テンプレートがある（tier2）');
+  assert(tpl.minConquest === 3, `中盤から応募する（征服度 ${tpl && tpl.minConquest} 以上）`);
+  assert((tpl.jobs || []).some(j => /料理/.test(j)), `職業に料理人がある（酒場の職業一致。${(tpl.jobs || []).join('・')}）`);
+  // 征服度で門が開く（tier の重みの前に閉める）。
+  // このテストは U.rand を 0.5 で固定しているので、抽選を見る間だけ散らす。
+  vm.runInContext('U.rand = (() => { let i = 0; return () => ((i = (i * 9301 + 49297) % 233280) / 233280); })();', ctx);
+  st.conquest = 0;
+  const closed = Array.from({ length: 200 }, () => Game.rollApplicant().tplId);
+  assert(!closed.includes('mandragora'), '征服度0では応募に混ざらない');
+  st.conquest = 3;
+  const opened = Array.from({ length: 200 }, () => Game.rollApplicant().tplId);
+  assert(opened.includes('mandragora'), '征服度3で応募に混ざる');
+  vm.runInContext('U.rand = () => 0.5;', ctx);
+
+  // 3戦で種族技「配り薬」、8戦で上位技「目覚めの声」
+  const m = member(150, 'ネネ', { tplId: 'mandragora', race: 'マンドラゴラ' });
+  st.roster = [m];
+  assert(SPECIES_SKILL.mandragora === 'mandragora_mend', `種族技の対応表（${SPECIES_SKILL.mandragora}）`);
+  Game.memberRecord(m).battles = 3;
+  const mend = Game.checkSpeciesSkill(m, []);
+  assert(!!mend && mend.skillId === 'mandragora_mend', `3戦で配り薬（${mend && mend.skillName}）`);
+  assert(SKILLS.mandragora_mend.kind === 'mend_all' && SKILLS.mandragora_mend.cost === 2,
+    `配り薬は mend_all・気合2（${SKILLS.mandragora_mend.kind}／${SKILLS.mandragora_mend.cost}）`);
+  Game.memberRecord(m).battles = 8;
+  const wake = Game.checkSkillUnlock(m, []);
+  assert(!!wake && wake.skillId === 'wake_call', `8戦で目覚めの声（${wake && wake.skillName}）`);
+  assert(m.traits.includes('wake_call') && m.skillTier === 2, 'traits に入り skillTier が2');
+  const upper = vm.runInContext('UPPER_SKILLS', ctx).mandragora_wake;
+  assert(upper && upper.kind === 'cleanse_all' && upper.trait === 'wake_call',
+    `上位技は cleanse_all で癖に紐づく（${upper && upper.kind}）`);
+  // 受動：留守番のとき食料 +1（癖の homeFood を留守番の貢献が読む）
+  const Aptitude = vm.runInContext('Aptitude', ctx);
+  const plain = Object.assign({}, m, { traits: [] });
+  assert(Aptitude.contribution(m, 'home').food === Aptitude.contribution(plain, 'home').food + 1,
+    '留守番のとき食料の調達が1多い');
+  assert(TRAITS.wake_call.skill.replaces === 'root_voice', '上位の癖は1段目を置き換える');
+}
+
 console.log(failed ? `\n${failed} 件失敗` : '\n全件通過');
 process.exit(failed ? 1 : 0);

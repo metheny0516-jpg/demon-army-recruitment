@@ -499,6 +499,33 @@ const TRAITS = {
     lines: { earned: ["城の音で、腹が減る刻が分かる", "留守は任せろ。火も見ている", "この城の勝手は、もう知ってる"] }
   },
 
+  // ── マンドラゴラ（docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md D）─────────
+  // 1段目は受動だけ（戦闘では鳴らない）。種族技「配り薬」は skills.js の mandragora_mend。
+  root_voice: {
+    name: "根の声",
+    relic: "薬研",
+    desc: "留守番のとき食料の調達+1。声が大きいので、畑の者がよく集まる",
+    skill: { species: "mandragora", tier: 1 },
+    homeFood: 1,
+    lines: {
+      unlock: ["土の声が、よく通るようになりました"],
+      use: ["失礼、少々声を張ります"]
+    }
+  },
+  // 2段目。上位技「目覚めの声」（skills.js の mandragora_wake、kind: cleanse_all）の紐づけ先。
+  // 効果は技側（skill_effects.js の cleanse_all）が持つので、ここは受動を引き継ぐだけ。
+  wake_call: {
+    name: "目覚めの声",
+    relic: "銅鑼",
+    desc: "留守番のとき食料の調達+1。戦場では上位技「目覚めの声」で全員の足止め・魅了・燃焼を払う",
+    skill: { species: "mandragora", tier: 2, replaces: "root_voice" },
+    homeFood: 1,
+    lines: {
+      unlock: ["この声なら、眠っている方も起きるでしょう", "大きな声で、失礼いたします"],
+      use: ["お目覚めくださいませ！", "皆様、正気に！"]
+    }
+  },
+
   // ── 第二幕の種族技（2026-09-11・データのみ）───────────────────
   // 新種族3体（サキュバス・ミノタウロス・リッチ）は `MONSTER_TEMPLATES_ACT2` にいるので、
   // 今の幕（第一幕）の応募には混ざらない。ここは技の定義だけを先に置く。
@@ -525,7 +552,7 @@ const TRAITS = {
   // サキュバス上位：惑わされた相手が、隣の味方を殴る。自動は1戦闘1回、号令なら必ず。
   enthrall: {
     name: "魅了",
-    desc: "攻撃した敵が、立っている別の敵1体を本来の7割で殴る（自動は1戦闘1回。号令なら必ず）",
+    desc: "攻撃した敵が、立っている別の敵1体を本来の7割で殴る（自動は1戦闘1回。号令なら必ず）。上位技は「気付け」",
     skill: { species: "succubus", tier: 2, replaces: "allure" },
     autoLimit: 1,
     order: { label: "魅了せよ", cost: 2, note: "次の一撃で、相手が必ず仲間を殴る" },

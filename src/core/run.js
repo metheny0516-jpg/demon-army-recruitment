@@ -1685,6 +1685,9 @@ const Game = {
     const pool = this.templates();
     const weights = pool.map(t => {
       let w;
+      // 中盤から来る種族（マンドラゴラ）。tier の重みの前に、征服度で門を閉める。
+      // データ側（monsters.js の minConquest）が持つので、種族を足しても run.js は触らない。
+      if (t.minConquest && (Number(st.conquest) || 0) < t.minConquest) return 0;
       // 低ティアはレベル5以上で来ること自体が珍しくなる（2 → 1）。
       // 珍しくするのは「来たときに歴戦の顔をしている」ための下ごしらえ。
       if (t.tier === 1) w = level <= 3 ? 6 : (level <= 4 ? 2 : 1);

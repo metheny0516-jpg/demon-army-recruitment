@@ -101,6 +101,16 @@ const SKILLS = {
     note: "×1.3　最初に動く・命中85%",
     lines: { use: ["上から失礼！", "風、もらった！", "急ぎのお届けっ！"], miss: ["きゃっ、風に流された！", "あっ、通り過ぎちゃった！"] }
   },
+  // マンドラゴラ（docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md D）。回復役の種族技。
+  // kind は カタログの mend_all（skill_effects.js）。味方全員を 15% 回復する。
+  mandragora_mend: {
+    name: "配り薬", species: "mandragora", cost: 2, kind: "mend_all", target: "all_allies", fx: "holy", power: 0.15,
+    label: "薬を配れ", note: "味方全員のHP15%回復",
+    lines: {
+      use: ["お一つずつ、どうぞ！", "手の空いた方から！", "煎じたてでございます！"],
+      miss: ["失礼、数が足りませんでした", "包みを取り違えました"]
+    }
+  },
   king_wave: {
     name: "大波", species: "king_slime", cost: 1, kind: "aoe", target: "all_enemies", fx: "nature", power: 0.5, condition: "hp50",
     note: "敵全体に50%　HP50%以上のときだけ",
@@ -119,6 +129,12 @@ const UPPER_SKILLS = {
     name: "気付け", species: "succubus", cost: 2, kind: "cleanse", trait: "enthrall", target: "ally", upper: true, fx: "holy",
     label: "目を覚ませ", note: "味方1体の足止め・魅了・燃焼を解く",
     lines: { use: ["正気に戻りなさい", "まだ勤務中よ"], miss: ["声が届かない"] }
+  },
+  // マンドラゴラ上位：cleanse の全体版。払ったあと、次の自分の手番は休む（効果は cleanse_all が持つ）。
+  mandragora_wake: {
+    name: "目覚めの声", species: "mandragora", cost: 2, kind: "cleanse_all", trait: "wake_call", target: "all_allies", upper: true, fx: "holy",
+    label: "声を張れ", note: "全員の足止め・魅了・燃焼を払う　次の手番は休む",
+    lines: { use: ["お目覚めくださいませ！", "皆様、正気に！"], miss: ["声が、かすれました"] }
   },
   king_slime_wrap: {
     name: "包む", species: "king_slime", cost: 1, kind: "heal", trait: "tidal_wave", target: "ally", upper: true, fx: "nature", power: 0.2,
