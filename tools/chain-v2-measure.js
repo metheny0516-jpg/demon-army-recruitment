@@ -64,9 +64,9 @@ if (!SIM_SRC.includes(CUT)) {
 const outer = { console, Math: seededMath, Date, JSON, require, process };
 vm.createContext(outer);
 vm.runInContext(SIM_SRC.slice(0, SIM_SRC.indexOf(CUT)), outer, { filename: 'tools/sim.js(戦略定義のみ)' });
-// 連鎖の深さを測るのは**戦う戦略**だけ。訓練を挟む戦略（2026-09-13）は
-// 稽古で戦闘数が伸びるぶん連鎖の分布が別物になるので、この測定からは外す。
-const strategies = vm.runInContext('strategies', outer).filter(s => !s.train);
+// 連鎖の深さを測るのは**戦う戦略**だけ。訓練を挟む戦略（2026-09-13）は稽古で戦闘数が伸び、
+// 噂の札の戦略（2026-09-14）は札の効果が乗るぶん、どちらも連鎖の分布が別物になる。外す。
+const strategies = vm.runInContext('strategies', outer).filter(s => !s.train && !s.rumors);
 const runOnce = vm.runInContext('runOnce', outer);
 const Game = vm.runInContext('Game', outer);
 const KPI = vm.runInContext('KPI', outer);
