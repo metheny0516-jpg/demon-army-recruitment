@@ -646,6 +646,9 @@ const UI = {
     const allowed = ["army", "records", "advisor", "town"];
     tab = allowed.includes(tab) ? tab : "army";
     if (!options.formation && this.root && this.root.dataset.scene !== "castle") this.castleFrom = Game.state.phase;
+    // 地図を開いた音（2026-09-13 の録音）。開いた瞬間に1回だけ。
+    // 同じ札の再描画（建てる・両替のたびに castle("town") が呼ばれる）では鳴らさない。
+    const openedTown = tab === "town" && this.castleTab !== "town" && !options.formation;
     this.castleTab = tab;
     let content = tab === "records" ? this.recordsCastlePanel()
       : tab === "advisor" ? this.advisorCastlePanel()
@@ -673,6 +676,7 @@ const UI = {
     </div>`, options.formation ? "formation" : "castle");
     // 地図は「次に戦う地点」が中央に来た状態で開く（描いたあとに一度だけ）。
     if (tab === "town" && typeof MapUI !== "undefined") MapUI.focus(this.root);
+    if (openedTown && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("map-open");
   },
 
   // 軍団のどこでも使う一行表示。操作を隠す面接でも、行そのものから同じ人物詳細へ入る。
@@ -1853,6 +1857,16 @@ const UI = {
       </div>
       <button class="primary wide" data-action="afterresult">次へ</button>`, "report");
     if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
+    // 差し押さえ・荒らし・取り立てで施設が1段落ちた決着では、金庫の音を1回。
+    // 控えは Town.demolishOne が置く（src/core/town.js）。鳴らしたら消すので二度は鳴らない。
+    // `turn` を ±1 まで許すのは、`st.turn += 1` の位置が経路ごとに違うため
+    // （荒らしは加算の前、銀行の差し押さえは稽古の決着だと加算の後に通る）。
+    // run.js を触らずに「この決着で落ちた分か」を見分けるための幅。
+    const razed = (st.town || {}).lastDemolished;
+    if (razed && Math.abs((Number(st.turn) || 0) - (Number(razed.turn) || 0)) <= 1) {
+      if (typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-bank");
+      delete st.town.lastDemolished;
+    }
     // 転身は「事件」なので一枚見せる。人事の欄より先に目に入る。
     const general = (st.lastPromotions || []).find(p => p.general);
     if (general) this.generalCutin(general);

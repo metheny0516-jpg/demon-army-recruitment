@@ -40,6 +40,10 @@ const Town = {
       .sort((a, b) => (b.lv - a.lv) || (costOf(b.f) - costOf(a.f)))[0];
     if (!top) return null;
     t.lv[top.f.id] -= 1;
+    // 施設が落ちたことを決着の画面（UI.result）が読む。音を鳴らすためだけの控えで、
+    // 進行には使わない。**run.js は触らずここで完結させる**（差し押さえ・荒らし・
+    // 取り立ての3経路が必ずここを通るので、1か所で足りる）。
+    t.lastDemolished = { id: top.f.id, lv: top.lv - 1, turn: Number(st.turn) || 0 };
     return { id: top.f.id, name: top.f.name, icon: top.f.icon, from: top.lv, to: top.lv - 1 };
   },
 

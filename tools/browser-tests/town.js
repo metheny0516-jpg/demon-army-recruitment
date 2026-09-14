@@ -58,6 +58,34 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   });
   ok(moved.facility === 0 && moved.town === 0, `軍団の札に施設の話は出ない（${moved.facility}）`);
 
+  // ── 音（2026-09-14）：施設が落ちた決着で金庫の音が鳴る ──
+  // 実際の経路（利子が払えず銀行が差し押さえる）を通して、決着の画面で鳴ることを見る。
+  console.log('▼ 施設が落ちた決着の音');
+  await page.evaluate(() => {
+    Sound.muted = false; Sound.volume = 0.01;      // 音は解禁しないと鳴らない
+    Sound.media.forEach(a => a.pause()); Sound.media.clear();
+    const st = Game.state;
+    st.town.lv.market = 2;                          // 落とせる施設を用意
+    st.town.debt = 2000; st.gold = 0;               // 利子が払えない ＝ 差し押さえ
+    st.roster.forEach(m => { m.hp = 9999; m.atk = 999; m.def = 99; m.spd = 99; });
+    Game.prepareMissions(true);
+    Game.selectMission(0); App.render();
+  });
+  await page.click('[data-action="deploy"]');
+  await page.click('[data-action="skiplog"]');
+  await page.click('[data-action="afterbattle"]');
+  await page.waitForTimeout(250);
+  const razed = await page.evaluate(() => ({
+    lv: Town.lv(Game.state, 'market'),
+    seized: (Game.state.town.ledger || []).some(r => r.seized),
+    played: [...Sound.media].map(a => (a.currentSrc || a.src || '').split('/').pop()),
+    cleared: Game.state.town.lastDemolished === undefined,
+    screen: (document.querySelector('.banner h2') || {}).textContent || ''
+  }));
+  ok(razed.lv === 1, `利子が払えず市場が1段落ちた（Lv${razed.lv}）`);
+  ok(razed.played.includes('town-bank.wav'), `決着の画面で town-bank.wav が鳴る（${razed.played.join(' ') || 'なし'}）`);
+  ok(razed.cleared, '鳴らしたら控えは消える（次の決着では鳴らない）');
+
   ok(errs.length === 0, `ページエラーなし${errs.length ? '：' + errs[0] : ''}`);
   await b.close();
   console.log(process.exitCode ? '失敗あり' : '全通過');
