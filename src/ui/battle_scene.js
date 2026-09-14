@@ -2071,7 +2071,7 @@ const BattleScene = {
   // 隊列の先頭から一人ずつ。窓は戦場の中央（味方の列のすぐ上）に浮き、後ろの戦場が透ける。
   // たたかう／技を選ぶと窓が細くなり、敵をタップして狙いを決める（敵が1体なら省く）。
   // 最後の一人が決めた瞬間にラウンド開始。「もどる」で一人前へ。味方の札をタップすればその者へ飛べる。
-  CMD_ICON: { attack: "⚔", guard: "🛡", skill: "✨", auto: "🤖" },
+  CMD_ICON: { attack: "⚔", guard: "🛡", skill: "✨", auto: "🤖", eat: "🍖" },
   // 敵の役（5節）。札の名前の前に小さく出す。fighter は印を出さない（既定なので）。
   ROLE_ICON: { brute: "💪", shield: "🛡", priest: "✚", caster: "🔥", archer: "🏹", rogue: "🗡", commander: "🎖" },
   ROLE_LABEL: { brute: "大男", shield: "盾役", priest: "僧侶", caster: "術士", archer: "弓", rogue: "斥候", commander: "隊長" },
@@ -2158,12 +2158,21 @@ const BattleScene = {
           ${sk.ready ? "" : "disabled"} title="${U.esc(sk.note || "")}">技「${U.esc(sk.label || sk.name)}」<small>${U.esc(sk.note || "")}　${cost}${sk.ready ? "" : "・" + U.esc(sk.why || "")}</small></button>`;
       }).join("");
       const first = seq.idx === 0;
+      // 食べる（2026-09-14）：「まもる」の2段目。携行食を1つ食べて HP を戻す（攻撃はしない）。
+      // 隊で1戦に2回まで（巨大厨房 Lv2 で3回）。備蓄が無い・傭兵・召喚は押せない。
+      const eat = a.eat || null;
+      const eatBtn = eat ? `<div class="cmd-menu cmd-menu-eat">
+          <button type="button" class="cmd-btn cmd-eat ${sel.cmd === "eat" ? "on" : ""}" data-cmd="eat"
+            ${eat.ready ? "" : "disabled"} title="${U.esc(eat.ready ? `HP を ${Math.round((eat.heal || 0) * 100)}% 戻す` : "いまは食べられない")}">
+            🍖 食べる<small>あと${eat.left}回${eat.ready ? `　HP +${Math.round((eat.heal || 0) * 100)}%` : "・いまは食べられない"}</small></button>
+        </div>` : "";
       body = `<div class="cmd-menu">
           <button type="button" class="cmd-btn ${sel.cmd === "attack" ? "on" : ""}" data-cmd="attack">たたかう</button>
           <button type="button" class="cmd-btn ${sel.cmd === "guard" ? "on" : ""}" data-cmd="guard">まもる</button>
           ${skillBtn}
           <button type="button" class="cmd-btn ${sel.cmd === "auto" ? "on" : ""}" data-cmd="auto">おまかせ</button>
         </div>
+        ${eatBtn}
         <div class="cmd-foot">
           <button type="button" class="cmd-btn cmd-back" data-nav="back" ${first ? "disabled" : ""}>もどる</button>
           ${first ? `<button type="button" class="small" data-cmdall="attack">全員たたかう</button>

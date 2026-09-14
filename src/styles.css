@@ -3877,3 +3877,8 @@ button.primary::first-letter { color: var(--gold); }
 
 .incident-result, .event-desk .incident-choice { background: #e9dec5; color: #352b22; border-color: #8b785a; }
 .incident-result h3, .incident-result summary, .incident-choice h2 { color: inherit; }
+
+/* 食べる（docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md A）。「まもる」の2段目に置く1行 */
+.cmd-menu-eat { margin-top: 4px; }
+.cmd-btn.cmd-eat { border-color: rgba(232, 189, 104, .45); }
+.cmd-btn.cmd-eat[disabled] { opacity: .45; }

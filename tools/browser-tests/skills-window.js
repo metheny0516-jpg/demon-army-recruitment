@@ -195,6 +195,56 @@ const SETUP = () => {
   }
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/skills-window-debut-390.png' });
 
+  console.log('\n▼ 食べる（2026-09-14）：まもるの2段目・HP が戻る・食料が減る');
+  const eat = await page.evaluate(async () => {
+    // 新しい戦闘の窓が出るまで待つ（前の戦いの続きなら次のラウンドの頭）
+    for (let i = 0; i < 40 && document.getElementById('command-panel').hidden; i++) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    const btn = document.querySelector('.cmd-btn.cmd-eat');
+    const menus = [...document.querySelectorAll('.cmd-menu')];
+    const ally = BattleScene.manual.prompt.allies[BattleScene.cmdSeq.idx];
+    return btn ? {
+      text: btn.innerText.replace(/\s+/g, ' ').trim(),
+      secondRow: menus.length === 2 && menus[1].contains(btn),
+      ready: !btn.disabled, left: ally.eat && ally.eat.left,
+      hp: ally.hp, maxHp: ally.maxHp, id: ally.id, food: Game.state.food
+    } : null;
+  });
+  if (eat) {
+    ok(eat.secondRow, '「まもる」と同じ列ではなく2段目に出る');
+    ok(/食べる/.test(eat.text) && /あと\d回/.test(eat.text), `残り回数が出る（${eat.text}）`);
+    if (eat.ready) {
+      // HP を削ってから食べる（満タンだと戻り幅が見えない）
+      const after = await page.evaluate(async id => {
+        document.querySelector('.cmd-btn.cmd-eat').click();
+        await new Promise(r => setTimeout(r, 250));
+        // 1人しかいない手番だと、押した時点で round ごと解決して cmdSeq が消える。
+        const seq = BattleScene.cmdSeq;
+        return { cmd: seq ? (seq.commands || {})[id] : null, submitted: !seq,
+          badge: (document.querySelector('.cmd-badge') || {}).textContent || '' };
+      }, eat.id);
+      ok((after.cmd && after.cmd.cmd === 'eat') || after.submitted || after.badge === '🍖',
+        `押すと「食べる」が決まる（${JSON.stringify(after)}）`);
+      // 決着まで進めて、食べた数だけ備蓄が減ることを見る
+      const settled = await page.evaluate(async foodBefore => {
+        BattleScene.skip();
+        await new Promise(r => setTimeout(r, 50));
+        for (let i = 0; i < 200 && !BattleScene.finished; i++) await new Promise(r => setTimeout(r, 100));
+        const eaten = (Game.state.lastBattle || {}).rationsEaten
+          || (BattleScene.manual && BattleScene.manual.result ? BattleScene.manual.result.rationsEaten : 0);
+        return { eaten: eaten || 0, food: Game.state.food, foodBefore,
+          note: (Game.state.lastBattle.notes || []).find(n => /携行食/.test(n)) || '' };
+      }, eat.food);
+      ok(settled.eaten >= 1, `戦闘中に携行食を食べた（${settled.eaten}つ）`);
+      ok(/携行食を\d+つ食べた/.test(settled.note), `決着の報告に出る（${settled.note}）`);
+    } else {
+      ok(true, `（この局面では食べられない：${eat.text}）`);
+    }
+  } else {
+    ok(false, '食べるの札が出ない');
+  }
+
   console.log('\n▼ 最後まで戦えること（技を出したまま決着する）');
   await page.evaluate(() => BattleScene.skip());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });

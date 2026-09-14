@@ -2613,6 +2613,12 @@ const Game = {
       // 追加フィールドは無視されるだけで発火順・回数・chainDepth を変えない。
       // 因果イベントとして出すのは V2b（battle.js 側）の仕事。
       meal: mealPlan,
+      // 食べる（2026-09-14）：戦闘中に携行食を1つ食べて HP を戻す。
+      // spare は**前払いを済ませたあとの備蓄**（これ以上は食べられない）。
+      // kitchenLv は巨大厨房（Lv2 で回数 +1、Lv3 で回復量が増える）。
+      // 食べた数は result.rationsEaten で返り、決着で st.food から引く。
+      spare: Math.max(0, Number(st.food) || 0),
+      kitchenLv: typeof Town !== "undefined" ? Town.lv(st, "grand_kitchen") : 0,
       boostSourceUid: mealPlan ? mealPlan.cookUid : null,
       boostTargetUid: mealPlan ? mealPlan.targetUid : null,
       boostAmount: mealPlan ? mealPlan.boost : 0
@@ -2845,11 +2851,23 @@ const Game = {
 
   // 続けた場合の決着。**これが唯一の続行経路**（引数なし deploy() もここを通る）。
   // 二つ持つと「テストは通るのに UI からだけ結果が違う」が起きる。
+  // 戦闘中に食べた携行食を備蓄から引く（2026-09-14）。**決着の経路2つの両方から1回ずつ**。
+  // 蔵から出した分なので、留守番の食事（processDepartments）より前に引く。
+  consumeBattleRations(result, notes) {
+    const st = this.state;
+    const eaten = Math.max(0, Number(result && result.rationsEaten) || 0);
+    if (!eaten) return 0;
+    st.food = Math.max(0, (Number(st.food) || 0) - eaten);
+    if (notes) notes.push(`戦闘中に携行食を${eaten}つ食べた（備蓄 ${st.food}）`);
+    return eaten;
+  },
+
   settleContinue(pending) {
     const st = this.state;
     this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);   // 号令で保留した戦闘はここで初めて確定する（済んでいれば何もしない）
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
+    this.consumeBattleRations(result, notes);
     // 城下町：防衛戦に負けた決着は税収が無い（processDepartments が読む）。勝ちも遠征も false
     st.lastRansacked = this.isDefenseBattle(stageData) && !result.victory;
     const goldBefore = st.gold;
@@ -3128,6 +3146,7 @@ const Game = {
     this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
+    this.consumeBattleRations(result, notes);
     st.lastRansacked = this.isDefenseBattle(stageData);   // 城下町：防衛戦から退いた決着も税収は無い
     const goldBefore = st.gold;
     const lostOnPoints = !!options.lostOnPoints;
