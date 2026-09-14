@@ -33,7 +33,11 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
     }
     if (await page.locator('[data-action="eventpick"]').count()) { fired=true; break; }
     if (await page.locator('[data-action="missionpick"]').count()) {
-      await page.locator('[data-action="missionpick"]').last().click(); await page.waitForTimeout(100);
+      // 訓練の札（2026-09-13）は進行しないので選ばない。稽古を繰り返すと30戦粘っても
+      // ハプニングに当たらないまま打ち切られる。
+      const real = page.locator('.mission-card:not(.mission-train) [data-action="missionpick"]');
+      await (await real.count() ? real.last() : page.locator('[data-action="missionpick"]').last()).click();
+      await page.waitForTimeout(100);
     }
     // イベントが出なければ次の戦闘へ
     if (await page.locator('[data-action="deploy"]:not([disabled])').count()) {
