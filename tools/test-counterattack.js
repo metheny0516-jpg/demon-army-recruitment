@@ -50,8 +50,10 @@ function freshRun(roster, activeUids, extra) {
 // 予約された防衛戦を1回戦う
 function fightDefense(st) {
   Game.prepareMissions(true);
-  assert(st.missionOffers.length === 1 && st.missionOffers[0].missionKind === "defend",
-    `作戦会議は防衛の一択（${st.missionOffers.map(m => m.missionKind).join(",")}）`);
+  // 防衛が来ている決着でも訓練は選べる（2026-09-13）。攻めに出る札だけが消える。
+  assert(st.missionOffers.length === 2 && st.missionOffers[0].missionKind === "defend"
+    && st.missionOffers[1].missionKind === "train",
+    `作戦会議は防衛と訓練（${st.missionOffers.map(m => m.missionKind).join(",")}）`);
   Game.selectMission(0);
   st.phase = "formation";
   return Game.deploy();

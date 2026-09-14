@@ -1099,21 +1099,103 @@ const Game = {
     // 長さだけで判断していたので、予約が立った直後に3択のまま残ることがあった。
     const pending = !!(st.counterattack && st.counterattack.pending);
     const offers = st.missionOffers;
-    const stale = !Array.isArray(offers) || !offers.length
-      || (pending ? offers.some(m => m.missionKind !== "defend") || offers.length !== 1
-        : offers.length !== MISSION_TYPES.length || offers.some(m => m.missionKind === "defend"));
+    // 訓練は「防衛が来ている決着でも選べる」（勇者の前に鍛え直す場でもある）ので、
+    // 予約中の札は「防衛＋訓練」の2枚、通常は「3系統＋訓練」の4枚になる。
+    const want = pending ? 2 : MISSION_TYPES.length + 1;
+    const stale = !Array.isArray(offers) || offers.length !== want
+      || (pending ? !offers.some(m => m.missionKind === "defend")
+        : offers.some(m => m.missionKind === "defend"))
+      || !offers.some(m => m.missionKind === "train");
     if (!force && !stale) {
       st.phase = "mission";
       return offers;
     }
     const previous = new Map((offers || []).map(m => [m.missionKind, m.formationId]));
     st.selectedMission = null;
-    st.missionOffers = pending
+    st.missionOffers = (pending
       ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
-      : MISSION_TYPES.map(type => this.buildMission(type, previous.get(type.id)));
+      : MISSION_TYPES.map(type => this.buildMission(type, previous.get(type.id))))
+      .concat([this.buildMission(MISSION_TYPES.train, previous.get("train"))]);
     st.phase = "mission";
     this.save();
     return st.missionOffers;
+  },
+
+  // ── 訓練（docs/DESIGN_TRAINING_2026-09-13.md）────────────────
+  // 死なない・金も建材も入らない・王国に知られない。食料は減り、給与は半分出る。
+  // 相手は本戦の隊列を写して倍率を掛けるだけ（battle.js は触らない）。
+  // 稽古で倒れた者は負傷（次の1戦だけ休む）。戦死の処理（継承・遺物・戦没者名簿）は通さない。
+  applyTrainingInjuries(contribution, notes) {
+    const st = this.state;
+    const down = [];
+    for (const row of contribution || []) {
+      if (!row.trainingDown && !row.injured) continue;
+      const monster = st.roster.find(m => m.uid === row.uid);
+      if (!monster) continue;
+      monster.injured = 1;
+      st.activeUids = st.activeUids.filter(uid => uid !== row.uid);
+      down.push(monster.name);
+    }
+    if (down.length) notes.push(`${down.join("、")}が稽古で倒れた（負傷。次の1戦は休む）`);
+    return down;
+  },
+
+  isTraining(stageData) {
+    return !!(stageData && (stageData.training || stageData.missionKind === "train"));
+  },
+  // 訓練では HP0 は戦死ではなく負傷（次の1戦だけ休む）。**結果を読む側で変換する**
+  // （battle.js は触らない。タイムラインは今までどおり death を持つ）。
+  softenTrainingCasualties(contribution) {
+    for (const row of contribution || []) {
+      if (row.survived === false) { row.survived = true; row.injured = true; row.trainingDown = true; }
+    }
+    return contribution;
+  },
+  // 訓練の戦功は「生きて終えたら +1（猛者は +2）」だけ。撃破も最多も数えない。
+  awardTrainingMerit(contribution, stageData, notes) {
+    const st = this.state;
+    st.lastPromotions = [];
+    const gain = Math.max(1, Number(stageData && stageData.trainingMerit) || 1);
+    for (const c of contribution || []) {
+      if (c.mercenary) continue;
+      const monster = st.roster.find(m => m.uid === c.uid);
+      if (!monster) continue;
+      monster.merit = (monster.merit || 0) + gain;
+      monster.loyalty = U.clamp((monster.loyalty || 0) + 1, 0, 100);
+      const targetRank = this.rankForMerit(monster.merit);
+      while (monster.rankId !== targetRank.id) {
+        const next = this.nextRank(monster);
+        if (!next || next.threshold > monster.merit) break;
+        this.promote(monster, next, notes);
+      }
+    }
+    notes.push(`稽古を終えた。出撃した者の戦功 +${gain}・忠誠 +1`);
+  },
+
+  trainingOpponents() {
+    const list = ((typeof MISSION_TYPES !== "undefined" && MISSION_TYPES.train) || {}).opponents || [];
+    return list.map(o => ({ ...o, unlocked: (this.state.conquest || 0) >= o.conquest }));
+  },
+  // 既定は「解放済みのうち一番強いもの」（迷わせないため）。
+  trainingOpponent(id) {
+    const list = this.trainingOpponents();
+    const open = list.filter(o => o.unlocked);
+    return open.find(o => o.id === id) || open[open.length - 1] || list[0];
+  },
+  // 訓練の相手を作る。本戦の隊列（同じ征服度・同じ隊列）を写して倍率を掛け、
+  // 猛者だけ隊長を1体足す。**役はそのまま**（何と戦っているか分からなくならないように）。
+  trainingUnits(baseUnits, opponent) {
+    const mult = opponent.mult || 1;
+    const scale = (v, min) => Math.max(min, Math.round((Number(v) || 0) * mult));
+    const units = (baseUnits || []).map(u => ({
+      ...u, hp: scale(u.hp, 1), atk: scale(u.atk, 1), def: u.def, spd: u.spd
+    }));
+    if (opponent.commander && units.length) {
+      const model = units[0];
+      units.push({ ...model, name: "稽古の隊長", role: "commander",
+        hp: scale(model.hp, 1), atk: scale(model.atk, 1) });
+    }
+    return units;
   },
 
   // 前哨戦の規則（docs/SPEC_TWO_STAGE_BATTLES_2026-09-12.md）。
@@ -1187,6 +1269,9 @@ const Game = {
       def: stat(unit.def, 0),
       spd: stat(unit.spd, 1)
     }));
+    // 訓練：本戦の隊列を写して倍率を掛ける（相手は選んだ段階）。金も警戒も動かない。
+    const training = type.id === "train";
+    const opponent = training ? this.trainingOpponent(this.state.trainingOpponentId) : null;
     // 進軍だけが2戦制。前哨戦は敵が半分・報酬も半分・征服度は進まない。
     const isOutpost = type.id === "invade" && !counter
       && this.outpostNeeded(baseIndex) && !this.outpostCleared();
@@ -1208,16 +1293,23 @@ const Game = {
     return {
       stage: st.turn,
       missionKind: type.id,
-      missionTitle: isOutpost ? `前哨戦：${base.region}の斥候` : type.title,
+      missionTitle: training ? `訓練：${opponent ? opponent.line : "稽古"}` : (isOutpost ? `前哨戦：${base.region}の斥候` : type.title),
       strategyLabel: type.strategyLabel,
       strategyHint: type.strategyHint,
       description: U.pick((isOutpost && type.outpostDescriptions) || type.descriptions),
+      // 訓練（2026-09-13）。決着の分岐と表示がこの印を読む。
+      training,
+      opponentId: opponent ? opponent.id : null,
+      opponentName: opponent ? opponent.name : null,
+      opponentNote: opponent ? opponent.note : null,
+      trainingMerit: opponent ? (opponent.merit || 1) : 0,
       // 前哨戦か本戦か（表示と決着が読む）。進軍以外は常に "main"。
       missionPhase: isOutpost ? "outpost" : "main",
       twoStage,
       difficulty: type.difficulty,
-      army: defenseArmy || (isInvade ? (isOutpost ? `${base.army}の斥候隊` : base.army) : type.armies[variant]),
-      region: counter ? "魔王城" : (isInvade ? base.region : type.regions[variant]),
+      army: training ? (opponent ? opponent.armyName : "訓練相手")
+        : defenseArmy || (isInvade ? (isOutpost ? `${base.army}の斥候隊` : base.army) : type.armies[variant]),
+      region: training ? "訓練場" : (counter ? "魔王城" : (isInvade ? base.region : type.regions[variant])),
       reward,
       // 進軍の警戒度は counterattack.js の invadeAlert が正本（反撃A で missions.js を 0 に戻した）。
       // 反撃B はここを読み忘れていて、進軍に勝っても警戒が上がらなかった（時計が動かない）。
@@ -1235,7 +1327,7 @@ const Game = {
       formationId: formation.id,
       formationName: formation.name,
       formationHint: formation.hint,
-      units: isOutpost ? this.outpostUnits(units) : units
+      units: training ? this.trainingUnits(units, opponent) : (isOutpost ? this.outpostUnits(units) : units)
     };
   },
 
@@ -2623,10 +2715,15 @@ const Game = {
     // 判定負け（30ラウンド経過。全滅ではない）は撤退と同じ結末にする。
     // 倒れていた者は担いで帰り、報酬は無い。**決着の経路は二つのまま**
     // （ここで委譲する。カウンタと育成を二度走らせないよう tally より前で分ける）。
-    if (!result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
+    // 訓練（2026-09-13）：誰も死なない。HP0 は負傷に変えてから先へ進める。
+    // 全滅も「全員が負傷して終わった稽古」なので、判定負けの委譲より前に変換する。
+    const training = this.isTraining(stageData);
+    if (training) this.softenTrainingCasualties(result.contribution);
+    if (!training && !result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
-    this.recordBattleTraces(result, result.contribution);
+    // 痕跡（担がれ・戦友の死）は訓練では立てない（4節の落とし穴）。
+    if (!training) this.recordBattleTraces(result, result.contribution);
     this.recordStageFight(stageData);
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
@@ -2637,7 +2734,19 @@ const Game = {
     const isDefense = this.isDefenseBattle(stageData);
     const heroDefense = isDefense && (st.counterattack || {}).kind === "hero";
     let defenseOutcome = null, castleFell = false;
-    if (result.victory) {
+    if (training) {
+      // 稽古。金・建材・遺物・痕跡・税・警戒度はどれも動かない（勝ち負けも問わない）。
+      // 動くのは戦闘数（上で済み）・小成長と技（trainSurvivors で済み）・戦功・忠誠・気合・食料・給与。
+      this.awardTrainingMerit(result.contribution, stageData, notes);
+      st.turn += 1;
+      st.missionOffers = [];
+      st.phase = "result";
+      // 留守番の仕事と食事・給与（半額）は通常どおり通す。税収だけ 0（processDepartments が読む）。
+      this.processDepartments(stageData, notes, undefined, battleRations);
+      this.paySalaries(notes, undefined, stageData);
+      this.processDepartures(notes);
+      this.settleDebts(notes);
+    } else if (result.victory) {
       st.gold += stageData.reward + lootGold;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
       if (lootGold > 0) notes.push(`戦闘中の略奪 ${lootGold}G を確定（所持金 ${st.gold}G）`);
@@ -2838,7 +2947,10 @@ const Game = {
     st.mercenaries = [];
     st.mercenaryOffers = [];
 
+    // この決着ぶんの回復を先に済ませてから、稽古で倒れた者へ負傷を付ける
+    // （順番を逆にすると、付けた負傷がその場で治る。settleRetreat と同じ作法）。
     this.recoverInjuries();
+    if (training) this.applyTrainingInjuries(result.contribution, notes);
     // 王国の反撃の判定は決着の最後。予告は必ず1手番前になる（奇襲はしない）。
     if (st.phase !== "clear" && st.phase !== "gameover") this.checkCounterattack();
 
@@ -3288,7 +3400,10 @@ const Game = {
     }
     notes.push(`留守番の建設：建材 +${materialReward}（備蓄 ${st.materials}）`);
     // 城下町：税・利子・酒場（決着ごと。開幕の日割りでは呼ばない）。荒らされたかは settleContinue が st.lastRansacked に控える
-    if (dailyDay === undefined && typeof Town !== "undefined") Town.settle(this, notes, { ransacked: !!st.lastRansacked });
+    // 訓練の決着は税収が無い（王国に知られていないので領地は動かない）。利子は普通どおり取られる。
+    if (dailyDay === undefined && typeof Town !== "undefined") {
+      Town.settle(this, notes, { ransacked: !!st.lastRansacked || this.isTraining(mission), training: this.isTraining(mission) });
+    }
     // 旧施設の移行の報せ（ロード中には出す画面が無いので、次の決着の報告で一度だけ）。
     if (st.lastFacilityMigration && st.lastFacilityMigration.length) {
       for (const line of st.lastFacilityMigration) notes.push(line);
@@ -3445,11 +3560,16 @@ const Game = {
     return true;
   },
 
-  paySalaries(notes, dailyDay) {
+  // 訓練の決着は給与が半分（端数は切り上げ。未払いの判定も半額で行う）。
+  salaryRatio(stageData) {
+    return this.isTraining(stageData || this.state.selectedMission) ? 0.5 : 1;
+  },
+  paySalaries(notes, dailyDay, stageData) {
     const st = this.state;
+    const ratio = this.salaryRatio(stageData);
     const assignments = this.salaryAssignments().map(entry => ({
       ...entry,
-      amount: dailyDay === undefined ? entry.amount : this.dailyShare(entry.amount, dailyDay)
+      amount: Math.ceil((dailyDay === undefined ? entry.amount : this.dailyShare(entry.amount, dailyDay)) * ratio)
     }));
     const total = assignments.reduce((sum, entry) => sum + entry.amount, 0);
     const paidRoster = assignments.map(entry => entry.monster);

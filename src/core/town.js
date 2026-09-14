@@ -171,6 +171,7 @@ const Town = {
     row.ransacked = !!opts.ransacked;
     const tax = opts.ransacked ? 0 : this.taxPerSettle(st);
     if (tax > 0) { st.gold += tax; row.tax += tax; notes.push(`領地${this.territories(st)}からの税収 +${tax}G`); }
+    else if (opts.training && this.territories(st) > 0) notes.push("稽古の日は徴税に出ない（税収は無い）");
     else if (opts.ransacked && this.territories(st) > 0) notes.push("荒らされたので、この決着の税収は無い");
     const tavern = this.lv(st, "tavern");
     if (tavern > 0) {

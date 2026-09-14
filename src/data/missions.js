@@ -81,6 +81,42 @@ const MISSION_TYPES = [
   }
 ];
 
+// 訓練（2026-09-13、docs/DESIGN_TRAINING_2026-09-13.md）。作戦会議の4枚目。
+// 死なない・金も建材も入らない・王国に知られない。食料は減り、給与は半分出る。
+// 相手は3段階で、解放は征服度で決まる（run.js の trainingOpponents が判定する）。
+MISSION_TYPES.train = {
+  id: "train",
+  icon: "🥊",
+  title: "訓練場で稽古する",
+  strategyLabel: "死なずに鍛える",
+  strategyHint: "王国攻略も警戒度も動かない。金は入らず、食料と半分の給与を払う。",
+  descriptions: [
+    "城の脇の訓練場。木剣と藁束と、少しばかりの本気。",
+    "誰も死なない戦い。だが体は、本番と同じだけ覚える。",
+    "勝っても何も奪えない。奪うものが無いから、みんな遠慮なく打ち合える。"
+  ],
+  // 相手の3段階。mult は本戦の隊列に掛ける倍率、merit は生存者に入る戦功。
+  opponents: [
+    { id: "scarecrow", name: "案山子隊", armyName: "案山子隊", conquest: 0, mult: 0.6, merit: 1,
+      line: "案山子隊と練習試合", note: "本戦の隊列を 0.6 倍にした相手。まず形から" },
+    { id: "mock", name: "模擬戦", armyName: "模擬部隊", conquest: 2, mult: 1, merit: 1,
+      line: "本戦の顔ぶれで", note: "次の本戦と同じ隊列。予行演習になる" },
+    { id: "veteran", name: "猛者", armyName: "城の猛者たち", conquest: 4, mult: 1.2, merit: 2,
+      commander: true, line: "隊長つきの稽古", note: "隊長を1体足して 1.2 倍。将軍を狙う者の稽古" }
+  ],
+  enemyTierOffset: 0,
+  enemyMult: 1,
+  rewardMult: 0,
+  payrollCoverage: 0,
+  rewardJitter: [0, 0],
+  foodReward: 0,
+  materialReward: 0,
+  alertDelta: 0,
+  conquestDelta: 0,
+  loyaltyDelta: 0,
+  difficulty: "稽古"
+};
+
 // 防衛は反撃の予約時だけ run.js が明示的に選ぶ。通常の3択にはまだ混ぜない。
 MISSION_TYPES.defend = {
   id: "defend",

@@ -27,8 +27,10 @@ st.roster = [{ uid: 1, tplId: 'orc', name: '門番', race: 'オーク', job: '�
   salary: 3, loyalty: 80, traits: [], tags: [], department: 'combat', unpaid: false, unpaidStreak: 0 }];
 st.activeUids = [1];
 Game.finishRecruitment();
-assert(st.phase === 'mission' && st.missionOffers.length === 3,
-  '採用終了後は準備日ではなく通常の作戦会議へ直行する');
+// 訓練の札が4枚目に加わった（2026-09-13）
+assert(st.phase === 'mission' && st.missionOffers.length === 4
+  && st.missionOffers.filter(m => m.missionKind === 'train').length === 1,
+  '採用終了後は準備日ではなく通常の作戦会議（3系統＋訓練）へ直行する');
 
 const legacyOpening = JSON.parse(JSON.stringify(st));
 legacyOpening.openingPrototype = true;
