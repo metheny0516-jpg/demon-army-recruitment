@@ -25,4 +25,52 @@ test('手入れは遺物そのものの特性を一戦だけ増やし、元の�
 test('教材の無料稽古は資金ゼロでも未払い・飢餓を起こさず一度で終わる',()=>{const st=fresh(['orc']);st.openingPrototype=false;st.day=4;st.gold=0;st.food=0;st.activeUids=[1];st.incidents.freeTraining=true;const m=st.roster[0];m.hp=1000;m.atk=100;m.loyalty=80;Game.prepareMissions();Game.selectMission(st.missionOffers.findIndex(m=>m.training));Game.deploy();assert(st.lastBattle.training);assert.equal(st.lastPayrollReport.paid,0);assert(!m.unpaid);assert.equal(st.lastDepartmentReport.foodShortage,0);assert(!st.incidents.freeTraining);});
 test('前の主の防衛戦は隊列名を使い、別の反撃を上書きしない',()=>{const st=fresh();st.incidents.masterVisit={name:'骨吉の元の主'};st.incidents.tail={id:'necro_visitor_tail',parent:'necro_visitor',branch:'遺物あり',ready:true};st.counterattack={pending:true,kind:'hero',armyName:'勇者'};Incidents.finishTail(Game,true);assert.equal(st.counterattack.kind,'hero');assert(st.incidents.tail);st.counterattack=null;Incidents.finishTail(Game,true);Game.prepareMissions();assert.equal(st.missionOffers.find(m=>m.missionKind==='defend').army,'骨吉の元の主');});
 test('提示を保存して復元しても根拠・敗者・選択済みは変わらない',()=>{const st=fresh();trace(st,'ate');trace(st,'sparked');offer(st,'slime_pond');const snapshot=JSON.stringify(st.incidents.offered);Game.state=JSON.parse(JSON.stringify(st));assert.equal(JSON.stringify(Incidents.init(Game.state).offered),snapshot);Incidents.open(Game,'slime_pond',1);assert(Game.state.incidents.done.slime_pond);});
+
+// ── 移植（2026-09-14）：退避した Opus 版の検査から、ここに無かったものだけを足す。
+// 直近60決着の窓と二人組の腕比べは上で見ているので重ねない。
+test('痕跡は22種で、日常の仕事3種と札の記録がある',()=>{
+  const TRACE_KINDS=vm.runInContext('TRACE_KINDS',ctx);
+  assert.equal(Object.keys(TRACE_KINDS).length,22);
+  assert.equal(Traces.MAX_KINDS,22);
+  for(const kind of ['carried_materials','cooked','trained','incident']) assert(TRACE_KINDS[kind],kind);
+});
+test('状態を満たさない札は出ない',()=>{
+  const st=fresh();st.town.lv.hostel=0;trace(st,'ate');trace(st,'sparked');
+  assert(!Incidents.candidate(st,Incidents.card('slime_pond'),2));
+  st.town.lv.hostel=1;
+  assert(Incidents.candidate(st,Incidents.card('slime_pond'),2));
+});
+test('状態式が読めない場面（城下町が無い等）でも決着は止まらない',()=>{
+  const st=fresh();trace(st,'ate');trace(st,'sparked');
+  const card=Incidents.card('slime_pond'),state=card.state;
+  card.state=()=>{throw new ReferenceError('Town is not defined');};
+  try {
+    assert.doesNotThrow(()=>Incidents.settle(Game));
+    assert(!st.incidents.offered.slime_pond,'読めない札は黙って見送る');
+  } finally { card.state=state; }
+  assert(Incidents.candidate(st,card,2),'式が読めれば今までどおり出る');
+});
+test('12枚の全枝が、黙って何もしないまま終わらない',()=>{
+  // データの枝名と run.js の switch がずれると、実行はできるのに何も起きない。
+  // 状態が動いたかで見張る（動かないのは筋書きだけの枝＝下の3本に限る）。
+  const quiet=['harpy_letter:未制圧','goblin_market:なし','training_visitor:最多でない'];
+  const silent=[];
+  for(const card of INCIDENTS) for(const branch of Object.keys(card.branches)) {
+    const st=fresh(['slime','orc','goblin']);
+    st.relics=[{id:'test',traitId:'brave',holderUid:1}];
+    st.roster.forEach(m=>Object.assign(m,{rankId:'general',loyalty:80}));
+    const c={game:Game,subject:st.roster[0],viewer:st.roster[1],members:st.roster.slice(0,2),
+      winner:st.roster[0],loser:st.roster[1]};
+    const before=JSON.stringify(st);
+    card.gain(st,c); card.branches[branch].apply(st,c);
+    if(JSON.stringify(st)===before) silent.push(card.id+':'+branch);
+  }
+  assert.deepEqual(silent.filter(x=>!quiet.includes(x)),[],'何も起きない枝: '+silent.join('、'));
+});
+test('旧セーブ（札の器が無い）でも決着が通り、器が入る',()=>{
+  // 器は trace() と settle() が入れる。どちらも冪等。
+  const st=fresh();delete st.incidents;
+  assert.doesNotThrow(()=>Incidents.settle(Game));
+  assert(st.incidents&&st.incidents.offered,'決着を1回通せば器が入る');
+});
 console.log(`${passed} incident tests passed`);
