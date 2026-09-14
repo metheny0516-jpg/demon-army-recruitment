@@ -134,6 +134,7 @@ function runOnce(strat, stats){
       // 訓練（2026-09-13）：「進軍の前に訓練を1回」の戦略は、進軍を選ぶ手番の前に1回だけ稽古する。
       // 死なないので判断は単純でよい。回数は stats.trainings に数える。
       if (strat.train && kind === 'invade' && !st.trainedBeforeThisInvade
+        && (!strat.trainMax || (st.simTrainings || 0) < strat.trainMax)
         && st.missionOffers.some(m => m.missionKind === 'train')) {
         kind = 'train';
         st.trainedBeforeThisInvade = true;
@@ -147,7 +148,7 @@ function runOnce(strat, stats){
         const index = st.missionOffers.findIndex(m => m.missionKind === kind);
         Game.selectMission(index >= 0 ? index : Math.min(2, st.missionOffers.length - 1));
       }
-      if (st.selectedMission && st.selectedMission.missionKind === 'train') stats.trainings = (stats.trainings || 0) + 1;
+      if (st.selectedMission && st.selectedMission.missionKind === 'train') { stats.trainings = (stats.trainings || 0) + 1; st.simTrainings = (st.simTrainings || 0) + 1; }
     }
     if (st.phase === 'formation') {
       // 出撃隊に入らない者は全員留守番（控えは無い）。「留守番2人」は弱い2人を出撃候補から外す
@@ -258,6 +259,8 @@ const strategies = [
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
   // 訓練（2026-09-13）：進軍の前に1回だけ稽古を挟む。使用率と破産率だけを見る。
   {name:'進軍の前に訓練を1回', kind:'greedy', train:true},
+  // 現実の遊び方に近い形：序盤の3回だけ（種族技が開くまで）。無制限の上と見比べる。
+  {name:'訓練は序盤3回だけ', kind:'greedy', train:true, trainMax:3},
 ];
 const N = Number(process.argv[2] || 400);
 // KPIの書き出し先（任意）: node tools/sim.js 30 --kpi /tmp/kpi.json
