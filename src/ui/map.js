@@ -119,7 +119,7 @@ const MapUI = {
       ${index >= 0 ? `data-action="missionpick" data-index="${index}"` : "disabled"}
       title="${U.esc(index >= 0 ? "訓練場で稽古をつける" : "いまは稽古に出られない")}"
       aria-label="${U.esc(spot.name)}">
-      <i class="mp-training-icon" aria-hidden="true">🏟</i>
+      <img class="mp-training-icon" src="${this.DIR}props/training.webp" alt="" aria-hidden="true">
       <span class="lot-name">${U.esc(spot.name)}</span>
     </button>`;
   },

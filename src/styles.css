@@ -3829,7 +3829,7 @@ button.primary::first-letter { color: var(--gold); }
   padding: 2px 4px; border: 1px solid rgba(160, 220, 160, .55); border-radius: 4px;
   background: rgba(12, 8, 20, .45); color: #f6e6c2; font: inherit; line-height: 1.1; cursor: pointer;
 }
-.map-training .mp-training-icon { font-size: 18px; font-style: normal; filter: drop-shadow(0 1px 2px #000); }
+.map-training .mp-training-icon { width: 48px; height: 48px; display: block; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55)); }
 .map-training .lot-name { font-size: 9px; white-space: nowrap; text-shadow: 0 1px 2px #000; }
 .map-training[disabled] { cursor: default; opacity: .55; }
 /* 第二幕の霧。act:2 の地点群の上をゆっくり流れる（第一幕を終えたら描かない） */
