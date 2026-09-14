@@ -365,6 +365,24 @@ const App = {
         this.render();
         return this.formationReport();
 
+      // 訓練の相手を選ぶ（2026-09-13）。作戦会議の札の中だけで完結する。
+      case "trainpick": {
+        Game.state.trainingOpponentId = data.id;
+        Game.prepareMissions(true);
+        this.render();
+        const first = !Game.state.trainedOnce;
+        const veteran = data.id === "veteran" && !Game.state.trainingVeteranSeen;
+        if (veteran) Game.state.trainingVeteranSeen = true;
+        const lines = typeof MORMO_LINES !== "undefined" ? MORMO_LINES : {};
+        if (veteran && (lines.trainingVeteran || []).length) {
+          return this.report("report", lines.trainingVeteran[0], { kicker: "訓練場", title: "宰相モルモ" });
+        }
+        if (first && (lines.training || []).length) {
+          return this.report("report", lines.training[0], { kicker: "訓練場", title: "宰相モルモ" });
+        }
+        return;
+      }
+
       case "missionpick":
         Game.selectMission(Number(data.index));
         this.render();

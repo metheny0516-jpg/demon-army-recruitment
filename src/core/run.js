@@ -1282,8 +1282,10 @@ const Game = {
     const payrollSupport = Math.round(this.salaryTotal() * (type.payrollCoverage || 0));
     // 1段階を2戦に割ったので、1戦あたりの実入りは落ちる。段階表を触らずここで補正する。
     const stageReward = base.reward * type.rewardMult * (twoStage ? this.TWO_STAGE_REWARD_MULT : 1);
-    const reward = Math.max(1, Math.round(stageReward * (isOutpost ? this.OUTPOST_REWARD_RATIO : 1))
-      + payrollSupport + jitter);
+    // 訓練は金が1円も入らない（Math.max(1, …) の下限も通さない）。
+    const reward = training ? 0
+      : Math.max(1, Math.round(stageReward * (isOutpost ? this.OUTPOST_REWARD_RATIO : 1))
+        + payrollSupport + jitter);
     const variant = type.armies ? U.randInt(0, type.armies.length - 1) : 0;
     const isInvade = type.id === "invade";
     // 討伐隊の名は段階表から作る（固有の敵を足すときは段階表に行を足すだけで済む）。
@@ -2888,6 +2890,10 @@ const Game = {
       relicsLeft: wipedRelics || [],
       // この戦いで技を覚えた者（表示用）。覚えた者がいない戦い・旧セーブには無い。
       unlocked,
+      // 稽古（2026-09-13）。結果画面はこの印で文言を変える。
+      training,
+      trainingDown: training
+        ? (result.contribution || []).filter(c => c.trainingDown).map(c => c.name) : [],
       missionKind: stageData.missionKind,
       missionTitle: stageData.missionTitle,
       army: stageData.army,

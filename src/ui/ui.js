@@ -1478,14 +1478,23 @@ const UI = {
         ? (m.missionPhase === "outpost"
           ? "王国攻略は進まない（勝てば本戦へ）"
           : `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`)
-        : m.missionKind === "suppress"
-          ? `生存者の忠誠 +${m.loyaltyDelta}`
-          : "王国攻略は進まない";
+        : m.missionKind === "train"
+          ? `誰も死なない。戦功 +${m.trainingMerit || 1}・忠誠 +1`
+          : m.missionKind === "suppress"
+            ? `生存者の忠誠 +${m.loyaltyDelta}`
+            : "王国攻略は進まない";
+      // 訓練（2026-09-13）：相手を3つの小ボタンから選ぶ。解放は征服度で決まる。
+      const trainingPick = m.missionKind === "train" ? `<div class="training-pick">
+        ${Game.trainingOpponents().map(o => `<button class="small${m.opponentId === o.id ? " on" : ""}"
+          data-action="trainpick" data-id="${U.esc(o.id)}" ${o.unlocked ? "" : "disabled"}
+          title="${U.esc(o.unlocked ? o.note : `王国攻略 ${o.conquest} で解放`)}">${U.esc(o.name)}${o.unlocked ? "" : `（攻略${o.conquest}）`}</button>`).join("")}
+      </div>
+      <div class="muted training-note">${U.esc((Game.trainingOpponent(m.opponentId) || {}).note || "")}</div>` : "";
       return `<div class="mission-card mission-${U.esc(m.missionKind)}" data-route="${i + 1}">
-        <div class="mission-route-number"><span>進軍路</span><b>${i + 1}</b></div>
-        <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : "🏰"}
+        <div class="mission-route-number"><span>${m.missionKind === "train" ? "訓練場" : "進軍路"}</span><b>${m.missionKind === "train" ? "🥊" : i + 1}</b></div>
+        <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : m.missionKind === "train" ? "🥊" : "🏰"}
           危険度 ${U.esc(m.difficulty)}</div>
-        <h3>${phase}${U.esc(m.missionTitle)}</h3>
+        <h3>${m.missionKind === "train" ? `<span class="mission-phase training">稽古</span>` : phase}${U.esc(m.missionTitle)}</h3>
         <div class="mission-purpose"><b>${U.esc(m.strategyLabel || "作戦")}</b><br>
           <span>${U.esc(m.strategyHint || "")}</span></div>
         <div class="mission-army">${U.esc(m.army)} <span class="muted">— ${U.esc(m.region)}</span></div>
@@ -1494,6 +1503,8 @@ const UI = {
           ${m.missionPhase === "main" && m.twoStage ? `<br><span class="outpost-note">前哨で見た隊列と同じ</span>` : ""}
           ${m.missionPhase === "outpost" ? `<br><span class="outpost-note">この隊列がそのまま本戦の隊列になる</span>` : ""}</div>
         <p>${U.esc(m.description)}</p>
+        ${trainingPick}
+        ${m.missionKind === "train" ? `<div class="training-terms">死なない。金は入らない。食料と<b>半分の給与</b>だけ払う。</div>` : ""}
         <dl class="mission-economy">
           <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
           <dt>食料</dt><dd class="food">+${m.foodReward || 0}</dd>
@@ -1720,7 +1731,19 @@ const UI = {
       ? (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name) : [];
     const fallen = wiped ? (b.fallen || []).map(f => f.name) : [];
     const relicsLeft = wiped ? (b.relicsLeft || []) : [];
-    const banner = b.defense && b.defended
+    // 稽古（2026-09-13）：勝ち負けを言わない。誰が伸びて、誰が倒れたかだけ。
+    const grown = (b.contribution || []).filter(c => !c.mercenary).length;
+    const learned = (b.unlocked || []).length;
+    const banner = b.training
+      ? `<div class="banner training">
+        <h2>稽古を終えた</h2>
+        <div>${U.esc(b.army)}との練習試合。${grown}人が一回り強くなった${
+          learned ? `。${learned}人が技を覚えた` : ""}。</div>
+        ${(b.trainingDown || []).length ? `<div class="retreat-injured">🩹 ${U.esc(b.trainingDown.join("、"))}は稽古で倒れた。
+          負傷。次の戦いは出られない（留守番として働く）</div>` : ""}
+        <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
+      </div>`
+      : b.defense && b.defended
       ? `<div class="banner win">
         <h2>城を守った</h2>
         <div>${U.esc(b.army)}を退けた。押収した建材・食料は蔵に収まっている。</div>
