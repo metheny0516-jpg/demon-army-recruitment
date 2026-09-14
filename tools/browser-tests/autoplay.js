@@ -14,62 +14,71 @@ const { autoDismissMormo } = require('./helpers.js');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 
-  // 固定HUDが伸びて（城下町Lv・将軍・前哨済…）札を覆うことがある。真ん中まで送ってから押し、
-  // それでも覆われていたらDOMのclickで逃げる。通し試遊が見たいのは「最後まで進むか」なので。
+  // 通し試遊は手数が多い（第2幕まで進むと1ランが数百手）。実クリックは演出のたびに
+  // 「安定待ち」でせき止められ、1手が1秒近くかかる。ここで見たいのは「最後まで進むか」
+  // ・「JSエラーが出ないか」なので、DOM の click で送る。当たり判定や覆いの検査は
+  // 個別のブラウザテスト（mission.js など）の担当。
   const click = async sel => { await clickOne(page.locator(sel).first()); };
   const clickOne = async locator => {
-    await locator.evaluate(e => e.scrollIntoView({ block: 'center' })).catch(() => {});
-    try { await locator.click({ timeout: 5000 }); }
-    catch (_) { await locator.evaluate(e => e.click()); }
-    await page.waitForTimeout(40);
+    await locator.evaluate(e => e.click());
+    await page.waitForTimeout(30);
   };
+  // 1手ごとに locator を8回数えると往復が重い（第2幕まで進むと1ランが300手を超える）。
+  // 画面にある data-action を一度に取ってきて、それを見て次の1手を決める。
+  const actions = () => page.evaluate(() => {
+    const out = { __banner: !!document.querySelector('.banner') };
+    document.querySelectorAll('[data-action]').forEach(e => {
+      out[e.dataset.action + (e.disabled ? ':off' : '')] = true;
+    });
+    return out;
+  });
   let runs = 0;
-  for (runs = 1; runs <= 3; runs++) {
+  // 3代→2代に減らした（2026-09-14）。恒久成長で代を重ねるほど1ランが伸び、
+  // 3代目は1500手でも決着に届かない（通しで9分超）。見たいのは「最後まで進むか」
+  // ・「魔界史が代をまたいで積まれるか」なので、2代で足りる。
+  for (runs = 1; runs <= 2; runs++) {
     await click('[data-action="new"]');
     let steps = 0;
-    // 進軍が前哨戦＋本戦の2戦になり（2026-09-12）、1ランに要る手数が倍近くに増えた。
-    // 120手では決着前に打ち切られる。
-    while (steps++ < 300) {
+    const trail = [];
+    // 進軍が前哨戦＋本戦の2戦になり（2026-09-12）、幕も第2幕まで続く（2026-09-11）。
+    // 手数は昔の3倍どころか、負けて再起を繰り返すと1500手を超える代もある。
+    // 上限は「無限ループの保険」であって尺ではないので、大きめに取る（1手 0.2秒ほど）。
+    while (steps++ < 3000) {
+      const a = await actions();
+      trail.push(Object.keys(a).filter(k => k !== '__banner').join('|')); if (trail.length > 6) trail.shift();
       // 敗北しても再起可能なうちは確定していない。ここでは「ここで終わる」を選んで確定させる。
-      if (await page.locator('[data-action="concede"]').count()) { await click('[data-action="concede"]'); continue; }
+      if (a.concede) { await click('[data-action="concede"]'); continue; }
       // ハプニングは適当に選んで進める
-      if (await page.locator('[data-action="eventpick"]').count()) { await click('[data-action="eventpick"]'); continue; }
-      if (await page.locator('[data-action="eventdone"]').count()) { await click('[data-action="eventdone"]'); continue; }
+      if (a.eventpick) { await click('[data-action="eventpick"]'); continue; }
+      if (a.eventdone) { await click('[data-action="eventdone"]'); continue; }
       // 戦闘結果の「次へ」
-      if (await page.locator('[data-action="afterresult"]').count()) { await click('[data-action="afterresult"]'); continue; }
+      if (a.afterresult) { await click('[data-action="afterresult"]'); continue; }
       // gameover(敗北確定 or 全クリア)画面だけを終端とみなす。result()の1戦ごとの勝利画面はスルーする。
-      if (await page.locator('.banner').count()
-          && !(await page.locator('[data-action="nextrecruit"], [data-action="afterresult"]').count())) break;
-      if (await page.locator('[data-action="skip"]').count()
-          && await page.evaluate(() => Game.state.hiresLeft <= 0)) { await click('[data-action="skip"]'); continue; }
-      if (await page.locator('[data-action="hire"]:not([disabled])').count()) { await click('[data-action="hire"]:not([disabled])'); continue; }
+      if (a.__banner && !a.nextrecruit && !a['nextrecruit:off']) break;
+      if (a.skip && await page.evaluate(() => Game.state.hiresLeft <= 0)) { await click('[data-action="skip"]'); continue; }
+      if (a.hire) { await click('[data-action="hire"]:not([disabled])'); continue; }
       // 満員なら1体解雇して入れ替える（プレイヤーと同じ操作）
-      if (await page.locator('[data-action="hire"][disabled]').count() && await page.locator('[data-action="fire"]').count()) {
-        await click('[data-action="fire"]'); continue;
-      }
-      if (await page.locator('[data-action="deploy"]:not([disabled])').count()) {
+      if (a['hire:off'] && a.fire) { await click('[data-action="fire"]'); continue; }
+      if (a.deploy) {
         await click('[data-action="deploy"]');
         await click('[data-action="skiplog"]');
         await click('[data-action="afterbattle"]');
         continue;
       }
-
-      if (await page.locator('[data-action="missionpick"]').count()) {
+      if (a.missionpick) {
         // 最後の札＝いちばん攻めた作戦を選ぶ。訓練（2026-09-13）は進行しないので除く
         // （選び続けるとランが終わらず、この通し試遊が止まる）。
         const real = page.locator('.mission-card:not(.mission-train) [data-action="missionpick"]');
-        const pick = await real.count() ? real.last() : page.locator('[data-action="missionpick"]').last();
-        await clickOne(pick);
+        await clickOne(await real.count() ? real.last() : page.locator('[data-action="missionpick"]').last());
         continue;
       }
-
-      if (await page.locator('[data-action="skip"]').count()) { await click('[data-action="skip"]'); continue; }
+      if (a.skip) { await click('[data-action="skip"]'); continue; }
       break;
     }
     const over = await page.locator('.banner').count() > 0
       && !(await page.locator('[data-action="nextrecruit"], [data-action="afterresult"]').count())
       && !(await page.locator('[data-action="concede"]').count());
-    if (!over) { console.log(`  ラン${runs}: 決着画面に到達せず`); break; }
+    if (!over) { console.log(`  ラン${runs}: 決着画面に到達せず（${steps}手）`); trail.forEach(t => console.log('    …' + t)); break; }
     const head = (await page.locator('.banner h2').innerText()).trim();
     const cause = (await page.locator('.banner div').first().innerText()).trim();
     console.log(`  ✓ ラン${runs} 終了: ${head} / ${cause}`);
