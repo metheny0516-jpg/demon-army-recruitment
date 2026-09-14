@@ -78,7 +78,7 @@ const { autoDismissMormo } = require('./helpers.js');
     const over = await page.locator('.banner').count() > 0
       && !(await page.locator('[data-action="nextrecruit"], [data-action="afterresult"]').count())
       && !(await page.locator('[data-action="concede"]').count());
-    if (!over) { console.log(`  ラン${runs}: 決着画面に到達せず（${steps}手）`); trail.forEach(t => console.log('    …' + t)); break; }
+    if (!over) { console.log(`  ラン${runs}: 決着画面に到達せず（${steps}手）`, JSON.stringify(await page.evaluate(() => ({ phase: Game.state.phase, turn: Game.state.turn, conquest: Game.state.conquest, act: Game.state.act, battlesWon: Game.state.battlesWon, wipes: Game.state.wipeCount, roster: Game.state.roster.length, gold: Game.state.gold, food: Game.state.food })))); trail.forEach(t => console.log('    …' + t)); break; }
     const head = (await page.locator('.banner h2').innerText()).trim();
     const cause = (await page.locator('.banner div').first().innerText()).trim();
     console.log(`  ✓ ラン${runs} 終了: ${head} / ${cause}`);
