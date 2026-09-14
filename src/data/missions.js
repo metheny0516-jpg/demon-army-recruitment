@@ -39,7 +39,7 @@ const MISSION_TYPES = [
     ],
     armies: ["魔界反乱軍", "独立を宣言した元部下", "臨時魔王を名乗る一団"],
     regions: ["魔界の旧砦", "地下食堂跡", "勝手に建てられた新魔王城"],
-    enemyNames: ["反乱兵バズ", "反乱兵ガロ", "扇動者モルド", "自称将軍ザガン"],
+    enemyNames: ["自称将軍ザガン", "反乱兵バズ", "反乱兵ガロ", "扇動者モルド"],   // 先頭が首謀者（REBEL_LOOKS.leaders の姿）
     enemyTierOffset: 0,
     enemyMult: 0.90,
     rewardMult: 0.55,
