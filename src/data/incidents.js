@@ -27,20 +27,20 @@ const INCIDENTS = [
     },
     // 見学者Vの次の1戦の気合上限+1。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("slime_pond", "gain", c);
     },
     // スライム2体以上→分身を仲間と思って連れ帰り、宿舎の空き枠1つを占有。1体→自分の映り込みと思い、池に弁当を投げる。元の痕跡の持ち主が死亡しても種族の生存者が引き継げる。
     branches: {
       "2体以上": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("slime_pond", "2体以上", c);
         },
         text: "池の光を浴びて力が湧いた。帰りには、スライムたちが分身を連れ帰り、空き寝台を埋めていた。",
         mormo: "お名前より先に、寝床が決まりましたネ。"
       },
       "1体": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("slime_pond", "1体", c);
         },
         text: "池の光を浴びて力が湧いた。一体だけのスライムは水面の顔を自分だと思い、今日も弁当を二つ持って出かけた。",
         mormo: "鏡のぶんまで、お腹が空くんでしょうか。"
@@ -70,20 +70,20 @@ const INCIDENTS = [
     },
     // 未開放の種族技を1戦早く開く。全て開放済みなら次の稽古1回を無償にする。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("mage_lab_light", "gain", c);
     },
     // 術師以外→研究所の光が移り、既存の火球をその者だけの技として恒久習得。術師系→光を教材に写し、研究所が次の訓練で別の仲間にも授業を始める。
     branches: {
       "術師以外": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("mage_lab_light", "術師以外", c);
         },
         text: "光を調べて技のこつをつかんだ。研究所は先生の留守にも授業を続け、見学者の斧から火球を出した。",
         mormo: "出席を取っているのは、建物のほうでしょうか。"
       },
       "術師系": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("mage_lab_light", "術師系", c);
         },
         text: "光を調べて技のこつをつかんだ。研究所の光を写した教材が、今度は隣の机で授業を始めた。",
         mormo: "この教室、先生が増えやすいんですね。"
@@ -111,20 +111,20 @@ const INCIDENTS = [
     },
     // 建材+4。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("kobold_dig", "gain", c);
     },
     // 借金あり→地下金庫へ抜け、銀行員が返済専用の窓口を作る。借金なし→銀行員が通路を配送口にし、次の決着に金庫の箱がK宛てに届く。
     branches: {
       "借金あり": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("kobold_dig", "借金あり", c);
         },
         text: "掘り出した建材を運んでいたら、銀行の金庫に出た。銀行員は穴に返済窓口の札を掛けた。",
         mormo: "裏口にも、ちゃんと営業時間があるんですね。"
       },
       "借金なし": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("kobold_dig", "借金なし", c);
         },
         text: "建材を掘り出した穴が、銀行の配送口になった。翌朝、ポチの部屋の前に金庫の箱が積まれていた。",
         mormo: "お届け先は合っていますが、置き場所がありませんネ。"
@@ -154,20 +154,20 @@ const INCIDENTS = [
     },
     // 既存の骸骨兵1体が応募する。通常の面接で採否を選べる。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("necro_visitor", "gain", c);
     },
     // 遺物あり→Nが身元の印として貸した遺物を、元の主が追って来る。なし→骸骨が印の代わりに元の主の紹介状を持ち帰り、その主が採用条件を直談判しに来る。
     branches: {
       "遺物あり": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("necro_visitor", "遺物あり", c);
         },
         text: "骸骨の応募を受け付けた。貸した遺物を目印に、前の主が迎えの軍勢を連れて来た。",
         mormo: "退職届は、受け取ってもらえなかったようデス。"
       },
       "なし": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("necro_visitor", "なし", c);
         },
         text: "骸骨の応募を受け付けた。紹介状を書いた前の主まで、面接室の椅子を並べ始めた。",
         mormo: "採用する側の人数が、多すぎます。"
@@ -197,20 +197,20 @@ const INCIDENTS = [
     },
     // 次の本戦の隊列を一度公開。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("harpy_letter", "gain", c);
     },
     // 前哨済み→手紙を書いた連絡兵は退路を失い、Hについて面接へ来る。未制圧→まだ砦に勤めており、次の敵隊列で同じ名の連絡兵がHに手を振る。
     branches: {
       "前哨済み": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("harpy_letter", "前哨済み", c);
         },
         text: "手紙から敵の隊列が分かった。返事を出す前に、書いた本人が履歴書を持って現れた。",
         mormo: "返信用の切手だけ、余りました。"
       },
       "未制圧": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("harpy_letter", "未制圧", c);
         },
         text: "手紙から敵の隊列が分かった。次の砦では、手紙を書いた兵が敵の列からピリカに手を振っていた。",
         mormo: "文通相手が、あちら側にいましたネ。"
@@ -240,20 +240,20 @@ const INCIDENTS = [
     },
     // 二人の次の1戦の気合上限+1。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("general_duel", "gain", c);
     },
     // 敗者の忠誠60以上→勝者へ二つ名を貸し、次の戦いで勝者がその名を名乗る。60未満→二つ名を貸す代わりに再戦状を突きつけ、二人が訓練場で勝敗表を付け始める。
     branches: {
       "60以上": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("general_duel", "60以上", c);
         },
         text: "模擬戦で二人の息が合った。勝った将軍が相手の二つ名を借り、次の戦いにその名で出た。",
         mormo: "名簿は本名で引けますから、ご安心を。"
       },
       "60未満": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("general_duel", "60未満", c);
         },
         text: "模擬戦で二人の息が合った。敗者は名札を抱えて再戦を申し込み、訓練場の壁に勝敗表を貼った。",
         mormo: "その表、次の欄まで書いてありますネ。"
@@ -283,20 +283,20 @@ const INCIDENTS = [
     },
     // 修理・手入れで次の1戦だけその遺物の既存効果を強化。効果別の強化量は採用時に決める。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("mimic_appraisal", "gain", c);
     },
     // 負傷中→Mが遺物を寝台の見張りにする。健康→Mが遺物を看板にして宿舎で出張鑑定を始め、持ち主の列ができる。
     branches: {
       "負傷中": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("mimic_appraisal", "負傷中", c);
         },
         text: "傷んだ遺物を使えるようにした。負傷中の箱丸はそれを寝台に置き、見張り番にしてしまった。",
         mormo: "警備員より先に、枕が見つかったんですね。"
       },
       "健康": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("mimic_appraisal", "健康", c);
         },
         text: "遺物を手入れして使えるようにした。箱丸はそれを看板にして、宿舎の廊下で出張鑑定を始めた。",
         mormo: "列の最後尾は、どのお部屋でしょう。"
@@ -324,20 +324,20 @@ const INCIDENTS = [
     },
     // 保管庫を整理し、なくした備品を取り戻す（建材+2は添え物）。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("mimic_hostel_locker", "gain", c);
     },
     // Lv2以上→荷物が受付へ行列を作り、部屋番号順に受け渡される。Lv1→空き寝台へ籠城し、部屋札を掛けるとおとなしく収まる。
     branches: {
       "Lv2以上": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("mimic_hostel_locker", "Lv2以上", c);
         },
         text: "宿舎に預けた荷物から、なくした備品が戻ってきた。今度は荷物がひとりでに受付まで行列を作った。",
         mormo: "受付を作ったら、荷物まで順番を守るんですね。"
       },
       "Lv1": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("mimic_hostel_locker", "Lv1", c);
         },
         text: "なくした備品が戻ってきた。荷物は空き寝台を選んで籠城し、部屋番号を掛けてもらうまで動かなかった。",
         mormo: "荷物にも、住所が欲しかったんですね。"
@@ -367,20 +367,20 @@ const INCIDENTS = [
     },
     // 金+8の売上。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("goblin_market", "gain", c);
     },
     // 未払いあり→Gの愚痴を聞いた客が王国の雇用契約を示す。なし→Gの待遇自慢を聞いた客が、自分も雇ってほしいと名乗る。客は最初から王国の間者で、正体を乱数で付けない。
     branches: {
       "未払いあり": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("goblin_market", "未払いあり", c);
         },
         text: "闇市で品物が売れた。ギギが客に職場の愚痴を話すと、王国の間者が雇用契約書を差し出した。",
         mormo: "向こうも、売り物を探していたようです。"
       },
       "なし": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("goblin_market", "なし", c);
         },
         text: "闇市で品物が売れた。ギギが職場を自慢すると、王国の間者が身分証を裏返し、面接の列に並んだ。",
         mormo: "買い物より、大きな用事ができたようです。"
@@ -413,20 +413,20 @@ const INCIDENTS = [
     },
     // 既存種族の旅人が弟子として応募。種族は札ごとに固定、採否は任意。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("training_visitor", "gain", c);
     },
     // 最多→旅人が武勇伝を集めて伝記作家を名乗り、次の日報の一面をPの話で埋める。最多でない→失敗の仕方までまねた弟子が稽古でわざと転び、Pが受け身の教室を始める。
     branches: {
       "最多": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("training_visitor", "最多", c);
         },
         text: "旅人が弟子入りを願い出た。噂の多い師匠を追ううちに、弟子より先に伝記作家を名乗り始めた。",
         mormo: "初版の表紙に、もうお名前が載っています。"
       },
       "最多でない": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("training_visitor", "最多でない", c);
         },
         text: "旅人が弟子入りを願い出た。転び方までまねるので、先生は予定を変えて受け身から教え直した。",
         mormo: "教えなかったところほど、よく見ていますネ。"
@@ -456,20 +456,20 @@ const INCIDENTS = [
     },
     // 留守番全員の忠誠+3。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("skeleton_choir", "gain", c);
     },
     // 食料3以下→町へ合唱を出前して食べ物をもらう。余裕あり→町人の送別会を葬儀と間違えて招待を受ける。最初の歌い手が死んでも、生存する骸骨たちが歌う。
     branches: {
       "食料3以下": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("skeleton_choir", "食料3以下", c);
         },
         text: "合唱で留守番の顔がほころんだ。骸骨たちは町へ歌いに出て、食べ物を抱えて戻った。",
         mormo: "骨にも、おひねりは必要なんですね。"
       },
       "余裕あり": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("skeleton_choir", "余裕あり", c);
         },
         text: "合唱で留守番の顔がほころんだ。骸骨たちは送別会へ招かれ、生きている主役に鎮魂歌を歌ってしまった。",
         mormo: "お別れは、隣町へ引っ越すだけだそうです。"
@@ -499,20 +499,20 @@ const INCIDENTS = [
     },
     // 参加者の忠誠+5。
     gain: (st, c) => {
-      // TODO: 効果
+      c.game.incidentEffect("succubus_party", "gain", c);
     },
     // 将軍→乾杯が号令として伝わり、客も並ぶ臨時の観兵式になる。兵卒→気楽な会にするつもりが客の愚痴を集める相談所になり、Sが司会席から動けなくなる。
     branches: {
       "将軍": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("succubus_party", "将軍", c);
         },
         text: "夜会でみんなの機嫌がよくなった。主催者が将軍なので、乾杯が号令になり、客まで隊列を組んだ。",
         mormo: "二列目のお客様、杯はそのままで結構デス。"
       },
       "兵卒": {
         apply: (st, c) => {
-          // TODO: 効果
+          c.game.incidentEffect("succubus_party", "兵卒", c);
         },
         text: "夜会でみんなの機嫌がよくなった。リリィの席には相談の列ができ、最後の客は酒場の店主だった。",
         mormo: "閉店の相談だけ、先に聞いてあげてください。"

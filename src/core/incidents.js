@@ -65,8 +65,8 @@ const Incidents = {
   },
   settle(game) {
     const st=game.state,s=this.init(st);
-    if (s.lastSettle === st.turn) return;
-    s.lastSettle=st.turn; s.stats.settles++;
+    // processDepartmentsは戦闘ごとに一度。turnの加算位置は訓練と本戦で異なる。
+    s.stats.settles++;
     s.result=null;
     if (game.finishIncidentEffects) game.finishIncidentEffects();
     for (const [id,o] of Object.entries(s.offered)) {

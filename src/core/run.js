@@ -1010,9 +1010,123 @@ const Game = {
     return EPITHETS[monster.tplId] || EPITHETS[monster.race] || fallback;
   },
   // 画面に出す名前。**m.name は変えない**（殿堂・遺物・記録・テストが名前で照合している）。
+  // 噂の札の効果。判定と文章はデータ、状態の変更はここに集める。
+  incidentBonus(m, key, amount, turns=1) {
+    if (!m) return;
+    m[key]=(m[key]||0)+amount;
+    (this.state.incidentEffects ||= []).push({uid:m.uid,key,amount,until:(this.state.turn||0)+turns});
+  },
+  finishIncidentEffects() {
+    const st=this.state;
+    st.incidentEffects=(st.incidentEffects||[]).filter(e=>{
+      if(e.until>(st.turn||0))return true;
+      const m=st.roster.find(x=>x.uid===e.uid);
+      if(m) { m[e.key]=(m[e.key]||0)-e.amount; if(e.key==="spiritMaxBonus")m.spirit=Math.min(m.spirit||0,this.spiritRules().max+m.spiritMaxBonus); }
+      return false;
+    });
+    for(const m of st.roster) if(m.epithetOverrideUntil<=(st.turn||0)) {delete m.epithetOverride;delete m.epithetOverrideUntil;}
+  },
+  incidentApplicant(tplId, name) {
+    const m=this.rollApplicant(tplId); if(name)m.name=name;
+    (this.state.incidentApplicants ||= []).push(m); return m;
+  },
+  incidentEffect(id, step, c) {
+    const st=this.state,m=c.subject,v=c.viewer,s=Incidents.init(st);
+    const loyalty=(list,n)=>list.filter(Boolean).forEach(x=>x.loyalty=U.clamp((x.loyalty||0)+n,0,100));
+    if(step==="gain") {
+      switch(id) {
+        case "slime_pond": this.incidentBonus(v,"spiritMaxBonus",1); break;
+        case "mage_lab_light":
+          v.incidentLearnBonus=1; this.checkSpeciesSkill(v,[]); break;
+        case "kobold_dig": st.materials+=4; this.trace("carried_materials",m.uid,null,{amount:4,facility:null}); break;
+        case "necro_visitor": this.incidentApplicant("skeleton"); break;
+        case "harpy_letter": s.intel=true; break;
+        case "general_duel": for(const x of c.members)this.incidentBonus(x,"spiritMaxBonus",1); break;
+        case "mimic_appraisal": {
+          // 遺物の特性に任意倍率を掛けず、所持者の攻撃を手入れの効果として強化する。
+          const r=(st.relics||[])[0],holder=st.roster.find(x=>x.uid===r?.holderUid)||m;
+          this.incidentBonus(holder,"atk",2); break;
+        }
+        case "mimic_hostel_locker": st.materials+=2;break;
+        case "goblin_market": st.gold+=8;break;
+        case "training_visitor": this.incidentApplicant("goblin");break;
+        case "skeleton_choir": loyalty(this.departmentRoster("home"),3);break;
+        case "succubus_party": loyalty(st.roster,5);break;
+      }
+      return;
+    }
+    // 出来事の姿・行き先はセーブに残し、城下町と続きの報告で表示する。
+    s.scenes ||= {}; s.scenes[id]={branch:step,turn:st.turn,subjectUid:m?.uid??null};
+    switch(id) {
+      case "slime_pond":
+        if(step==="2体以上") s.bedReserved=st.roster.length<this.maxArmy()?1:0;
+        break;
+      case "mage_lab_light":
+        if(step==="術師以外") {
+          v.skills ||= [];
+          const skill=["mage_fireball","imp_spark","necro_raise"].find(k=>typeof SKILLS!=="undefined"&&SKILLS[k]&&!v.skills.includes(k));
+          if(skill)v.skills.push(skill);
+          else s.scenes[id].branch="術師系";
+        } else { s.lessonUid=v.uid; }
+        break;
+      case "kobold_dig": s.bankPassage=step;break;
+      case "necro_visitor":
+        if(step==="遺物あり")s.masterVisit={name:(m?.name||"骸骨")+"の元の主",due:(st.turn||0)+2};
+        break;
+      case "harpy_letter":
+        if(step==="前哨済み")this.incidentApplicant("goblin","王国の連絡兵");
+        else s.letterEnemy=true;
+        break;
+      case "general_duel":
+        for(const x of c.members)this.trace("trained",x.uid,null,{tier:"将軍の模擬戦"});
+        if(step==="60以上") {c.winner.epithetOverride=c.loser.epithet||"将軍";c.winner.epithetOverrideUntil=(st.turn||0)+2;}
+        break;
+      case "mimic_appraisal":
+        this.trace("carried_materials",m.uid,null,{amount:1,facility:"hostel",sourceCard:id});break;
+      case "mimic_hostel_locker": s.locker=step;break;
+      case "goblin_market": if(step==="なし")this.incidentApplicant("goblin","身分証を裏返した客"); break;
+      case "training_visitor":
+        if(step==="最多")s.biography={uid:m.uid,lines:this.journal(5).map(x=>typeof x==="string"?x:JSON.stringify(x))};
+        else s.lessonUid=m.uid;
+        break;
+      case "skeleton_choir": if(step==="食料3以下")st.food+=3;break;
+      case "succubus_party": s.party=step;break;
+    }
+  },
+  incidentTail(t, accept) {
+    const st=this.state,s=Incidents.init(st);
+    let text="その後、話はひと区切りついた。";
+    switch(t.parent) {
+      case "slime_pond":
+        s.bedReserved=0;
+        if(t.branch==="2体以上"&&accept) {this.incidentApplicant("slime");text="池の分身が、正式に面接へ来た。";}
+        else text="スライムたちは池へ戻った。宿舎の寝台が空いた。";
+        break;
+      case "kobold_dig": delete s.bankPassage;text="地下の荷物を運び終え、銀行への穴を閉じた。";break;
+      case "necro_visitor":
+        if(t.branch==="遺物あり"&&accept) {
+          if(st.counterattack?.pending) {s.masterVisit.due=(st.turn||0)+1;text="前の主は城の外で待っている。先に今の防衛戦を片付けよう。";break;}
+          st.counterattack={pending:true,kind:"punitive",armyName:s.masterVisit?.name||"骸骨の元の主"};
+          st.missionOffers=[];text="骸骨の元の主を迎え撃つ。城の守りを固めよう。";
+        } else text="骸骨の前の主と話をつけ、借りた品を返した。";
+        delete s.masterVisit;break;
+      case "harpy_letter": s.intel=false;s.letterEnemy=false;text="手紙の主との用事が済んだ。封筒だけが手元に残った。";break;
+      case "general_duel":
+        for(const uid of [t.winnerUid,t.loserUid]) {const m=st.roster.find(x=>x.uid===uid);if(m){delete m.epithetOverride;delete m.epithetOverrideUntil;}}
+        text="名札を返し、将軍たちはいつもの持ち場へ戻った。";break;
+      case "mimic_hostel_locker": delete s.locker;text="荷物に部屋札を掛けると、宿舎は静かになった。";break;
+      case "goblin_market":text="露店を閉じた。契約の話は断り、応募者とは通常の面接で話すことにした。";break;
+      case "training_visitor":text="師匠の記事と受け身の稽古が、町の話題になった。";break;
+      case "skeleton_choir":text="合唱団が帰ってきた。送別会の主役は無事に引っ越した。";break;
+      case "succubus_party":delete s.party;text="夜会がお開きになり、客も隊列を解いた。";break;
+    }
+    if(s.scenes)delete s.scenes[t.parent];
+    return text;
+  },
   displayName(monster) {
     if (!monster) return "";
-    return monster.epithet ? `${monster.epithet}・${monster.name}` : monster.name;
+    const epithet = monster.epithetOverride || monster.epithet;
+    return epithet ? `${epithet}・${monster.name}` : monster.name;
   },
   isGeneral(monster) {
     return !!monster && monster.rankId === "general";
@@ -1160,6 +1274,7 @@ const Game = {
       if (c.mercenary) continue;
       const monster = st.roster.find(m => m.uid === c.uid);
       if (!monster) continue;
+      this.trace("trained", monster.uid, null, { tier: stageData.army || "稽古", facility: this.facilityLv("lab") > 0 ? "lab" : null });
       monster.merit = (monster.merit || 0) + gain;
       monster.loyalty = U.clamp((monster.loyalty || 0) + 1, 0, 100);
       const targetRank = this.rankForMerit(monster.merit);
@@ -1470,6 +1585,7 @@ const Game = {
     st.applicants = [];
     const n = this.applicantCount();
     for (let i = 0; i < n; i++) st.applicants.push(this.rollApplicant());
+    if (st.incidentApplicants?.length) { st.applicants.push(...st.incidentApplicants); st.incidentApplicants = []; }
     let legacySlot = -1;
     if (st.legacyReturn && !st.legacyOffered && st.applicants.length) {
       const legacy = st.legacyReturn;
@@ -1858,7 +1974,7 @@ const Game = {
   },
 
   // ── 採用・解雇・編成 ──────────────────────
-  maxArmy() { return this.MAX_ARMY + (typeof Town !== "undefined" ? Town.armyBonus(this.state) : 0); },   // 宿舎
+  maxArmy() { return this.MAX_ARMY + (typeof Town !== "undefined" ? Town.armyBonus(this.state) : 0) - (this.state?.incidents?.bedReserved || 0); },   // 宿舎
   canHire() { return this.state.roster.length < this.maxArmy(); },
 
   additionalHireCost() {
@@ -2074,7 +2190,7 @@ const Game = {
     const raw = species ? rules.speciesUnlockBattles : rules.unlockBattles;
     const base = this.isLateBloomer(monster) ? Math.round(raw * this.LATE_BLOOMER_MULT[species ? "species" : "order"]) : raw;
     const lab = typeof Town !== "undefined" ? Town.unlockBonus(this.state, key) : 0;   // 研究所
-    return Math.max(1, base - lab);
+    return Math.max(1, base - lab - (species ? (monster.incidentLearnBonus || 0) : 0));
   },
   // 遅咲きが代わりに持つ内政の伸び。採用時に決めて monster.homeBonus に控える。
   // Aptitude（departments.js）は種族と職業だけを見るので、加算はこちら側で行う。
@@ -2886,6 +3002,7 @@ const Game = {
     // homeStays を足しておらず、城の主だけ1決着ぶん遅れる。
     const earnedTraits = this.grantExperienceTraits(notes);
 
+    if (mealPlan?.boost > 0 && mealPlan.cookUid != null) this.trace("cooked", mealPlan.cookUid, null, { facility: this.facilityLv("grand_kitchen") > 0 ? "grand_kitchen" : null });
     st.lastBattle = {
       victory: result.victory,
       // 経験で身についた共通特性（表示用）。身につかなかった決着・旧セーブには無い。
@@ -3383,6 +3500,7 @@ const Game = {
     const adapted = this.advanceHunger(foodShortage > 0, notes);
 
     st.materials += materialReward;
+    if (!normalized && materialReward > 0) for (const m of builders) this.trace("carried_materials", m.uid, null, { amount: materialReward / Math.max(1, builders.length), facility: this.facilityLv("hostel") > 0 ? "hostel" : null });
     // 旧「施工」（建材を進捗に変えて施設 Lv を上げる）は撤去した（2026-09-13）。
     // 留守番は建材を**運ぶ**だけで、使い道は城下町ただ一つ。st.autoBuild の flag ごと消してある。
     // 供養代行：建設部門の死霊術師は、直前の戦没者を建材へ変える（墓石も城壁も石である）。
@@ -3424,6 +3542,7 @@ const Game = {
     // 訓練の決着は税収が無い（王国に知られていないので領地は動かない）。利子は普通どおり取られる。
     if (dailyDay === undefined && typeof Town !== "undefined") {
       Town.settle(this, notes, { ransacked: !!st.lastRansacked || this.isTraining(mission), training: this.isTraining(mission) });
+      if (typeof Incidents !== "undefined") Incidents.settle(this);
     }
     // 旧施設の移行の報せ（ロード中には出す画面が無いので、次の決着の報告で一度だけ）。
     if (st.lastFacilityMigration && st.lastFacilityMigration.length) {
