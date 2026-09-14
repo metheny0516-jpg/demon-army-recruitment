@@ -17,12 +17,17 @@ const TRACE_KINDS = {
   defended: { label: "防衛", template: "{data.army}から城を守った" },
   ransacked: { label: "荒らされた", template: "{data.army}に城を荒らされた" },
   act: { label: "幕", template: "第{data.act}幕が始まった" },
-  sparked: { label: "火の粉", template: "{subject}が{object}の「{data.skill}」の火の粉を浴びた" }   // 2026-09-14 見える小さな事故
+  sparked: { label: "火の粉", template: "{subject}が{object}の「{data.skill}」の火の粉を浴びた" },  // 2026-09-14 見える小さな事故
+  // 日常の仕事も痕跡にする（噂の札の材料。DESIGN_INCIDENTS 8-2）。1決着で 3〜5 本 自然に増える。
+  carried_materials: { label: "運搬", template: "{subject}が建材を{data.amount}運んだ" },
+  cooked: { label: "炊事", template: "{subject}が食事をこしらえた" },
+  trained: { label: "稽古", template: "{subject}が{data.tier}と稽古をつけた" },
+  incident: { label: "噂の札", template: "{subject}が「{data.id}」をめくった（{data.branch}）" }
 };
 
 const Traces = {
   MAX: 400,
-  MAX_KINDS: 18,
+  MAX_KINDS: 22,
   protectedKinds: new Set(["fallen", "retreated"]),
 
   record(list, trace) {
