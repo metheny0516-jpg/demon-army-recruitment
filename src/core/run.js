@@ -2592,6 +2592,11 @@ const Game = {
     if (!result || (pending && pending.spiritApplied)) return;
     if (pending) pending.spiritApplied = true;
     const find = uid => st.roster.find(x => String(x.uid) === String(uid));
+    // 火の粉（見える小さな事故）を痕跡に。札（途中イベント）の材料になる（docs/DESIGN_INCIDENTS_2026-09-14.md 7-1）
+    for (const sp of result.sparked || []) {
+      const m = find(sp.uid), by = find(sp.byUid);
+      if (m) this.trace("sparked", m.uid, by ? by.uid : null, { skill: (typeof SKILLS !== "undefined" && SKILLS[sp.skillId] && SKILLS[sp.skillId].name) || sp.skillId });
+    }
     for (const [uid, spent] of Object.entries(result.spiritSpent || {})) {
       const m = find(uid);
       if (m && typeof m.spirit === "number") m.spirit = Math.max(0, m.spirit - spent);

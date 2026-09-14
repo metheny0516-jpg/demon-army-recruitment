@@ -16,12 +16,13 @@ const TRACE_KINDS = {
   ordered: { label: "号令", template: "{subject}に「{data.skill}」と命じた" },
   defended: { label: "防衛", template: "{data.army}から城を守った" },
   ransacked: { label: "荒らされた", template: "{data.army}に城を荒らされた" },
-  act: { label: "幕", template: "第{data.act}幕が始まった" }
+  act: { label: "幕", template: "第{data.act}幕が始まった" },
+  sparked: { label: "火の粉", template: "{subject}が{object}の「{data.skill}」の火の粉を浴びた" }   // 2026-09-14 見える小さな事故
 };
 
 const Traces = {
   MAX: 400,
-  MAX_KINDS: 17,
+  MAX_KINDS: 18,
   protectedKinds: new Set(["fallen", "retreated"]),
 
   record(list, trace) {
