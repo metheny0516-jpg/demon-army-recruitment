@@ -1462,6 +1462,89 @@ const UI = {
       ${this.synergyPanel(Game.activeRoster())}`);
   },
 
+  // ── 噂の札（docs/SPEC_INCIDENTS_IMPL_2026-09-14.md 4節）────────────────
+  // 作戦会議の右端の5枚目と、城下町の張り紙は**同じ札**。どちらから開いても同じ話になる。
+  // 状態は読むだけ。めくる・やめるは既存の流儀どおり main.js の action へ渡す。
+  rumorCard(card, place) {
+    if (!card) return "";
+    const yes = (card.choices || [])[0] || "めくる";
+    const no = (card.choices || [])[1] || "やめる";
+    return `<div class="mission-card rumor rumor-${U.esc(place)}" data-incident="${U.esc(card.id)}">
+      <div class="mission-route-number"><span>噂</span><b>？</b></div>
+      <h3>${U.esc(card.title)}</h3>
+      <p class="rumor-line">${U.esc(card.rumor || "")}</p>
+      <div class="rumor-actions">
+        <button class="primary wide" data-action="incidentopen" data-id="${U.esc(card.id)}">${U.esc(yes)}</button>
+        <button class="small ghost" data-action="incidentdecline" data-id="${U.esc(card.id)}">${U.esc(no)}</button>
+      </div>
+    </div>`;
+  },
+  // A の札だけが作戦会議と張り紙に出る（B はその決着に起きるので結果画面に出る）。
+  rumorCards(place) {
+    if (typeof Incidents === "undefined") return "";
+    return Incidents.offered(Game.state, "A").map(card => this.rumorCard(card, place)).join("");
+  },
+
+  // めくったあと：見学者を選ぶ → 結果。既存のイベント画面の器を借りる（新しい画面を足さない）。
+  incidentPick(id) {
+    const card = typeof Incidents !== "undefined" ? Incidents.card(id) : null;
+    if (!card) return this.render ? this.render() : null;
+    const st = Game.state;
+    const rows = st.roster.map(m => `<button class="wide event-choice" data-action="incidentpick"
+      data-id="${U.esc(card.id)}" data-uid="${m.uid}">${this.icon(m.race)} ${U.esc(Game.displayName(m))}
+      <small class="muted">${U.esc(m.race)} / ${U.esc(m.job)}</small></button>`).join("");
+    this.set(`${this.hud()}
+      <div class="event-desk"><div class="event-seal">噂</div>
+      <div class="panel event-panel">
+        <div class="event-kicker">城内・噂の札</div><h2>⚡ ${U.esc(card.title)}</h2>
+        <div class="event-text">${U.esc(card.rumor || "")}</div>
+        <div class="muted">誰が見に行くか。</div>
+      </div>
+      <div class="event-options">${rows}</div></div>`, "event");
+  },
+
+  // 結果。text は3行以内、モルモの一言、「なぜ」は畳んでおく（押すと開く）。
+  incidentResult() {
+    const out = Game.state.lastIncident;
+    if (!out) return this.render ? this.render() : null;
+    this.set(`${this.hud()}
+      <div class="event-desk resolved"><div class="event-seal">処理済</div>
+      <div class="panel event-panel incident-result">
+        <div class="event-kicker">城内・噂の札</div><h2>⚡ ${U.esc(out.title)}</h2>
+        <div class="event-text">${U.esc(out.text || "")}</div>
+        ${out.mormo ? `<div class="mormo-brief">宰相モルモ「${U.esc(out.mormo)}」</div>` : ""}
+        ${(out.notes || []).length ? `<ul class="notes">${out.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>` : ""}
+        ${this.incidentWhy(out.why)}
+      </div>
+      <button class="primary wide" data-action="incidentdone">戻る</button></div>`, "event");
+  },
+  // 決着の画面に出す分：B の札（その決着にもう起きている）と、この決着でめくった札の「なぜ」。
+  incidentResultPanel() {
+    if (typeof Incidents === "undefined") return "";
+    const st = Game.state;
+    const bCards = Incidents.offered(st, "B");
+    const out = st.lastIncident && st.lastIncident.turn === st.turn ? st.lastIncident : null;
+    if (!bCards.length && !out) return "";
+    return `<div class="panel incident-panel-result"><h3>⚡ 城内の噂</h3>
+      ${bCards.map(card => `<div class="incident-b">
+        <b>${U.esc(card.title)}</b>
+        <div class="event-text">${U.esc(card.rumor || "")}</div>
+        <div class="rumor-actions">
+          <button class="small primary" data-action="incidentopen" data-id="${U.esc(card.id)}">${U.esc((card.choices || [])[0] || "受ける")}</button>
+          <button class="small ghost" data-action="incidentdecline" data-id="${U.esc(card.id)}">${U.esc((card.choices || [])[1] || "関わらない")}</button>
+        </div></div>`).join("")}
+      ${out ? `<div class="incident-b"><b>${U.esc(out.title)}</b>
+        <div class="event-text">${U.esc(out.text || "")}</div>${this.incidentWhy(out.why)}</div>` : ""}
+    </div>`;
+  },
+
+  // 「なぜ」欄。**痕跡と状態を名指し**する（原因を後付けしない。設計7-2）。
+  incidentWhy(why) {
+    if (!why) return "";
+    return `<details class="incident-why"><summary>なぜこうなった？</summary>
+      <div class="muted">${U.esc(why)}</div></details>`;
+  },
+
   mission() {
     const st = Game.state;
     const offers = st.missionOffers.length ? st.missionOffers : Game.prepareMissions(true);
@@ -1544,7 +1627,7 @@ const UI = {
       <div class="panel mission-assets"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
       </header>
       <div class="mission-map-label"><span>王国周辺作戦図</span><small>${forced ? "迎撃準備" : "三本の進軍路から、次の一手を選ぶ"}</small></div>
-      <div class="mission-grid mission-routes">${cards}</div>
+      <div class="mission-grid mission-routes">${cards}${this.rumorCards("mission")}</div>
       <div class="spacer"></div>
       ${forced ? "" : `<button class="wide ghost mission-return" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`}
       </div>`, "mission");
@@ -1808,6 +1891,7 @@ const UI = {
       ${/* 敗因メモ（ニアミス）は「どこまで届いたか」を残す。全滅と敗走のときだけ出す。
            再起画面がほぼ出なくなった（再建の仕様）ので、ここに無いと二度と読まれない。 */
         (wiped || b.lostOnPoints) ? this.nearMissPanel(b.nearMiss) : ""}
+      ${this.incidentResultPanel()}
       ${this.skillUnlockPanel(b)}
       ${this.earnedTraitPanel(b)}
       ${Game.canSeizeStronghold() ? (() => {

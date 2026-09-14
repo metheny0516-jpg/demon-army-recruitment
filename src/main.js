@@ -506,6 +506,31 @@ const App = {
         return this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
           { kicker: "次期採用報告", title: "宰相モルモ" });
 
+      // ── 噂の札（2026-09-14）。めくる → （見学者を選ぶ）→ 結果 ──────────
+      case "incidentopen": {
+        if (typeof Incidents === "undefined") return;
+        const card = Incidents.card(data.id);
+        if (!card) return this.render();
+        if (typeof Sound !== "undefined") Sound.cue("shuffle");
+        // 見学者を選ぶ札は、まず名簿から1人選ばせる（既存の人物選択の見た目を借りる）
+        if (Incidents.needsViewer(card) && Game.state.roster.length > 1) return UI.incidentPick(card.id);
+        Incidents.open(Game, card.id, (Game.state.roster[0] || {}).uid);
+        return UI.incidentResult();
+      }
+
+      case "incidentpick":
+        if (typeof Incidents === "undefined") return;
+        Incidents.open(Game, data.id, Number(data.uid));
+        return UI.incidentResult();
+
+      case "incidentdecline":
+        if (typeof Incidents === "undefined") return;
+        Incidents.decline(Game, data.id);
+        return this.render();
+
+      case "incidentdone":
+        return this.render();
+
       case "eventpick":
         Game.chooseEvent(Number(data.index));
         this.render();

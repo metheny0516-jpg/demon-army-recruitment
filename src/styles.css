@@ -3863,3 +3863,20 @@ button.primary::first-letter { color: var(--gold); }
 .training-note { font-size: 11px; }
 .training-terms { font-size: 12px; color: #d8f0d8; margin: 4px 0; }
 .banner.training { border-color: rgba(160, 220, 160, .6); }
+
+/* ── 噂の札（docs/SPEC_INCIDENTS_IMPL_2026-09-14.md 4節）──────────────
+   作戦会議の右端の5枚目と、城下町の張り紙は同じ部品。作戦の札より薄く、めくる前だと分かる見た目。 */
+.mission-card.rumor {
+  border-style: dashed;
+  border-color: rgba(232, 189, 104, .45);
+  background: rgba(24, 18, 34, .55);
+}
+.mission-card.rumor .mission-route-number b { color: #d9c9a0; }
+.mission-card.rumor .rumor-line { font-size: 13px; color: #e6dcc4; line-height: 1.5; }
+.mission-card.rumor .rumor-actions { display: flex; flex-direction: column; gap: 6px; margin-top: auto; }
+.town-rumors { margin: 12px 0; }
+.town-rumors h3 { margin: 0 0 6px; font-size: 14px; }
+.incident-why { margin-top: 8px; font-size: 12px; }
+.incident-why summary { cursor: pointer; color: #d9c9a0; }
+.incident-panel-result .incident-b + .incident-b { margin-top: 10px; border-top: 1px solid rgba(232, 189, 104, .2); padding-top: 8px; }
+.incident-panel-result .rumor-actions { display: flex; gap: 8px; margin-top: 6px; }

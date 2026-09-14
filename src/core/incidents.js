@@ -112,10 +112,9 @@ const Incidents = {
     for (const [id, row] of Object.entries(inc.offered)) {
       const card = this.card(id);
       const gone = !card || !this.subjectAlive(st, card, row.subjectUid);
-      if (gone || turn >= (row.expires || 0)) {
-        delete inc.offered[id];
-        if (gone && card) game.note && game.note(`${card.title}の話は、立ち消えになった`);
-      }
+      // 主役が死ねば札も消える（設計7-6。それくらいの難度でよい）。
+      // 消えた札を弔いへ回す仕組み（incident phase=lost）は後日。
+      if (gone || turn >= (row.expires || 0)) delete inc.offered[id];
     }
     inc.active = Object.keys(inc.offered).length;
     if (inc.active >= this.MAX_OFFERED) { inc.dry = 0; return null; }
@@ -168,7 +167,7 @@ const Incidents = {
     inc.active = Object.keys(inc.offered).length;
     if (typeof game.trace === "function") game.trace("incident", ctx.viewerUid ?? null, null, { id, branch: branchKey });
     st.lastIncident = {
-      id, title: card.title, branch: branchKey,
+      id, title: card.title, branch: branchKey, turn: Number(st.turn) || 0,
       text: branch ? branch.text : "", mormo: branch ? branch.mormo : "",
       why: this.why(st, id), notes: ctx.notes.slice(),
       viewerUid: ctx.viewerUid, viewerName: viewer ? viewer.name : null
@@ -217,7 +216,7 @@ const Incidents = {
     const value = row.branch !== undefined && row.branch !== null && row.branch !== ""
       ? row.branch
       : (card.hidden && typeof card.hidden.value === "function" ? String(card.hidden.value(st)) : "");
-    const head = lines.length ? `${lines.join("と")}がこの話につながった。` : "";
+    const head = lines.length ? `${lines.join("、")}。それがこの話につながった。` : "";
     const tail = label && value ? `${label}は${value}だったため、いまの出来事になった。` : "";
     return `${head}${tail}`.trim();
   }

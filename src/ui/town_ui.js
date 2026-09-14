@@ -47,8 +47,12 @@ const TownUI = {
       <div class="muted">給与と食料は結果画面の報告に。ここは城下町の分だけ。</div></section>`;
     // 地図を先頭に。地図が無くても（データやCSSが欠けても）札はそのまま読める。
     const map = typeof MapUI !== "undefined" ? MapUI.render(st) : "";
+    // 噂の札の張り紙（2026-09-14）。地図の下、施設一覧の上。作戦会議の5枚目と**同じ札**で、
+    // どちらから開いても同じ話になる（生活の側から気づく人のための入口）。
+    const rumors = typeof UI !== "undefined" && UI.rumorCards ? UI.rumorCards("town") : "";
     return `<section class="town-panel">
       ${map}
+      ${rumors ? `<div class="town-rumors"><h3>📌 城内の張り紙</h3><div class="mission-grid">${rumors}</div></div>` : ""}
       <div class="town-summary">領地 <b>${sum.territories}</b> × <b>${sum.perTerritory}G</b> ＝ 税収 <b>${sum.tax}G</b>／決着　　所持金 <b>${st.gold}G</b>　建材 <b>${st.materials}</b></div>
       <div class="muted">領地は本戦で取った段階。施設は金と建材で建てる（1決着に1件）。足りなければ銀行へ。</div>
       ${facilities}
