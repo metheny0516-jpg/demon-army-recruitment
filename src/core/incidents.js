@@ -114,7 +114,12 @@ const Incidents = {
       const gone = !card || !this.subjectAlive(st, card, row.subjectUid);
       // 主役が死ねば札も消える（設計7-6。それくらいの難度でよい）。
       // 消えた札を弔いへ回す仕組み（incident phase=lost）は後日。
-      if (gone || turn >= (row.expires || 0)) delete inc.offered[id];
+      // 期限切れ・主役の消失は done に控える。**同じ決着の中で拾い直さないため**であり、
+      // 「同じ id は1ランに1回」の規則ともここで揃う（自分でやめた A の札だけは無記録）。
+      if (gone || turn >= (row.expires || 0)) {
+        delete inc.offered[id];
+        inc.done[id] = { turn, branch: gone ? "lost" : "expired", by: row.by || [] };
+      }
     }
     inc.active = Object.keys(inc.offered).length;
     if (inc.active >= this.MAX_OFFERED) { inc.dry = 0; return null; }
