@@ -3,8 +3,8 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/run.js'];
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/incidents.js','src/data/demon_kings.js',
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/traces.js','src/core/incidents.js','src/core/run.js'];
 // SIM_NO_TOWN=1 で城下町（税）を読まない。再起の回帰テスト（test-chain-measure-retry）は全滅が起きる前提なので、税で楽になった後も同じ種で測れるようにする
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -16,6 +16,7 @@ for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename
 const Game = vm.runInContext('Game', ctx);
 // 城下町（2026-09-13 の統合で、施設はここ1系統になった）。SIM_NO_TOWN のときは未定義。
 const Town = vm.runInContext('typeof Town !== "undefined" ? Town : null', ctx);
+const Incidents = vm.runInContext('Incidents', ctx);
 const KPI = vm.runInContext('KPI', ctx);
 const Synergy = vm.runInContext('Synergy', ctx);
 const TRAITS = vm.runInContext('TRAITS', ctx);
@@ -45,6 +46,12 @@ function runOnce(strat, stats){
   const st = Game.state;
   let guard = 0;
   while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
+    if (strat.cards) {
+      if (strat.cards === 'open') {
+        if(st.incidents?.tail?.ready) Incidents.finishTail(Game, true);
+        for(const id of Object.keys(st.incidents?.offered || {})) Incidents.open(Game,id,st.roster[0]?.uid);
+      } else for(const [id,o] of Object.entries(st.incidents?.offered || {})) if(o.door==='B') Incidents.decline(Game,id);
+    }
     stats.maxArmy = Math.max(stats.maxArmy, st.roster.length);
     // 採用フェーズ: 枠がある限り採用する
     while (st.phase === 'recruit' && st.applicants.length) {
@@ -238,6 +245,8 @@ function runOnce(strat, stats){
     if (rec.clearedBy === "defense") stats.defense.byDefense++;
     else stats.defense.byConquest++;
   }
+  stats.cards ||= {settles:0,offered:0,opened:0,natural:0};
+  for(const k of Object.keys(stats.cards)) stats.cards[k] += st.incidents?.stats?.[k] || 0;
   return rec;
 }
 
@@ -263,6 +272,8 @@ const strategies = [
   {name:'訓練は序盤3回だけ', kind:'greedy', train:true, trainMax:3},
 ];
 const N = Number(process.argv[2] || 400);
+// 連鎖測定器の既存15戦略は維持し、札の比較は通常のsim実行に追加する。
+strategies.push({name:'札を全部めくる',kind:'greedy',cards:'open'}, {name:'全部無視',kind:'greedy',cards:'ignore'});
 // KPIの書き出し先（任意）: node tools/sim.js 30 --kpi /tmp/kpi.json
 // 実機のプレイではないので数値そのものは参考値だが、KPI→レポートの経路を
 // 人間の試遊を待たずに通せる。試遊で集めた本物の export とは混ぜないこと。
@@ -275,7 +286,7 @@ const kpiOut = (() => {
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 const skillTriggerTotals = {};
-for (const s of strategies) {
+for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)) {
   const stats = { generals:0, trainings:0, syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
@@ -285,6 +296,7 @@ for (const s of strategies) {
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
   console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン`);
+  console.log(`  札: 提示 ${stats.cards.offered}／めくった ${stats.cards.opened}／自然発生 ${stats.cards.natural}／決着 ${stats.cards.settles}（波乱 ${(100*stats.cards.natural/Math.max(1,stats.cards.settles)).toFixed(2)}%）`);
   const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);
   const nameCount = new Map();

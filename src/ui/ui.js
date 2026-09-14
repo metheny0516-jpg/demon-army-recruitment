@@ -1507,6 +1507,7 @@ const UI = {
           ${m.missionPhase === "main" && m.twoStage ? `<br><span class="outpost-note">前哨で見た隊列と同じ</span>` : ""}
           ${m.missionPhase === "outpost" ? `<br><span class="outpost-note">この隊列がそのまま本戦の隊列になる</span>` : ""}</div>
         <p>${U.esc(m.description)}</p>
+        ${st.incidents?.intel && m.missionKind==="invade" ? `<p class="letter-intel">手紙の敵情：${m.units.map(u=>`${U.esc(u.name)}（攻${u.atk}・守${u.def}）`).join("、")}</p>` : ""}
         ${trainingPick}
         ${m.missionKind === "train" ? `<div class="training-terms">死なない。金は入らない。食料と<b>半分の給与</b>だけ払う。</div>` : ""}
         <dl class="mission-economy">
@@ -1808,6 +1809,7 @@ const UI = {
       ${this.incidentCards("B")}
       ${st.incidents?.tail?.ready ? '<p><button data-action="incidenttailview">📜 噂の続きが届いている</button></p>' : ""}
       ${this.incidentResultHtml(st.incidents?.result)}
+      ${st.incidents?.biography ? `<section class="panel"><h3>魔界日報：${U.esc(st.incidents.biography.name)}の歩み</h3>${st.incidents.biography.lines.map(t=>`<p>${U.esc(t)}</p>`).join("")}</section>` : ""}
       ${/* 敗因メモ（ニアミス）は「どこまで届いたか」を残す。全滅と敗走のときだけ出す。
            再起画面がほぼ出なくなった（再建の仕様）ので、ここに無いと二度と読まれない。 */
         (wiped || b.lostOnPoints) ? this.nearMissPanel(b.nearMiss) : ""}
@@ -2050,13 +2052,24 @@ const UI = {
     const choices=card.pick==="viewer"
       ? st.roster.map(m=>`<button class="wide" data-action="incidentpick" data-id="${id}" data-uid="${m.uid}">${U.esc(Game.displayName(m))}</button>`).join("")
       : `<button class="wide primary" data-action="incidentpick" data-id="${id}">${U.esc(card.choices[0])}</button>`;
-    this.set(`${this.hud()}<div class="event-desk"><section class="panel"><h2>${U.esc(card.title)}</h2><p>${U.esc(Incidents.text(st,card.rumor,Incidents.context(st,o)))}</p>
+    this.set(`${this.hud()}<div class="event-desk"><section class="panel incident-choice"><h2>${U.esc(card.title)}</h2><p>${U.esc(Incidents.text(st,card.rumor,Incidents.context(st,o)))}</p>
       ${result?.busy?"<p>先に、進行中の噂の後始末をしよう。</p>":choices}
       <button class="wide" data-action="incidentdecline" data-id="${id}">${U.esc(card.choices[1])}</button></section></div>`,"event");
   },
   incidentTail() {
     const t=Game.state.incidents?.tail;if(!t?.ready)return;
-    const choice=t.parent==="slime_pond"?["正式採用の面接へ","池へ返す"]:t.parent==="necro_visitor"?["迎え撃つ","話をつける"]:["後始末をする","話を収める"];
+    const choice={
+      slime_pond:t.branch==="2体以上"?["正式採用の面接へ","池へ返す"]:["池から呼び戻す","散歩を終える"],
+      kobold_dig:t.branch==="借金あり"?["返済窓口を閉じる","銀行へ案内する"]:["箱を銀行へ返す","運搬係を引き受ける"],
+      necro_visitor:t.branch==="遺物あり"?["迎え撃つ","話をつける"]:["通常の面接で話す","保証を断る"],
+      harpy_letter:["手紙のその後を聞く","封筒をしまう"],
+      general_duel:t.branch==="60以上"?["名札を返す","元の名で呼ぶ"]:["再戦を終える","勝敗表をしまう"],
+      mimic_hostel_locker:["受付係を任せる","部屋札を掛け直す"],
+      goblin_market:["店主と話す","契約を断って閉店する"],
+      training_visitor:["師匠の報告を聞く","教室を片付ける"],
+      skeleton_choir:["合唱団を迎える","送別会の誤解を解く"],
+      succubus_party:["閉会を告げる","最後の客を送る"]
+    }[t.parent]||["その後を聞く","話を収める"];
     this.set(`${this.hud()}<div class="event-desk"><h2>噂の続き</h2><p>${U.esc(Incidents.card(t.parent).title)}のその後を聞く。</p>
       <button data-action="incidenttail" data-accept="yes">${choice[0]}</button><button data-action="incidenttail" data-accept="no">${choice[1]}</button></div>`,"event");
   },

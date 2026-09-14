@@ -3874,3 +3874,6 @@ button.primary::first-letter { color: var(--gold); }
 .incident-mormo { border-left: 3px solid #99845f; padding-left: 12px; }
 .incident-scene { font-size: .9rem; }
 
+
+.incident-result, .event-desk .incident-choice { background: #e9dec5; color: #352b22; border-color: #8b785a; }
+.incident-result h3, .incident-result summary, .incident-choice h2 { color: inherit; }

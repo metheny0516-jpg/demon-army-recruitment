@@ -6,7 +6,7 @@ const Incidents = {
     const s = st.incidents || (st.incidents = {});
     s.offered ||= {}; s.done ||= {}; s.dry ||= 0; s.active ||= 0;
     s.identities ||= {}; s.stats ||= { settles: 0, offered: 0, opened: 0, natural: 0 };
-    for (const m of st.roster || []) s.identities[m.uid] = { name: m.name, race: m.race };
+    for (const m of [...(st.departed || []), ...(st.roster || [])]) s.identities[m.uid] = { name: m.name, race: m.race };
     return s;
   },
   roster(st) { return st.roster || []; },
@@ -22,7 +22,7 @@ const Incidents = {
       if (!card.traces.includes(t.kind) || (t.turn ?? 0) < turn - 60) return false;
       if (card.subject.kind === "facility") return t.data?.facility === card.subject.id;
       if (card.subject.kind === "race") {
-        if (t.kind === "fallen") return true; // 同僚の戦死。軍団の記録として記述する
+        if (t.kind === "fallen") return (st.traces || []).some(h => h.kind === "hired" && s.identities[h.subject]?.race === card.subject.race && h.seq < t.seq);
         return s.identities[t.subject]?.race === card.subject.race;
       }
       if (["ransacked", "defended", "fallen"].includes(t.kind)) {
@@ -40,6 +40,7 @@ const Incidents = {
       groups = [];
       for (let i=0;i<pool.length;i++) for (let j=i+1;j<pool.length;j++) groups.push([pool[i].uid,pool[j].uid]);
     }
+    let best=null;
     for (const uids of groups) {
       const used = new Set(), by = this.relevant(st, card, uids).filter(t => {
         if (used.has(t.kind)) return false; used.add(t.kind); return true;
@@ -55,9 +56,9 @@ const Incidents = {
         offer.winnerUid = strength(p)>strength(q) ? p.uid : q.uid;
         offer.loserUid = offer.winnerUid===p.uid ? q.uid : p.uid;
       }
-      return offer;
+      if(!best || offer.by[0]>best.by[0])best=offer;
     }
-    return null;
+    return best;
   },
   record(game, subject, data) {
     if (game.trace) game.trace("incident",subject,null,data);
@@ -78,7 +79,7 @@ const Incidents = {
         delete s.offered[id];
       }
     }
-    if (s.tail && s.tail.due <= (st.turn||0)) s.tail.ready=true;
+    if (s.tail && s.tail.due <= s.stats.settles) s.tail.ready=true;
     if (Object.keys(s.offered).length>=2) return;
     const threshold=s.dry>=3?1:2;
     const candidates=this.cards().filter(c=>!s.done[c.id]&&!s.offered[c.id]&&(!c.tail?.after || !s.tail))
@@ -90,7 +91,7 @@ const Incidents = {
     s.offered[card.id]=offer; s.stats.offered++;
     if (card.door==="B") {
       s.stats.natural++;
-      this.record(game,offer.subjectUid,{id:card.id,phase:"appeared",text:card.rumor});
+      this.record(game,offer.subjectUid,{id:card.id,phase:"appeared",text:this.text(st,card.rumor,this.context(st,offer))});
     }
   },
   context(st,offer,viewerUid) {
@@ -111,16 +112,17 @@ const Incidents = {
     if (card.pick==="viewer" && !this.roster(st).some(m=>m.uid===viewerUid)) return { pick:true,id };
     const c=this.context(st,offer,viewerUid); c.game=game; c.id=id;
     // hiddenはgainで変更されうる値なので先に保存。模擬戦の敗者も既に確定済み。
-    const value=card.hidden.value(st,c), branch=card.branches[value];
+    const value=card.hidden.value(st,c); let branch=card.branches[value];
     if(!branch) return null;
     card.gain(st,c); branch.apply(st,c);
+    const actual=c.branchOverride||value; branch=card.branches[actual];
     const nameOf=uid=>s.identities[uid]?.name;
-    const why=offer.evidence.map(t=>Traces.describe(t,nameOf)).join("。")+"。"+card.hidden.label+"："+value+"。";
-    const result={id,title:card.title,text:this.text(st,branch.text,c),mormo:this.text(st,branch.mormo,c),why,branch:value};
-    s.done[id]={turn:st.turn||0,branch:value}; delete s.offered[id]; s.stats.opened++;
-    this.record(game,offer.subjectUid,{id,branch:value,phase:"start",text:result.text});
+    const why=offer.evidence.map(t=>Traces.describe(t,nameOf)).join("。")+"。"+card.hidden.label+"："+value+"。"+this.text(st,branch.text,c);
+    const result={id,title:card.title,text:this.text(st,branch.text,c),mormo:this.text(st,branch.mormo,c),why,branch:actual};
+    s.done[id]={turn:st.turn||0,branch:actual}; delete s.offered[id]; s.stats.opened++;
+    this.record(game,offer.subjectUid,{id,branch:actual,phase:"start",text:result.text});
     if (card.tail?.after) {
-      s.tail={id:card.tail.id,parent:id,due:(st.turn||0)+card.tail.after,branch:value,
+      s.tail={id:card.tail.id,parent:id,due:s.stats.settles+card.tail.after,branch:actual,
         subjectUid:offer.subjectUid,viewerUid,winnerUid:offer.winnerUid,loserUid:offer.loserUid,text:card.tail.text};
       s.active=1;
     }
@@ -136,6 +138,7 @@ const Incidents = {
   },
   finishTail(game,accept=false) {
     const s=this.init(game.state),t=s.tail; if(!t?.ready)return null;
+    if(t.parent==="necro_visitor" && t.branch==="遺物あり" && accept && game.state.counterattack?.pending) return {id:t.id,title:"前の主は待っている",text:"今の防衛戦を終えてから、迎え撃つか話し合うかを選ぼう。",mormo:"順番に、お相手しましょう。",why:"王国の反撃が既に予約されているため。"};
     const text=game.incidentTail ? game.incidentTail(t,accept) : t.text;
     this.record(game,t.subjectUid,{id:t.parent,phase:"tail",text});
     s.tail=null;s.active=0;s.result={id:t.id,title:"噂の続き",text,mormo:"その後のご報告デス。",why:"先日の噂の続き。"};

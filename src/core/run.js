@@ -218,6 +218,7 @@ const Game = {
   trace(kind, subject = null, object = null, data = {}) {
     const st = this.state;
     if (!st || typeof Traces === "undefined") return null;
+    if (typeof Incidents !== "undefined") Incidents.init(st);
     return Traces.record(st.traces, { kind, subject, object, data, day: st.day, turn: st.turn });
   },
 
@@ -634,9 +635,9 @@ const Game = {
   },
 
   battleRationQuote() {
-    const foodBefore = Math.max(0, this.state.food || 0);
     const kitchen = this.facilityReady("grand_kitchen");
     const totalNeed = this.foodNeed() + (kitchen ? 1 : 0);
+    const foodBefore = Math.max(0, this.state.food || 0) + (this.isTraining(this.state.selectedMission) && this.state.incidents?.freeTraining ? totalNeed : 0);
     const need = this.foodNeedFor(this.activeRoster()) + (kitchen ? 1 : 0);
     const consumed = Math.min(foodBefore, need);
     return {
@@ -985,7 +986,9 @@ const Game = {
       if (feast && Aptitude.of(m).appetite > 0) dmgMult *= 1 + feast.dmgBonus;
       // 施設の一律HP・防御補正は撤去した（設計憲法 第9節）。施設Lv.は
       // 大型Jokerが働ける回数（facilityWorks）としてのみ効く。
-      return { ...m, battleDmgMult: dmgMult, battleTakenMult: takenMult };
+      const traits=(m.traits||[]).slice();
+      for(const r of this.state.relics||[]) if(r.holderUid===m.uid && r.polishedUntil>(this.state.incidents?.stats?.settles||0) && traits.includes(r.traitId)) traits.push(r.traitId);
+      return { ...m, traits, battleDmgMult: dmgMult, battleTakenMult: takenMult };
     });
   },
 
@@ -1014,17 +1017,18 @@ const Game = {
   incidentBonus(m, key, amount, turns=1) {
     if (!m) return;
     m[key]=(m[key]||0)+amount;
-    (this.state.incidentEffects ||= []).push({uid:m.uid,key,amount,until:(this.state.turn||0)+turns});
+    (this.state.incidentEffects ||= []).push({uid:m.uid,key,amount,until:Incidents.init(this.state).stats.settles+turns});
   },
   finishIncidentEffects() {
     const st=this.state;
     st.incidentEffects=(st.incidentEffects||[]).filter(e=>{
-      if(e.until>(st.turn||0))return true;
+      if(e.until>Incidents.init(st).stats.settles)return true;
       const m=st.roster.find(x=>x.uid===e.uid);
       if(m) { m[e.key]=(m[e.key]||0)-e.amount; if(e.key==="spiritMaxBonus")m.spirit=Math.min(m.spirit||0,this.spiritRules().max+m.spiritMaxBonus); }
       return false;
     });
-    for(const m of st.roster) if(m.epithetOverrideUntil<=(st.turn||0)) {delete m.epithetOverride;delete m.epithetOverrideUntil;}
+    for(const r of st.relics||[]) if(r.polishedUntil<=Incidents.init(st).stats.settles)delete r.polishedUntil;
+    for(const m of st.roster) if(m.epithetOverrideUntil<=Incidents.init(st).stats.settles) {delete m.epithetOverride;delete m.epithetOverrideUntil;}
   },
   incidentApplicant(tplId, name) {
     const m=this.rollApplicant(tplId); if(name)m.name=name;
@@ -1037,15 +1041,15 @@ const Game = {
       switch(id) {
         case "slime_pond": this.incidentBonus(v,"spiritMaxBonus",1); break;
         case "mage_lab_light":
-          v.incidentLearnBonus=1; this.checkSpeciesSkill(v,[]); break;
+          if(this.speciesSkillFor(v)) {v.incidentLearnBonus=1; this.checkSpeciesSkill(v,[]);} else s.freeTraining=true; break;
         case "kobold_dig": st.materials+=4; this.trace("carried_materials",m.uid,null,{amount:4,facility:null}); break;
         case "necro_visitor": this.incidentApplicant("skeleton"); break;
         case "harpy_letter": s.intel=true; break;
         case "general_duel": for(const x of c.members)this.incidentBonus(x,"spiritMaxBonus",1); break;
         case "mimic_appraisal": {
-          // 遺物の特性に任意倍率を掛けず、所持者の攻撃を手入れの効果として強化する。
-          const r=(st.relics||[])[0],holder=st.roster.find(x=>x.uid===r?.holderUid)||m;
-          this.incidentBonus(holder,"atk",2); break;
+          // 元の特性を次の戦闘入力で二度適用する。名簿の特性や遺物自体は消さない。
+          const r=(st.relics||[])[0];
+          if(r) {if(r.holderUid==null)this.giveRelic(r.id,m.uid);r.polishedUntil=s.stats.settles+1;} break;
         }
         case "mimic_hostel_locker": st.materials+=2;break;
         case "goblin_market": st.gold+=8;break;
@@ -1064,9 +1068,9 @@ const Game = {
       case "mage_lab_light":
         if(step==="術師以外") {
           v.skills ||= [];
-          const skill=["mage_fireball","imp_spark","necro_raise"].find(k=>typeof SKILLS!=="undefined"&&SKILLS[k]&&!v.skills.includes(k));
+          const skill=["mage_fireball","necro_hand","slime_dissolve"].find(k=>typeof SKILLS!=="undefined"&&SKILLS[k]&&!v.skills.includes(k));
           if(skill)v.skills.push(skill);
-          else s.scenes[id].branch="術師系";
+          else {s.scenes[id].branch="術師系";s.lessonUid=v.uid;c.branchOverride="術師系";}
         } else { s.lessonUid=v.uid; }
         break;
       case "kobold_dig": s.bankPassage=step;break;
@@ -1074,19 +1078,19 @@ const Game = {
         if(step==="遺物あり")s.masterVisit={name:(m?.name||"骸骨")+"の元の主",due:(st.turn||0)+2};
         break;
       case "harpy_letter":
-        if(step==="前哨済み")this.incidentApplicant("goblin","王国の連絡兵");
+        if(step==="前哨済み") {const a=this.incidentApplicant("goblin","王国の連絡兵");const soldier=this.actStages()[0].units[0];a.race=soldier.race||"人間";a.icon=soldier.icon||"🛡️";a.tplId=soldier.tplId||"soldier";a.tags=(soldier.tags||[]).slice();a.traits=(soldier.traits||[]).slice();}
         else s.letterEnemy=true;
         break;
       case "general_duel":
         for(const x of c.members)this.trace("trained",x.uid,null,{tier:"将軍の模擬戦"});
-        if(step==="60以上") {c.winner.epithetOverride=c.loser.epithet||"将軍";c.winner.epithetOverrideUntil=(st.turn||0)+2;}
+        if(step==="60以上") {c.winner.epithetOverride=c.loser.epithet||"将軍";c.winner.epithetOverrideUntil=s.stats.settles+2;}
         break;
       case "mimic_appraisal":
         this.trace("carried_materials",m.uid,null,{amount:1,facility:"hostel",sourceCard:id});break;
       case "mimic_hostel_locker": s.locker=step;break;
       case "goblin_market": if(step==="なし")this.incidentApplicant("goblin","身分証を裏返した客"); break;
       case "training_visitor":
-        if(step==="最多")s.biography={uid:m.uid,lines:this.journal(5).map(x=>typeof x==="string"?x:JSON.stringify(x))};
+        if(step==="最多")s.biography={uid:m.uid,name:m.name,lines:(st.traces||[]).filter(t=>t.subject===m.uid||t.object===m.uid).slice(-5).map(t=>Traces.describe(t,uid=>st.roster.find(x=>x.uid===uid)?.name))};
         else s.lessonUid=m.uid;
         break;
       case "skeleton_choir": if(step==="食料3以下")st.food+=3;break;
@@ -1100,7 +1104,7 @@ const Game = {
       case "slime_pond":
         s.bedReserved=0;
         if(t.branch==="2体以上"&&accept) {this.incidentApplicant("slime");text="池の分身が、正式に面接へ来た。";}
-        else text="スライムたちは池へ戻った。宿舎の寝台が空いた。";
+        else text=t.branch==="2体以上"?"スライムたちは池へ戻った。宿舎の寝台が空いた。":"水面の友達との散歩が終わり、スライムが帰ってきた。";
         break;
       case "kobold_dig": delete s.bankPassage;text="地下の荷物を運び終え、銀行への穴を閉じた。";break;
       case "necro_visitor":
@@ -1116,7 +1120,7 @@ const Game = {
         text="名札を返し、将軍たちはいつもの持ち場へ戻った。";break;
       case "mimic_hostel_locker": delete s.locker;text="荷物に部屋札を掛けると、宿舎は静かになった。";break;
       case "goblin_market":text="露店を閉じた。契約の話は断り、応募者とは通常の面接で話すことにした。";break;
-      case "training_visitor":text="師匠の記事と受け身の稽古が、町の話題になった。";break;
+      case "training_visitor":delete s.biography;delete s.lessonUid;text="師匠の記事と受け身の稽古が、町の話題になった。";break;
       case "skeleton_choir":text="合唱団が帰ってきた。送別会の主役は無事に引っ越した。";break;
       case "succubus_party":delete s.party;text="夜会がお開きになり、客も隊列を解いた。";break;
     }
@@ -1274,7 +1278,7 @@ const Game = {
       if (c.mercenary) continue;
       const monster = st.roster.find(m => m.uid === c.uid);
       if (!monster) continue;
-      this.trace("trained", monster.uid, null, { tier: stageData.army || "稽古", facility: this.facilityLv("lab") > 0 ? "lab" : null });
+      this.trace("trained", monster.uid, null, { tier: stageData.army || "稽古", facility: null });
       monster.merit = (monster.merit || 0) + gain;
       monster.loyalty = U.clamp((monster.loyalty || 0) + 1, 0, 100);
       const targetRank = this.rankForMerit(monster.merit);
@@ -1283,6 +1287,10 @@ const Game = {
         if (!next || next.threshold > monster.merit) break;
         this.promote(monster, next, notes);
       }
+    }
+    if (st.incidents?.lessonUid != null) {
+      const pupil=(contribution||[]).map(c=>st.roster.find(m=>m.uid===c.uid)).find(m=>m && m.uid!==st.incidents.lessonUid);
+      if(pupil) {pupil.incidentLearnBonus=1;this.checkSpeciesSkill(pupil,notes);notes.push(`${pupil.name}も教材で技のこつをつかんだ。`);delete st.incidents.lessonUid;}
     }
     notes.push(`稽古を終えた。出撃した者の戦功 +${gain}・忠誠 +1`);
   },
@@ -1414,8 +1422,9 @@ const Game = {
     const variant = type.armies ? U.randInt(0, type.armies.length - 1) : 0;
     const isInvade = type.id === "invade";
     // 討伐隊の名は段階表から作る（固有の敵を足すときは段階表に行を足すだけで済む）。
+    if (type.id === "invade" && st.incidents?.letterEnemy && units.length) units[0] = {...units[0], name:"王国の連絡兵"};
     const defenseArmy = counter
-      ? (counter.kind === "hero" ? base.army : `${base.army}討伐隊`)
+      ? (counter.armyName || (counter.kind === "hero" ? base.army : `${base.army}討伐隊`))
       : null;
     return {
       stage: st.turn,
@@ -2851,12 +2860,15 @@ const Game = {
     // 訓練（2026-09-13）：誰も死なない。HP0 は負傷に変えてから先へ進める。
     // 全滅も「全員が負傷して終わった稽古」なので、判定負けの委譲より前に変換する。
     const training = this.isTraining(stageData);
+    const freeTraining = training && st.incidents?.freeTraining;
     if (training) this.softenTrainingCasualties(result.contribution);
     if (!training && !result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
+    if (mealPlan?.boost > 0 && mealPlan.cookUid != null) this.trace("cooked", mealPlan.cookUid, null, { facility: this.facilityLv("grand_kitchen") > 0 ? "grand_kitchen" : null });
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
     // 痕跡（担がれ・戦友の死）は訓練では立てない（4節の落とし穴）。
     if (!training) this.recordBattleTraces(result, result.contribution);
+    if(stageData.missionKind==="invade" && this.state.incidents?.intel) {this.state.incidents.intel=false;if(this.state.incidents.letterEnemy)notes.push("王国の連絡兵が、敵の列からハーピーに手を振った。");}
     this.recordStageFight(stageData);
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
@@ -2879,6 +2891,7 @@ const Game = {
       this.paySalaries(notes, undefined, stageData);
       this.processDepartures(notes);
       this.settleDebts(notes);
+      if(freeTraining) {delete st.incidents.freeTraining;notes.push("研究所が今回の稽古代と食料を受け持った。");}
     } else if (result.victory) {
       st.gold += stageData.reward + lootGold;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
@@ -3002,7 +3015,6 @@ const Game = {
     // homeStays を足しておらず、城の主だけ1決着ぶん遅れる。
     const earnedTraits = this.grantExperienceTraits(notes);
 
-    if (mealPlan?.boost > 0 && mealPlan.cookUid != null) this.trace("cooked", mealPlan.cookUid, null, { facility: this.facilityLv("grand_kitchen") > 0 ? "grand_kitchen" : null });
     st.lastBattle = {
       victory: result.victory,
       // 経験で身についた共通特性（表示用）。身につかなかった決着・旧セーブには無い。
@@ -3127,11 +3139,14 @@ const Game = {
         : { ...row, survived: true, injured: true })
       : ((result.retreatOffer && result.retreatOffer.contribution) || result.contribution);
     const carried = contribution.filter(c => c.injured && !c.mercenary);
+    if (mealPlan?.boost > 0 && mealPlan.cookUid != null) this.trace("cooked", mealPlan.cookUid, null, { facility: this.facilityLv("grand_kitchen") > 0 ? "grand_kitchen" : null });
+
     // 個人カウンタは名簿が動く前に進める（引退・戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(contribution, false);
     this.recordBattleTraces(result, contribution);
     if (!lostOnPoints) this.trace("retreated", null, null, { army: stageData.army, carried: carried.map(c => c.name).join("、") });
     for (const row of carried) this.trace("carried", row.uid, null, { army: stageData.army });
+    if(stageData.missionKind==="invade" && this.state.incidents?.intel) {this.state.incidents.intel=false;if(this.state.incidents.letterEnemy)notes.push("王国の連絡兵が、敵の列からハーピーに手を振った。");}
     this.recordStageFight(stageData);
     // 退いた戦いも1戦。出撃はした（仕様2.2）。
     const unlocked = this.trainSurvivors(contribution, notes);
@@ -3500,7 +3515,7 @@ const Game = {
     const adapted = this.advanceHunger(foodShortage > 0, notes);
 
     st.materials += materialReward;
-    if (!normalized && materialReward > 0) for (const m of builders) this.trace("carried_materials", m.uid, null, { amount: materialReward / Math.max(1, builders.length), facility: this.facilityLv("hostel") > 0 ? "hostel" : null });
+    if (!normalized && materialReward > 0) for (const m of builders) this.trace("carried_materials", m.uid, null, { amount: materialReward / Math.max(1, builders.length), facility: null });
     // 旧「施工」（建材を進捗に変えて施設 Lv を上げる）は撤去した（2026-09-13）。
     // 留守番は建材を**運ぶ**だけで、使い道は城下町ただ一つ。st.autoBuild の flag ごと消してある。
     // 供養代行：建設部門の死霊術師は、直前の戦没者を建材へ変える（墓石も城壁も石である）。
@@ -3708,6 +3723,10 @@ const Game = {
   },
   paySalaries(notes, dailyDay, stageData) {
     const st = this.state;
+    if(this.isTraining(stageData || st.selectedMission) && st.incidents?.freeTraining) {
+      st.lastPayrollReport={policyId:this.payrollPolicy().id,base:0,paid:0,loyaltyDelta:0};
+      notes.push("研究所が今回の稽古の給与を受け持った。");return;
+    }
     const ratio = this.salaryRatio(stageData);
     const assignments = this.salaryAssignments().map(entry => ({
       ...entry,
@@ -3827,6 +3846,7 @@ const Game = {
 
   preparePayrollForBattle(notes) {
     const st = this.state;
+    if(this.isTraining(st.selectedMission) && st.incidents?.freeTraining)return true;
     const quote = this.payrollQuote();
     const policy = quote.policy;
     const assignments = this.salaryAssignments();

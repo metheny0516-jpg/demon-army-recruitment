@@ -1,5 +1,5 @@
 // 噂の札12枚。docs/SPEC_INCIDENTS_IMPL_2026-09-14.md §1 / INCIDENTS_BATCH2.md。
-// 効果は未実装。文章の例示名も原文のまま保持し、表示名への置換は器側で行う。
+// 効果はGame.incidentEffectへ渡す。文章の例示名も原文のまま保持し、表示名への置換は器側で行う。
 // c の受け渡し: subject=固定主役の人物、viewer=選んだ見学者、
 // loser=提示時に決めた模擬戦の敗者。gainより前に器側で確定する。
 // unitのrace/rankは選定条件、count:2は将軍二人を固定するための情報。
