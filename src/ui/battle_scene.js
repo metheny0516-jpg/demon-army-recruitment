@@ -57,7 +57,13 @@ const BattleScene = {
     hero: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     succubus: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     minotaur: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    lich: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    lich: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    rebel_boss: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),        // 反乱軍の首謀者（2026-09-14）
+    dragoon: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),           // 第二幕（2026-09-14 CodeX）
+    dragoon_heavy: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    inquisitor: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    chorister: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    artillery: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
   },
   motions: new Set(),
   pendingHits: new Set(),
@@ -117,15 +123,17 @@ const BattleScene = {
       "🗡": "swordsman", "🗡️": "swordsman", "⚔️": "swordsman",
       "🏹": "archer", "✨": "cleric", "📖": "sage",
       "🛡️": "shield", "🪨": "slinger", "🪓": "axeman",
-      "🐎": "cavalry", "🎖️": "commander", "👑": "hero"
+      "🐎": "cavalry", "🎖️": "commander", "👑": "hero",
+      "🐉": "dragoon", "🐲": "dragoon_heavy", "🔥": "inquisitor", "🎵": "chorister", "💥": "artillery"   // 第二幕
     }[u.icon] : undefined);
   },
 
   // 表示上の分類だけ。射程・ダメージ種別・命中率などの戦闘ルールではない。
   attackKind(u) {
     if (!u) return "melee";
-    if (u.icon === "🏹") return "arrow";
-    if (u.icon === "🪨") return "stone";
+    if (u.icon === "🏹" || u.icon === "🐉") return "arrow";
+    if (u.icon === "🪨" || u.icon === "💥") return "stone";
+    if (u.icon === "🔥" || u.icon === "🎵") return "magic";
     if (["mage", "necromancer", "imp"].includes(u.tplId) || ["✨", "📖"].includes(u.icon)) return "magic";
     return "melee";
   },
