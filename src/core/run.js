@@ -1220,7 +1220,7 @@ const Game = {
           else st.counterattack.armyName = name;
           this.incidentNote(ctx, `貸した遺物を目印に、${name}が軍勢を連れて来る（次は防衛戦）`);
         },
-        "遺物なし"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "紹介状を書いた前の主まで面接に来た（応募がもう1人）"); }
+        "なし"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "紹介状を書いた前の主まで面接に来た（応募がもう1人）"); }
       }
     },
     // 5. 封筒より先に本人（人：ハーピー）
@@ -1230,7 +1230,7 @@ const Game = {
       // として警戒度を下げる（文は CodeX のものをそのまま使える）。
       gain(st, ctx) { st.alert = Math.max(0, (st.alert || 0) - 3); this.incidentNote(ctx, `手紙から敵の動きが読めた（王国警戒度 -3／現在 ${st.alert}）`); },
       branches: {
-        "前哨済"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "退路を失った連絡兵が面接へ来る"); },
+        "前哨済み"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "退路を失った連絡兵が面接へ来る"); },
         "未制圧"(st, ctx) { this.incidentNote(ctx, "文通相手は、まだあちら側の砦に勤めている"); }
       }
     },
@@ -1241,15 +1241,15 @@ const Game = {
         this.incidentNote(ctx, "二人の気合の上限が次の1戦だけ +1");
       },
       branches: {
-        "忠誠60以上"(st, ctx) {
-          const [winner, loser] = st.roster.filter(m => this.isGeneral(m));
+        "60以上"(st, ctx) {
+          const winner = ctx.winner, loser = ctx.loser;
           if (winner && loser) {
             winner.epithetOverride = loser.epithet || loser.name;
             st.incidentFx = (st.incidentFx || []).concat([{ kind: "epithet", uid: winner.uid, until: (Number(st.turn) || 0) + 2 }]);
             this.incidentNote(ctx, `${winner.name}が「${winner.epithetOverride}」の名を2決着だけ借りた`);
           }
         },
-        "忠誠60未満"(st, ctx) {
+        "60未満"(st, ctx) {
           for (const m of st.roster.filter(x => this.isGeneral(x))) m.merit = (m.merit || 0) + 1;
           this.incidentNote(ctx, "訓練場の壁に勝敗表が貼られた（二人の戦功 +1）");
         }
@@ -1259,7 +1259,7 @@ const Game = {
     mimic_appraisal: {
       gain(st, ctx) { this.lendSpiritCap(ctx.viewer); this.incidentNote(ctx, "手入れした遺物を提げて出る（次の1戦だけ気合の上限 +1）"); },
       branches: {
-        "負傷中"(st, ctx) { if (ctx.viewer) ctx.viewer.injured = 0; this.incidentNote(ctx, "遺物を見張りに立てて眠り、傷が癒えた（負傷が明ける）"); },
+        "負傷中"(st, ctx) { const m = ctx.subject || ctx.viewer; if (m) m.injured = 0; this.incidentNote(ctx, "遺物を見張りに立てて眠り、傷が癒えた（負傷が明ける）"); },
         "健康"(st, ctx) { st.materials += 2; this.incidentNote(ctx, `出張鑑定の木枠が宿舎へ運ばれた（建材 +2／備蓄 ${st.materials}）`); }
       }
     },
@@ -1267,8 +1267,8 @@ const Game = {
     mimic_hostel_locker: {
       gain(st, ctx) { st.materials += 2; st.gold += 3; this.incidentNote(ctx, `なくした備品が戻ってきた（建材 +2・金 +3）`); },
       branches: {
-        "宿舎Lv2以上"(st, ctx) { for (const m of st.roster) if (m.injured > 0) m.injured = 0; this.incidentNote(ctx, "部屋番号順に受け渡され、寝込んでいた者が起きた（負傷が治る）"); },
-        "宿舎Lv1"(st, ctx) { for (const m of st.roster) if (m.injured > 0) m.injured += 1; this.incidentNote(ctx, "荷物が空き寝台に籠城した（寝込んだ者の床が足りず、負傷が1決着延びる）"); }
+        "Lv2以上"(st, ctx) { for (const m of st.roster) if (m.injured > 0) m.injured = 0; this.incidentNote(ctx, "部屋番号順に受け渡され、寝込んでいた者が起きた（負傷が治る）"); },
+        "Lv1"(st, ctx) { for (const m of st.roster) if (m.injured > 0) m.injured += 1; this.incidentNote(ctx, "荷物が空き寝台に籠城した（寝込んだ者の床が足りず、負傷が1決着延びる）"); }
       }
     },
     // 9. 客の履歴書（人：ゴブリン）
@@ -1276,12 +1276,12 @@ const Game = {
       gain(st, ctx) { st.gold += 8; this.incidentNote(ctx, `闇市の売上 +8G（所持金 ${st.gold}G）`); },
       branches: {
         "未払いあり"(st, ctx) {
-          const g = ctx.viewer;
+          const g = ctx.subject || ctx.viewer;
           if (g) g.loyalty = U.clamp((g.loyalty || 0) - 10, 0, 100);
           st.alert = Math.max(0, (st.alert || 0) + 2);
           this.incidentNote(ctx, "客は王国の間者だった（忠誠 -10・王国警戒度 +2）");
         },
-        "未払いなし"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "待遇自慢を聞いた客が、自分も雇ってほしいと名乗った"); }
+        "なし"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "待遇自慢を聞いた客が、自分も雇ってほしいと名乗った"); }
       }
     },
     // 10. 師匠の追っかけ（人：稽古をつけた者）
@@ -1305,7 +1305,7 @@ const Game = {
       gain(st, ctx) { for (const m of st.roster) m.loyalty = U.clamp((m.loyalty || 0) + 5, 0, 100); this.incidentNote(ctx, "夜会で参加者の忠誠 +5"); },
       branches: {
         "将軍"(st, ctx) { for (const m of this.activeRoster()) this.gainSpirit(m, 1); this.incidentNote(ctx, "乾杯が号令になった（出撃隊の気合 +1）"); },
-        "兵卒"(st, ctx) { if (ctx.viewer) ctx.viewer.loyalty = U.clamp((ctx.viewer.loyalty || 0) + 10, 0, 100); this.incidentNote(ctx, "相談所になり、司会席から動けなくなった（本人の忠誠 +10）"); }
+        "兵卒"(st, ctx) { const m = ctx.subject || ctx.viewer; if (m) m.loyalty = U.clamp((m.loyalty || 0) + 10, 0, 100); this.incidentNote(ctx, "相談所になり、司会席から動けなくなった（本人の忠誠 +10）"); }
       }
     }
   },

@@ -35,15 +35,27 @@ const Incidents = {
   unitOf(st, uid) { return (st.roster || []).find(m => m.uid === uid) || null; },
 
   // その札の主役になれる者（unit の札は「いちばん関係の深い1人」を出すときに決める）。
+  // データ側（src/data/incidents.js）の subject は
+  //   { kind:"unit", uid?, race?, tplId?, rank?, count? } / { kind:"race", race } / { kind:"facility", id }
   subjectCandidates(st, card) {
     const s = card.subject || {};
     const roster = st.roster || [];
     if (s.kind === "unit") {
       if (s.uid !== undefined && s.uid !== null) return roster.filter(m => m.uid === s.uid);
-      return roster.filter(m => (!s.race || m.race === s.race) && (!s.tplId || m.tplId === s.tplId));
+      return roster.filter(m => (!s.race || m.race === s.race) && (!s.tplId || m.tplId === s.tplId)
+        && (!s.rank || m.rankId === s.rank));
     }
     if (s.kind === "race") return roster.filter(m => m.race === s.race);
     return [];   // facility は人を主役に持たない
+  },
+  // 固定の主役を決める：関係する痕跡がいちばん多い者（同数なら名簿順）。
+  // 乱数を使わないので、同じ状態なら誰が主役かは毎回同じになる。
+  pickSubject(st, card) {
+    const list = this.subjectCandidates(st, card);
+    if (!list.length) return null;
+    const count = uid => (st.traces || []).filter(t => t.subject === uid
+      && (card.traces || []).includes(t.kind)).length;
+    return list.reduce((best, m) => count(m.uid) > count(best.uid) ? m : best, list[0]);
   },
 
   // 主役がまだ生きているか（unit の戦死・解雇・逃亡、race の全滅、facility の Lv0 で失効）
@@ -52,6 +64,8 @@ const Incidents = {
     if (s.kind === "facility") {
       return (typeof Town !== "undefined" ? Town.lv(st, s.id) : 0) > 0;
     }
+    // 二人組の札（general_duel）は二人とも要る
+    if (s.kind === "unit" && (s.count || 1) > 1) return this.subjectCandidates(st, card).length >= s.count;
     if (s.kind === "unit" && subjectUid !== undefined && subjectUid !== null) {
       return !!this.unitOf(st, subjectUid);
     }
@@ -92,7 +106,7 @@ const Incidents = {
     const inc = this.init(st);
     if (!card || inc.done[card.id] || inc.offered[card.id]) return null;
     const subjectUid = card.subject && card.subject.kind === "unit"
-      ? (card.subject.uid ?? (this.subjectCandidates(st, card)[0] || {}).uid ?? null) : null;
+      ? (card.subject.uid ?? (this.pickSubject(st, card) || {}).uid ?? null) : null;
     if (card.subject && card.subject.kind === "unit" && subjectUid === null) return null;
     if (!this.subjectAlive(st, card, subjectUid)) return null;
     if (typeof card.state === "function" && !card.state(st)) return null;
@@ -158,12 +172,24 @@ const Incidents = {
     const inc = this.init(st);
     const row = inc.offered[id];
     if (!card || !row) return null;
+    // データ側が読む文脈を先に固める（`c.subject` 固定の主役 / `c.viewer` 見学者 /
+    // `c.winner`・`c.loser` 二人組の腕比べ）。**隠れた状態を読むのはこの後**。
+    const subject = this.unitOf(st, row.subjectUid) || this.pickSubject(st, card) || null;
     const viewer = this.needsViewer(card)
-      ? (this.unitOf(st, Number(viewerUid)) || (st.roster || [])[0] || null)
-      : (this.unitOf(st, row.subjectUid) || this.subjectCandidates(st, card)[0] || null);
-    const branchKey = typeof card.hidden?.value === "function" ? String(card.hidden.value(st)) : "";
+      ? (this.unitOf(st, Number(viewerUid)) || subject || (st.roster || [])[0] || null)
+      : (subject || (st.roster || [])[0] || null);
+    // 二人組は現在の攻撃・防御で腕比べ（乱数にしない。同点は挑戦側＝名簿の後ろが譲る）。
+    const pair = (card.subject || {}).count > 1 ? this.subjectCandidates(st, card).slice(0, 2) : [];
+    const arm = m => (m.atk || 0) + (m.def || 0);
+    const winner = pair.length === 2 ? (arm(pair[0]) >= arm(pair[1]) ? pair[0] : pair[1]) : null;
+    const loser = pair.length === 2 ? (winner === pair[0] ? pair[1] : pair[0]) : null;
+    const ctx = { card, subject, viewer, winner, loser,
+      viewerUid: viewer ? viewer.uid : null, branch: "", notes: [] };
+    let branchKey = "";
+    try { branchKey = typeof card.hidden?.value === "function" ? String(card.hidden.value(st, ctx)) : ""; }
+    catch (e) { branchKey = ""; }   // 主役が欠けた札は枝なしで閉じる（画面は止めない）
+    ctx.branch = branchKey;
     const branch = (card.branches || {})[branchKey] || null;
-    const ctx = { card, viewer, viewerUid: viewer ? viewer.uid : null, branch: branchKey, notes: [] };
     // 効果は run.js の表が正（データ側の gain/apply はそこに無いときだけ使う）
     this.runEffect(game, card, "gain", ctx);
     this.runEffect(game, card, branchKey, ctx);

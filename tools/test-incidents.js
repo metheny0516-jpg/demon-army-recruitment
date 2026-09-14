@@ -21,6 +21,7 @@ const Game = vm.runInContext('Game', ctx);
 const Incidents = vm.runInContext('Incidents', ctx);
 const Traces = vm.runInContext('Traces', ctx);
 const TRACE_KINDS = vm.runInContext('TRACE_KINDS', ctx);
+const INCIDENTS = vm.runInContext('INCIDENTS', ctx);
 const ok = (c, m) => { if (!c) { console.log('✗ ' + m); process.exitCode = 1; } else console.log('✓ ' + m); };
 
 // スライム2体・宿舎Lv1のランを作る（slime_pond の状態条件）
@@ -90,18 +91,20 @@ for (const kind of ['carried_materials', 'cooked', 'trained', 'incident']) {
   ok(!st.incidents.offered.slime_pond, 'めくらなければ3決着で消える');
 }
 
-// ── 2枚上限（札が3枚あっても、出るのは2枚）────────────────────────
+// ── 2枚上限（条件を満たす札が何枚あっても、出るのは2枚）──────────────
 {
-  const INCIDENTS = vm.runInContext('INCIDENTS', ctx);
-  const base = INCIDENTS[0];
-  INCIDENTS.push({ ...base, id: 'slime_pond_b' }, { ...base, id: 'slime_pond_c' });
   const st = freshRun();
   spark(st, 1); haul(st, 2);
+  // 施設の札（研究所）も候補に入れる。**施設の痕跡は data.facility で紐づく**
+  // （いまのエンジンで facility を添えているのは cooked だけ。7節の申し送り）。
+  st.town.lv.lab = 1;
+  Game.trace('carried_materials', 1, null, { amount: 1, facility: 'lab' });
+  Game.trace('trained', 2, null, { tier: '案山子', facility: 'lab' });
   const got = [Incidents.settle(Game), Incidents.settle(Game), Incidents.settle(Game)];
   ok(Object.keys(st.incidents.offered).length === 2, `同時に出るのは2枚まで（${Object.keys(st.incidents.offered).join('・')}）`);
   ok(got[2] === null, '3枚目は足されない');
-  ok(got[0] !== got[1], '1決着に足すのは1枚だけ');
-  INCIDENTS.length = 1;
+  ok(got.filter(Boolean).length === 2 && got[0] !== got[1],
+    `1決着に足すのは1枚だけ（${got.map(x => x || 'なし').join('→')}）`);
 }
 
 // ── 乾き（0が3回続いたら次だけ1本で判定） ────────────────────────
@@ -132,9 +135,10 @@ for (const kind of ['carried_materials', 'cooked', 'trained', 'incident']) {
   st.turn += 1;
   Game.expireIncidentFx();
   ok(st.roster[0].spiritMaxBonus === before, '次の決着で気合の上限は戻る');
-  // 同じ札は1ランに1回
+  // 同じ札は1ランに1回（別の札は出てよい）
   spark(st, 1); haul(st, 2);
-  ok(Incidents.settle(Game) === null, '同じ札は1ランに1回だけ');
+  Incidents.settle(Game); Incidents.settle(Game);
+  ok(!st.incidents.offered.slime_pond, '一度めくった札は同じランでもう出ない');
 }
 
 // ── 隠れた状態が違えば別の枝 ────────────────────────────────
@@ -167,16 +171,23 @@ for (const kind of ['carried_materials', 'cooked', 'trained', 'incident']) {
   card.door = door;
 }
 
-// ── 12枚ぶんの効果が run.js にある ────────────────────────────
+// ── データ12枚と run.js の効果が噛み合っているか ────────────────────
 {
-  const ids = ['slime_pond', 'mage_lab_light', 'kobold_dig', 'necro_visitor', 'harpy_letter', 'general_duel',
-    'mimic_appraisal', 'mimic_hostel_locker', 'goblin_market', 'training_visitor', 'skeleton_choir', 'succubus_party'];
-  const missing = ids.filter(id => !Game.INCIDENT_EFFECTS[id]);
-  ok(missing.length === 0, `12枚の効果が run.js にある（欠け: ${missing.join('・') || 'なし'}）`);
-  const noBranch = ids.filter(id => Object.keys(Game.INCIDENT_EFFECTS[id].branches || {}).length !== 2);
-  ok(noBranch.length === 0, `どの札も枝が2本ある（${noBranch.join('・') || 'すべて2本'}）`);
-  const noGain = ids.filter(id => typeof Game.INCIDENT_EFFECTS[id].gain !== 'function');
-  ok(noGain.length === 0, `どの札にも得がある（${noGain.join('・') || 'すべてあり'}）`);
+  ok(INCIDENTS.length === 12, `札は12枚（${INCIDENTS.length}）`);
+  const problems = [];
+  for (const card of INCIDENTS) {
+    const eff = Game.INCIDENT_EFFECTS[card.id];
+    if (!eff) { problems.push(`${card.id}: 効果が無い`); continue; }
+    if (typeof eff.gain !== 'function') problems.push(`${card.id}: 得が無い`);
+    for (const key of Object.keys(card.branches || {})) {
+      if (typeof (eff.branches || {})[key] !== 'function') problems.push(`${card.id} の枝「${key}」に効果が無い`);
+    }
+    for (const key of Object.keys(eff.branches || {})) {
+      if (!(card.branches || {})[key]) problems.push(`${card.id} に余った枝「${key}」`);
+    }
+    if (Object.keys(card.branches || {}).length !== 2) problems.push(`${card.id}: 枝が2本でない`);
+  }
+  ok(problems.length === 0, `12枚すべてでデータの枝と効果が一致する（${problems.join(' / ') || '一致'}）`);
 }
 
 // ── 旧セーブ（incidents が無い）でも落ちない ──────────────────────
