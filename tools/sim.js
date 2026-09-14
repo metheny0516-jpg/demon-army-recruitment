@@ -3,8 +3,8 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/run.js'];
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/incidents.js','src/data/demon_kings.js',
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/traces.js','src/core/incidents.js','src/core/run.js'];
 // SIM_NO_TOWN=1 で城下町（税）を読まない。再起の回帰テスト（test-chain-measure-retry）は全滅が起きる前提なので、税で楽になった後も同じ種で測れるようにする
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -16,6 +16,8 @@ for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename
 const Game = vm.runInContext('Game', ctx);
 // 城下町（2026-09-13 の統合で、施設はここ1系統になった）。SIM_NO_TOWN のときは未定義。
 const Town = vm.runInContext('typeof Town !== "undefined" ? Town : null', ctx);
+// 噂の札（2026-09-14）。データが無ければ null（列は 0 になる）。
+const Incidents = vm.runInContext('typeof Incidents !== "undefined" ? Incidents : null', ctx);
 const KPI = vm.runInContext('KPI', ctx);
 const Synergy = vm.runInContext('Synergy', ctx);
 const TRAITS = vm.runInContext('TRAITS', ctx);
@@ -41,6 +43,8 @@ function chooseIndex(apps, roster, strat){
 }
 
 function runOnce(strat, stats){
+  // 噂の札：このランで見た札と、札が出た決着（重複を数えない）
+  const seenRumors = new Set(), rumorTurns = new Set();
   Game.newRun();
   const st = Game.state;
   let guard = 0;
@@ -123,6 +127,21 @@ function runOnce(strat, stats){
       else Game.prepareOpeningBattle('invade');
     }
     if (st.phase === 'mission') {
+      // 噂の札（2026-09-14）。出た札を数え、戦略に従ってめくる／無視する。
+      // 「波乱が決着の何割に入ったか」は**札が出た決着の数**で測る（設計7-3 の 1〜2 割）。
+      if (Incidents) {
+        for (const id of Object.keys((st.incidents || {}).offered || {})) {
+          if (!seenRumors.has(id)) { seenRumors.add(id); stats.rumorOffers += 1; rumorTurns.add(st.turn); }
+        }
+        if (strat.rumors === 'open') {
+          for (const card of Incidents.offered(st)) {
+            const viewer = (st.roster[0] || {}).uid;
+            if (Incidents.open(Game, card.id, viewer)) stats.rumorOpens += 1;
+          }
+        } else if (strat.rumors === 'ignore') {
+          for (const card of Incidents.offered(st)) Incidents.decline(Game, card.id);
+        }
+      }
       let kind = 'invade';
       const salary = Game.salaryTotal();
       if (strat.mission === 'raid' && (st.missionCounts.raid || 0) < 4) kind = 'raid';
@@ -232,6 +251,9 @@ function runOnce(strat, stats){
   // 0.5 未満なら閾値を 18 へ、3 以上なら 26 へ（この列がその判断材料）。
   if (!stats.generals) stats.generals = 0;
   stats.generals += (st.generalsMade || []).length;
+  // 噂の札：札が出た決着の割合（設計7-3 の「波乱は 1〜2 割」をここで見る）
+  stats.rumorTurns += rumorTurns.size;
+  stats.settleTurns += Math.max(1, Number(st.turn) || 1);
   const rec = st.record || {};
   if (rec.cause === "城陥落") stats.defense.fall++;
   if (rec.cleared) {
@@ -261,6 +283,10 @@ const strategies = [
   {name:'進軍の前に訓練を1回', kind:'greedy', train:true},
   // 現実の遊び方に近い形：序盤の3回だけ（種族技が開くまで）。無制限の上と見比べる。
   {name:'訓練は序盤3回だけ', kind:'greedy', train:true, trainMax:3},
+  // 噂の札（2026-09-14）：出た札を全部めくる／全部無視する。
+  // 「全部無視」の列が、波乱が決着の何割に入ったか（設計7-3 の 1〜2 割）を測る物差し。
+  {name:'札を全部めくる', kind:'greedy', rumors:'open'},
+  {name:'札を全部無視', kind:'greedy', rumors:'ignore'},
 ];
 const N = Number(process.argv[2] || 400);
 // KPIの書き出し先（任意）: node tools/sim.js 30 --kpi /tmp/kpi.json
@@ -276,7 +302,7 @@ const kpiOut = (() => {
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 const skillTriggerTotals = {};
 for (const s of strategies) {
-  const stats = { generals:0, trainings:0, syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
+  const stats = { generals:0, trainings:0, rumorOffers:0, rumorOpens:0, rumorTurns:0, settleTurns:0, syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -284,7 +310,7 @@ for (const s of strategies) {
   const facility = (res.reduce((a,r)=>a+(r.townLevels||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  札 ${((stats.rumorOffers||0)/N).toFixed(2)}枚/ラン（決着の ${((stats.rumorTurns||0)/Math.max(1,stats.settleTurns)*100).toFixed(1)}%／めくり ${stats.rumorOpens||0}）`);
   const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);
   const nameCount = new Map();
