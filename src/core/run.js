@@ -145,9 +145,12 @@ const Game = {
       relicSeq: 0,
       pendingBond: null,
       traces: [],
+      // 噂の札（2026-09-14）。**migrateState の defaults にも Incidents.init がある**
+      incidents: null,
       checkpoint: null
     };
     if (typeof Town !== "undefined") Town.init(this.state);   // 城下町（2026-09-12）
+    if (typeof Incidents !== "undefined") Incidents.init(this.state);   // 噂の札（2026-09-14）
     // 仕様2.5「開幕の勇者襲来を最初の反撃にする」は**開幕3日間プロトタイプ限定**にした。
     // 開幕モードは 2026-09-03 に撤廃されていて `openingPrototype` は常に false なので、
     // ここは今のところ動かない。通常ループの1戦目をいきなり防衛戦にすると、
@@ -388,6 +391,7 @@ const Game = {
     if (!Array.isArray(st.debts)) st.debts = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
     this.migrateOldFacility(st);
+    if (typeof Incidents !== "undefined") Incidents.init(st);   // 噂の札（2026-09-14）。旧セーブには無い
     st.hiresLeft = Math.max(0, Number(st.hiresLeft) || 0);
     st.extraHiresThisPhase = Math.max(0, Number(st.extraHiresThisPhase) || 0);
     if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
@@ -1012,7 +1016,10 @@ const Game = {
   // 画面に出す名前。**m.name は変えない**（殿堂・遺物・記録・テストが名前で照合している）。
   displayName(monster) {
     if (!monster) return "";
-    return monster.epithet ? `${monster.epithet}・${monster.name}` : monster.name;
+    // 借りた二つ名（噂の札 general_duel）は epithet を**書き換えずに**上に乗せる。
+    // 本名・UID・元の二つ名はそのまま。返すときは epithetOverride を消すだけで済む。
+    const epithet = monster.epithetOverride || monster.epithet;
+    return epithet ? `${epithet}・${monster.name}` : monster.name;
   },
   isGeneral(monster) {
     return !!monster && monster.rankId === "general";
@@ -1119,6 +1126,188 @@ const Game = {
     st.phase = "mission";
     this.save();
     return st.missionOffers;
+  },
+
+  // ── 噂の札の効果（docs/SPEC_INCIDENTS_IMPL_2026-09-14.md 6節）──────────
+  // 文と条件は `src/data/incidents.js`（CodeX）。**効果はここが正**で、
+  // データ側に gain/apply があっても、ここに実装がある札はこちらが使われる（Incidents.runEffect）。
+  // ctx = { card, viewer, viewerUid, branch, notes }。notes は結果画面に出る一行の配列。
+  //
+  // 規則（設計7-2）：**得は意図どおり（gain）、思わぬ向きは隠れた状態で分かれる（branches）**。
+  // 新しい数値は作らない。動かすのは既存の金・食料・建材・忠誠・戦功・気合・負傷・
+  // 応募者・警戒度・防衛の予約・施設 Lv・技だけ。
+  incidentNote(ctx, text) { if (ctx && Array.isArray(ctx.notes) && text) ctx.notes.push(text); return text; },
+
+  // 「次の1戦だけ気合の上限 +1」。戻す口を1つにするため控えを st.incidentFx に置く。
+  lendSpiritCap(monster, turns = 1) {
+    const st = this.state;
+    if (!monster) return null;
+    if (!Array.isArray(st.incidentFx)) st.incidentFx = [];
+    monster.spiritMaxBonus = (monster.spiritMaxBonus || 0) + 1;
+    st.incidentFx.push({ kind: "spiritCap", uid: monster.uid, until: (Number(st.turn) || 0) + turns });
+    return monster;
+  },
+  // 貸したものを返す（決着ごとに1回。Incidents.settle と同じ場所から呼ぶ）。
+  expireIncidentFx() {
+    const st = this.state;
+    if (!Array.isArray(st.incidentFx) || !st.incidentFx.length) return;
+    const turn = Number(st.turn) || 0;
+    st.incidentFx = st.incidentFx.filter(fx => {
+      if (turn < (fx.until || 0)) return true;
+      const m = st.roster.find(x => x.uid === fx.uid);
+      if (m && fx.kind === "spiritCap") m.spiritMaxBonus = Math.max(0, (m.spiritMaxBonus || 0) - 1);
+      if (m && fx.kind === "epithet") delete m.epithetOverride;
+      return false;
+    });
+  },
+  // 次の面接に1人混ぜる予約（強制採用はしない。落とし穴の項）。
+  reserveIncidentApplicant(tplId) {
+    const st = this.state;
+    if (!Array.isArray(st.incidentApplicants)) st.incidentApplicants = [];
+    if (st.incidentApplicants.length < 3) st.incidentApplicants.push(tplId || null);
+    return st.incidentApplicants.length;
+  },
+  incidentRosterOf(race) { return this.state.roster.filter(m => m.race === race); },
+
+  INCIDENT_EFFECTS: {
+    // 1. 池からの同居人（種族：スライム）
+    slime_pond: {
+      gain(st, ctx) { this.lendSpiritCap(ctx.viewer); this.incidentNote(ctx, `${ctx.viewer ? ctx.viewer.name : "見学者"}の気合の上限が次の1戦だけ +1`); },
+      branches: {
+        "2体以上"(st, ctx) { this.reserveIncidentApplicant("slime"); this.incidentNote(ctx, "分身が宿舎の空き寝台を埋めた（次の面接に応募してくる）"); },
+        "1体"(st, ctx) { st.food = Math.max(0, st.food - 1); this.incidentNote(ctx, "弁当をもう一つ持って出かけた（食料 -1）"); }
+      }
+    },
+    // 2. 授業をやめない研究所（施設：研究所）
+    mage_lab_light: {
+      gain(st, ctx) { if (ctx.viewer) this.memberRecord(ctx.viewer).battles += 1; this.incidentNote(ctx, "技を覚えるのが1戦ぶん早まった"); },
+      branches: {
+        "術師以外"(st, ctx) {
+          const m = ctx.viewer;
+          if (m && !(m.skills || []).includes("mage_fireball")) { m.skills = (m.skills || []).concat("mage_fireball"); this.incidentNote(ctx, `${m.name}だけの技として【火球】が残った`); }
+          else this.incidentNote(ctx, "教材が隣の机で授業を始めた");
+        },
+        "術師系"(st, ctx) {
+          const other = st.roster.find(m => m.uid !== ctx.viewerUid);
+          if (other) this.memberRecord(other).battles += 1;
+          this.incidentNote(ctx, other ? `${other.name}にも授業が回った（技が1戦ぶん早まる）` : "教材だけが残った");
+        }
+      }
+    },
+    // 3. 金庫の裏口（人：コボルト）
+    kobold_dig: {
+      gain(st, ctx) { st.materials += 4; this.incidentNote(ctx, `掘り出した建材 +4（備蓄 ${st.materials}）`); },
+      branches: {
+        // 借金は勝手に消さない。窓口ができる＝次の決着の利子だけ免除される。
+        // 借金は勝手に消さない（設計の縛り）。窓口ができた分、この決着の利子が戻る。
+        "借金あり"(st, ctx) {
+          const back = typeof Town !== "undefined" ? Math.max(1, Town.interest(st)) : 1;
+          st.gold += back;
+          this.incidentNote(ctx, `銀行が返済窓口を掛けた（この決着の利子ぶん ${back}G が戻る）`);
+        },
+        "借金なし"(st, ctx) { st.gold += 6; this.incidentNote(ctx, `配送口から金庫の箱が届いた（金 +6／所持金 ${st.gold}G）`); }
+      }
+    },
+    // 4. 前の職場からお迎え（人：死霊術師）
+    necro_visitor: {
+      gain(st, ctx) { this.reserveIncidentApplicant("skeleton"); this.incidentNote(ctx, "骸骨兵が次の面接に応募してくる"); },
+      branches: {
+        "遺物あり"(st, ctx) {
+          // 新しい戦の型は作らない。既存の防衛戦の予約に名前を差し替えて乗せる。
+          st.alert = Math.max(0, (st.alert || 0) + 3);
+          const name = `${ctx.viewer ? ctx.viewer.name : "骸骨"}の元の主`;
+          if (!st.counterattack || !st.counterattack.pending) st.counterattack = { pending: true, kind: "punitive", armyName: name };
+          else st.counterattack.armyName = name;
+          this.incidentNote(ctx, `貸した遺物を目印に、${name}が軍勢を連れて来る（次は防衛戦）`);
+        },
+        "遺物なし"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "紹介状を書いた前の主まで面接に来た（応募がもう1人）"); }
+      }
+    },
+    // 5. 封筒より先に本人（人：ハーピー）
+    harpy_letter: {
+      // 仕様の「次の本戦の隊列を一度公開」は、前哨戦（2026-09-12）が既にやっている。
+      // 二重にしても画面が変わらないので、同じ意味の効果＝王国の動きが読めて守りが楽になる、
+      // として警戒度を下げる（文は CodeX のものをそのまま使える）。
+      gain(st, ctx) { st.alert = Math.max(0, (st.alert || 0) - 3); this.incidentNote(ctx, `手紙から敵の動きが読めた（王国警戒度 -3／現在 ${st.alert}）`); },
+      branches: {
+        "前哨済"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "退路を失った連絡兵が面接へ来る"); },
+        "未制圧"(st, ctx) { this.incidentNote(ctx, "文通相手は、まだあちら側の砦に勤めている"); }
+      }
+    },
+    // 6. 借りた二つ名（人：将軍2人。door B）
+    general_duel: {
+      gain(st, ctx) {
+        for (const m of st.roster.filter(x => this.isGeneral(x)).slice(0, 2)) this.lendSpiritCap(m);
+        this.incidentNote(ctx, "二人の気合の上限が次の1戦だけ +1");
+      },
+      branches: {
+        "忠誠60以上"(st, ctx) {
+          const [winner, loser] = st.roster.filter(m => this.isGeneral(m));
+          if (winner && loser) {
+            winner.epithetOverride = loser.epithet || loser.name;
+            st.incidentFx = (st.incidentFx || []).concat([{ kind: "epithet", uid: winner.uid, until: (Number(st.turn) || 0) + 2 }]);
+            this.incidentNote(ctx, `${winner.name}が「${winner.epithetOverride}」の名を2決着だけ借りた`);
+          }
+        },
+        "忠誠60未満"(st, ctx) {
+          for (const m of st.roster.filter(x => this.isGeneral(x))) m.merit = (m.merit || 0) + 1;
+          this.incidentNote(ctx, "訓練場の壁に勝敗表が貼られた（二人の戦功 +1）");
+        }
+      }
+    },
+    // 7. 遺物の添い寝（人：ミミック）
+    mimic_appraisal: {
+      gain(st, ctx) { this.lendSpiritCap(ctx.viewer); this.incidentNote(ctx, "手入れした遺物を提げて出る（次の1戦だけ気合の上限 +1）"); },
+      branches: {
+        "負傷中"(st, ctx) { if (ctx.viewer) ctx.viewer.injured = 0; this.incidentNote(ctx, "遺物を見張りに立てて眠り、傷が癒えた（負傷が明ける）"); },
+        "健康"(st, ctx) { st.materials += 2; this.incidentNote(ctx, `出張鑑定の木枠が宿舎へ運ばれた（建材 +2／備蓄 ${st.materials}）`); }
+      }
+    },
+    // 8. 荷物の引っ越し（施設：宿舎）
+    mimic_hostel_locker: {
+      gain(st, ctx) { st.materials += 2; st.gold += 3; this.incidentNote(ctx, `なくした備品が戻ってきた（建材 +2・金 +3）`); },
+      branches: {
+        "宿舎Lv2以上"(st, ctx) { for (const m of st.roster) if (m.injured > 0) m.injured = 0; this.incidentNote(ctx, "部屋番号順に受け渡され、寝込んでいた者が起きた（負傷が治る）"); },
+        "宿舎Lv1"(st, ctx) { for (const m of st.roster) if (m.injured > 0) m.injured += 1; this.incidentNote(ctx, "荷物が空き寝台に籠城した（寝込んだ者の床が足りず、負傷が1決着延びる）"); }
+      }
+    },
+    // 9. 客の履歴書（人：ゴブリン）
+    goblin_market: {
+      gain(st, ctx) { st.gold += 8; this.incidentNote(ctx, `闇市の売上 +8G（所持金 ${st.gold}G）`); },
+      branches: {
+        "未払いあり"(st, ctx) {
+          const g = ctx.viewer;
+          if (g) g.loyalty = U.clamp((g.loyalty || 0) - 10, 0, 100);
+          st.alert = Math.max(0, (st.alert || 0) + 2);
+          this.incidentNote(ctx, "客は王国の間者だった（忠誠 -10・王国警戒度 +2）");
+        },
+        "未払いなし"(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "待遇自慢を聞いた客が、自分も雇ってほしいと名乗った"); }
+      }
+    },
+    // 10. 師匠の追っかけ（人：稽古をつけた者）
+    training_visitor: {
+      gain(st, ctx) { this.reserveIncidentApplicant(null); this.incidentNote(ctx, "旅人が弟子として応募してくる"); },
+      branches: {
+        "最多"(st, ctx) { st.renownBonus = 1; this.incidentNote(ctx, "伝記の一面が出た（次の面接に1人多く来る）"); },
+        "最多でない"(st, ctx) { for (const m of st.roster) if (m.injured > 0) m.injured = 0; this.incidentNote(ctx, "受け身の教室が開かれた（寝込んでいた者が起きる）"); }
+      }
+    },
+    // 11. 食堂で鳴る鎮魂歌（種族：骸骨兵。door B）
+    skeleton_choir: {
+      gain(st, ctx) { for (const m of this.departmentRoster("home")) m.loyalty = U.clamp((m.loyalty || 0) + 3, 0, 100); this.incidentNote(ctx, "留守番全員の忠誠 +3"); },
+      branches: {
+        "食料3以下"(st, ctx) { st.food += 3; this.incidentNote(ctx, `町へ出前に出て食べ物を抱えて戻った（食料 +3／備蓄 ${st.food}）`); },
+        "余裕あり"(st, ctx) { for (const m of st.roster) m.loyalty = U.clamp((m.loyalty || 0) + 1, 0, 100); this.incidentNote(ctx, "送別会で鎮魂歌を歌ってしまった（全員の忠誠 +1）"); }
+      }
+    },
+    // 12. 夜会の総点呼（人：サキュバス。door B）
+    succubus_party: {
+      gain(st, ctx) { for (const m of st.roster) m.loyalty = U.clamp((m.loyalty || 0) + 5, 0, 100); this.incidentNote(ctx, "夜会で参加者の忠誠 +5"); },
+      branches: {
+        "将軍"(st, ctx) { for (const m of this.activeRoster()) this.gainSpirit(m, 1); this.incidentNote(ctx, "乾杯が号令になった（出撃隊の気合 +1）"); },
+        "兵卒"(st, ctx) { if (ctx.viewer) ctx.viewer.loyalty = U.clamp((ctx.viewer.loyalty || 0) + 10, 0, 100); this.incidentNote(ctx, "相談所になり、司会席から動けなくなった（本人の忠誠 +10）"); }
+      }
+    }
   },
 
   // ── 訓練（docs/DESIGN_TRAINING_2026-09-13.md）────────────────
@@ -1495,6 +1684,9 @@ const Game = {
       legacySlot = slot;
     }
     this.addBondApplicant(legacySlot);
+    // 噂の札の予約（2026-09-14）。**強制採用はしない**。面接の列に並ぶだけ。
+    for (const tplId of (st.incidentApplicants || [])) st.applicants.push(this.rollApplicant(tplId || undefined));
+    st.incidentApplicants = [];
   },
 
   // 離脱が起きた次の面接に、故人と縁のある者が1人混ざる。
@@ -2592,6 +2784,10 @@ const Game = {
     if (!result || (pending && pending.spiritApplied)) return;
     if (pending) pending.spiritApplied = true;
     const find = uid => st.roster.find(x => String(x.uid) === String(uid));
+    // 炊事の痕跡：料理人の食事が**実際に効いた**決着だけ（作っただけ・食べただけは記録しない）。
+    if (pending && pending.mealPlan && pending.mealPlan.cookUid && pending.mealPlan.boost > 0) {
+      this.trace("cooked", pending.mealPlan.cookUid, null, { facility: pending.mealPlan.kitchen ? "grand_kitchen" : null });
+    }
     // 火の粉（見える小さな事故）を痕跡に。札（途中イベント）の材料になる（docs/DESIGN_INCIDENTS_2026-09-14.md 7-1）
     for (const sp of result.sparked || []) {
       const m = find(sp.uid), by = find(sp.byUid);
@@ -2755,6 +2951,11 @@ const Game = {
       // 稽古。金・建材・遺物・痕跡・税・警戒度はどれも動かない（勝ち負けも問わない）。
       // 動くのは戦闘数（上で済み）・小成長と技（trainSurvivors で済み）・戦功・忠誠・気合・食料・給与。
       this.awardTrainingMerit(result.contribution, stageData, notes);
+      // 稽古の痕跡：出撃した者ごとに1本（相手の段階を添える）。
+      {
+        const tier = (this.trainingOpponent(st.trainingOpponentId) || {}).name || "稽古";
+        for (const c of result.contribution || []) if (!c.mercenary) this.trace("trained", c.uid, null, { tier });
+      }
       st.turn += 1;
       st.missionOffers = [];
       st.phase = "result";
@@ -3383,6 +3584,10 @@ const Game = {
     const adapted = this.advanceHunger(foodShortage > 0, notes);
 
     st.materials += materialReward;
+    // 日常の仕事も痕跡に（噂の札の材料。DESIGN_INCIDENTS 8-2）。建材を運んだ者ごとに1本。
+    if (dailyDay === undefined) {
+      for (const c of output.contributors) if (c.material > 0) this.trace("carried_materials", c.uid, null, { amount: c.material, facility: null });
+    }
     // 旧「施工」（建材を進捗に変えて施設 Lv を上げる）は撤去した（2026-09-13）。
     // 留守番は建材を**運ぶ**だけで、使い道は城下町ただ一つ。st.autoBuild の flag ごと消してある。
     // 供養代行：建設部門の死霊術師は、直前の戦没者を建材へ変える（墓石も城壁も石である）。
@@ -3425,6 +3630,9 @@ const Game = {
     if (dailyDay === undefined && typeof Town !== "undefined") {
       Town.settle(this, notes, { ransacked: !!st.lastRansacked || this.isTraining(mission), training: this.isTraining(mission) });
     }
+    // 噂の札（2026-09-14）：決着ごとに1枚だけ。条件を満たす札が無ければ何も出さない。
+    if (dailyDay === undefined) this.expireIncidentFx();
+    if (dailyDay === undefined && typeof Incidents !== "undefined") Incidents.settle(this);
     // 旧施設の移行の報せ（ロード中には出す画面が無いので、次の決着の報告で一度だけ）。
     if (st.lastFacilityMigration && st.lastFacilityMigration.length) {
       for (const line of st.lastFacilityMigration) notes.push(line);
