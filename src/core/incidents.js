@@ -33,7 +33,12 @@ const Incidents = {
     }).sort((a, b) => b.seq - a.seq);
   },
   candidate(st, card, threshold) {
-    if (!card.state(st)) return null;
+    // 「いまの状態」はデータ側の式（`src/data/incidents.js`）。読めない場面
+    // （sim の SIM_NO_TOWN で Town が無い等）は**その札を出さない**だけにする。
+    // 器の都合で決着を止めない。
+    let ready = false;
+    try { ready = !!card.state(st); } catch (e) { ready = false; }
+    if (!ready) return null;
     const pool = this.roster(st).filter(m => this.matches(m, card.subject)).sort((a,b) => a.uid-b.uid);
     let groups = card.subject.kind === "unit" ? pool.map(m => [m.uid]) : [[]];
     if (card.subject.count === 2) {

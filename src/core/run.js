@@ -3557,8 +3557,10 @@ const Game = {
     // 訓練の決着は税収が無い（王国に知られていないので領地は動かない）。利子は普通どおり取られる。
     if (dailyDay === undefined && typeof Town !== "undefined") {
       Town.settle(this, notes, { ransacked: !!st.lastRansacked || this.isTraining(mission), training: this.isTraining(mission) });
-      if (typeof Incidents !== "undefined") Incidents.settle(this);
     }
+    // 噂の札は城下町の有無に関わらず決着ごとに1回（城下町を読まない測定＝SIM_NO_TOWN でも
+    // 札の判定は動かす。状態式が読めない札は Incidents.candidate が黙って見送る）。
+    if (dailyDay === undefined && typeof Incidents !== "undefined") Incidents.settle(this);
     // 旧施設の移行の報せ（ロード中には出す画面が無いので、次の決着の報告で一度だけ）。
     if (st.lastFacilityMigration && st.lastFacilityMigration.length) {
       for (const line of st.lastFacilityMigration) notes.push(line);
