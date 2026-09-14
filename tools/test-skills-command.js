@@ -407,5 +407,19 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   ENEMY_BIG_MOVE.chance = bigChance;
 }
 
+// ── 手番の行動を数える（成長の偏り用、contribution.actions） ──
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const x = mk('殴り手', { hp: 120 }), y = mk('守り手', { hp: 120 });
+  const { h } = startWith([x, y], foes(2, { atk: 5 }), { manual: true, rations: Object.assign(rations(), { spare: 3 }) });
+  h.next({ p0: { cmd: 'attack', target: 'e0' }, p1: { cmd: 'guard' } });
+  h.next({ p0: { cmd: 'attack', target: 'e0' }, p1: { cmd: 'eat' } });
+  const res = finish(h);
+  const cx = res.contribution.find(c => c.uid === '殴り手'), cy = res.contribution.find(c => c.uid === '守り手');
+  assert(cx && cx.actions.attack >= 2, `殴り手の attack が数えられる（${cx && cx.actions.attack}）`);
+  assert(cy && cy.actions.guard === 1 && cy.actions.eat === 1, `守り手の guard=1・eat=1（${cy && JSON.stringify(cy.actions)}）`);
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

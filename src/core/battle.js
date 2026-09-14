@@ -409,6 +409,8 @@ const Battle = {
       return { spare: Math.max(0, Number(r.spare) || 0), limit: lv >= 2 ? EAT.limitKitchen2 : EAT.limit, heal: lv >= 3 ? EAT.healKitchen3 : EAT.heal };
     })();
     let rationsEaten = 0;               // 食べた携行食の数（run.js が食料から引く）
+    const actions = {};                 // uid → { attack, guard, skill, eat, cover } 手番で何をしたか（成長の偏り、docs/SPEC_GROWTH_BY_ACTION）
+    const countAction = (u, key) => { if (u.side !== "player" || u.uid === null || u.uid === undefined) return; const a = actions[u.uid] || (actions[u.uid] = { attack: 0, guard: 0, skill: 0, eat: 0, cover: 0 }); a[key] += 1; };
     const canEat = () => eatRules.spare - rationsEaten > 0 && rationsEaten < eatRules.limit;
     let scatterUntil = 0;               // かく乱：このラウンドまで敵の狙いが散る
     const gainSpirit = (u, amount, reason) => {
@@ -1426,12 +1428,14 @@ const Battle = {
         const enemies = unit.side === "player" ? enemyUnits : playerUnits;
         // まもる：この手番は攻撃しない（被ダメ半減は applyDamage）。
         if (unit.side === "player" && unit.flags.guarding) {
+          countAction(unit, "guard");
           emit("note", { unitId: unit.id, guarding: true, emphasis: 1, text: `　${unit.name}は身を守っている`, cls: "trait" });
           continue;
         }
         // 食べる：この手番は携行食を食べて HP を戻す（攻撃しない）
         if (unit.side === "player" && unit.flags.eating) {
           unit.flags.eating = false;
+          countAction(unit, "eat");
           const amount = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * eatRules.heal));
           if (amount > 0) unit.hp += amount;
           emitCausal("heal", { unitId: unit.id, amount, hp: unit.hp, maxHp: unit.maxHp, sourceId: unit.id, label: "携行食", eat: true, fx: "holy", emphasis: 2 }, null);
@@ -1480,9 +1484,11 @@ const Battle = {
         if (unit.flags.skillCmd) {
           const cmd = unit.flags.skillCmd;
           unit.flags.skillCmd = null;
+          countAction(unit, unit.flags.covering ? "cover" : "skill");
           if (cmd.done) { emit("note", { unitId: unit.id, guarding: true, emphasis: 1, text: `　${unit.name}は身構えている`, cls: "trait" }); }
           else resolveSkill(unit, SK[cmd.id], cmd, allies, enemies, round);
         } else {
+          countAction(unit, "attack");
           act(unit, allies, enemies, round, manualCmd && manualCmd.target
             ? { target: enemies.find(e => e.id === manualCmd.target) || null } : undefined);
         }
@@ -1637,7 +1643,7 @@ const Battle = {
       incidents: timeline.filter(e => e.type === "incident").map(e => ({ id: e.id, name: e.name, text: e.text })),
       // 誰がどれだけ働いたか（結果画面のMVP表示用）。新しい状態を戦闘中に
       // 持ち回る必要はなく、既に確定したタイムラインから導出するだけでよい。
-      contribution: this.summarizeContribution(timeline, playerUnits),
+      contribution: this.summarizeContribution(timeline, playerUnits, actions),
       nearMiss: this.summarizeNearMiss(timeline),
       chainSummary: this.summarizeChains(timeline),
       overkillSummary: this.summarizeOverkill(timeline),
@@ -1900,7 +1906,7 @@ const Battle = {
     };
   },
 
-  summarizeContribution(timeline, playerUnits) {
+  summarizeContribution(timeline, playerUnits, actions = {}) {
     const hits = timeline.filter(e => (e.type === "attack" || e.type === "splash") && e.label !== "仲間割れ");
     return playerUnits.filter(u => !u.flags.summoned).map(u => {
       // 反動のような自傷は「受けたダメージ」には残すが、与ダメージ／撃破には足さない。
@@ -1926,6 +1932,7 @@ const Battle = {
         late: u.flags.late || 0,          // 遅刻したラウンド数。0なら開戦から居た
         lateCause: u.flags.lateCause || (u.flags.late ? u.flags.lateTrait : null),  // 何で遅れたか（酒好き／発酵糧食）
         unpaid: !!u.unpaid, dealt, taken, kills,
+        actions: actions[u.uid] || { attack: 0, guard: 0, skill: 0, eat: 0, cover: 0 },
         overkillCount: overkills.length,
         maxOverkill: overkills.reduce((max, event) => Math.max(max, event.percent || 0), 0),
         traitTriggers: timeline.filter(e => e.type === "trait_trigger" && e.sourceId === u.id).length,
