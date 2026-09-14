@@ -47,10 +47,13 @@ const MAP_FACILITY_SLOTS = {
   grand_kitchen: 7, graveyard: 8
 };
 
-// 魔王城と金庫（魔界銀行）。金庫は城の隣（設計3節）。
+// 魔王城と金庫（魔界銀行）と訓練場。金庫は城の隣（設計3節）、
+// 訓練場は城をはさんで金庫の反対側（城の左脇。背景では城の左手の森）。
+// 訓練場の絵はまだ無いので、表示側（src/ui/map.js）は当面 絵文字＋名前で描く。
 const MAP_LANDMARKS = {
-  castle: { x: 194, y: 2010, name: "魔王城" },
-  bank:   { x: 305, y: 1930, name: "魔界銀行" }
+  castle:   { x: 194, y: 2010, name: "魔王城" },
+  bank:     { x: 305, y: 1930, name: "魔界銀行" },
+  training: { x:  83, y: 1930, name: "訓練場" }
 };
 
 if (typeof module !== "undefined") {

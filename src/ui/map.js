@@ -89,6 +89,25 @@ const MapUI = {
     </button>`;
   },
 
+  // 訓練場（2026-09-14）。押すと作戦会議の訓練の札をそのまま選ぶ（既存の missionpick）。
+  // 新しい action は足さない。作戦会議に訓練の札が無いとき（防衛だけの古いセーブ、
+  // 決着の画面から地図を開いたときなど）は押せない。
+  // 絵はまだ無いので絵文字。CodeX の絵が来たら img へ差し替えるだけで済むようにしてある。
+  trainingHtml(st) {
+    const lm = this.landmarks();
+    const spot = lm.training;
+    if (!spot) return "";
+    const offers = (st.missionOffers || []);
+    const index = st.phase === "mission" ? offers.findIndex(m => m.missionKind === "train") : -1;
+    return `<button type="button" class="map-training" style="${this.pct(spot.x, spot.y)}"
+      ${index >= 0 ? `data-action="missionpick" data-index="${index}"` : "disabled"}
+      title="${U.esc(index >= 0 ? "訓練場で稽古をつける" : "いまは稽古に出られない")}"
+      aria-label="${U.esc(spot.name)}">
+      <i class="mp-training-icon" aria-hidden="true">🏟</i>
+      <span class="lot-name">${U.esc(spot.name)}</span>
+    </button>`;
+  },
+
   // 次に戦う地点（開いたときにここが中央へ来る）。
   focusPoint(st) {
     const list = this.points();
@@ -117,6 +136,7 @@ const MapUI = {
         ${defending ? `<span class="map-defend-road" aria-hidden="true"></span>` : ""}
         ${this.points().map(p => this.pointHtml(st, p, sum.perTerritory)).join("")}
         ${this.lots().map(l => this.lotHtml(st, l)).join("")}
+        ${this.trainingHtml(st)}
         ${lm.bank ? `<a class="map-bank" style="${this.pct(lm.bank.x, lm.bank.y)}" href="#town-bank"
           aria-label="魔界銀行へ"><img class="mp-vault" src="${this.DIR}props/vault.webp" alt=""><span class="lot-name">魔界銀行</span></a>` : ""}
         ${/* 魔王城は背景がもう描いている。印を重ねると二重になるので置かない（座標は map.js に残してある） */ ""}

@@ -136,6 +136,43 @@ const SAVE = () => {
   ok(Math.abs(scroll.offset) <= 40, `次に戦う地点が中央に来る（ずれ ${scroll.offset}px）`);
   ok(scroll.scrolled > 0, `初回のスクロール位置が合っている（${scroll.scrolled}px）`);
 
+  console.log('\n▼ 訓練場（2026-09-14）：地図から稽古へ入れる');
+  const training = await page.evaluate(() => {
+    Game.state.conquest = 3;
+    Game.state.outpost = { stage: 3, cleared: true, formationId: 'standard' };
+    Game.prepareMissions(true); UI.castle('town');
+    const el = document.querySelector('.map-training');
+    const bank = document.querySelector('.map-bank');
+    const box = e => { const r = e.getBoundingClientRect(); return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) }; };
+    return {
+      exists: !!el, text: el && el.innerText.replace(/\s+/g, ' '),
+      action: el && el.dataset.action, index: el && Number(el.dataset.index),
+      disabled: el && el.disabled,
+      kindAtIndex: el && (Game.state.missionOffers[Number(el.dataset.index)] || {}).missionKind,
+      sameRow: el && bank && Math.abs(box(el).y - box(bank).y) <= 2,
+      leftOfCastle: el && bank && box(el).x < box(bank).x
+    };
+  });
+  ok(training.exists, '訓練場の地点が地図にある');
+  ok(/訓練場/.test(training.text || ''), `名前が出る（${training.text}）`);
+  ok(training.sameRow && training.leftOfCastle, '城をはさんで金庫の反対側（同じ高さの左脇）');
+  ok(!training.disabled && training.action === 'missionpick' && training.kindAtIndex === 'train',
+    `押すと訓練の札を選ぶ（index ${training.index} = ${training.kindAtIndex}）`);
+  const picked = await page.evaluate(async () => {
+    document.querySelector('.map-training').click();
+    await new Promise(r => setTimeout(r, 120));
+    return { phase: Game.state.phase, kind: (Game.state.selectedMission || {}).missionKind };
+  });
+  ok(picked.kind === 'train' && picked.phase === 'formation',
+    `押すと稽古の編成へ入る（${picked.phase} / ${picked.kind}）`);
+  const noCard = await page.evaluate(() => {
+    Game.state.missionOffers = (Game.state.missionOffers || []).filter(m => m.missionKind !== 'train');
+    Game.state.phase = 'mission'; UI.castle('town');
+    const el = document.querySelector('.map-training');
+    return { disabled: el && el.disabled, action: el && el.dataset.action || null };
+  });
+  ok(noCard.disabled && !noCard.action, '訓練の札が出ていない決着では押せない');
+
   console.log('\n▼ 旧セーブ（town も outpost も無い）でも描ける');
   const legacy = await page.evaluate(() => {
     delete Game.state.town; delete Game.state.outpost; Game.state.conquest = 0;
