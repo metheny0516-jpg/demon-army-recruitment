@@ -136,6 +136,38 @@ const SAVE = () => {
   ok(Math.abs(scroll.offset) <= 40, `次に戦う地点が中央に来る（ずれ ${scroll.offset}px）`);
   ok(scroll.scrolled > 0, `初回のスクロール位置が合っている（${scroll.scrolled}px）`);
 
+  console.log('\n▼ 第二幕の霧（2026-09-14）');
+  const fog = await page.evaluate(() => {
+    Game.state.act = 1; Game.state.conquest = 3; UI.castle('town');
+    const fogEl = document.querySelector('.map-fog');
+    if (!fogEl) return { exists: false };
+    const box = e => { const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; };
+    const act2 = [...document.querySelectorAll('.map-point')]
+      .filter(p => Number(p.dataset.stage) >= 9).map(box);
+    const act1 = [...document.querySelectorAll('.map-point')]
+      .filter(p => Number(p.dataset.stage) <= 8).map(box);
+    const f = box(fogEl);
+    const st = getComputedStyle(fogEl);
+    return {
+      exists: true,
+      loaded: st.backgroundImage.includes('fog.webp'),
+      covers: act2.every(p => p.top >= f.top - 1 && p.bottom <= f.bottom + 1),
+      clearOfAct1: act1.every(p => p.top >= f.bottom - 1),
+      animated: st.animationName === 'mapFog',
+      clicks: st.pointerEvents
+    };
+  });
+  ok(fog.exists && fog.loaded, `霧の絵が act:2 の上にある（${fog.loaded ? 'fog.webp' : 'なし'}）`);
+  ok(fog.covers, '第二幕の地点をすべて覆っている');
+  ok(fog.clearOfAct1, '第一幕の地点にはかかっていない');
+  ok(fog.animated && fog.clicks === 'none', 'ゆっくり流れる／下の地点の操作を邪魔しない');
+  const cleared = await page.evaluate(() => {
+    Game.state.act = 2; Game.state.conquest = 8; UI.castle('town');
+    return { fog: document.querySelectorAll('.map-fog').length,
+      fogged: document.querySelectorAll('.map-point.mp-fogged').length };
+  });
+  ok(cleared.fogged === 0 && cleared.fog === 0, `第一幕を終えたら霧は消える（霧 ${cleared.fog}／？？？ ${cleared.fogged}）`);
+
   console.log('\n▼ 訓練場（2026-09-14）：地図から稽古へ入れる');
   const training = await page.evaluate(() => {
     Game.state.conquest = 3;

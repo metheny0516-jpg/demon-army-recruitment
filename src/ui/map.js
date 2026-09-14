@@ -89,6 +89,22 @@ const MapUI = {
     </button>`;
   },
 
+  // 第二幕の霧（2026-09-14）。act:2 の地点群の上へ 1枚かぶせる。
+  // 第一幕を終えて霧の地点が無くなったら描かない（幕が明けたことが地図で分かる）。
+  // 位置は act:2 の y の最小〜最大。印は中心座標なので、上下に印の高さぶんだけ足して
+  // 端の地点が霧から顔を出さないようにしてある。
+  fogHtml(st) {
+    const act2 = this.points().filter(p => p.act === 2);
+    if (!act2.length) return "";
+    if (!this.points().some(p => this.stateOf(st, p) === "fogged")) return "";
+    const s = this.size();
+    const pad = 40;
+    const top = Math.max(0, Math.min(...act2.map(p => p.y)) - pad);
+    const bottom = Math.min(s.h, Math.max(...act2.map(p => p.y)) + pad);
+    return `<span class="map-fog" aria-hidden="true"
+      style="top:${(top / s.h * 100).toFixed(3)}%;height:${((bottom - top) / s.h * 100).toFixed(3)}%"></span>`;
+  },
+
   // 訓練場（2026-09-14）。押すと作戦会議の訓練の札をそのまま選ぶ（既存の missionpick）。
   // 新しい action は足さない。作戦会議に訓練の札が無いとき（防衛だけの古いセーブ、
   // 決着の画面から地図を開いたときなど）は押せない。
@@ -135,6 +151,7 @@ const MapUI = {
           sizes="100vw" alt="王国の地図">
         ${defending ? `<span class="map-defend-road" aria-hidden="true"></span>` : ""}
         ${this.points().map(p => this.pointHtml(st, p, sum.perTerritory)).join("")}
+        ${this.fogHtml(st)}
         ${this.lots().map(l => this.lotHtml(st, l)).join("")}
         ${this.trainingHtml(st)}
         ${lm.bank ? `<a class="map-bank" style="${this.pct(lm.bank.x, lm.bank.y)}" href="#town-bank"
