@@ -2489,8 +2489,16 @@ const Game = {
       if (row.late > 0) record.late += 1;
       // その戦いで使った数値だけが伸びる（1戦で各 +1 まで）。
       // 技は当面「たたかう」と同じ扱い（仕様2節の表）。食べるでは伸びない。
+      //
+      // **手番の記録が空の戦果もある**：撤退の提案と号令の保留で作る戦果は
+      // `battle.js` の `summarizeContribution` を actions 抜きで呼ぶので、
+      // 全部 0 のまま届く（2026-09-14 時点。退いた決着はこちらを使う）。
+      // そのときは残っている数字から読める分だけ数える＝**与ダメージがあれば殴っている**。
+      // 守りは数字に残らないので数えない（無い行動をでっち上げない）。
       const acts = row.actions || {};
-      if ((acts.attack || 0) + (acts.skill || 0) >= 1) { record.grow.atk += 1; record.grow.spd += 1; }
+      const recorded = (acts.attack || 0) + (acts.guard || 0) + (acts.skill || 0) + (acts.eat || 0) + (acts.cover || 0);
+      const attacked = recorded > 0 ? (acts.attack || 0) + (acts.skill || 0) >= 1 : (row.dealt || 0) > 0;
+      if (attacked) { record.grow.atk += 1; record.grow.spd += 1; }
       if ((acts.guard || 0) + (acts.cover || 0) >= 1) record.grow.def += 1;
       if ((row.taken || 0) > 0) record.grow.hp += 1;
     }

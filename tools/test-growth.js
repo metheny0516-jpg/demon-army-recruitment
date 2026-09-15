@@ -128,7 +128,25 @@ const fight = (st, contribution, times) => {
     `移行で数値が1も動かない（${before}）`);
 }
 
-// ── 8. 傭兵と戦死者は育たない ──────────────────────────────
+// ── 8. 手番の記録が空の戦果（撤退の提案）でも、与ダメージから「殴った」を読む ──
+{
+  const st = fresh();
+  const m = member(14, '退き際'), quiet = member(15, '無為');
+  st.roster = [m, quiet];
+  // battle.js の撤退の提案は actions を全部 0 のまま返す（2026-09-14 時点）
+  const empty = { attack: 0, guard: 0, skill: 0, eat: 0, cover: 0 };
+  Game.tallyBattleRecords([
+    { uid: 14, survived: true, actions: { ...empty }, dealt: 37, taken: 0 },
+    { uid: 15, survived: true, actions: { ...empty }, dealt: 0, taken: 0 }
+  ], false);
+  ok(Game.memberRecord(m).grow.atk === 1 && Game.memberRecord(m).grow.spd === 1,
+    `与ダメージがあれば殴ったと数える（${JSON.stringify(Game.memberRecord(m).grow)}）`);
+  ok(Game.memberRecord(m).grow.def === 0, '守りは数字に残らないので数えない（でっち上げない）');
+  ok(Game.memberRecord(quiet).grow.atk === 0,
+    `何もしていない者は伸びない（${JSON.stringify(Game.memberRecord(quiet).grow)}）`);
+}
+
+// ── 9. 傭兵と戦死者は育たない ──────────────────────────────
 {
   const st = fresh();
   const merc = Object.assign(member(12, '傭兵'), { mercenary: true });
