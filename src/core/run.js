@@ -3173,6 +3173,7 @@ const Game = {
     this.recordBattleResult(pending);   // 号令で保留した戦闘はここで初めて確定する（済んでいれば何もしない）
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
     this.consumeBattleRations(result, notes);
+    this.settleCaptains(stageData, result, notes);   // 敵将：討った・見逃した・雇った
     // 城下町：防衛戦に負けた決着は税収が無い（processDepartments が読む）。勝ちも遠征も false
     st.lastRansacked = this.isDefenseBattle(stageData) && !result.victory;
     const goldBefore = st.gold;
@@ -3452,6 +3453,7 @@ const Game = {
     this.recordBattleResult(pending);
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
     this.consumeBattleRations(result, notes);
+    this.settleCaptains(stageData, result, notes);   // 退いた戦いでも、見逃した・雇った者は記録に残る
     st.lastRansacked = this.isDefenseBattle(stageData);   // 城下町：防衛戦から退いた決着も税収は無い
     const goldBefore = st.gold;
     const lostOnPoints = !!options.lostOnPoints;
@@ -3776,8 +3778,57 @@ const Game = {
     return won ? "main-cleared" : "main-lost";
   },
 
+  // 敵将の決着（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
+  // 討てば首級（報酬と名声）、雇えば名簿に増える、見逃せば去る。
+  // 状態の更新そのものは Captains.settle に任せる（captains.js は触らない）。
+  settleCaptains(mission, result, notes) {
+    if (typeof Captains === "undefined" || !mission) return null;
+    const st = this.state;
+    const ids = mission.captainIds || [];
+    if (!ids.length && !(result.spared || []).length) return null;
+    const before = {};
+    for (const id of ids) before[id] = Captains.state(st, id).status;
+    Captains.settle(st, result, ids);
+    const rules = Captains.rules();
+    const out = { slain: [], spared: [], hired: [] };
+    for (const id of ids) {
+      const now = Captains.state(st, id).status;
+      if (now === before[id]) continue;
+      const c = Captains.get(id); if (!c) continue;
+      const short = c.short || c.name;
+      if (now === "slain") {
+        const bounty = Math.max(1, Math.round(mission.reward * (rules.bountyMult - 1)));
+        st.gold += bounty;
+        st.fame = (st.fame || 0) + (rules.fame || 0);
+        out.slain.push(short);
+        notes.push(`${short}を討った。首級 +${bounty}G`);
+        this.trace("captain_slain", null, null, { id, name: short });
+      } else if (now === "spared") { out.spared.push(short); notes.push(`${short}を見逃した。戦場を去っていった`); }
+    }
+    // 雇った者は名簿へ（rollApplicant と同じ形の1体。名前は敵将の short）
+    for (const x of result.spared || []) {
+      if (x.kind !== "hire") continue;
+      const c = Captains.get(x.id); if (!c || !c.hire) continue;
+      const m = this.rollApplicant(c.hire.race);
+      m.name = c.short || c.name;
+      m.loyalty = c.hire.loyalty;
+      m.job = c.hire.job || m.job;
+      if (c.hire.trait && !(m.traits || []).includes(c.hire.trait)) m.traits = (m.traits || []).concat(c.hire.trait);
+      m.captainId = x.id;
+      st.roster.push(m);
+      this.memberRecord(m);
+      this.baseOf(m);
+      out.hired.push(m.name);
+      notes.push(`${m.name}が魔王軍に加わった（忠誠 ${m.loyalty}）`);
+      this.trace("captain_hired", m.uid, null, { id: x.id, name: m.name });
+    }
+    st.lastCaptains = out;
+    return out;
+  },
+
   applyMissionOutcome(mission, notes) {
     const st = this.state;
+    st.settles = (st.settles || 0) + 1;   // 「⚠ ○○がいる」札の周期
     st.alert = Math.max(0, st.alert + (mission.alertDelta || 0));
     st.conquest = U.clamp(st.conquest + (mission.conquestDelta || 0), 0, this.MAX_CONQUEST);
     // 地図の上の戦争（段階A）。勝った札の場所を領土にし、征服度はそこから写す

@@ -917,6 +917,21 @@ const UI = {
   GROWTH_LABEL: { hp: "HP", atk: "攻撃", def: "防御", spd: "速さ" },
   GROWTH_LINES: 8,
   GROWTH_STEP_MS: 500,
+  // 敵将の決着（討った・見逃した・雇った）。何も起きていない決着では出さない。
+  captainPanel() {
+    const out = (Game.state && Game.state.lastCaptains) || null;
+    if (!out || !(out.slain.length + out.spared.length + out.hired.length)) return "";
+    const row = (mark, label, names) => names.length
+      ? `<li><span class="captain-mark">${mark}</span>${U.esc(label)}：${U.esc(names.join("、"))}</li>` : "";
+    return `<div class="panel captain-panel">
+      <h3>⚔ 名のある敵</h3>
+      <ul class="captain-lines">
+        ${row("☠", "討った", out.slain)}
+        ${row("🕊", "見逃した", out.spared)}
+        ${row("🤝", "加わった", out.hired)}
+      </ul>
+    </div>`;
+  },
   growthPanel() {
     const rows = (Game.state && Game.state.lastGrowth) || [];
     if (!rows.length) return "";
@@ -1603,6 +1618,7 @@ const UI = {
           ${m.familiarity ? `<dt>守りの慣れ</dt><dd>敵能力 +${m.familiarity}%（この辺りで戦い続けた分）</dd>` : ""}
         </dl>
         ${m.territoryLine ? `<div class="mission-territory">${U.esc(m.territoryLine)}</div>` : ""}
+        ${m.captainCard ? `<div class="mission-captain">⚠ ${U.esc(m.captainCard.short)}が待ち構えている<small class="muted">　討てば首級（報酬 1.5 倍）。膝をつかせれば、見逃すか雇うか選べる</small></div>` : ""}
         <button class="primary wide" data-action="missionpick" data-index="${i}">${U.esc(m.territoryMode === "take" ? m.missionTitle : "この作戦を選ぶ")}</button>
         ${others.map(o => {
           const t = o.mission;
@@ -1923,6 +1939,7 @@ const UI = {
       </div>
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
+      ${this.captainPanel()}
       ${this.growthPanel()}
       ${this.breakthroughPanel(b)}
       ${this.debtPanel()}

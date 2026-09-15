@@ -421,6 +421,7 @@ const BattleScene = {
     this.mormoAwaiting = false;
     this.asideUsed = {};
     this.retreatAnswered = false;
+    this.resetSpare();
     this.retreated = false;
     this.resumeSkipAfterRetreat = false;
     this.orderAnswered = new Set();   // 答えた order_offer の eventId（節目は戦況が動くたびに来る）
@@ -545,6 +546,8 @@ const BattleScene = {
   // 止めて見せる出来事。数字は「読み終える尺」。x1 で 2.6 秒、x2 で 2.6 秒、x4 で 1.3 秒。
   HOLD_MS: 2600,
   // 技は「繰り出す一瞬」を止めて見せる。order_exec は指示の記録になった（quiet）ので外す。
+  // 一戦ごとに戻す印（見逃す／雇うは1戦闘に1回まで）
+  resetSpare() { this.spareAsked = false; this.spareWanted = false; },
   BEAT_TYPES: new Set(["trait_trigger", "skill_call", "cover", "intent", "incident", "revive", "summon", "synergy_trigger", "facility_trigger", "retreat_offer"]),
   isBeat(ev) {
     if (!ev) return false;
@@ -2052,14 +2055,56 @@ const BattleScene = {
     }
     this.showResumeButton(false);
     this.paused = true;
+    // 敵将が膝をついた（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
+    // 指示の前に一度だけ「討つ／見逃す（雇う）」を聞く。断れば同じ戦闘では二度と出ない。
+    if (handle.prompt && handle.prompt.canSpare && !this.spareAsked && this.askSpare(handle.prompt)) return;
     this.renderCommandPanel(handle.prompt);
+  },
+
+  // 見逃す／雇うの窓。撤退の提案と同じ一言の窓を使う（新しい窓は作らない）。
+  askSpare(prompt) {
+    const offer = prompt.canSpare;
+    if (!offer || this.finished) return false;
+    this.spareAsked = true;
+    if (this.mormoAwaiting) this.closeAside();
+    this.mormoAwaiting = true;
+    this.setMormoControlsLocked(true, false);
+    const hire = offer.kind === "hire";
+    const line = (typeof Captains !== "undefined" && Captains.get(offer.captainId)?.lines?.beaten || [])[0] || "";
+    const box = MormoScene.aside({
+      expression: "worried",
+      text: `${offer.name}が膝をついています。${line ? `\n「${line}」` : ""}`,
+      note: hire
+        ? "雇えば魔王軍に加わる（忠誠は低いところから）。討てば首級の報酬が入る。"
+        : "見逃せば戦場を去る（この戦いの数には入らない）。討てば首級の報酬が入る。",
+      host: document.getElementById("scene"),
+      choices: [
+        { label: hire ? "🤝 雇う" : "🕊 見逃す", value: "spare", primary: true },
+        { label: "⚔ 討つ", value: "fight" }
+      ],
+      onChoose: choice => this.answerSpare(choice)
+    });
+    if (!box) { this.mormoAwaiting = false; this.setMormoControlsLocked(false); return false; }
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+    return true;
+  },
+
+  answerSpare(choice) {
+    this.spareWanted = choice === "spare";
+    this.mormoAwaiting = false;
+    this.closeAside();
+    this.setMormoControlsLocked(false);
+    if (this.manual && this.manual.prompt) this.renderCommandPanel(this.manual.prompt);
   },
 
   submitCommands(commands) {
     const handle = this.manual;
     if (!handle || handle.done) return;
     this.hideCommandPanel();
-    const step = handle.next(commands || {});
+    const payload = commands || {};
+    // 見逃す／雇うは指示と一緒に送る（battle.js の next({ spare: true, ... })）。
+    if (this.spareWanted) { payload.spare = true; this.spareWanted = false; }
+    const step = handle.next(payload);
     this.eventById = new Map(this.timeline.filter(e => e.eventId).map(e => [e.eventId, e]));
     this.pacing = this.plan(this.timeline);
     if (step.type === "end") this.settleManual(step.result);
