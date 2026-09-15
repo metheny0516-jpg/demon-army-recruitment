@@ -170,5 +170,38 @@ assert(st.town && typeof st.town.debt === 'number', '旧セーブに town が無
   assert(!Game.canSeizeStronghold(), 'ランに1度きり');
 }
 
+// ── 生んだもの（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §2）──
+// 施設ごとに数字1本と、建てた日・増築の日。旧セーブは空のまま。
+{
+  Game.newRun();
+  const s6 = Game.state;
+  s6.turn = 4; s6.gold = 200; s6.materials = 60; s6.conquest = 3; s6.act = 1;
+  Town.build(Game, 'market');
+  const market = Town.statOf(s6, 'market');
+  assert(market.built === 4 && market.upgraded.length === 0, `建てた日が残る（第${market.built}決着）`);
+  s6.turn = 9;
+  Town.build(Game, 'market');
+  assert(Town.statOf(s6, 'market').upgraded[0] === 9, `増築の日が残る（${JSON.stringify(Town.statOf(s6, 'market').upgraded)}）`);
+
+  // 市場が生んだもの＝市場が無ければ入らなかった上乗せ分だけ（税の総額ではない）
+  s6.turn = 10;
+  const before = Town.statOf(s6, 'market').value;
+  Town.settle(Game, [], {});
+  const gained = Town.statOf(s6, 'market').value - before;
+  assert(gained === 3 * Town.lv(s6, 'market'), `市場は上乗せ分だけ数える（領地3 × Lv${Town.lv(s6, 'market')} ＝ ${gained}）`);
+
+  // 荒らされた決着は税が入らないので、market も増えない（無かったものは数えない）
+  const kept = Town.statOf(s6, 'market').value;
+  s6.turn = 11;
+  Town.settle(Game, [], { ransacked: true });
+  assert(Town.statOf(s6, 'market').value === kept, `荒らされた決着では増えない（${Town.statOf(s6, 'market').value}）`);
+
+  // 旧セーブ（stats が無い）は空で用意され、表示側が読んでも壊れない
+  delete s6.town.stats;
+  Town.init(s6);
+  assert(JSON.stringify(s6.town.stats) === '{}' && Town.statOf(s6, 'lab').value === 0,
+    '旧セーブは空から数え始める');
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

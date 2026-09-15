@@ -86,6 +86,50 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   ok(razed.played.includes('town-bank.wav'), `決着の画面で town-bank.wav が鳴る（${razed.played.join(' ') || 'なし'}）`);
   ok(razed.cleared, '鳴らしたら控えは消える（次の決着では鳴らない）');
 
+  // ── 施設の詳細（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §1・§7）──
+  console.log('▼ 施設の詳細が開き、その場で増築できる');
+  await page.evaluate(() => {
+    Game.state.gold = 200; Game.state.materials = 60; Game.state.turn = 7;
+    Game.state.town.builtTurn = 0; Game.state.town.builtCount = 0;
+    App.render();
+  });
+  await page.click('[data-action="castle"]');
+  await page.click('[data-action="castletab"][data-tab="town"]');
+  await page.waitForTimeout(120);
+  await page.locator('.town-card .town-name[data-id="market"]').click();
+  await page.waitForTimeout(150);
+  const detail = await page.evaluate(() => {
+    const body = document.querySelector('.fd-body');
+    return {
+      open: !!document.querySelector('.facility-detail'),
+      title: (document.querySelector('.fd-title') || {}).innerText || '',
+      art: (document.querySelector('.fd-art') || {}).dataset?.lv,
+      bg: body ? getComputedStyle(body).backgroundImage : '',
+      mormo: (document.querySelector('.fd-mormo') || {}).innerText || '',
+      born: (document.querySelector('.fd-history') || {}).innerText || '',
+      wide: document.documentElement.scrollWidth <= innerWidth
+    };
+  });
+  ok(detail.open && /市場/.test(detail.title), `市場の詳細が開く（${detail.title.replace(/\s+/g, ' ')}）`);
+  ok(/bg-market\.webp/.test(detail.bg), `施設ごとの背景が乗る（${detail.bg.slice(0, 60)}）`);
+  ok(/デス/.test(detail.mormo), `モルモの一言が Lv 別に出る（${detail.mormo}）`);
+  ok(/生んだもの/.test(detail.born), '「生んだもの」が読める');
+  ok(detail.wide, '390px で横に溢れない');
+  if (process.env.SP) await page.screenshot({ path: path.join(process.env.SP, 'facility-detail-390.png'), fullPage: true });
+
+  const lvBefore = await page.evaluate(() => Town.lv(Game.state, 'market'));
+  await page.locator('.fd-build [data-action="townbuild"]').click();
+  await page.waitForTimeout(250);
+  const grown = await page.evaluate(() => ({
+    lv: Town.lv(Game.state, 'market'),
+    still: !!document.querySelector('.facility-detail'),
+    art: document.querySelector('.fd-art')?.dataset.lv,
+    upgraded: (Game.state.town.stats.market || {}).upgraded || []
+  }));
+  ok(grown.lv === lvBefore + 1 && grown.still, `詳細のまま増築できる（Lv${lvBefore}→${grown.lv}）`);
+  ok(String(grown.art) === String(grown.lv), `絵がその場で差し替わる（data-lv=${grown.art}）`);
+  ok(grown.upgraded.includes(7), `増築した決着が記録に残る（${JSON.stringify(grown.upgraded)}）`);
+
   ok(errs.length === 0, `ページエラーなし${errs.length ? '：' + errs[0] : ''}`);
   await b.close();
   console.log(process.exitCode ? '失敗あり' : '全通過');
