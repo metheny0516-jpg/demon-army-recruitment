@@ -50,10 +50,12 @@ test('状態式が読めない場面（城下町が無い等）でも決着は�
   } finally { card.state=state; }
   assert(Incidents.candidate(st,card,2),'式が読めれば今までどおり出る');
 });
-test('12枚の全枝が、黙って何もしないまま終わらない',()=>{
+test('全札の全枝が、黙って何もしないまま終わらない',()=>{
   // データの枝名と run.js の switch がずれると、実行はできるのに何も起きない。
   // 状態が動いたかで見張る（動かないのは筋書きだけの枝＝下の3本に限る）。
   const quiet=['harpy_letter:未制圧','goblin_market:なし','training_visitor:最多でない'];
+  // 札を足したらここも増えるので、枚数も一緒に見ておく（データと検査のずれを防ぐ）
+  assert.equal(INCIDENTS.length,13,'札は13枚');
   const silent=[];
   for(const card of INCIDENTS) for(const branch of Object.keys(card.branches)) {
     const st=fresh(['slime','orc','goblin']);
@@ -72,5 +74,45 @@ test('旧セーブ（札の器が無い）でも決着が通り、器が入る',
   const st=fresh();delete st.incidents;
   assert.doesNotThrow(()=>Incidents.settle(Game));
   assert(st.incidents&&st.incidents.offered,'決着を1回通せば器が入る');
+});
+
+// ── 堕騎士の札「王国からの使者」（docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md 2節）──
+test('使者は忠誠80から来る。斬れば王国が気づき、断れば後日 元同僚が討伐隊に混ざる',()=>{
+  const build=loyal=>{
+    const st=fresh(['fallen_knight']);
+    Object.assign(st.roster[0],{race:'堕騎士',loyalty:loyal});
+    st.traces=[];trace(st,'hired',1,{day:1});trace(st,'promoted',1,{rank:'兵長'});
+    return st;
+  };
+  // 忠誠が足りなければ出ない
+  const cold=build(70);
+  assert(!Incidents.candidate(cold,Incidents.card('knight_envoy'),2),'忠誠80未満では出ない');
+  // 90未満＝断る。忠誠が上がり、続きで元同僚が討伐隊に混ざる
+  const refuse=build(85);
+  Incidents.settle(Game);
+  assert(refuse.incidents.offered.knight_envoy,'忠誠80以上で出る');
+  assert.equal(refuse.incidents.stats.natural,1,'自然発生（door B）として数える');
+  const r=Incidents.open(Game,'knight_envoy');
+  assert.equal(r.branch,'90未満');
+  assert.equal(refuse.roster[0].loyalty,100,'会わせて+5、断って+10');
+  assert.equal(refuse.alert,0,'断った側は王国警戒度を上げない');
+  refuse.incidents.tail.ready=true;refuse.counterattack=null;
+  Incidents.finishTail(Game,true);
+  assert(/元同僚/.test(refuse.counterattack.armyName),'元同僚が討伐隊の隊列名になる');
+  // 90以上＝斬る。警戒度+5・戦功+3
+  const cut=build(95);
+  Incidents.settle(Game);
+  const before=cut.roster[0].merit||0;
+  const r2=Incidents.open(Game,'knight_envoy');
+  assert.equal(r2.branch,'90以上');
+  assert.equal(cut.alert,5,'王国警戒度 +5');
+  assert.equal(cut.roster[0].merit,before+3,'戦功 +3');
+  // 関わらない（B なので記録は残る）
+  const ignore=build(85);
+  Incidents.settle(Game);
+  const food=ignore.food;
+  Incidents.decline(Game,'knight_envoy');
+  assert.equal(ignore.incidents.done.knight_envoy.branch,'ignored','関わらないは記録に残る');
+  assert.equal(ignore.food,food,'関わらなければ何も起きない');
 });
 console.log(`${passed} incident tests passed`);

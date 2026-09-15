@@ -270,5 +270,53 @@ const fresh = () => { Game.newRun(); const st = Game.state; st.roster = []; st.a
   assert(TRAITS.wake_call.skill.replaces === 'root_voice', '上位の癖は1段目を置き換える');
 }
 
+// ── 8. 堕騎士（docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md）──────────
+{
+  const st = fresh();
+  const TRAITS = vm.runInContext('TRAITS', ctx);
+  const UPPER_SKILLS = vm.runInContext('UPPER_SKILLS', ctx);
+  const MONSTER_TEMPLATES = vm.runInContext('MONSTER_TEMPLATES', ctx);
+  const tpl = MONSTER_TEMPLATES.find(t => t.id === 'fallen_knight');
+  assert(!!tpl && tpl.race === '堕騎士' && tpl.tier === 3, '種族テンプレートがある（tier3）');
+  assert((tpl.tags || []).includes('human') && tpl.minConquest === 2 && tpl.rarity === 0.5,
+    `人間・征服度2から・出現は半分（${(tpl.tags || []).join()}／${tpl.minConquest}／${tpl.rarity}）`);
+  assert((tpl.fixedTraits || []).includes('fealty') && tpl.names.length === 10,
+    `忠義を必ず持ち、名前が10本（${(tpl.names || []).length}）`);
+
+  // 面接に並ぶ確率は他の tier3 の半分（±の幅を見て、半分の位置にあることだけを見る）
+  vm.runInContext('U.rand = (() => { let i = 1; return () => ((i = (i * 9301 + 49297) % 233280) / 233280); })();', ctx);
+  st.conquest = 0;
+  assert(!Array.from({ length: 200 }, () => Game.rollApplicant().tplId).includes('fallen_knight'),
+    '征服度0では応募に混ざらない');
+  st.conquest = 4;
+  const pool = Array.from({ length: 1200 }, () => Game.rollApplicant().tplId);
+  const knights = pool.filter(id => id === 'fallen_knight').length;
+  const others = ['mage', 'necromancer', 'ogre'].map(id => pool.filter(x => x === id).length);
+  const avg = others.reduce((a, b) => a + b, 0) / others.length;
+  assert(knights > 0 && knights < avg * 0.8,
+    `他の tier3 より珍しい（堕騎士 ${knights}／他の平均 ${avg.toFixed(1)}）`);
+  vm.runInContext('U.rand = () => 0.5;', ctx);
+
+  // 3戦で「抜刀」、8戦で「一刀」
+  const m = member(160, 'セシル', { tplId: 'fallen_knight', race: '堕騎士', loyalty: 85 });
+  st.roster = [m];
+  assert(SPECIES_SKILL.fallen_knight === 'knight_iai', `種族技の対応表（${SPECIES_SKILL.fallen_knight}）`);
+  Game.memberRecord(m).battles = 3;
+  const iai = Game.checkSpeciesSkill(m, []);
+  assert(!!iai && iai.skillId === 'knight_iai', `3戦で抜刀（${iai && iai.skillName}）`);
+  assert(SKILLS.knight_iai.power === 1.4 && SKILLS.knight_iai.order === 'first'
+    && SKILLS.knight_iai.cost === 1 && SKILLS.knight_iai.condition === 'loyalty60',
+    '抜刀は ×1.4・先手・気合1・忠誠60以上');
+  Game.memberRecord(m).battles = 8;
+  const ittou = Game.checkSkillUnlock(m, []);
+  assert(!!ittou && ittou.skillId === 'oath', `8戦で誓い＝一刀（${ittou && ittou.skillName}）`);
+  assert(m.traits.includes('oath') && m.skillTier === 2, 'traits に入り skillTier が2');
+  assert(UPPER_SKILLS.knight_ittou.kind === 'execute' && UPPER_SKILLS.knight_ittou.trait === 'oath'
+    && UPPER_SKILLS.knight_ittou.cost === 2, '一刀は execute・癖 oath・気合2');
+  assert(TRAITS.oath.skill.replaces === 'fealty', '誓いは忠義を置き換える');
+  assert(/60/.test(TRAITS.fealty.desc) && /80/.test(TRAITS.fealty.desc), '忠義の説明に閾値が書いてある');
+  assert((TRAITS.fealty.lines.use || []).some(line => /我が主/.test(line)), '主と認めた時の一言がある');
+}
+
 console.log(failed ? `\n${failed} 件失敗` : '\n全件通過');
 process.exit(failed ? 1 : 0);
