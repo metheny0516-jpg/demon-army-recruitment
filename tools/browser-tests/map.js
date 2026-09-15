@@ -101,7 +101,8 @@ const SAVE = () => {
     };
   });
   ok(lots.market && /市場/.test(lots.market.text) && /Lv2/.test(lots.market.text), `市場は Lv2（${lots.market && lots.market.text}）`);
-  ok(lots.market && lots.market.built && lots.market.action === 'townbuild', '建った区画は押すと「建てる」へ');
+  // 区画のタップは施設の詳細へ（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §7。建てる・増築は詳細の中）
+  ok(lots.market && lots.market.built && lots.market.action === 'towndetail', '建った区画は押すと施設の詳細へ');
   ok(lots.smithy && !lots.smithy.built && /Lv0/.test(lots.smithy.text), `建てていない施設は空き地（${lots.smithy && lots.smithy.text}）`);
   ok(lots.empty === 0, `8区画すべてに施設が割り当たった（空き区画 ${lots.empty}／8）`);
 
