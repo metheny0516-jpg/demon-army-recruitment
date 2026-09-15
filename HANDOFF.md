@@ -28,7 +28,7 @@
 
 **いま動いているもの（上がったら取り込みと検証）**
 - Opus：成長の偏り＋読み上げ＋技の吹き出し（`docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md`、`docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md`）。堕騎士のデータ（`docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md`）。
-- CodeX：堕騎士の絵（履歴書・6ポーズ・表情3枚、ブランチ `codex/fallen-knight-art`）。上がったら `BATTLE_SPRITES`（battle_scene.js）と `PORTRAITS` に登録し、`art-coverage.js` の枚数を +6（今 204）。
+- 済（2026-09-15・Claude）：CodeX の堕騎士の絵（`codex/fallen-knight-art` 4d41e94）を取り込み、`BATTLE_SPRITES`・`PORTRAITS`（表情 surprise/smirk/tears）に登録、`art-coverage.js` は 210（35種×6）。node 88本 全通過（2026-09-15 昼に再確認）。
 - エンジン側は済み：食べる（`cmd:"eat"`）、行動の記録（`contribution[].actions`）、技の台詞は手番で（`skill_call`、`order_exec` は quiet）、火の粉（`sparked`）、忠義（癖 `fealty`・condition `loyalty60`）、吸血（kind `vampiric`）、目覚めの声（`cleanse_all`）、将軍技（`might`）。
 
 **判断待ち（オーナー）**
