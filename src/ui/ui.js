@@ -1535,7 +1535,18 @@ const UI = {
     const offers = st.missionOffers.length ? st.missionOffers : Game.prepareMissions(true);
     const salary = Game.salaryTotal();
     const construction = Game.departmentOutput().material;
+    // 地図の候補（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
+    // 同じ場所の「落とす／略奪／贈る」は裏の選択肢として offers に並んでいるので、
+    // 表に出すのは代表の1枚だけにして、切り替えは同じ札の中のボタンで行う。
+    const alt = new Map();      // territoryId → [{ index, mission }]
+    offers.forEach((m, i) => {
+      if (!m.territoryId || m.territoryMode === "take") return;
+      if (!alt.has(m.territoryId)) alt.set(m.territoryId, []);
+      alt.get(m.territoryId).push({ index: i, mission: m });
+    });
     const cards = offers.map((m, i) => {
+      if (m.territoryId && m.territoryMode !== "take") return "";   // 裏の選択肢は札にしない
+      const others = m.territoryId ? (alt.get(m.territoryId) || []) : [];
       const net = m.reward - salary;
       // 建材は城下町で使う（旧「施工で積む」は撤去した。2026-09-13）
       const availableMaterials = (st.materials || 0) + (m.materialReward || 0) + construction;
@@ -1546,7 +1557,9 @@ const UI = {
           ? `<span class="mission-phase outpost">前哨戦</span>`
           : `<span class="mission-phase main">本戦</span>`)
         : "";
-      const consequence = m.missionKind === "invade"
+      const consequence = m.missionKind === "patrol" ? "攻略は進まない。王国にも気づかれない"
+        : m.territoryMode === "take" ? "勝てば領土になる（王国攻略はここから決まる）"
+        : m.missionKind === "invade"
         ? (m.missionPhase === "outpost"
           ? "王国攻略は進まない（勝てば本戦へ）"
           : `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`)
@@ -1590,7 +1603,18 @@ const UI = {
           <dt>軍勢警戒</dt><dd>${m.armyPressure ? `敵能力 +${m.armyPressure}%` : "なし"}</dd>
           ${m.familiarity ? `<dt>守りの慣れ</dt><dd>敵能力 +${m.familiarity}%（この辺りで戦い続けた分）</dd>` : ""}
         </dl>
-        <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
+        ${m.territoryLine ? `<div class="mission-territory">${U.esc(m.territoryLine)}</div>` : ""}
+        <button class="primary wide" data-action="missionpick" data-index="${i}">${U.esc(m.territoryMode === "take" ? m.missionTitle : "この作戦を選ぶ")}</button>
+        ${others.map(o => {
+          const t = o.mission;
+          const label = t.missionKind === "tribute"
+            ? `贈って従える（${t.tributeCost.gold}G・食料${t.tributeCost.food}）`
+            : "落とさずに略奪する";
+          const poor = t.missionKind === "tribute"
+            && ((st.gold || 0) < t.tributeCost.gold || (st.food || 0) < t.tributeCost.food);
+          return `<button class="small wide mission-alt" data-action="missionpick" data-index="${o.index}" ${poor ? "disabled" : ""}
+            title="${U.esc(t.strategyHint || "")}">${U.esc(label)}${poor ? "（足りない）" : ""}</button>`;
+        }).join("")}
       </div>`;
     }).join("");
     // 反撃予約中は defend 一択になる。作戦会議の見出しをそれに合わせ、

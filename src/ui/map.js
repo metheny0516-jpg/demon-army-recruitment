@@ -21,6 +21,27 @@ const MapUI = {
     return `left:${(x / s.w * 100).toFixed(3)}%;top:${(y / s.h * 100).toFixed(3)}%`;
   },
 
+  // ── 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md §2-4）──
+  // 段階A のあいだ、土地20は既存の地点14へ仮に割り当てる（正しい配置は段階E）。
+  // act1 の12土地を p1〜p8 へ、act2 の8土地を p9〜p14 へ順に詰める。
+  landsOfPoint(point) {
+    if (typeof Territory === "undefined") return [];
+    const lands = Territory.lands().filter(l => (l.act || 1) === point.act);
+    const points = this.points().filter(p => p.act === point.act);
+    const slot = points.findIndex(p => p.id === point.id);
+    if (slot < 0 || !lands.length || !points.length) return [];
+    return lands.filter((l, i) => Math.floor(i * points.length / lands.length) === slot);
+  },
+  // いま作戦会議に出ている候補の場所（光らせる先）。
+  candidateIds(st) {
+    return new Set((st.missionOffers || []).map(m => m.territoryId).filter(Boolean));
+  },
+  // 候補の札の番号（タップでその作戦を選ぶ。新しい action は増やさない）。
+  offerIndexOf(st, ids) {
+    if (st.phase !== "mission") return -1;
+    return (st.missionOffers || []).findIndex(m => m.territoryMode === "take" && ids.includes(m.territoryId));
+  },
+
   // その地点がいまどういう状態か（設計3節の5つ）。**判定はここだけ**。
   //   owned    ：本戦で取った段階（conquest より下）
   //   outpost  ：次の地点で、前哨戦を制している
@@ -41,7 +62,18 @@ const MapUI = {
 
   // 地点1つ。次の地点だけが押せる（押すと既存の作戦会議へ）。
   pointHtml(st, point, tax) {
-    const state = this.stateOf(st, point);
+    let state = this.stateOf(st, point);
+    // 領土（段階A）：落とした土地は色を塗り、候補は光らせる。
+    const lands = this.landsOfPoint(point).map(l => l.id);
+    const owns = typeof Territory !== "undefined" && lands.length && lands.every(id => Territory.has(st, id));
+    const candidates = this.candidateIds(st);
+    const isCandidate = lands.some(id => candidates.has(id));
+    let offerIndex = -1;
+    if (state !== "fogged" && lands.length) {
+      if (owns) state = "owned";
+      else if (isCandidate) { state = "next"; offerIndex = this.offerIndexOf(st, lands); }
+      else if (state !== "owned") state = "far";
+    }
     const pin = state === "owned" ? "pin-owned" : state === "outpost" ? "pin-outpost" : "pin-gray";
     const clickable = state === "next" || state === "outpost";
     const ransacked = state === "owned" && st.lastRansacked && point.stage === (Number(st.conquest) || 0);
@@ -49,9 +81,10 @@ const MapUI = {
     const note = state === "owned" ? `<i class="mp-tax">税 ${tax}G</i>`
       : state === "outpost" ? `<i class="mp-flag">前哨済</i>`
       : state === "next" ? `<i class="mp-next">次の戦い</i>` : "";
-    return `<button type="button" class="map-point mp-${state}" style="${this.pct(point.x, point.y)}"
+    return `<button type="button" class="map-point mp-${state}${isCandidate ? " mp-candidate" : ""}" style="${this.pct(point.x, point.y)}"
       data-point="${U.esc(point.id)}" data-stage="${point.stage}"
-      ${clickable ? `data-action="mission"` : "disabled"}
+      ${offerIndex >= 0 ? `data-action="missionpick" data-index="${offerIndex}"`
+        : clickable || isCandidate ? `data-action="mission"` : "disabled"}
       aria-label="${U.esc(label)}">
       <img class="mp-pin" src="${this.DIR}${pin}.webp" alt="">
       ${ransacked ? `<img class="mp-smoke" src="${this.DIR}props/smoke.webp" alt="" aria-hidden="true">` : ""}
@@ -87,6 +120,24 @@ const MapUI = {
       ${art}<i class="lot-icon">${facility.icon}</i>
       <span class="lot-name">${U.esc(facility.name)}<i class="lot-lv">Lv${lv}</i></span>
     </button>`;
+  },
+
+  // 魔界の部族圏10。正しい配置は段階E なので、今は城下町の下に横一列で仮置きする。
+  tribesHtml(st) {
+    if (typeof Territory === "undefined") return "";
+    const tribes = Territory.tribes().filter(t => (t.act || 1) <= (Number(st.act) || 1));
+    if (!tribes.length) return "";
+    const candidates = this.candidateIds(st);
+    const row = tribes.map(t => {
+      const owned = Territory.has(st, t.id);
+      const cand = candidates.has(t.id);
+      const index = cand ? this.offerIndexOf(st, [t.id]) : -1;
+      return `<button type="button" class="tribe-pin${owned ? " owned" : ""}${cand ? " mp-candidate" : ""}"
+        data-tribe="${U.esc(t.id)}"
+        ${index >= 0 ? `data-action="missionpick" data-index="${index}"` : cand ? `data-action="mission"` : "disabled"}
+        aria-label="${U.esc(t.name)}">${U.esc(t.name)}</button>`;
+    }).join("");
+    return `<div class="tribe-row" aria-label="魔界の部族圏">${row}</div>`;
   },
 
   // 第二幕の霧（2026-09-14）。act:2 の地点群の上へ 1枚かぶせる。
@@ -154,6 +205,7 @@ const MapUI = {
         ${this.fogHtml(st)}
         ${this.lots().map(l => this.lotHtml(st, l)).join("")}
         ${this.trainingHtml(st)}
+        ${this.tribesHtml(st)}
         ${lm.bank ? `<a class="map-bank" style="${this.pct(lm.bank.x, lm.bank.y)}" href="#town-bank"
           aria-label="魔界銀行へ"><img class="mp-vault" src="${this.DIR}props/vault.webp" alt=""><span class="lot-name">魔界銀行</span></a>` : ""}
         ${/* 魔王城は背景がもう描いている。印を重ねると二重になるので置かない（座標は map.js に残してある） */ ""}
