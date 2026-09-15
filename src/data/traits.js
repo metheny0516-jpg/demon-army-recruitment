@@ -499,6 +499,33 @@ const TRAITS = {
     lines: { earned: ["城の音で、腹が減る刻が分かる", "留守は任せろ。火も見ている", "この城の勝手は、もう知ってる"] }
   },
 
+  // ── 堕騎士（docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md）──────────────
+  // 受動。**効き方は battle.js が持つ**（忠誠60未満は威力0.8＋種族技が出ない、80以上で1.1）。
+  // ここは名前と説明と台詞だけ。数値をこちらに書くと二重管理になる。
+  fealty: {
+    name: "忠義",
+    relic: "布を巻いた鞘",
+    desc: "忠誠60未満は本気を出さない。80以上で主と認め、全力になる",
+    skill: { species: "fallen_knight", tier: 1 },
+    lines: {
+      unlock: ["剣を預ける相手は、自分で決めます"],
+      use: ["承知した、我が主", "仰せのままに", "……その命令なら、従いましょう"],
+      idle: ["まだ、あなたを主とは"]
+    }
+  },
+  // 2段目。上位技「一刀」（skills.js の knight_ittou、kind: execute）の紐づけ先。
+  // 効果は技側が持つので、ここは忠義を引き継いで名前を変えるだけ。
+  oath: {
+    name: "誓い",
+    relic: "折れた紋章",
+    desc: "主と認めた者に剣を預けた。忠誠60未満は本気を出さない。80以上で全力（忠義と同じ）",
+    skill: { species: "fallen_knight", tier: 2, replaces: "fealty" },
+    lines: {
+      unlock: ["この剣は、あなたのものです", "誓いは口にしません。振るうだけです"],
+      use: ["一刀のもとに", "終わらせます"]
+    }
+  },
+
   // ── マンドラゴラ（docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md D）─────────
   // 1段目は受動だけ（戦闘では鳴らない）。種族技「配り薬」は skills.js の mandragora_mend。
   root_voice: {

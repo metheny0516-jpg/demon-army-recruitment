@@ -103,6 +103,14 @@ const SKILLS = {
   },
   // マンドラゴラ（docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md D）。回復役の種族技。
   // kind は カタログの mend_all（skill_effects.js）。味方全員を 15% 回復する。
+  // 堕騎士（docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md）。居合の一線。
+  // `condition: "loyalty60"` は battle.js が読む（忠誠60未満は「まだ主と認めていない」で出ない）。
+  knight_iai: {
+    name: "抜刀", species: "fallen_knight", cost: 1, kind: "strike", target: "enemy", fx: "slash",
+    power: 1.4, order: "first", condition: "loyalty60",
+    label: "抜け", note: "×1.4　必ず先に動く　忠誠60以上でだけ出せる",
+    lines: { use: ["御免", "一足一刀", "……抜きます"], miss: ["外しました", "踏み込みが浅い"] }
+  },
   mandragora_mend: {
     name: "配り薬", species: "mandragora", cost: 2, kind: "mend_all", target: "all_allies", fx: "holy", power: 0.15,
     label: "薬を配れ", note: "味方全員のHP15%回復",
@@ -129,6 +137,12 @@ const UPPER_SKILLS = {
     name: "黒の癒し", species: "succubus", cost: 2, kind: "heal", trait: "enthrall", target: "ally", upper: true, fx: "dark", power: 0.35,
     label: "黒で癒せ", note: "味方1体をHP35%回復（黒魔法。少し痛い）",
     lines: { use: ["痛いのは一瞬よ", "黒いけど、効くの", "これで貸し一つね"], miss: ["届かない"] }
+  },
+  // 堕騎士上位：カタログの execute（とどめの見切り）。HP3割以下なら確殺、そうでなければ反撃を受ける。
+  knight_ittou: {
+    name: "一刀", species: "fallen_knight", cost: 2, kind: "execute", trait: "oath", target: "enemy", upper: true, fx: "slash",
+    label: "斬れ", note: "弱った敵を確実に斬る　まだ早ければ反撃を受ける",
+    lines: { use: ["そこまでです", "見えました"], miss: ["まだ早い"] }
   },
   mandragora_wake: {
     name: "目覚めの声", species: "mandragora", cost: 2, kind: "cleanse_all", trait: "wake_call", target: "all_allies", upper: true, fx: "holy",

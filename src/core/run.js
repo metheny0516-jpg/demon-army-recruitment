@@ -1685,7 +1685,7 @@ const Game = {
     const pool = this.templates();
     const weights = pool.map(t => {
       let w;
-      // 中盤から来る種族（マンドラゴラ）。tier の重みの前に、征服度で門を閉める。
+      // 中盤から来る種族（マンドラゴラ・堕騎士）。tier の重みの前に、征服度で門を閉める。
       // データ側（monsters.js の minConquest）が持つので、種族を足しても run.js は触らない。
       if (t.minConquest && (Number(st.conquest) || 0) < t.minConquest) return 0;
       // 低ティアはレベル5以上で来ること自体が珍しくなる（2 → 1）。
@@ -1695,6 +1695,9 @@ const Game = {
       else w = level <= 2 ? 0.5 : (level <= 4 ? 2 : 5);
       // 第二幕の新顔は、来たことが分かる程度に寄せる（tier 3 と同じ枝のままで少し重く）
       if (t.tier >= 4 && (st.act || 1) >= 2) w *= 1.5;
+      // 珍しい種族（堕騎士は他の tier3 の半分）。tier の枝の**あと**に掛けるので、
+      // 段階が上がっても「会えたら嬉しい」の位置のまま薄まらない。
+      if (t.rarity) w *= t.rarity;
       if (favored.has(t.id)) w *= 3;
       if (brief) {
         // 金を払って条件を出した以上は寄る。ただし外れも残す。
