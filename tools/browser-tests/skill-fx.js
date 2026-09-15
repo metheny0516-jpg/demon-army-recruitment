@@ -197,6 +197,52 @@ const FX = ['heavy', 'slash_multi', 'fire', 'dark', 'holy', 'nature', 'wind', 'a
   ok(!still.moving, '画面を揺らさない');
   await reduced.close();
 
+  // ── 技の吹き出し（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 1節）──
+  console.log('▼ 繰り出す直前の吹き出し');
+  const bubble = await page.evaluate(async () => {
+    document.querySelectorAll('.bu-bubble').forEach(el => el.remove());
+    // 指示（order_exec・quiet）だけでは何も出ない → 繰り出す瞬間（skill_call）で出る
+    BattleScene.render({ type: 'order_exec', unitId: 'p0', name: 'ガロ', skillId: 'ogre_smash',
+      skillName: '振り下ろす', label: '叩け', quote: 'どっせい！', quiet: true, target: 'enemy' });
+    await new Promise(r => setTimeout(r, 200));
+    const afterOrder = { bubbles: document.querySelectorAll('.bu-bubble').length,
+      caption: (document.getElementById('action-caption') || {}).textContent || '' };
+    BattleScene.render({ type: 'skill_call', unitId: 'p0', name: 'ガロ', skillId: 'ogre_smash',
+      skillName: '振り下ろす', label: '叩け', quote: 'どっせい！', target: 'enemy' });
+    await new Promise(r => setTimeout(r, 200));
+    const el = document.querySelector('.bu-bubble');
+    const after = { bubbles: document.querySelectorAll('.bu-bubble').length,
+      text: el ? el.innerText.replace(/\s+/g, ' ').trim() : '',
+      onUnit: el ? el.closest('.bu') === BattleScene.units.p0.el : false };
+    // 1体に1つ：続けてもう一度呼んでも増えない
+    BattleScene.render({ type: 'skill_call', unitId: 'p0', name: 'ガロ', skillId: 'ogre_smash',
+      skillName: '踏みつけ', label: '踏め', quote: 'まだだ！', target: 'enemy' });
+    await new Promise(r => setTimeout(r, 120));
+    const twice = { bubbles: document.querySelectorAll('.bu-bubble').length,
+      text: (document.querySelector('.bu-bubble') || {}).innerText || '' };
+    return { afterOrder, after, twice };
+  });
+  ok(bubble.afterOrder.bubbles === 0, `指示（quiet）だけでは吹き出しを出さない（${bubble.afterOrder.bubbles}）`);
+  ok(!/どっせい/.test(bubble.afterOrder.caption), `指示では字幕も出さない（${bubble.afterOrder.caption.slice(0, 20)}）`);
+  ok(bubble.after.bubbles === 1 && bubble.after.onUnit, '繰り出す瞬間に本人の札へ吹き出しが出る');
+  ok(/どっせい/.test(bubble.after.text) && /振り下ろす/.test(bubble.after.text),
+    `台詞と技名が並ぶ（${bubble.after.text}）`);
+  ok(bubble.twice.bubbles === 1 && /踏みつけ/.test(bubble.twice.text),
+    `吹き出しは1体に1つ。次が来たら差し替わる（${bubble.twice.bubbles}／${bubble.twice.text.replace(/\s+/g, ' ').trim()}）`);
+
+  console.log('▼ 繰り出す前に倒れた者は吹き出しを出さない');
+  const dead = await page.evaluate(async () => {
+    document.querySelectorAll('.bu-bubble').forEach(el => el.remove());
+    // 先攻の敵に倒された → エンジンは skill_call を出さない（unit.alive を見る）。
+    // 画面側も、死んだ札に吹き出しを足さないことを見る。
+    BattleScene.render({ type: 'death', unitId: 'p1', name: 'ホネオ', text: '　ホネオ は倒れた！', cls: 'death' });
+    await new Promise(r => setTimeout(r, 200));
+    return { bubbles: document.querySelectorAll('.bu-bubble').length,
+      dead: BattleScene.units.p1.el.classList.contains('dead') };
+  });
+  ok(dead.bubbles === 0, `倒れた札に吹き出しは出ない（${dead.bubbles}）`);
+  ok(dead.dead, '倒れた表示にはなっている（イベント自体は届いている）');
+
   ok(errs.length === 0, `ページエラーなし${errs.length ? '：' + errs[0] : ''}`);
   await b.close();
   console.log(process.exitCode ? '失敗あり' : '全通過');

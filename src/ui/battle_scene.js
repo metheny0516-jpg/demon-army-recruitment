@@ -1068,7 +1068,8 @@ const BattleScene = {
         const sk = this.skillOf(ev.skillId);
         if (u) {
           u.el.classList.add("acting");
-          this.bubble(u, ev.quote, ev.label || ev.skillName);
+          // 吹き出しに出すのは**技名**（label は「叩け」のような号令の言い方なので使わない）
+          this.bubble(u, ev.quote, ev.skillName || ev.label);
           // 自分・全体対象はその場で光る。味方1体を狙う技は、光るのは対象の側。
           const here = ["self", "none", "all_allies"].includes(ev.target) || (sk && sk.kind === "rest");
           if (here && ev.fx) this.fxVfx(u, ev.fx, 2);
