@@ -1641,6 +1641,26 @@ const Game = {
         mission.ambush = { kind: "hall", name: who.name };
       }
     }
+    // 最終戦（都）の顔ぶれ（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-3）。
+    // 勇者アレンの隣に「討たなかった者」が立つ。雇った者はこちらにいるので外れる。
+    if (land && land.kind === "capital") {
+      mission.units = Captains.heroParty(st, mission.units, 1);
+      for (const u of mission.units) if (u.captain && u.captain.id) ids.push(u.captain.id);
+      // 師（ガレス）を討たれた勇者は覚醒が早い（50% → 70%）。癖の表は触らない。
+      if (Captains.state(st, "gareth").status === "slain") {
+        const hero = mission.units.find(u => u.role === "commander");
+        if (hero) hero.awakenAt = 0.7;
+        mission.heroAwakened = true;
+      }
+      // 雇った敵将がこちらの隊列にいると、勇者は開戦で気づく
+      const hired = (st.roster || []).some(m => m.captainId && st.activeUids.includes(m.uid));
+      if (hired) {
+        mission.heroNoticesHired = true;
+        const hero = mission.units.find(u => u.role === "commander");
+        if (hero) hero.introQuote = "……お前も、そちらか。";   // 開戦の一言（battle.js の dialogue が読む）
+      }
+      mission.heroParty = mission.units.filter(u => u.captain).map(u => u.name);
+    }
     mission.captainIds = ids;
     return mission;
   },
