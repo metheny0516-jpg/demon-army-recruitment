@@ -26,6 +26,18 @@ const BattleScene = {
   },
   // 全体技は同時に着弾させる。総尺は単体の1.6倍まで（3体でも「長い」と感じさせない）。
   AOE_TOTAL_MULT: 1.6,
+  // 大技（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）。
+  // 種類ごとにプリセットを増やさない。エンジンが乗せる `ev.big` を見る分岐を
+  // 着弾（damage）と発火印（trait_trigger）に1か所ずつ置くだけにする。
+  BIG: {
+    stopMs: 80,        // 止め（ヒットストップ）
+    knockPx: 12,       // 相手が後ろへ弾かれる距離
+    projectileMult: 1.3, // 弾が飛ぶ時間（速いほど迫力が落ちる）
+    windup: 1.6        // 溜め
+  },
+  // 全体攻撃の余波で1発ごとに止めると重い。最初の1発だけ止め＋フラッシュ。
+  BIG_STOP_GAP: 420,
+  lastBigStopAt: 0,
   missingSprites: new Set(),
   traitQuoteShown: new Set(),   // 癖の台詞は1戦闘1回（play() で空にする）
   preloadedSprites: new Set(),
@@ -914,6 +926,13 @@ const BattleScene = {
             : `【${ev.name}】${ev.note ? "　" + ev.note : ""}`, ev.quote && first ? 1400 : 900);
         }
         this.pulse(ev.traitId);
+        // 大技の発火印（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）。
+        // 回復系の大技は着弾を出さないので、「大きさ」を見せるのはここだけになる。
+        if (ev.big && u) {
+          const hold = this.visualDuration(560 * this.BIG.windup);
+          u.el.classList.add("charging-big");
+          this.timers.push(setTimeout(() => u.el.classList.remove("charging-big"), hold));
+        }
         if (propagating) {
           this.flash(1);
           if (u) this.unitVfx(u, "overkill", "", 3);
@@ -1470,7 +1489,7 @@ const BattleScene = {
     this.timers.push(setTimeout(() => el.remove(), life));
   },
 
-  projectileMotion(from, to, kind, contact) {
+  projectileMotion(from, to, kind, contact, big) {
     const scene = document.getElementById("scene");
     if (!scene || !from?.actor || !to?.actor) return () => {};
     const stage = scene.getBoundingClientRect();
@@ -1479,7 +1498,7 @@ const BattleScene = {
     const end = { x: b.x + b.width / 2 - stage.x - scene.clientLeft, y: b.y + b.height * .6 - stage.y - scene.clientTop };
     const angle = Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
     const el = document.createElement("span");
-    el.className = `battle-projectile projectile-${kind}`;
+    el.className = `battle-projectile projectile-${kind}${big ? " big" : ""}`;
     el.setAttribute("aria-hidden", "true");
     const pose = p => `translate(${p.x}px, ${p.y}px) rotate(${angle}deg)`;
     scene.appendChild(el);
@@ -1506,8 +1525,9 @@ const BattleScene = {
       : preset && preset.projectile ? preset.projectile : this.attackKind(from);
     const ranged = kind !== "melee";
     // heavy は溜めてから当てる（接触を後ろへ）。wind は速い（接触を前へ）。
-    const beat = preset ? (preset.windup ? 1.5 : preset.fast ? 0.6 : 1) : 1;
-    const contact = reduced ? 0 : Math.min(total * .8, total * (ranged ? .62 : .38) * beat);
+    // 大技は溜めを長く、弾もゆっくり飛ばす（速いほど迫力が落ちる）。
+    const beat = (preset ? (preset.windup ? 1.5 : preset.fast ? 0.6 : 1) : 1) * (ev.big ? this.BIG.projectileMult : 1);
+    const contact = reduced ? 0 : Math.min(total * .85, total * (ranged ? .62 : .38) * beat);
     const settle = () => { if (to) this.setHp(to, ev.hp, ev.maxHp); };
     this.pendingHits.add(settle);
     const later = (fn, ms) => this.timers.push(setTimeout(fn, ms));
@@ -1517,7 +1537,7 @@ const BattleScene = {
       later(() => this.setPose(from, "strike"), total * .22);
       later(() => this.setPose(from, "recover"), total * .68);
       later(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : "idle"), total);
-      removeProjectile = this.projectileMotion(from, to, kind, contact);
+      removeProjectile = this.projectileMotion(from, to, kind, contact, ev.big);
       const direction = from.side === "player" ? 1 : -1;
       const frames = from.tplId === "imp" ? [
         { transform: "translateY(0) scale(1)", offset: 0 },
@@ -1555,6 +1575,7 @@ const BattleScene = {
       settle();
       this.pendingHits.delete(settle);
       if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId, attackKind: kind });
+
       if (!to) return;
       if (preset) {
         // プリセットの絵。打数のある技（二連打・血の雄叫び）は短い間隔で2回。
@@ -1594,8 +1615,11 @@ const BattleScene = {
         this.setPose(to, to.el.classList.contains("dead") ? "fallen" : "idle");
         to.el.classList.remove("hit", "hit-big");
       }, Math.min(total * .5, total - contact));
+      // 大技（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）。
+      // 止め→白フラッシュ→強い揺れ→相手を弾く→着弾の絵。ここが `ev.big` を見る唯一の着弾側の分岐。
+      if (ev.big) this.bigImpact(to, ev);
       // heavy は一撃で画面が小さく揺れる（大技を「重い」と感じさせるのはここだけ）
-      if ((ev.emphasis >= 3 || (preset && preset.shake)) && !reduced) this.shake();
+      else if ((ev.emphasis >= 3 || (preset && preset.shake)) && !reduced) this.shake();
     };
     if (reduced) impact(); else later(impact, contact);
   },
@@ -2516,12 +2540,70 @@ const BattleScene = {
     this.timers.push(setTimeout(() => n.remove(), life));
   },
 
-  shake() {
+  shake(big) {
     const s = document.getElementById("scene");
     if (!s) return;
-    s.classList.remove("shake");
+    s.classList.remove("shake", "shake-big");
     void s.offsetWidth;
     s.classList.add("shake");
+    if (big) {
+      s.classList.add("shake-big");
+      this.timers.push(setTimeout(() => s.classList.remove("shake-big"), this.visualDuration(360)));
+    }
+  },
+
+  // 止め（ヒットストップ）。走っている動きを数十ミリ秒だけ止めてから解く。
+  // 新しいタイマーで動かし直すのではなく、同じ motion を pause/play する
+  // （スキップや中断で this.motions ごと cancel されても破綻しない）。
+  hitStop(ms) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const held = [...this.motions];
+    for (const m of held) { try { m.pause(); } catch (e) {} }
+    this.timers.push(setTimeout(() => {
+      for (const m of held) { try { if (this.motions.has(m)) m.play(); } catch (e) {} }
+    }, ms));
+  },
+
+  // 大技の着弾。止め→白フラッシュ→強い揺れ→相手を弾く→着弾の絵、の順。
+  // 低モーションでは止め・揺れ・弾きを出さない（絵と音は出す）。
+  bigImpact(to, ev) {
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const now = Date.now();
+    // 連続する余波は最初の1発だけ止め＋フラッシュ。以降は揺れだけ。
+    const lead = !this.lastBigStopAt || now - this.lastBigStopAt > this.BIG_STOP_GAP;
+    if (lead) this.lastBigStopAt = now;
+    const after = fn => this.timers.push(setTimeout(fn, reduced || !lead ? 0 : this.BIG.stopMs));
+    if (lead && !reduced) { this.hitStop(this.BIG.stopMs); this.flash(2); }
+    after(() => {
+      if (!reduced) this.shake(true);
+      if (to && !reduced) {
+        const recoil = to.side === "player" ? -1 : 1;
+        this.animateActor(to, [
+          { transform: "translateX(0)" },
+          { transform: `translateX(${recoil * this.BIG.knockPx}px) rotate(${recoil * 10}deg)`, offset: .3 },
+          { transform: `translateX(${recoil * this.BIG.knockPx * .35}px)`, offset: .6 },
+          { transform: "translateX(0)" }
+        ], this.visualDuration(340));
+      }
+      if (to) this.bigVfx(to, ev.fx);
+    });
+  },
+
+  // 着弾の絵。種類ごとの絵が無ければ既存 impact を2倍で出す。
+  bigVfx(u, fx) {
+    if (!u || !u.el) return;
+    const anchor = u.el.querySelector(".bu-vfx-anchor");
+    if (!anchor) return;
+    const img = document.createElement("img");
+    img.className = `bu-vfx vfx-big fx-big-${fx || "hit"}`;
+    img.alt = "";
+    img.src = `${this.EFFECT_DIR}big-${fx || "hit"}.webp`;
+    const life = this.visualDuration(640);
+    img.style.animationDuration = `${life}ms`;
+    img.onerror = () => { img.remove(); this.unitVfx(u, "impact", "big2x", 3); };
+    anchor.appendChild(img);
+    this.timers.push(setTimeout(() => img.remove(), life));
+    return img;
   },
 
   // 戦意メーター。戦闘のあいだ常に出ていて、上がるたびに叩かれる。

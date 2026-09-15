@@ -197,6 +197,36 @@ const FX = ['heavy', 'slash_multi', 'fire', 'dark', 'holy', 'nature', 'wind', 'a
   ok(!still.moving, '画面を揺らさない');
   await reduced.close();
 
+  // ── 大技（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）──
+  // エンジンが乗せる ev.big を見て、弾が大きくなり、着弾で画面が強く揺れる。
+  // 普通の火球（big が無い）は今までどおり。
+  console.log('▼ 大技は大きく・揺れる');
+  const bigShot = async big => page.evaluate(async big => {
+    const scene = document.getElementById('scene');
+    scene.classList.remove('shake', 'shake-big');
+    document.querySelectorAll('.bu-vfx').forEach(el => el.remove());
+    const seen = { projectile: false, bigProjectile: false, shake: false, shakeBig: false, vfx: false };
+    BattleScene.render({ type: 'attack', fromId: 'p0', toId: 'e1', dmg: 40, hp: 60, maxHp: 100,
+      fx: 'fire', skillId: big ? 'great_fireball' : 'mage_fireball', label: big ? '大火球' : '火球',
+      emphasis: big ? 2 : 1, big });
+    for (let i = 0; i < 160; i++) {
+      const shot = document.querySelector('.battle-projectile');
+      if (shot) { seen.projectile = true; if (shot.classList.contains('big')) seen.bigProjectile = true; }
+      if (scene.classList.contains('shake')) seen.shake = true;
+      if (scene.classList.contains('shake-big')) seen.shakeBig = true;
+      if (document.querySelector('#bu-e1 .bu-vfx')) seen.vfx = true;
+      await new Promise(r => setTimeout(r, 20));
+    }
+    return seen;
+  }, big);
+  const bigFx = await bigShot(true);
+  ok(bigFx.bigProjectile, `大火球の弾に .big が付く（弾${bigFx.projectile ? 'あり' : 'なし'}）`);
+  ok(bigFx.shakeBig, '着弾で画面が強く揺れる（.shake-big）');
+  ok(bigFx.vfx, '着弾の絵が出る（絵が無ければ既存 impact の2倍）');
+  const plainFx = await bigShot(false);
+  ok(plainFx.projectile && !plainFx.bigProjectile, `普通の火球の弾には .big が付かない（${plainFx.bigProjectile}）`);
+  ok(!plainFx.shakeBig, '普通の火球では強く揺れない');
+
   // ── 技の吹き出し（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 1節）──
   console.log('▼ 繰り出す直前の吹き出し');
   const bubble = await page.evaluate(async () => {
