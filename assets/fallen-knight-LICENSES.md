@@ -1,0 +1,40 @@
+# 堕騎士（fallen_knight）画像来歴
+制作: CodeX / 2026-09-15 / OpenAI 内蔵 image_gen
+ユーザー指定と DESIGN_HUMAN_SWORDSMAN_2026-09-14.md 1・3節に基づくオリジナル人物。
+
+## 参照
+リポジトリ内 necromancer.png を画風・履歴書構図の参考とし、今回の履歴書原画から同一人物の戦闘と表情を展開。archer の戦闘規格、goblin の表情規格に合わせた。外部の写真・素材・ロゴは使っていない。AI生成物として記録し、第三者素材のCC等のライセンスは付与していない。
+
+## 納品と準備
+- assets/monsters/fallen_knight.png: 768×1024、72,501 bytes。顔は上55%内、視線を外す。既存prepare_monster_images.pyのflatten_and_resize後、肌色と赤帯保持のため256×341へ縮小、64色減色、最近傍で768×1024に戻した。
+- assets/battle/units/fallen_knight/: 6ポーズ512×512透過WebP、1536×1024 RGBA motion-source.png、768×512 motion-review.png。
+- 既存prepare_species_motion.pyをメモリ内で新IDに対応して使用。列境界0/512/990/1536、行境界0/520/1024。アルファ閾値20、全6枚共通倍率min(450/最大幅,440/最大高)、足元492、quality90/method4。スクリプトファイルは変更していない。
+- assets/monsters/events/fallen_knight/: smirk/surprise/tears、512×512透過WebP、既存prepare_event_expressions.py、quality88/method6。微笑と驚きは背景抽出でもRGBだったため、単色背景版を既存の端連結背景除去で透過化。暗い背景で輪郭を確認。
+- 画像の寸法・容量・アルファ、顔の上部正方形への収まりを確認。コード・数値変更がないためsimは未実行。
+
+## 採用原画
+Codex generated_images/01a093ec-55de-7a81-8575-c48ac9263f10/ 内:
+portrait: exec-b4f58060-8664-41d0-8b67-faefce091ef6.png
+motion: exec-864cad68-d20f-46cf-a8df-7058f1133806.png
+smirk: exec-bc5c7ae5-6aa0-440d-9f28-19967b4c2d54.png
+surprise: exec-c57613c2-4aa8-4022-b63b-951e4ce64f29.png
+tears: exec-f40d7da2-b480-4fc8-b9a2-e0363ddefb07.png
+
+## プロンプト
+### fkPortraitPrompt
+Use case: stylized-concept. One original adult human male fallen knight resume photograph illustration, portrait 3:4 intended 768x1024. Use attached necromancer ONLY as reference for thick uneven ink, restrained matte printed 1990s Japanese fantasy bestiary style, flat pale blue-grey opaque studio background and formal bust framing. DIFFERENT character: handsome pale human man around 30, long silver-white hair swept to one side, both naturally OPEN grey eyes clearly visible, looking away slightly to viewer's right rather than meeting camera, cool quiet unreadable expression, no smugness, no squinting, no glasses. Slight asymmetric nose, one old healed diagonal cheek scar, a few untidy flyaways. Face/head entirely above 52% canvas, chin around 44%. Black and dull silver practical light armor, ONE faded dark-red sash across torso. Frayed dark cloak with a deliberately cut-out small shield-shaped hole where the royal crest used to be, loose stitches around the hole, NO actual royal crest. One sword only, wrapped-cloth scabbard partly visible low in frame. No helmet, skull brooch, fantasy jewels, glowing eyes, airbrushed beauty, glossy metal, cinematic lighting, generic glamorous AI anime prince or symmetrical perfect costume. Handsome from firm features and still posture, weathered belongings and awkward passport-photo averted gaze. Bold economical uneven outlines, simplified soft hand-drawn shapes, muted grey/black/ivory/burgundy, modest print grain. No words, watermark, scenery or effects.
+
+### fkMotionPrompt
+Use case: stylized-concept. Production battle sprite sheet, exactly 1536x1024, equal 3x2 cells. SIX poses of exact same adult male fallen knight in reference: pale handsome quiet human, long silver-white hair swept to one side, open grey eyes NOT squinting, healed cheek scar, black and tarnished silver light armor, single burgundy diagonal sash, frayed black cloak with cut-out shield-shaped former royal crest hole and loose stitches. ONE sword with simple crossguard and a cloth-wrapped scabbard at left hip. Same identity, equipment and physical SCALE in all six. All full body facing RIGHT in side-three-quarter view, practical slim knight proportions, large enough face to read at small sizes. Row1 idle: hand resting on sheathed sword, calm upright stance. Row1 attack-windup: low stance, right hand grips hilt, left hand holds scabbard ready to draw. Row1 strike: one clean horizontal iaido draw-cut toward right, sword fully drawn in right hand, left hand holds EMPTY scabbard, clear straight line of blade, NO extra swords or magical slash effects. Row2 recover: brings the one sword back toward scabbard, rises. Row2 hurt: recoils with free hand to shoulder, sword low, open eyes. Row2 fallen: intact body on side, head toward right, sword beside right hand and empty scabbard still belted. Keep entire sword, boots, hair and cape in EACH cell; ample transparent gutters, no crossing boundaries, center each figure in safe 420x440 area. Thick slightly uneven dark ink, simple restrained matte cel colors, 1990s Japanese monster manual print texture, NOT polished gacha or glossy concept art. Real transparent RGBA background, alpha zero outside figures. No backdrop, checkerboard, ground, cast shadows, speed lines, text, grid, magic, blood or gore.
+
+### fkSmirkPrompt
+Use case: identity-preserve. Create ONE 1024x1024 transparent PNG event expression sprite of the EXACT human fallen knight in reference. Full body, centered, boots and hair and cloak fully visible with clear margins. Same pale adult handsome face, cheek scar, long silver-white side-swept hair, black/silver practical light armor, ONE burgundy sash, frayed cloak and cut-out crest patch, one sheathed sword with cloth-wrapped scabbard. Face three-quarter right, grey eyes naturally OPEN, no squinting. Expression SMIRK: extremely small restrained asymmetric lift of only one corner of mouth, calm eyes, quiet warmth, not smug or seductive. One hand lightly on sheathed sword, other relaxed. Use economical thick uneven dark ink and matte muted flat cel colors, simple 1990s Japanese RPG monster-manual drawing, same identity but readable compact full-body event illustration like a game sprite. Actual transparent alpha background, not a painted checkerboard. No scenery, ground, shadows, text, labels, effects, other figures, extra weapons, glossy metal or glamorous beauty portrait.
+
+### fkSurprisePrompt
+Use case: identity-preserve. Make ONE square full-body transparent event sprite of EXACT SAME fallen knight as reference. Preserve face, silver-white long side-swept hair, healed cheek scar, pale skin, black and silver light armor, ONE muted red sash, torn black cloak with shield-shaped missing crest, one cloth-wrapped SHEATHED sword, whole boots and hair visible. Change expression and body gesture to SURPRISE: naturally wide OPEN eyes with raised eyebrows, lips parted a little, head slightly pulled back, one hand half-raised at chest, other hand away from sword. Human believable unexpected surprise, no comic symbols or giant mouth. Maintain quiet reserved personality. Same thick uneven ink and matte limited grey/ivory/black/burgundy print-textured 1990s Japanese monster manual style. Match reference framing and physical scale. Actual RGBA transparent background, no painted checkerboard, background, ground, shadow, text or effects. All silhouette stays inside square with clear margins.
+
+### fkTearsPrompt
+Use case: identity-preserve. ONE square full-body event sprite, EXACT same adult human fallen knight as reference, same framing and scale, pale face, old cheek scar, long silver-white side-swept hair, black/silver armor, one burgundy sash, frayed cloak with cut-out crest and one sheathed cloth-wrapped sword. Expression TEARS: open grey eyes, raised inner brows, mouth pressed softly shut, two plainly visible slender tears running down cheeks, restrained quiet grief, not yelling or squinting. One gloved hand touching upper chest, other hanging relaxed; slight bowed shoulders. Whole boots, cloak, and hair inside canvas with margins. Preserve the cool reserved personality even while crying. Thick uneven dark ink, muted matte simple cel colors, 1990s Japanese RPG monster manual, modest print texture. Real RGBA transparent background with alpha zero; no checkerboard drawn, ground, shadows, background, symbols, text, effects or additional weapons.
+
+追加背景指示: Remove the background. Output transparent PNG with real alpha channel. Keep this exact full body knight and his expression unchanged.
+驚きの単色化: Replace ONLY the checkerboard background with completely plain pure white #ffffff. No checkerboard, texture, shadow or grey background. Full body same framing.
