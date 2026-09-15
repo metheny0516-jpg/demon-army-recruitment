@@ -60,6 +60,10 @@
 }
 .projectile-fire::before { background-image: url('../assets/battle/effects/projectile-fire.webp'); width: 44px; height: 44px; left: -22px; top: -22px; }
 .projectile-wind::before { background-image: url('../assets/battle/effects/projectile-wind.webp'); width: 52px; height: 52px; left: -26px; top: -26px; }
+/* 大技の弾（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §3）：CodeX の大きい絵に差し替え、3倍相当。
+   styles.css の .big（CSS の玉と尾）は絵が無いときの代用なので、こちらが後に読まれて勝つ。 */
+.battle-projectile.big.projectile-fire::before { background-image: url('../assets/battle/effects/projectile-fire-big.webp'); width: 132px; height: 132px; left: -66px; top: -66px; box-shadow: none; }
+.battle-projectile.big.projectile-wind::before { background-image: url('../assets/battle/effects/projectile-wind-big.webp'); width: 156px; height: 156px; left: -78px; top: -78px; box-shadow: none; }
 .game-scene-battle .scene.battlefield {
   display: block;
   min-height: 560px;

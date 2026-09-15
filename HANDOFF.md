@@ -31,12 +31,22 @@
 - `claude/incidents-opus-2026-09-14`（Opus 版の噂の札 8 コミット）は 9/14 の二重投資で、本線には CodeX 版が入っている。ガードの1コミット（b3fd42f）だけ本線へ写してある。**残りは不採用＝削除候補。**
 
 **残タスク（順番どおり。上から）**
-1. **Opus**：段階A ＝ 地図の上の戦争（`docs/SPEC_TERRITORY_A_2026-09-15.md` §2、貼り付けは §4）。run.js・ui.js・map.js・index.html・sim・テスト。エンジン（`src/core/territory.js`・test 24件）は済み。
-2. **Opus**：段階B/D ＝ 敵将13人（`docs/SPEC_CAPTAINS_BD_2026-09-15.md` §2、貼り付けは §5）。段階A の後。エンジン・台詞117本・写真13枚は本線に入っていて、配線だけで画面に出る。
-3. **CodeX**：大技の絵8枚＋dokan 音3本（`docs/SPEC_BIG_SKILL_FX_2026-09-15.md` §5、枝 `codex/big-skill-fx`）。素材だけ。配線は取り込み時に Claude。
+1. 済（Opus 4fa14f8、Claude 検証済み）：段階A ＝ 地図の上の戦争。
+2. **進行中（Opus）**：段階B/D ＝ 敵将13人（`docs/SPEC_CAPTAINS_BD_2026-09-15.md` §2）。エンジン・台詞117本・写真13枚は本線に入っていて、配線だけで画面に出る。
+3. 済（CodeX、Claude 取り込み・弾の配線済み）：大技の絵8枚＋dokan 音3本。CodeX に今すぐ貼れるものは無い（次はスライムの大筋か、監査の「墓場」文書の整理）。
    - 済（CodeX 36baa6c、Claude 取り込み済み）：地図の印20枚 `assets/map/pins/`（64×64 可逆 WebP・ID は `territories.js` と一致・review.png で明暗確認）。**表示への接続は段階A（上の 1）で Opus が `Territory` の kind / tribe から `kind-<kind>.webp` / `tribe-<id>.webp` を引く。** 背景と座標は段階E。
 4. **Opus（軽い）**：`st.turn` の加算位置を経路で揃える（下の 9/14 メモ）。揃えたら差し押さえ音の ±1 の幅を外す。
 5. **Claude**：上がったものの取り込み・検証（node → 該当ブラウザテスト → 大きい変更なら sim 20 を1回、見るのは「0% の戦略」と「平均戦闘数の急減」だけ）。
+
+**取り込み・検証（2026-09-15 深夜・Claude）**
+- 済（Opus）：**段階A 地図の上の戦争**（ca6bb89〜4fa14f8、`SPEC_TERRITORY_A` §2 + 印の配置）。Claude 検証：node 92本、run-all 全通過、sim 20 は全戦略が完走。
+  **sim のクリア率は 45〜100% に下がった**（段階A 前は 90〜100%。土地の守備段階が征服度ではなく garrison から引かれ、進軍の型が2戦制に戻ったため。精鋭3体 45%、訓練1回 45%、スライム統一 70%）。
+  規則どおり「0% の戦略なし・戦闘数の急減なし」なので**調整はしない**。試遊の「ひやひや」の材料として見る。
+- 済（CodeX `codex/big-skill-fx`）：**大技の絵8枚＋dokan 音3本**を取り込み。512×512 可逆 WebP、爆発音は CC0（rubberduck、来歴は `assets/sfx/LICENSES.md`）。
+  Opus の配線は `big-<fx>.webp` と `dokan-a/b/c.wav` を既に参照していたので着弾と音はそのまま出る。**弾の大きい絵だけ Claude が `battlefield.css` に2行**（`.big.projectile-fire/wind::before` を新しい webp・3倍に）。skill-fx / ranged / battlefield / effects 通過、実画像で確認。
+  **これで大技の迫力は絵・音・配線とも完了。** 原画 `assets/battle/effects/big-skill-sources/`（14MB）は CodeX の方針どおり保持。
+- 進行中（Opus）：**段階B/D 敵将13人**（`SPEC_CAPTAINS_BD` §2。オーナーが 09-15 深夜に貼り付け済み）。上がったら取り込みと検証（test-captains、run-all、sim 20 を1回）。
+- 次に Opus へ：`st.turn` の加算位置合わせ（軽い）。その後はオーナー判断（下の2件）。
 
 **オーナー判断待ち（2026-09-15 夜に足した2件。朝に一言ほしい）**
 - **死んでいる要素の監査** `docs/AUDIT_DEAD_ELEMENTS_2026-09-15.md`：`node tools/audit-elements.js 30` で実測。戦意は上限到達 0%（+40% 未満が 99%）、OVERKILL の蹂躙以上 0%、同時シナジー2つ 0%、《魔王軍完成》発動 0、傭兵・宴・指名求人は毎回使っても結果が変わらない。
