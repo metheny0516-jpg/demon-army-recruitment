@@ -27,7 +27,8 @@
 **規則**：仕様書に触るファイルを書く。run.js と battle.js は同じコミットに入れない。run.js を触るチケットは一人だけ（両方に貼ると二重投資になる。2026-09-14 に一度起きた）。貼り付け文には宛名（Opus 用／CodeX 用）。sim・run-all・ブラウザテストは直列。
 
 **いま動いているもの（上がったら取り込みと検証）**
-- Opus：成長の偏り＋読み上げ＋技の吹き出し（`docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md`、`docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md`）。堕騎士のデータ（`docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md`）。
+- Opus：成長の偏り＋読み上げ＋技の吹き出し（`docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md`、`docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md`）。**未着手**（run.js / battle_scene.js に `skill_call` の処理なし・2026-09-15 昼確認）。
+- 済（Opus、2026-09-15）：堕騎士のデータ（`docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md`）＝ 556e972 (a) 種族・癖・技 ／ 00197cb (b) 札「王国からの使者」と名簿の忠義の一行 ／ 815407f (c) テスト2件。本線に取り込み済み。Opus の判断3点：面接の一言は `quotes` に5本（RECRUIT_BRIEFS は追加せず）／「元同僚」は `necro_visitor` と同じ口で実際に討伐隊として来る（防衛戦中は1決着待つ）／`rollApplicant` にデータ側 `rarity` を掛ける1行を追加（種族追加で run.js を触らない口）。
 - 済（2026-09-15・Claude）：CodeX の堕騎士の絵（`codex/fallen-knight-art` 4d41e94）を取り込み、`BATTLE_SPRITES`・`PORTRAITS`（表情 surprise/smirk/tears）に登録、`art-coverage.js` は 210（35種×6）。node 88本 全通過（2026-09-15 昼に再確認）。
 - エンジン側は済み：食べる（`cmd:"eat"`）、行動の記録（`contribution[].actions`）、技の台詞は手番で（`skill_call`、`order_exec` は quiet）、火の粉（`sparked`）、忠義（癖 `fealty`・condition `loyalty60`）、吸血（kind `vampiric`）、目覚めの声（`cleanse_all`）、将軍技（`might`）。
 
