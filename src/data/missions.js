@@ -15,7 +15,7 @@ const MISSION_TYPES = [
     armies: ["辺境の自警団", "王国商隊の護衛", "村おこし勇者団"],
     regions: ["辺境の村", "人間界の街道", "国境市場"],
     enemyTierOffset: -1,
-    enemyMult: 0.85,
+    enemyMult: 1.0,     // 2026-09-15 オーナー「通常戦はひやひやがない」→ 0.85 から引き上げ
     rewardMult: 0.75,
     payrollCoverage: 1,
     rewardJitter: [1, 3],
@@ -41,7 +41,7 @@ const MISSION_TYPES = [
     regions: ["魔界の旧砦", "地下食堂跡", "勝手に建てられた新魔王城"],
     enemyNames: ["自称将軍ザガン", "反乱兵バズ", "反乱兵ガロ", "扇動者モルド"],   // 先頭が首謀者（REBEL_LOOKS.leaders の姿）
     enemyTierOffset: 0,
-    enemyMult: 0.90,
+    enemyMult: 1.05,    // 2026-09-15 同上。0.90 から
     rewardMult: 0.55,
     payrollCoverage: 0.5,
     rewardJitter: [0, 1],
@@ -68,7 +68,7 @@ const MISSION_TYPES = [
       "偵察に出た一隊を先に潰す。得るものは少ないが、次に何が来るかが分かる。"
     ],
     enemyTierOffset: 0,
-    enemyMult: 1,
+    enemyMult: 1.15,    // 2026-09-15 同上。1 から。防衛戦（勇者）は据え置き
     rewardMult: 1,
     payrollCoverage: 0,
     rewardJitter: [0, 0],
