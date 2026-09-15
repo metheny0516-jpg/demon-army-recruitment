@@ -33,7 +33,8 @@
 **残タスク（順番どおり。上から）**
 1. **Opus**：段階A ＝ 地図の上の戦争（`docs/SPEC_TERRITORY_A_2026-09-15.md` §2、貼り付けは §4）。run.js・ui.js・map.js・index.html・sim・テスト。エンジン（`src/core/territory.js`・test 24件）は済み。
 2. **Opus**：段階B/D ＝ 敵将13人（`docs/SPEC_CAPTAINS_BD_2026-09-15.md` §2、貼り付けは §5）。段階A の後。エンジン・台詞117本・写真13枚は本線に入っていて、配線だけで画面に出る。
-3. **CodeX**：地図の印20枚（`SPEC_TERRITORY_A` §5）／ 大技の絵8枚＋dokan 音3本（`docs/SPEC_BIG_SKILL_FX_2026-09-15.md` §5、枝 `codex/big-skill-fx`）。どちらも素材だけ。配線は取り込み時に Claude。
+3. **CodeX**：大技の絵8枚＋dokan 音3本（`docs/SPEC_BIG_SKILL_FX_2026-09-15.md` §5、枝 `codex/big-skill-fx`）。素材だけ。配線は取り込み時に Claude。
+   - 済（CodeX 36baa6c、Claude 取り込み済み）：地図の印20枚 `assets/map/pins/`（64×64 可逆 WebP・ID は `territories.js` と一致・review.png で明暗確認）。**表示への接続は段階A（上の 1）で Opus が `Territory` の kind / tribe から `kind-<kind>.webp` / `tribe-<id>.webp` を引く。** 背景と座標は段階E。
 4. **Opus（軽い）**：`st.turn` の加算位置を経路で揃える（下の 9/14 メモ）。揃えたら差し押さえ音の ±1 の幅を外す。
 5. **Claude**：上がったものの取り込み・検証（node → 該当ブラウザテスト → 大きい変更なら sim 20 を1回、見るのは「0% の戦略」と「平均戦闘数の急減」だけ）。
 
