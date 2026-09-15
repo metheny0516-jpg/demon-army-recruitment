@@ -68,3 +68,22 @@
 ## 7. 追記（2026-09-14 オーナー）：入口と背景
 - 地図の施設をタップしたら**この詳細画面**を開く（今は「建てる」を直接呼んでいる。1節どおりに変える）。
 - 詳細画面の**背景をその施設らしく**する：施設ごとに背景1枚（`assets/map/facility/bg-<id>.webp`、390×300 程度、暗めで文字が乗る）。市場なら屋台の中、鍛冶場なら炉の前、墓地なら夜の柵。絵は CodeX（8枚、第二幕の敵の絵のあとで）。無い間は既存の紙の質感のまま。
+
+## 8. 着手（2026-09-15 オーナー「ビジュアル面を強化したい」）
+
+順番：**CodeX の背景8枚とモルモの一言32本を先に** → 本線へ → Opus の §5（run.js を触るので Opus 一人。決めポーズの配線・大技の迫力と battle_scene.js は重ならないが、順番は一つずつ）。
+
+### 8-1. CodeX の仕事（src/ は `src/data/mormo_lines.js` だけ）
+- 背景8枚 `assets/map/facility/bg-<id>.webp`（id：market / tavern / smithy / lab / hostel / factory / grand_kitchen / graveyard）。**780×600（390×300 の2倍）**、暗めで上に白い文字が乗る（明度は画面の下半分ほど暗く）。中に入った視点：市場＝屋台の中から通りを見る、酒場＝カウンター越し、鍛冶場＝炉の前、研究所＝薬品と巻物の机、宿舎＝二段ベッドの並ぶ部屋、工場＝歯車と両替台、巨大厨房＝大鍋と湯気、墓地＝夜の柵と月。既存の紙の質感・荒い線・抑えた色。人物は描かない（モルモと施設の絵が上に乗る）。
+- モルモの一言32本：`src/data/mormo_lines.js` に `MORMO_FACILITY = { market: ["Lv0の一言","Lv1","Lv2","Lv3"], ... }` の形で追加。Lv0 は「ここに○○を建てると……デス」と効果の紹介、Lv3 は褒める。語尾は既存のモルモ（「〜デス」）に合わせる。1本 30 字以内、中高生に伝わる言い方。既存の行は触らない。
+- ブランチ `codex/facility-detail-art`。
+
+### 8-2. 貼り付け用（CodeX 用）
+```
+Astra へ。docs/SPEC_FACILITY_DETAIL_2026-09-13.md の §8-1 をお願いします。(1) 施設の詳細画面の背景8枚 assets/map/facility/bg-<id>.webp（market / tavern / smithy / lab / hostel / factory / grand_kitchen / graveyard）、780×600、暗めで白文字が乗る、中に入った視点、人物なし、既存の紙の質感。(2) モルモの一言32本を src/data/mormo_lines.js に MORMO_FACILITY = { market: [Lv0, Lv1, Lv2, Lv3], ... } の形で追加（Lv0 は建てると何が起きるかの紹介、Lv3 は褒める、語尾「〜デス」、30字以内、既存行は触らない）。ブランチ codex/facility-detail-art、作業ブランチ claude/hero-arrival-tavern-prototype-uy2toh から切って push。src/ は mormo_lines.js 以外触らない。
+```
+
+### 8-3. 貼り付け用（Opus 用。背景が本線に入ってから）
+```
+Opus へ。まず git pull（作業ブランチ claude/hero-arrival-tavern-prototype-uy2toh）。docs/SPEC_FACILITY_DETAIL_2026-09-13.md の §1〜§5・§7 を実装して。地図の区画タップと城下町一覧の施設名タップで詳細画面 TownUI.detail(id) を開く（建てる／増築はその中）。背景は assets/map/facility/bg-<id>.webp（無ければ既存の紙のまま）、モルモの一言は MORMO_FACILITY[id][lv]。「生んだもの」は §2 の数字1本、st.town.stats に記録。触るのは town_ui.js・map.js・main.js・town.js・run.js（加算呼び出し5行程度）・styles.css・test-town.js（+4）・browser-tests/town.js（+2）。battle.js は触らない。run.js と battle.js を同じコミットに入れない。node 全件とブラウザテストを直列で回して緑を確認してから push。
+```

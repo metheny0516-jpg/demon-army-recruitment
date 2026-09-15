@@ -37,6 +37,7 @@
 **いま動いているもの（上がったら取り込みと検証）**
 - 済（Opus、2026-09-15 午後）：成長の偏り＋読み上げ＋技の吹き出し（`docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md`、`docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md`）＝ 48d69d4 (a) run.js の成長 ／ 6c0939c (b) 読み上げ ／ fc9f240 (c) 吹き出しと order_exec の quiet 化 ／ c1643a1 (d) テスト ／ 047aba4・ecbf776 (a の続き：手番の記録が空でも与ダメージから読む保険) ／ 22ec39f skills-window の一コマ。Claude 側は 95142b6 で撤退の提案にも actions を渡した。取り込み後 node 89本・art-coverage / skill-fx / report / skills-window 通過（360f068）。
 - 大技の迫力（`docs/SPEC_BIG_SKILL_FX_2026-09-15.md`）：エンジン済み（b97f875、attack/splash/trait_trigger に `big` と fx）。CodeX＝絵8枚＋dokan 音3本（`codex/big-skill-fx`）、Opus＝battle_scene.js/sound.js の `ev.big` 分岐（止め80ms→フラッシュ→強い揺れ→弾き）。Opus は絵を待たず先に貼ってよい（推奨）。
+- 施設の詳細画面（2026-09-15 オーナー着手決定、`docs/SPEC_FACILITY_DETAIL_2026-09-13.md` §8）：CodeX＝背景8枚 `bg-<id>.webp`＋モルモの一言32本（`codex/facility-detail-art`）→ 本線 → Opus＝§5（town_ui / map / main / town / run.js 5行。run.js を触るので Opus 一人）。地図の区画タップは今「建てる」直行なので、詳細を開くに変える。
 - 済（2026-09-15 午後・Claude）：CodeX の決めポーズ `ready` / 防御 `guard`（`codex/command-pose-art` 760e9d5、18種×2＝36枚＋トロル6枚とサキュバス attack-windup の差し替え）を取り込み、18種の `BATTLE_SPRITES` に登録、`art-coverage` 246 で通過。battlefield / vfx-lifecycle も通過。**次は Opus へ `docs/SPEC_COMMAND_POSE_2026-09-15.md` §2（battle_scene.js の配線）**。ただし Opus の成長読み上げ・大技の迫力と battle_scene.js が重なるので、一つずつ順に。
 - 済（Opus、2026-09-15）：堕騎士のデータ（`docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md`）＝ 556e972 (a) 種族・癖・技 ／ 00197cb (b) 札「王国からの使者」と名簿の忠義の一行 ／ 815407f (c) テスト2件。本線に取り込み済み。Opus の判断3点：面接の一言は `quotes` に5本（RECRUIT_BRIEFS は追加せず）／「元同僚」は `necro_visitor` と同じ口で実際に討伐隊として来る（防衛戦中は1決着待つ）／`rollApplicant` にデータ側 `rarity` を掛ける1行を追加（種族追加で run.js を触らない口）。
 - 済（2026-09-15・Claude）：CodeX の堕騎士の絵（`codex/fallen-knight-art` 4d41e94）を取り込み、`BATTLE_SPRITES`・`PORTRAITS`（表情 surprise/smirk/tears）に登録、`art-coverage.js` は 210（35種×6）。node 88本 全通過（2026-09-15 昼に再確認）。
@@ -46,7 +47,6 @@
 - 噂の札の第3便（自然発生 B を中心に6〜8枚。全部無視で波乱 2.9% → 目安 1〜2割）。`docs/DESIGN_INCIDENTS_2026-09-14.md`。
 - カタログ25本の割り当て `docs/PROPOSAL_CATALOG_ASSIGNMENT_2026-09-13.md`（サキュバスは「気付け」でなく「黒の癒し」に変更済み）。
 - 大筋の波乱の縦切り（先代の英雄＋引き抜きから）`docs/ARC_IDEAS_SCORED_2026-09-14.md`。
-- 施設の詳細画面（`docs/SPEC_FACILITY_DETAIL_2026-09-13.md`、背景8枚は CodeX）。
 - 古い CodeX の枝3本（`codex/act2-art` `codex/f-wip` `codex/two-wins`）の削除。
 
 **今日入ったものの一覧（2026-09-13〜15）**：将軍への転身、全体マップと施設の絵、城下町統合（巨大厨房・墓地）、訓練場、反乱軍の魔物化と首謀者、素材の配線（音・小物・紫炎）、噂の札の器と12枚、火の粉、第二幕の敵5種の絵、マンドラゴラ（回復役）、トロルのタンク化、サキュバス作り直し、名簿に覚えた技を表示。
