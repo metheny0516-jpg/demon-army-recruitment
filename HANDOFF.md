@@ -38,6 +38,11 @@
 4. **Opus（軽い）**：`st.turn` の加算位置を経路で揃える（下の 9/14 メモ）。揃えたら差し押さえ音の ±1 の幅を外す。
 5. **Claude**：上がったものの取り込み・検証（node → 該当ブラウザテスト → 大きい変更なら sim 20 を1回、見るのは「0% の戦略」と「平均戦闘数の急減」だけ）。
 
+**オーナー判断待ち（2026-09-15 夜に足した2件。朝に一言ほしい）**
+- **死んでいる要素の監査** `docs/AUDIT_DEAD_ELEMENTS_2026-09-15.md`：`node tools/audit-elements.js 30` で実測。戦意は上限到達 0%（+40% 未満が 99%）、OVERKILL の蹂躙以上 0%、同時シナジー2つ 0%、《魔王軍完成》発動 0、傭兵・宴・指名求人は毎回使っても結果が変わらない。
+  判断案＝**消す**：戦意・《魔王軍完成》・指名求人・傭兵・宴・号令（＋自動撤退提案）・拠点接収（段階Aの後）。**段を減らす**：OVERKILL を2段に。**残す**：CHAIN・シナジー6本・ツケ・縁故・昇進・合体。OK なら 1要素=1コミットで、run.js 側は Opus、battle.js 側は Claude。
+- **スライムの大筋** `docs/DESIGN_ARC_SLIME_2026-09-15.md`：ChatGPT の指摘「小事件が大決着まで届かない」への答え。池の噂（既存）→ 増殖の元（火の粉×札）→ 沼が動く（区画占有＋部族圏「沼」が従う）→ 完全体（合体の拡張＋即死技＋施設と土地を飲む）→ 飲み込みエンド。既存の口だけで作る。②③は今すぐ、④は段階Aの後。決めてほしいこと3点は文書の5節。
+
 **オーナー判断待ち（急がない。試遊のあとで）**
 - 難易度：通常戦の敵倍率を上げた（c12e35e）あとの試遊で「ひやひや」が出たか。出なければ候補③（段階倍率）→ ①②（勇者隊の厚み・来訪の前倒し）。
 - 噂の札 第3便（自然発生 B 中心に 6〜8 枚。今は自然発生 2.9%）。`docs/DESIGN_INCIDENTS_2026-09-14.md`。
@@ -45,7 +50,7 @@
 - カタログ25本の割り当て `docs/PROPOSAL_CATALOG_ASSIGNMENT_2026-09-13.md`／大筋の波乱の縦切り `docs/ARC_IDEAS_SCORED_2026-09-14.md`／`docs/IDEA_BANK_2026-09-13.md`。
 - 古い枝の削除（GitHub の Branches 画面。オーナーか CodeX）：`codex/act2-art` `codex/f-wip` `codex/two-wins`、`claude/incidents-opus-2026-09-14`、取り込み済みの `claude/*` 旧枝一式（`owner-playtest-tuning-*`、`chain-*`、`game-*`、`design-philosophy-review-*` など 2026-09-09 以前のもの）。
 
-**テストの回し方**：node は `for f in tools/test-*.js; do node $f; done`（91本）。ブラウザは `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright` のあと `CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome NODE_PATH="$(pwd)/node_modules" sh tools/browser-tests/run-all.sh`。
+**テストの回し方**：node は `for f in tools/test-*.js; do node $f; done`（91本）。要素の生死は `node tools/audit-elements.js 30`（使い捨て。戦意・CHAIN・OVERKILL・シナジー・傭兵・宴・指名求人などの発火率）。ブラウザは `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright` のあと `CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome NODE_PATH="$(pwd)/node_modules" sh tools/browser-tests/run-all.sh`。
 
 
 ### 領土の印20枚（2026-09-15・CodeX）
