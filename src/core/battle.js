@@ -894,7 +894,7 @@ const Battle = {
         }
       }
       const post = {
-        attacker: unit, target, dmg, enemies, allies, round, onField, log: note, pick: U.pick, ordered,
+        attacker: unit, target, dmg, enemies, allies, round, onField, log: note, pick: U.pick, chance: U.chance, ordered,
         trigger: traitId => skillTrigger(unit, traitId, applied.event),
         dealRaw: (a, t, d, label, parentEvent) => applyDamage(a, t, d, "splash", { label, parentEvent: parentEvent || applied.event }).dmg,
         extraAction: (parentEvent, label) => act(unit, allies, enemies, round, { parentEvent, label, isExtra: true }),

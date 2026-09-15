@@ -540,19 +540,23 @@ const TRAITS = {
   allure: {
     name: "誘惑",
     relic: "香水瓶",
-    desc: "攻撃した敵の攻撃力を2下げる",
-    order: { label: "本気で誘う", cost: 1, note: "いつもの誘惑を、次の一撃で強く効かせる" },
-    lines: { order: ["あら、ご指名？", "仕方ないわね、本気で", "断れない子は好きよ"] },
+    desc: "たたかうで殴った敵を、15%で魅了する（次の攻撃を同僚へ向ける）。そのぶん腕力は弱い",   // 2026-09-14 オーナー：魅了は通常攻撃の付与効果（低確率）に
+    charmChance: 0.15,
+    order: { label: "本気で誘う", cost: 1, note: "次の一撃の魅了を60%に" },
+    lines: { order: ["あら、ご指名？", "仕方ないわね、本気で", "断れない子は好きよ"], use: ["こっちを見て？", "その人、邪魔じゃない？"] },
     postAttack(ctx) {
-      if (!ctx.target.alive || ctx.target.atk <= 1) return;
-      ctx.target.atk = Math.max(1, ctx.target.atk - (ctx.ordered ? 4 : 2));
+      if (!ctx.target.alive || ctx.target.flags.charmed) return;
+      const chance = ctx.ordered ? 0.6 : (this.charmChance || 0.15);
+      if (!ctx.chance(chance)) return;
+      ctx.target.flags.charmed = true;
+      ctx.log(`　${ctx.target.name}は${ctx.attacker.name}に魅入られた`, "trait");
       ctx.trigger("allure");   // 発動の記録（chain.js の CLASSIFY に役あり。sim の発動集計にも載る）
     }
   },
   // サキュバス上位：惑わされた相手が、隣の味方を殴る。自動は1戦闘1回、号令なら必ず。
   enthrall: {
     name: "魅了",
-    desc: "攻撃した敵が、立っている別の敵1体を本来の7割で殴る（自動は1戦闘1回。号令なら必ず）。上位技は「気付け」",
+    desc: "攻撃した敵が、立っている別の敵1体を本来の7割で殴る（自動は1戦闘1回。号令なら必ず）。上位技は「黒の癒し」",
     skill: { species: "succubus", tier: 2, replaces: "allure" },
     autoLimit: 1,
     order: { label: "魅了せよ", cost: 2, note: "次の一撃で、相手が必ず仲間を殴る" },

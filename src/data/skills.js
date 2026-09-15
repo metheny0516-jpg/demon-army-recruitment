@@ -67,9 +67,9 @@ const SKILLS = {
     lines: { use: ["起きてください。まだ勤務中です", "退職届は受け取っておりません", "呼び戻します。こちらへ手を"], miss: ["呼びかけが届きません……", "手が、すり抜けました……"] }
   },
   succubus_charm: {
-    name: "魅惑", species: "succubus", cost: 2, kind: "charm", target: "enemy", fx: "dark", chance: 0.7,
-    note: "敵1体の次の攻撃を同僚へ向ける（70%）　気合2",
-    lines: { use: ["ねぇ、あなた……こっちを見て", "隣の人、嫌いでしょう？", "私のお願い、聞いてくださる？"], miss: ["あら、目を逸らすのね", "つれない方。聞いてもくださらない"] }
+    name: "吸血", species: "succubus", cost: 2, kind: "vampiric", target: "enemy", fx: "dark", power: 1.0, chance: 0.6,
+    label: "吸え", note: "敵1体を噛んで与ダメの半分だけ回復し、60%で魅了する",   // 2026-09-14 オーナー：吸血＝HP吸収＋高確率の魅了。id は旧セーブ互換
+    lines: { use: ["少しだけ、いただくわ", "動かないで。すぐ終わる", "甘い……もっと"], miss: ["あら、外れた", "つれない方"] }
   },
   troll_rest: {
     name: "壁になる", species: "troll", cost: 1, kind: "cover", target: "ally", fx: "shield", power: 0.8,
@@ -124,13 +124,12 @@ const SKILLS = {
 // kind: "trait" ＝ 気合を払うと、その戦いの次の一撃で trait の条件を飛ばして必ず出す（flags.ordered）。
 // 条件が無い上位技（分裂・骨の壁・腐敗・火遊び・大召集・大波）は勝手に効く癖なので、ここには載せない。
 const UPPER_SKILLS = {
-  // サキュバスの上位技は「魅了」から「気付け」へ差し替え（2026-09-14 オーナー決定。魅了は癖として残る）
-  succubus_cleanse: {
-    name: "気付け", species: "succubus", cost: 2, kind: "cleanse", trait: "enthrall", target: "ally", upper: true, fx: "holy",
-    label: "目を覚ませ", note: "味方1体の足止め・魅了・燃焼を解く",
-    lines: { use: ["正気に戻りなさい", "まだ勤務中よ"], miss: ["声が届かない"] }
+  // サキュバスの上位技は「黒の癒し」（2026-09-14 オーナー：黒魔法的な回復魔法）。癖「魅了」に紐づく
+  succubus_dark_heal: {
+    name: "黒の癒し", species: "succubus", cost: 2, kind: "heal", trait: "enthrall", target: "ally", upper: true, fx: "dark", power: 0.35,
+    label: "黒で癒せ", note: "味方1体をHP35%回復（黒魔法。少し痛い）",
+    lines: { use: ["痛いのは一瞬よ", "黒いけど、効くの", "これで貸し一つね"], miss: ["届かない"] }
   },
-  // マンドラゴラ上位：cleanse の全体版。払ったあと、次の自分の手番は休む（効果は cleanse_all が持つ）。
   mandragora_wake: {
     name: "目覚めの声", species: "mandragora", cost: 2, kind: "cleanse_all", trait: "wake_call", target: "all_allies", upper: true, fx: "holy",
     label: "声を張れ", note: "全員の足止め・魅了・燃焼を払う　次の手番は休む",
@@ -186,7 +185,7 @@ Object.assign(SKILLS, GENERAL_SKILL);
 // 演出プリセット（docs/TICKET_SKILL_FX_2026-09-12.md）。技に fx が無ければ kind から引く。battle.js が技のイベントに載せ、描画側が読む。
 const FX_BY_KIND = {
   strike: "slash", aoe: "dark", heal: "holy", rest: "holy", buff: "aura", debuff: "nature", cover: "shield",
-  stun: "nature", charm: "dark", push: "heavy", revive: "summon", random: "dark", steal: "wind", scatter: "wind", trait: "heavy", might: "dark", cleanse_all: "holy"
+  stun: "nature", charm: "dark", push: "heavy", revive: "summon", random: "dark", steal: "wind", scatter: "wind", trait: "heavy", might: "dark", cleanse_all: "holy", vampiric: "dark"
 };
 
 // 種族 → 3戦目で覚える技。run.js の開放と、面接の札（「3戦で【…】」）が読む。上位技は含めない。

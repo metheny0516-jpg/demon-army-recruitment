@@ -450,7 +450,7 @@ const MONSTER_TEMPLATES_ACT2 = [
     skills: ["succubus_charm"],
     id: "succubus", race: "サキュバス", tier: 4, tags: ["caster"], act: 2,
     jobs: ["交渉役", "接待担当", "秘書（兼・査定担当）", "スカウト", "広報（裏）"],
-    base: { hp: 22, atk: 15, def: 3, spd: 8 },
+    base: { hp: 22, atk: 12, def: 3, spd: 8 },   // 2026-09-14 魅了が通常攻撃に付いたぶん攻撃 15→12
     salary: [8, 10], loyalty: [50, 75],
     fixedTraits: [], traitPool: ["coward", "greedy"],
     prevJobs: ["人間界の高級クラブ（源泉徴収でもめて退店）", "商談要員（相手を丸め込みすぎて契約無効に）", "冒険者ギルドの受付（勧誘しすぎて出禁）",

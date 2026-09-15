@@ -67,6 +67,14 @@ Object.assign(SKILL_EFFECTS, {
     const hp = t.hp, dealt = c.damage(t, 1, c.skill.name);
     if (c.onField(c.unit)) c.heal(c.unit, Math.max(0, Math.floor(Math.min(hp, dealt) * 0.3) - 1e-9) / c.unit.maxHp, c.skill.name);
   } },
+  // 吸血（サキュバスの種族技）：×power の一撃、与ダメの半分を自分に戻し、chance で魅了
+  vampiric: { resolve(c) {
+    const t = c.pickEnemy(); if (!t) return;
+    const sk = c.skill || {};
+    const hp = t.hp, dealt = c.damage(t, sk.power || 1, sk.name);
+    if (c.onField(c.unit)) c.heal(c.unit, Math.max(0, Math.floor(Math.min(hp, dealt) * 0.5)) / c.unit.maxHp, sk.name);
+    if (t.alive && !t.flags.charmed && c.chance(sk.chance || 0.6)) { t.flags.charmed = true; c.note(`　${t.name}は${c.unit.name}に魅入られた`, "trait"); }
+  } },
   pierce: { resolve(c) {
     const t = c.pickEnemy(); if (!t) return;
     const raw = c.unit.atk * (0.9 + c.rand() * 0.2) * (c.unit.mods.dmgMult || 1);

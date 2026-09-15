@@ -383,8 +383,24 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   assert(!!cov, 'トロルの「壁になる」で味方をかばう（cover イベント）');
   const suc = mk('サキュバス', { tplId: 'succubus', race: 'サキュバス', traits: ['enthrall'], spirit: 3 });
   const { prompt: ps } = startWith([suc, mk('前')], foes(2), { manual: true });
-  const cl = ps.allies[0].skills.find(x => x.id === 'succubus_cleanse');
-  assert(cl && cl.kind === 'cleanse' && cl.target === 'ally' && !ps.allies[0].skills.some(x => x.id === 'enthrall'), '癖「魅了」持ちの窓に上位技「気付け」が出て、旧「魅了」の指示は出ない');
+  const cl = ps.allies[0].skills.find(x => x.id === 'succubus_dark_heal');
+  assert(cl && cl.kind === 'heal' && cl.target === 'ally' && !ps.allies[0].skills.some(x => x.id === 'enthrall'), '癖「魅了」持ちの窓に上位技「黒の癒し」が出て、旧「魅了」の指示は出ない');
+  // 吸血：与ダメの半分を回復し、魅了することがある。誘惑：たたかうでも魅了することがある
+  const SPARK2 = require('vm').runInContext('SPARK', ctx); const sw = SPARK2.chance; SPARK2.chance = 0;
+  const vamp = mk('吸血鬼', { tplId: 'succubus', race: 'サキュバス', skills: ['succubus_charm'], spirit: 3, hp: 100, atk: 20 });
+  vamp.hp = 50;
+  const { h: hv } = startWith([vamp], foes(1, { hp: 200, atk: 1, def: 0 }), { manual: true });
+  hv.next({ p0: { cmd: 'skill', skill: 'succubus_charm', target: 'e0' } });
+  const bite = events(hv, 'attack').find(ev => ev.fromId === 'p0' && ev.label === '吸血');
+  const sip = events(hv, 'heal').find(ev => ev.unitId === 'p0');
+  assert(bite && sip && sip.amount === Math.floor(bite.dmg * 0.5), `吸血で与ダメの半分だけ回復（${bite && bite.dmg} → +${sip && sip.amount}）`);
+  const al = mk('誘惑', { tplId: 'succubus', race: 'サキュバス', traits: ['allure'], spirit: 3 });
+  const uch = U.chance; U.chance = () => true;
+  const { h: ha } = startWith([al], foes(2, { atk: 1 }), { manual: true });
+  ha.next({ p0: { cmd: 'attack', target: 'e0' } });
+  U.chance = uch;
+  assert(events(ha, 'note').some(ev => /魅入られた/.test(ev.text || '')), 'たたかうでも誘惑で魅了することがある');
+  SPARK2.chance = sw;
   const ks = mk('王', { tplId: 'king_slime', race: 'キングスライム', traits: ['tidal_wave'], spirit: 3 });
   const { prompt: pk } = startWith([ks, mk('前2')], foes(2), { manual: true });
   assert(pk.allies[0].skills.some(x => x.id === 'king_slime_wrap' && x.kind === 'heal'), 'キングスライム（大波持ち）の窓に「包む」が出る');

@@ -195,6 +195,13 @@ const UI = {
       : (key === "species" ? rules.speciesUnlockBattles : rules.unlockBattles);
     const species = typeof Game !== "undefined" && Game.speciesSkillFor ? Game.speciesSkillFor(m) : null;
     const lines = [];
+    // 覚えている技（種族技は m.skills、上位技は癖に紐づく）。覚えた後に何も出ないのは不親切（2026-09-14 オーナー指摘）
+    if (typeof SKILLS !== "undefined") {
+      const learned = [];
+      for (const id of (m.skills || [])) if (SKILLS[id] && !SKILLS[id].upper) learned.push(SKILLS[id]);
+      for (const sk of Object.values(SKILLS)) if (sk.trait && (m.traits || []).includes(sk.trait) && !learned.includes(sk)) learned.push(sk);
+      for (const sk of learned) lines.push(`<div class="skill-hint learned">${sk.upper ? "🗡" : "✨"} 技【${U.esc(sk.name)}】${sk.cost ? `（気合${sk.cost}）` : ""}${sk.note ? `：${U.esc(sk.note)}` : ""}</div>`);
+    }
     if (species) lines.push(`<div class="skill-hint">✨ ${need("species")}戦で技【${U.esc(species.name)}】</div>`);
     if (skill) lines.push(`<div class="skill-hint">🗡 ${need("order")}戦で【${U.esc(skill.name)}】</div>`);
     // 遅咲き（裏方の職）。何が起きるかは言わない。「隠している」ことだけ伝える。
