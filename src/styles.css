@@ -3624,6 +3624,30 @@ button.primary::first-letter { color: var(--gold); }
 .projectile-wind::before { width: 26px; height: 3px; top: -1px; left: -26px; border-radius: 2px;
   background: linear-gradient(90deg, transparent, #dff4ff); box-shadow: 0 4px 0 -1px #dff4ff80, 0 -4px 0 -1px #dff4ff80; }
 
+/* ── 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md §2-4）──
+   土地の種類の印と部族圏の顔（CodeX の20枚）。候補は光らせる。
+   正しい配置は段階E。今は既存の地点の上と、城下町の下の横一列に置く。 */
+.map-point .mp-kind { position: absolute; left: 50%; top: -6px; width: 26px; height: 26px;
+  transform: translateX(-50%); pointer-events: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+.map-point.mp-candidate { z-index: 3; }
+.map-point.mp-candidate .mp-pin, .tribe-pin.mp-candidate { animation: territoryGlow 1.6s ease-in-out infinite; }
+@keyframes territoryGlow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 214, 120, .6)); }
+  50% { filter: drop-shadow(0 0 10px rgba(255, 214, 120, 1)); }
+}
+.tribe-row { position: absolute; left: 2%; right: 2%; bottom: 1.5%; display: flex; flex-wrap: wrap;
+  gap: 4px; justify-content: center; }
+.tribe-pin { display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 2px 4px; border: 1px solid rgba(255,255,255,.28); border-radius: 6px;
+  background: rgba(14, 12, 20, .72); color: #e8e4f0; font-size: 10px; line-height: 1.1; }
+.tribe-pin .tribe-face { width: 26px; height: 26px; }
+.tribe-pin.owned { border-color: var(--gold, #e8bd68); color: #ffe6a8; }
+.tribe-pin[disabled] { opacity: .55; }
+@media (prefers-reduced-motion: reduce) {
+  .map-point.mp-candidate .mp-pin, .tribe-pin.mp-candidate { animation: none;
+    filter: drop-shadow(0 0 6px rgba(255, 214, 120, .95)); }
+}
+
 /* ── 施設の詳細（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §1・§7）──
    390px の1画面に収める。スクロールするのは下の「生んだもの」だけ。
    背景はその施設らしい1枚。無ければ既存の紙のまま（読み込めなければ地の色が出る）。 */

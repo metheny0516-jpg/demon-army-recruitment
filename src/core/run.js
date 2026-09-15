@@ -1422,10 +1422,15 @@ const Game = {
     return true;
   },
   // 今の征服度で前哨を制しているか（HUD と作戦カードが読む）。
-  outpostCleared() {
+  // 前哨を制しているか。土地の札（段階A）では「どの土地の前哨か」まで見る
+  // （ある土地を偵察して、別の土地の本戦へ持ち込めてしまわないように）。
+  outpostCleared(placeId) {
     const st = this.state;
     const o = st && st.outpost;
-    return !!(o && o.cleared && o.stage === st.conquest);
+    if (!o || !o.cleared) return false;
+    if (placeId) return o.place === placeId;
+    // 引数なしは「どこかの前哨を制しているか」（HUD の ▸前哨済 がこれを読む）。
+    return o.place ? true : o.stage === st.conquest;
   },
   // 前哨戦の敵：本戦の隊列の前半（役つきを1体は残す）。
   outpostUnits(units) {
@@ -1499,7 +1504,7 @@ const Game = {
       ...(base.variants || [])
     ];
     // 前哨で見た隊列が本戦の隊列（読みに意味を持たせる）。控えは st.outpost.formationId。
-    const heldId = type.id === "invade" && this.outpostCleared() ? (st.outpost || {}).formationId : null;
+    const heldId = type.id === "invade" && this.outpostCleared(place ? place.id : null) ? (st.outpost || {}).formationId : null;
     const formation = formations.find(f => f.id === (heldId || previousFormationId)) || U.pick(formations);
     // 大軍は選抜の自由度が高いぶん敵にも察知される。隠し補正にせず
     // mission.armyPressure として作戦カードへ渡し、解雇・維持の判断材料にする。
@@ -1522,9 +1527,11 @@ const Game = {
     const training = type.id === "train";
     const opponent = training ? this.trainingOpponent(this.state.trainingOpponentId) : null;
     // 進軍だけが2戦制。前哨戦は敵が半分・報酬も半分・征服度は進まない。
-    const isOutpost = !place && type.id === "invade" && !counter
-      && this.outpostNeeded(baseIndex) && !this.outpostCleared();
-    const twoStage = !place && type.id === "invade" && !counter && this.outpostNeeded(baseIndex);
+    // 土地を落とす札（進軍の型）は今までどおり2戦制。守りの薄い土地（段階1）と
+    // 幕の最終段階には前哨が付かない。略奪・従える・巡回は1戦のまま。
+    const isOutpost = type.id === "invade" && !counter
+      && this.outpostNeeded(baseIndex) && !this.outpostCleared(place ? place.id : null);
+    const twoStage = type.id === "invade" && !counter && this.outpostNeeded(baseIndex);
     const jitter = U.randInt(type.rewardJitter[0], type.rewardJitter[1]);
     // 略奪は「給与を払ったうえで少し蓄えられる」資金調達策にする。
     // 固定額だけでは大所帯ほど赤字になり、寄り道する意味が逆転してしまう。
@@ -3687,7 +3694,7 @@ const Game = {
     if (!mission || mission.missionKind !== "invade") return null;
     if (mission.missionPhase === "outpost") {
       if (!won) return null;                       // 前哨に負けた：もう一度前哨から
-      st.outpost = { stage: st.conquest, cleared: true, formationId: mission.formationId };
+      st.outpost = { stage: st.conquest, place: mission.territoryId || null, cleared: true, formationId: mission.formationId };
       if (notes) notes.push(`${mission.region}の前哨を制した。次は本戦`);
       return "outpost-cleared";
     }

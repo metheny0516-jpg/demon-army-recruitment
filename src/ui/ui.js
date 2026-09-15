@@ -1558,6 +1558,7 @@ const UI = {
           : `<span class="mission-phase main">本戦</span>`)
         : "";
       const consequence = m.missionKind === "patrol" ? "攻略は進まない。王国にも気づかれない"
+        : m.missionPhase === "outpost" ? "王国攻略は進まない（勝てば本戦へ）"
         : m.territoryMode === "take" ? "勝てば領土になる（王国攻略はここから決まる）"
         : m.missionKind === "invade"
         ? (m.missionPhase === "outpost"

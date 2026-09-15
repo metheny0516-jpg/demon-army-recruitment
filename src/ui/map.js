@@ -94,6 +94,7 @@ const MapUI = {
         : clickable || isCandidate ? `data-action="mission"` : "disabled"}
       aria-label="${U.esc(label)}">
       <img class="mp-pin" src="${this.DIR}${pin}.webp" alt="">
+      ${this.kindPin(st, lands, state)}
       ${ransacked ? `<img class="mp-smoke" src="${this.DIR}props/smoke.webp" alt="" aria-hidden="true">` : ""}
       ${point.act === 1 && point.stage === 8 && state !== "fogged" ? `<img class="mp-star" src="${this.DIR}props/star.webp" alt="" aria-hidden="true">` : ""}
       <span class="mp-name">${U.esc(label)}${note}</span>
@@ -129,6 +130,21 @@ const MapUI = {
     </button>`;
   },
 
+  // 土地の種類の印（CodeX の20枚。assets/map/pins/kind-<kind>.webp）。
+  // 1地点に土地が2つ乗る仮の割り当てなので、まだ取れる方（候補）を優先して出す。
+  // 霧の地点には出さない（何があるか見せない）。絵が無ければ静かに消える。
+  kindPin(st, landIds, state) {
+    if (state === "fogged" || typeof Territory === "undefined" || !landIds.length) return "";
+    const candidates = this.candidateIds(st);
+    const pick = landIds.find(id => candidates.has(id)) || landIds.find(id => !Territory.has(st, id)) || landIds[0];
+    const land = Territory.byId(pick);
+    if (!land || !land.kind) return "";
+    const kind = Territory.kinds()[land.kind];
+    return `<img class="mp-kind" src="${this.DIR}pins/kind-${U.esc(land.kind)}.webp" alt=""
+      title="${U.esc(`${land.name}（${kind ? kind.name : land.kind}）`)}"
+      onerror="this.remove()">`;
+  },
+
   // 魔界の部族圏10。正しい配置は段階E なので、今は城下町の下に横一列で仮置きする。
   tribesHtml(st) {
     if (typeof Territory === "undefined") return "";
@@ -142,7 +158,9 @@ const MapUI = {
       return `<button type="button" class="tribe-pin${owned ? " owned" : ""}${cand ? " mp-candidate" : ""}"
         data-tribe="${U.esc(t.id)}"
         ${index >= 0 ? `data-action="missionpick" data-index="${index}"` : cand ? `data-action="mission"` : "disabled"}
-        aria-label="${U.esc(t.name)}">${U.esc(t.name)}</button>`;
+        aria-label="${U.esc(t.name)}">
+        <img class="tribe-face" src="${this.DIR}pins/tribe-${U.esc(t.id)}.webp" alt="" onerror="this.remove()">
+        <span>${U.esc(t.name)}</span></button>`;
     }).join("");
     return `<div class="tribe-row" aria-label="魔界の部族圏">${row}</div>`;
   },

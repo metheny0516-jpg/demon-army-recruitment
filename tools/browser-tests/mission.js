@@ -24,13 +24,15 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   ok(await page.locator('.mission-formation').count() === 4, '各作戦に敵編成名と特徴が事前表示される');
   ok(await page.locator('.mission-purpose').count() === 4, '各作戦の戦略目的が表示される');
   const missionText = await page.locator('.mission-grid').innerText();
-  ok(missionText.includes('資金・食料を補給') && missionText.includes('忠誠回復・建材確保')
-    && missionText.includes('決戦へ進む'), '補給・再建・決戦進行の役割が区別される');
+  // 地図の上の戦争（2026-09-15）：3択は隣接する候補3つ。役割は場所で決まる。
+  ok(/領土を広げる|仲間を増やす/.test(missionText) && missionText.includes('落とさずに略奪する'),
+    '落とす／従える／略奪の役割が区別される');
   ok((missionText.match(/施設施工見込/g) || []).length === 4, '全作戦に勝利後の建材見込が表示される');
-  ok(missionText.includes('決戦まであと8勝'), '王国侵攻に最終決戦までの距離が表示される');
+  ok(/勝てば領土になる/.test(missionText), '落とす札は「勝てば領土になる」と書いてある');
   const before = await page.evaluate(() => ({ alert: Game.state.alert, conquest: Game.state.conquest, turn: Game.state.turn }));
 
-  await page.locator('[data-action="missionpick"]').first().click();
+  // 略奪（落とさずに奪って帰る）を選ぶ
+  await page.locator('.mission-alt').first().click();
   await page.evaluate(() => Game.state.roster.forEach(m => { m.hp = 9999; m.atk = 999; m.def = 99; m.spd = 99; }));
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
@@ -45,11 +47,16 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   ok(after.alert === before.alert + 2, '略奪で警戒度が2上がる');
   ok(after.conquest === before.conquest, '略奪では王国攻略が進まない');
   ok(after.turn === before.turn + 1 && after.raids === 1, '作戦数と略奪回数が記録される');
+  ok(Object.keys(await page.evaluate(() => Game.state.raided)).length === 1,
+    '略奪した土地は控えに残る（次に来ると守りが硬い）');
 
   // 前哨戦と本戦（2026-09-12）：進軍のカードに帯が出て、本戦は隊列の引き継ぎを言う
   console.log('▼ 前哨戦／本戦の帯');
   await page.evaluate(() => {
-    Game.state.conquest = 3; Game.state.outpost = null;
+    // 守りの厚い土地（港町 garrison 4）を候補に出す。段階1の土地には前哨が付かない。
+    Game.state.territory = { lands: ['h01', 'h02', 'h03', 'h04', 'h05', 'h06', 'h07'], tribes: [] };
+    Game.state.conquest = Territory.conquestOf(Game.state);
+    Game.state.outpost = null;
     Game.prepareMissions(true); App.render();
   });
   const outpost = await page.evaluate(() => {
@@ -62,7 +69,9 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   ok(/宰相モルモ「まず斥候を叩いて/.test(await page.locator('.mission-briefing').innerText()),
     '作戦会議にモルモの前哨の一言');
   const main = await page.evaluate(() => {
-    Game.state.outpost = { stage: 3, cleared: true, formationId: 'standard' };
+    const land = [...document.querySelectorAll('.mission-card.mission-invade')][0];
+    Game.state.outpost = { stage: Game.state.conquest, place: Game.state.missionOffers.find(m => m.missionKind === 'invade').territoryId,
+      cleared: true, formationId: 'standard' };
     Game.prepareMissions(true); App.render();
     const card = [...document.querySelectorAll('.mission-card')].find(c => c.className.includes('mission-invade'));
     return { badge: (card.querySelector('.mission-phase') || {}).textContent || '', text: card.innerText,
@@ -70,7 +79,7 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   });
   ok(main.badge === '本戦', `前哨を制すと「本戦」の帯（${main.badge}）`);
   ok(/前哨で見た隊列と同じ/.test(main.text), '本戦のカードは「前哨で見た隊列と同じ」');
-  ok(/王国攻略 \+1/.test(main.text), '本戦は王国攻略+1');
+  ok(/勝てば領土になる/.test(main.text), '本戦は勝てば領土になる');
   ok(/▸前哨済/.test(main.hud), `HUD に「▸前哨済」（${(main.hud.match(/王国攻略[^\n]*/) || [''])[0]}）`);
   ok(/宰相モルモ「前哨で見た顔ぶれ/.test(main.brief), '作戦会議にモルモの本戦の一言');
 

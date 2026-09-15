@@ -248,6 +248,12 @@ const SAVE = () => {
   ok(world.glow + world.tribeGlow >= 1, `候補が光る（土地${world.glow}／部族${world.tribeGlow}）`);
   ok(world.picks === world.glow, `光った地点はタップでその札を選ぶ（${world.picks}/${world.glow}）`);
   ok(world.tribes >= 8, `部族圏の印が並ぶ（${world.tribes}）`);
+  const pins = await page.evaluate(() => ({
+    kind: [...document.querySelectorAll('.mp-kind')].filter(i => i.complete && i.naturalWidth > 0).length,
+    face: [...document.querySelectorAll('.tribe-face')].filter(i => i.complete && i.naturalWidth > 0).length
+  }));
+  ok(pins.kind >= 1, `土地の種類の印が読める（${pins.kind}）`);
+  ok(pins.face === 10, `部族の顔が10枚とも読める（${pins.face}）`);
 
   ok(errs.length === 0, `ページエラーなし${errs.length ? '：' + errs[0] : ''}`);
   await b.close();
