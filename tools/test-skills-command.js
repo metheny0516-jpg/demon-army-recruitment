@@ -472,5 +472,25 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   delete SKILLS.test_iai;
 }
 
+console.log('▼ 大技の big（2026-09-15）：指示で大火球を放つと、本人の一撃と余波に big と fx=fire が乗る。普通の攻撃には乗らない');
+{
+  ENEMY_BIG_MOVE.chance = 0;
+  const mage = mk('ミラ', { tplId: 'mage', race: '魔法使い', skills: ['mage_fireball'], traits: ['great_fireball'], spirit: 3, spd: 9 });
+  const orc = mk('ガロ', { spd: 1 });
+  const { h } = startWith([mage, orc], foes(3, { spd: 0 }), { manual: true });
+  h.next({ p0: { cmd: 'skill', skill: 'great_fireball', target: 'e0' }, p1: { cmd: 'attack', target: 'e0' } });
+  const trig = events(h, 'trait_trigger').find(ev => ev.traitId === 'great_fireball');
+  assert(trig && trig.big === true && trig.fx === 'fire' && trig.skillId === 'great_fireball' && trig.emphasis === 3, '大火球の発火印に big・fx=fire・skillId・強調度3');
+  const main = events(h, 'attack').find(ev => ev.fromId === 'p0');
+  assert(main && main.big === true && main.fx === 'fire' && main.emphasis >= 2, `本人の一撃に big・fx=fire・強調度2以上（${main && main.emphasis}）`);
+  const splash = events(h, 'splash').filter(ev => ev.fromId === 'p0' && ev.label === '大火球');
+  assert(splash.length === 2 && splash.every(ev => ev.big === true && ev.fx === 'fire'), `余波2発とも big・fx=fire（${splash.length}）`);
+  const burn = events(h, 'splash').filter(ev => ev.fromId === 'p0' && ev.label === '燃焼');
+  assert(burn.length === 2 && burn.every(ev => ev.big === false), `次ラウンド頭の燃焼2発は big を継承しない（${burn.length}）`);
+  const plain = events(h, 'attack').find(ev => ev.fromId === 'p1');
+  assert(plain && plain.big === false && !plain.fx, '普通の攻撃は big=false で fx なし');
+  ENEMY_BIG_MOVE.chance = bigChance;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;

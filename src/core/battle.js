@@ -328,10 +328,11 @@ const Battle = {
       }
       const lines = trait.lines && trait.lines.use;
       const quote = lines && lines.length ? U.pick(lines) : "";
-      return emitCausal("trait_trigger", {
-        sourceId: unit.id, traitId, name: trait.name || traitId, quote, emphasis: 2,
+      const upper = UPPER_BY_TRAIT[traitId] || null;
+      return emitCausal("trait_trigger", Object.assign({
+        sourceId: unit.id, traitId, name: trait.name || traitId, quote, emphasis: upper ? 3 : 2,
         text: `　${unit.name}の【${trait.name || traitId}】${quote ? `「${quote}」` : ""}`, cls: "trait"
-      }, parent || null);
+      }, upper ? { big: true, fx: fxOf(upper), skillId: upper.id } : {}), parent || null);
     };
 
     const summonUnit = (source, spec, parent) => {
@@ -401,6 +402,10 @@ const Battle = {
     // 演出プリセット（fx）。技のイベントに載せる。描画側が読む（無ければ通常攻撃の見た目）。
     const FXK = typeof FX_BY_KIND !== "undefined" ? FX_BY_KIND : {};
     const fxOf = sk => (sk && (sk.fx || FXK[sk.kind])) || null;
+    // 大技（upper: true の技）の索引：癖 id → 技。大技の一撃と余波には big: true と技の fx を乗せ、
+    // 描画側が「大技は大きく・揺れて・ドカーン」を fx の種類によらず一律に出せるようにする（2026-09-15）。
+    const UPPER_BY_TRAIT = {};
+    for (const id in SK) { const sk = SK[id]; if (sk && sk.upper && sk.trait) UPPER_BY_TRAIT[sk.trait] = Object.assign({ id }, sk); }
     const spiritGained = {};            // uid → 戦闘中に増えた気合（run.js が名簿へ反映）
     const debutShown = [];              // お披露目を実際に使った者の uid
     const sparked = [];                 // 火の粉を浴びた味方 { uid, byUid, skillId }（run.js が痕跡に）
@@ -679,14 +684,19 @@ const Battle = {
       if (dead) emphasis = 3;
       else if (dmg >= target.maxHp * 0.25) emphasis = 2;
       else if (opts.traits && opts.traits.length) emphasis = 1;
+      // 大技の一撃・余波（親が大技の発火印）は big。強調度は最低 2（描画側は big で揺れ・大弾・爆発音）
+      const parentBig = !!(opts.parentEvent && opts.parentEvent.big);
+      const big = opts.big !== undefined ? !!opts.big : parentBig;   // big: false を明示すれば継承しない（燃焼など）
+      const bigFx = opts.fx || (parentBig ? opts.parentEvent.fx : null) || null;
+      if (big) emphasis = Math.max(emphasis, 2);
 
       const label = opts.label ? `【${opts.label}】` : "";
       const damageEvent = emitCausal(kind, {
         fromId: attacker.id, toId: target.id, dmg,
         hp: target.hp, maxHp: target.maxHp, dead,
         traits: opts.traits || [], label: opts.label || null, emphasis,
-        skillId: opts.skillId || null, fx: opts.fx || (attacker.flags.bigMove && attacker.side !== target.side && !opts.incident ? "heavy" : null),
-        aoe: !!opts.aoe,
+        skillId: opts.skillId || null, fx: bigFx || (attacker.flags.bigMove && attacker.side !== target.side && !opts.incident ? "heavy" : null),
+        aoe: !!opts.aoe, big,
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
@@ -858,10 +868,13 @@ const Battle = {
       if (ctx.notes.length) {
         note(`　${unit.name}の特性（${ctx.notes.join("・")}！）`, "trait");
       }
+      // 号令・指示で大技を放つ本人の一撃：技の fx と big を乗せる（余波は skillTrigger の親から継承）
+      const bigSkill = ordered ? (unit.traits || []).map(t => UPPER_BY_TRAIT[t]).find(Boolean) || null : null;
       const applied = applyDamage(unit, target, amount, "attack", {
         traits: ctx.notes,
         label: actionOpts.label || null,
-        skillId: actionOpts.skillId || null, fx: actionOpts.fx || null,
+        skillId: actionOpts.skillId || (bigSkill && bigSkill.id) || null, fx: actionOpts.fx || (bigSkill ? fxOf(bigSkill) : null),
+        big: !!bigSkill,
         parentEvent: actionOpts.parentEvent || ledgerParent || null
       });
       const dmg = applied.dmg;
@@ -1259,7 +1272,7 @@ const Battle = {
         const burn = target.flags.burn;
         delete target.flags.burn;
         applyDamage(burn.source, target, Math.ceil(target.maxHp * 0.08), "splash", {
-          label: "燃焼", parentEvent: burn.parentEvent || null
+          label: "燃焼", parentEvent: burn.parentEvent || null, big: false   // 燃焼は毎ラウンドの削り。大技の演出は継承しない
         });
       }
 
