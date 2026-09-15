@@ -1660,6 +1660,7 @@ const Game = {
         if (hero) hero.introQuote = "……お前も、そちらか。";   // 開戦の一言（battle.js の dialogue が読む）
       }
       mission.heroParty = mission.units.filter(u => u.captain).map(u => u.name);
+      st.lastHeroParty = mission.heroParty;   // sim の列（最終戦が既定の3人だけか、混成か）
     }
     mission.captainIds = ids;
     return mission;

@@ -3,8 +3,8 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js','src/data/territories.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/incidents.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/territory.js','src/core/traces.js','src/core/incidents.js','src/core/run.js'];
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js','src/data/territories.js','src/data/enemy_captains.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/incidents.js','src/data/demon_kings.js',
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/territory.js','src/core/captains.js','src/core/traces.js','src/core/incidents.js','src/core/run.js'];
 // SIM_NO_TOWN=1 で城下町（税）を読まない。再起の回帰テスト（test-chain-measure-retry）は全滅が起きる前提なので、税で楽になった後も同じ種で測れるようにする
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -259,6 +259,14 @@ function runOnce(strat, stats){
     if (rec.clearedBy === "defense") stats.defense.byDefense++;
     else stats.defense.byConquest++;
   }
+  // 敵将（段階B/D）：討った・雇った・最終戦の顔ぶれ。sim は提案に答えないので全部「討つ」。
+  {
+    const cap = st.captains || {};
+    const list = Object.keys(cap);
+    stats.capSlain = (stats.capSlain || 0) + list.filter(id => cap[id].status === 'slain').length;
+    stats.capHired = (stats.capHired || 0) + list.filter(id => cap[id].status === 'hired').length;
+    stats.capMixed = (stats.capMixed || 0) + ((st.lastHeroParty || []).length ? 1 : 0);
+  }
   // 地図の上の戦争（段階A）：どこまで面を広げたか・巡回を何回まわしたか
   stats.territory = (stats.territory || 0) + ((st.territory?.lands || []).length + (st.territory?.tribes || []).length);
   stats.patrols = (stats.patrols || 0) + (st.patrolCount || 0);
@@ -315,7 +323,7 @@ for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)
   const facility = (res.reduce((a,r)=>a+(r.townLevels||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  領土 ${((stats.territory||0)/N).toFixed(2)}／ラン  巡回 ${((stats.patrols||0)/N).toFixed(2)}回/ラン`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  領土 ${((stats.territory||0)/N).toFixed(2)}／ラン  巡回 ${((stats.patrols||0)/N).toFixed(2)}回/ラン  敵将 討${((stats.capSlain||0)/N).toFixed(2)}／雇${((stats.capHired||0)/N).toFixed(2)}／最終戦が混成 ${stats.capMixed||0}ラン`);
   console.log(`  札: 提示 ${stats.cards.offered}／めくった ${stats.cards.opened}／自然発生 ${stats.cards.natural}／決着 ${stats.cards.settles}（波乱 ${(100*stats.cards.natural/Math.max(1,stats.cards.settles)).toFixed(2)}%）`);
   const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);
