@@ -282,9 +282,21 @@ const App = {
         return UI.castle(data.tab);
 
       // 城下町（2026-09-12）
+      // 施設の詳細（2026-09-15）。地図の区画と一覧の施設名から開く。
+      case "towndetail":
+        if (typeof TownUI === "undefined" || !Town.facility(data.id)) return UI.castle("town");
+        return UI.set(TownUI.detail(data.id), "castle");
       case "townbuild": {
         const out = Town.build(Game, data.id);
         if (out && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-build");
+        // 詳細から建てたときは詳細のまま。絵はその場で差し替わる（0.6秒）。
+        if (data.from === "detail") {
+          UI.set(TownUI.detail(data.id), "castle");
+          const art = UI.root && UI.root.querySelector(".fd-art");
+          if (art && out) art.classList.add("fd-grown");
+          if (out) { const f = Town.facility(out.id); return this.report("joy", `${f.name}が Lv${out.lv} になりました。${f.line}、デス。`, { kicker: "城下町", title: "宰相モルモ" }); }
+          return;
+        }
         UI.castle("town");
         if (out) { const f = Town.facility(out.id); return this.report("joy", `${f.name}が Lv${out.lv} になりました。${f.line}、デス。`, { kicker: "城下町", title: "宰相モルモ" }); }
         return;

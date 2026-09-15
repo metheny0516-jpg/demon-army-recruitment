@@ -76,13 +76,13 @@ const MapUI = {
       return `<span class="map-lot mp-empty" style="${this.pct(lot.x, lot.y)}" aria-hidden="true"></span>`;
     }
     const lv = Town.lv(st, id);
-    // 建てられないときは押せなくする（理由は一覧と同じ文言）。
-    // Town.build() 側でも弾かれるが、押せる顔をして何も起きないのは嘘になる。
-    const can = Town.canBuild(Game, id);
+    // タップで施設の詳細を開く（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §7）。
+    // 建てる・増築は詳細の中。ここで直接建てないので、建てられない区画も押せる
+    // （中で理由が読める方が親切。「押せるのに何も起きない」にはならない）。
     const art = this.lotArt(id, lv);
     return `<button type="button" class="map-lot${lv ? " built" : ""}${art ? " has-art" : ""} lot-lv${lv}" style="${this.pct(lot.x, lot.y)}"
-      data-action="townbuild" data-id="${U.esc(id)}" data-lot="${lot.slot}"
-      ${can.ok ? "" : "disabled"} title="${U.esc(can.ok ? `${facility.name}を建てる` : (can.why || ""))}"
+      data-action="towndetail" data-id="${U.esc(id)}" data-lot="${lot.slot}"
+      title="${U.esc(`${facility.name}を見る`)}"
       aria-label="${U.esc(facility.name)} Lv${lv}">
       ${art}<i class="lot-icon">${facility.icon}</i>
       <span class="lot-name">${U.esc(facility.name)}<i class="lot-lv">Lv${lv}</i></span>

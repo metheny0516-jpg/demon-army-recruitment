@@ -11,7 +11,9 @@ const TownUI = {
       const can = Town.canBuild(Game, f.id);
       const next = cost ? `Lv${lv + 1}へ：${cost.gold}G・建材${cost.materials}${cost.discount ? "（職業一致で2割引）" : ""}` : "最大";
       return `<div class="town-card${lv ? " built" : ""}">
-        <div class="town-head"><span class="town-icon">${f.icon}</span><b>${U.esc(f.name)}</b> <span class="town-lv">Lv${lv}</span></div>
+        <div class="town-head"><span class="town-icon">${f.icon}</span>
+          <button type="button" class="town-name" data-action="towndetail" data-id="${f.id}">${U.esc(f.name)}</button>
+          <span class="town-lv">Lv${lv}</span></div>
         <div class="town-line">${U.esc(f.line)}</div>
         <div class="muted town-effect">${lv ? U.esc(f.effect(lv)) : "まだ空き地"}${f.jobs.length ? `　<small>合う職：${U.esc(f.jobs.join("・"))}</small>` : ""}</div>
         <div class="town-actions"><span class="muted">${U.esc(next)}</span>
@@ -55,5 +57,81 @@ const TownUI = {
       ${facilities}
       ${factory}${bank}${ledger}
     </section>`;
+
+  },
+
+  // ── 施設の詳細（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §1〜§5・§7）──
+  // 地図の区画と一覧の施設名から開く。建てる・増築はこの中だけ。
+  // 「育っている」を見せる画面なので、出すのは 絵・いまの効果・次のLv・生んだもの・モルモの一言 だけ。
+  // 比較もグラフも作らない（§6）。
+  STAT_LABEL: {
+    market: { label: "税収の上乗せ", unit: "G" },
+    tavern: { label: "回復した忠誠", unit: "" },
+    smithy: { label: "備えた決着", unit: "回" },
+    lab: { label: "早く覚えた技", unit: "本" },
+    hostel: { label: "早く治した人数", unit: "人" },
+    factory: { label: "両替した回数", unit: "回" },
+    grand_kitchen: { label: "強めた食事", unit: "回" },
+    graveyard: { label: "呼び戻した骸骨", unit: "体" }
+  },
+
+  detailArt(f, lv) {
+    const art = (typeof MAP_FACILITY_ART !== "undefined" && MAP_FACILITY_ART) || [];
+    const dir = typeof MapUI !== "undefined" ? MapUI.DIR : "assets/map/";
+    const src = lv <= 0 || !art.includes(f.id)
+      ? `${dir}facility/lot-0.webp`
+      : `${dir}facility/${f.id}-${Math.min(3, lv)}.webp`;
+    return `<img class="fd-art" src="${src}" alt="" data-lv="${lv}">`;
+  },
+
+  detail(id) {
+    const st = Game.state;
+    const f = Town.facility(id);
+    if (!f) return UI.castle("town");
+    Town.init(st);
+    const lv = Town.lv(st, id);
+    const cost = Town.buildCost(Game, id);
+    const can = Town.canBuild(Game, id);
+    const row = Town.statOf(st, id);
+    const dir = typeof MapUI !== "undefined" ? MapUI.DIR : "assets/map/";
+    // 背景は施設ごとに1枚。無い間は既存の紙のまま（読み込めなければ CSS の地が出る）。
+    const bg = `style="background-image:url('${dir}facility/bg-${f.id}.webp')"`;
+    const dots = [0, 1, 2].map(i => `<i class="fd-dot${i < lv ? " on" : ""}"></i>`).join("");
+    const next = cost
+      ? `${U.esc(f.effect(lv + 1))}<small class="muted">　${cost.gold}G・建材${cost.materials}${cost.discount ? "（合う職で2割引）" : ""}</small>`
+      : "最大まで育った";
+    const stat = this.STAT_LABEL[id] || { label: "生んだもの", unit: "" };
+    const born = row.value > 0 || row.built
+      ? `<dl class="fd-born">
+          <div><dt>${U.esc(stat.label)}</dt><dd>${row.value}${U.esc(stat.unit)}</dd></div>
+          ${row.built ? `<div><dt>建てた日</dt><dd>第${row.built}決着</dd></div>` : ""}
+          ${row.upgraded.length ? `<div><dt>増築</dt><dd>${row.upgraded.map((t, i) => `第${t}決着（Lv${i + 2}）`).join("　")}</dd></div>` : ""}
+        </dl>`
+      : `<div class="muted fd-empty">まだ記録なし。建てたところから数え始める。</div>`;
+    const lines = typeof MORMO_FACILITY !== "undefined" ? (MORMO_FACILITY[id] || []) : [];
+    const mormo = lines[Math.min(lv, lines.length - 1)] || "";
+    return `${UI.hud()}<div class="castle-screen facility-detail">
+      <header class="castle-header fd-header">
+        <button class="small ghost castle-home" data-action="home">⌂ メインへ</button>
+        <button class="small ghost" data-action="castletab" data-tab="town">← 城下町に戻る</button>
+      </header>
+      <main class="castle-content fd-body" ${bg}>
+        <div class="fd-stage">${this.detailArt(f, lv)}</div>
+        <h1 class="fd-title"><span class="fd-icon">${f.icon}</span>${U.esc(f.name)}
+          <span class="fd-lv">Lv${lv}</span><span class="fd-dots">${dots}</span></h1>
+        <div class="fd-line">${U.esc(f.line)}</div>
+        <dl class="fd-effects">
+          <div><dt>いまの効果</dt><dd>${lv ? U.esc(f.effect(lv)) : "まだ空き地"}</dd></div>
+          <div><dt>次の Lv</dt><dd>${next}</dd></div>
+          ${f.jobs.length ? `<div><dt>合う職</dt><dd>${U.esc(f.jobs.join("・"))}<small class="muted">（2割引）</small></dd></div>` : ""}
+        </dl>
+        <div class="fd-build">
+          ${cost ? `<button class="primary wide" data-action="townbuild" data-id="${f.id}" data-from="detail" ${can.ok ? "" : "disabled"}>${lv ? "増築する" : "建てる"}</button>` : ""}
+          ${!can.ok && cost ? `<small class="muted fd-why">${U.esc(can.why)}</small>` : ""}
+        </div>
+        <section class="fd-history"><h2>この${U.esc(f.name)}が生んだもの</h2>${born}</section>
+        ${mormo ? `<div class="fd-mormo">🐭 モルモ「${U.esc(mormo)}」</div>` : ""}
+      </main>
+    </div>`;
   }
 };

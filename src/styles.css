@@ -3624,6 +3624,50 @@ button.primary::first-letter { color: var(--gold); }
 .projectile-wind::before { width: 26px; height: 3px; top: -1px; left: -26px; border-radius: 2px;
   background: linear-gradient(90deg, transparent, #dff4ff); box-shadow: 0 4px 0 -1px #dff4ff80, 0 -4px 0 -1px #dff4ff80; }
 
+/* ── 施設の詳細（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §1・§7）──
+   390px の1画面に収める。スクロールするのは下の「生んだもの」だけ。
+   背景はその施設らしい1枚。無ければ既存の紙のまま（読み込めなければ地の色が出る）。 */
+.facility-detail .fd-header { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.facility-detail .fd-body {
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+  border-radius: 8px; padding: 10px 12px 14px;
+  box-shadow: inset 0 -120px 120px -60px rgba(8, 6, 12, .92), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.facility-detail .fd-stage { display: flex; justify-content: center; align-items: flex-end; height: 192px; }
+.facility-detail .fd-art { width: 192px; height: 192px; object-fit: contain; image-rendering: auto;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.7)); }
+.facility-detail .fd-art.fd-grown { animation: facilityGrown .6s ease-out; }
+@keyframes facilityGrown {
+  0% { opacity: 0; transform: translateY(8px) scale(.9); }
+  60% { opacity: 1; transform: translateY(0) scale(1.04); }
+  100% { opacity: 1; transform: none; }
+}
+.facility-detail .fd-title { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: 20px; }
+.facility-detail .fd-lv { font-size: 14px; color: var(--gold, #e8bd68); }
+.facility-detail .fd-dots { display: inline-flex; gap: 3px; }
+.facility-detail .fd-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(255,255,255,.55); }
+.facility-detail .fd-dot.on { background: var(--gold, #e8bd68); border-color: var(--gold, #e8bd68); }
+.facility-detail .fd-line { font-size: 13px; opacity: .9; margin-bottom: 8px; }
+.facility-detail .fd-effects, .facility-detail .fd-born { margin: 0 0 8px; }
+.facility-detail .fd-effects > div, .facility-detail .fd-born > div {
+  display: flex; gap: 8px; align-items: baseline; padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.facility-detail dt { flex: 0 0 5.5em; font-size: 12px; opacity: .75; }
+.facility-detail dd { margin: 0; font-size: 13px; }
+.facility-detail .fd-build { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.facility-detail .fd-history { max-height: 30vh; overflow-y: auto; }
+.facility-detail .fd-history h2 { font-size: 14px; margin: 6px 0 4px; }
+.facility-detail .fd-mormo { margin-top: 8px; font-size: 13px; background: rgba(12,10,18,.7);
+  border-radius: 6px; padding: 6px 8px; }
+/* 一覧の施設名も詳細への入口（見た目は今までの見出しのまま） */
+.town-name { background: none; border: 0; padding: 0; color: inherit; font: inherit; font-weight: 700;
+  cursor: pointer; text-decoration: underline dotted rgba(255,255,255,.35); text-underline-offset: 3px; }
+.town-name:hover { text-decoration-color: var(--gold, #e8bd68); }
+@media (prefers-reduced-motion: reduce) {
+  .facility-detail .fd-art.fd-grown { animation: none; }
+}
+
 /* ── 指示待ちの決めポーズと行動の構え（docs/SPEC_COMMAND_POSE_2026-09-15.md §2）──
    絵の差し替えが唐突に見えないよう 0.15 秒だけ重ねる。登場動作は JS（transform）側。 */
 .bu-sprite-img.pose-swap { animation: poseSwap .15s ease-out; }

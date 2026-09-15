@@ -17,10 +17,30 @@ const Town = {
     if (typeof t.exchanged !== "number") t.exchanged = 0;
     if (typeof t.exchangedTurn !== "number") t.exchangedTurn = 0;
     if (!Array.isArray(t.ledger)) t.ledger = [];
+    // 施設ごとの「生んだもの」（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §2）。
+    // 数字は施設ごとに1本だけ。旧セーブは空（詳細では「まだ記録なし」）。
+    if (!t.stats || typeof t.stats !== "object") t.stats = {};
     if (typeof t.seized !== "number") t.seized = 0;
     return t;
   },
   lv(st, id) { return Number(((st.town || {}).lv || {})[id]) || 0; },
+
+  // ── 生んだもの（詳細画面が読む数字1本） ──
+  // 加算の入口はここだけ。run.js からも Town.stat(st, id, n) で足す。
+  statOf(st, id) {
+    const t = this.init(st);
+    if (!t.stats[id]) t.stats[id] = { built: 0, upgraded: [], value: 0 };
+    const row = t.stats[id];
+    if (typeof row.value !== "number") row.value = 0;
+    if (!Array.isArray(row.upgraded)) row.upgraded = [];
+    return row;
+  },
+  stat(st, id, n) {
+    if (!st || !id || !n) return 0;
+    const row = this.statOf(st, id);
+    row.value += Number(n) || 0;
+    return row.value;
+  },
   // 外（run.js・events.js・battle への options）から読む入口。lv と同じだが、
   // 「城下町の施設のレベル」という意味で呼び分けられるようにしてある。
   level(st, id) { return this.lv(st, id); },
@@ -96,6 +116,9 @@ const Town = {
     st.gold -= cost.gold;
     st.materials -= cost.materials;
     t.lv[id] += 1;
+    const row = this.statOf(st, id);
+    if (t.lv[id] === 1) row.built = Number(st.turn) || 0;
+    else row.upgraded.push(Number(st.turn) || 0);
     if (t.builtTurn !== st.turn) { t.builtTurn = st.turn; t.builtCount = 0; }
     t.builtCount = (t.builtCount || 0) + 1;
     this.ledger(st).build += cost.gold;
@@ -121,6 +144,7 @@ const Town = {
     if (t.exchangedTurn !== st.turn) { t.exchangedTurn = st.turn; t.exchanged = 0; }
     st.materials -= this.EXCHANGE.toGold.materials; st.gold += this.EXCHANGE.toGold.gold; t.exchanged += 1;
     this.ledger(st).exchange += this.EXCHANGE.toGold.gold;
+    if (this.lv(st, "factory") > 0) this.stat(st, "factory", 1);
     game.save();
     return true;
   },
@@ -130,6 +154,7 @@ const Town = {
     if (t.exchangedTurn !== st.turn) { t.exchangedTurn = st.turn; t.exchanged = 0; }
     st.gold -= this.EXCHANGE.toMaterials.gold; st.materials += this.EXCHANGE.toMaterials.materials; t.exchanged += 1;
     this.ledger(st).exchange -= this.EXCHANGE.toMaterials.gold;
+    if (this.lv(st, "factory") > 0) this.stat(st, "factory", 1);
     game.save();
     return true;
   },
@@ -174,14 +199,26 @@ const Town = {
     const row = this.ledger(st);
     row.ransacked = !!opts.ransacked;
     const tax = opts.ransacked ? 0 : this.taxPerSettle(st);
-    if (tax > 0) { st.gold += tax; row.tax += tax; notes.push(`領地${this.territories(st)}からの税収 +${tax}G`); }
+    if (tax > 0) {
+      st.gold += tax; row.tax += tax; notes.push(`領地${this.territories(st)}からの税収 +${tax}G`);
+      // 市場が生んだもの＝市場が無ければ入らなかった上乗せ分だけ
+      if (this.lv(st, "market") > 0) this.stat(st, "market", this.territories(st) * this.lv(st, "market"));
+    }
     else if (opts.training && this.territories(st) > 0) notes.push("稽古の日は徴税に出ない（税収は無い）");
     else if (opts.ransacked && this.territories(st) > 0) notes.push("荒らされたので、この決着の税収は無い");
     const tavern = this.lv(st, "tavern");
     if (tavern > 0) {
-      for (const m of game.departmentRoster("home")) m.loyalty = U.clamp((m.loyalty || 0) + tavern, 0, 100);
+      let healed = 0;
+      for (const m of game.departmentRoster("home")) {
+        const before = m.loyalty || 0;
+        m.loyalty = U.clamp(before + tavern, 0, 100);
+        healed += m.loyalty - before;
+      }
+      if (healed > 0) this.stat(st, "tavern", healed);
       notes.push(`酒場で留守番の忠誠 +${tavern}`);
     }
+    // 鍛冶場の貯めた気合は測りにくいので、鍛冶場があった決着の数を数える（§2の表）
+    if (this.lv(st, "smithy") > 0) this.stat(st, "smithy", 1);
     const interest = this.interest(st);
     if (interest > 0) {
       if ((st.gold || 0) >= interest) { st.gold -= interest; row.interest += interest; notes.push(`魔界銀行へ利子 ${interest}G（残高 ${t.debt}G）`); }
