@@ -42,12 +42,16 @@
 
 **いま動いているもの（上がったら取り込みと検証）**
 - 済（Opus、2026-09-15 午後）：成長の偏り＋読み上げ＋技の吹き出し（`docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md`、`docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md`）＝ 48d69d4 (a) run.js の成長 ／ 6c0939c (b) 読み上げ ／ fc9f240 (c) 吹き出しと order_exec の quiet 化 ／ c1643a1 (d) テスト ／ 047aba4・ecbf776 (a の続き：手番の記録が空でも与ダメージから読む保険) ／ 22ec39f skills-window の一コマ。Claude 側は 95142b6 で撤退の提案にも actions を渡した。取り込み後 node 89本・art-coverage / skill-fx / report / skills-window 通過（360f068）。
-- 大技の迫力（`docs/SPEC_BIG_SKILL_FX_2026-09-15.md`）：エンジン済み（b97f875、attack/splash/trait_trigger に `big` と fx）。CodeX＝絵8枚＋dokan 音3本（`codex/big-skill-fx`）、Opus＝battle_scene.js/sound.js の `ev.big` 分岐（止め80ms→フラッシュ→強い揺れ→弾き）。Opus は絵を待たず先に貼ってよい（推奨）。
-- 施設の詳細画面（2026-09-15 オーナー着手決定、`docs/SPEC_FACILITY_DETAIL_2026-09-13.md` §8）：CodeX＝背景8枚 `bg-<id>.webp`＋モルモの一言32本（`codex/facility-detail-art`）→ 本線 → Opus＝§5（town_ui / map / main / town / run.js 5行。run.js を触るので Opus 一人）。地図の区画タップは今「建てる」直行なので、詳細を開くに変える。
+- 大技の迫力（`docs/SPEC_BIG_SKILL_FX_2026-09-15.md`）：エンジン済み（b97f875）、**Opus の配線も済み（19f5575、skill-fx 通過）**。残りは CodeX の絵8枚＋dokan 音3本（`codex/big-skill-fx`、未着手）。
+- 施設の詳細画面（`docs/SPEC_FACILITY_DETAIL_2026-09-13.md` §8）：**CodeX 済み（背景8枚 780×600＋`MORMO_FACILITY` 32本、766ae4b で取り込み）**。次は Opus へ §8-3（town_ui / map / main / town / run.js 5行。run.js を触るので Opus 一人。決めポーズの配線の後）。
 - 済（2026-09-15 午後・Claude）：CodeX の決めポーズ `ready` / 防御 `guard`（`codex/command-pose-art` 760e9d5、18種×2＝36枚＋トロル6枚とサキュバス attack-windup の差し替え）を取り込み、18種の `BATTLE_SPRITES` に登録、`art-coverage` 246 で通過。battlefield / vfx-lifecycle も通過。**次は Opus へ `docs/SPEC_COMMAND_POSE_2026-09-15.md` §2（battle_scene.js の配線）**。ただし Opus の成長読み上げ・大技の迫力と battle_scene.js が重なるので、一つずつ順に。
 - 済（Opus、2026-09-15）：堕騎士のデータ（`docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md`）＝ 556e972 (a) 種族・癖・技 ／ 00197cb (b) 札「王国からの使者」と名簿の忠義の一行 ／ 815407f (c) テスト2件。本線に取り込み済み。Opus の判断3点：面接の一言は `quotes` に5本（RECRUIT_BRIEFS は追加せず）／「元同僚」は `necro_visitor` と同じ口で実際に討伐隊として来る（防衛戦中は1決着待つ）／`rollApplicant` にデータ側 `rarity` を掛ける1行を追加（種族追加で run.js を触らない口）。
 - 済（2026-09-15・Claude）：CodeX の堕騎士の絵（`codex/fallen-knight-art` 4d41e94）を取り込み、`BATTLE_SPRITES`・`PORTRAITS`（表情 surprise/smirk/tears）に登録、`art-coverage.js` は 210（35種×6）。node 88本 全通過（2026-09-15 昼に再確認）。
 - エンジン側は済み：食べる（`cmd:"eat"`）、行動の記録（`contribution[].actions`）、技の台詞は手番で（`skill_call`、`order_exec` は quiet）、火の粉（`sparked`）、忠義（癖 `fealty`・condition `loyalty60`）、吸血（kind `vampiric`）、目覚めの声（`cleanse_all`）、将軍技（`might`）。
+
+**設計中（オーナー判断待ち・2026-09-15 夕）**
+- `docs/DESIGN_WORLD_CAMPAIGN_2026-09-15.md`：地図を「段階の列」から「土地20＋部族10の面」に。次に落とす場所と従える部族を地図で選ぶ。巡回の札（何度でも戦える雑魚戦）。段階A〜E。判断3点は文書末尾。
+- `docs/DESIGN_CAMPAIGN_ROUTE_2026-09-15.md`（第2版）：三本の糸（ポルカ・ザガン・ガレス）。最終戦の勇者一行の顔ぶれは「討たなかった者」で決まる。判断3点は文書末尾。
 
 **判断待ち（オーナー）**
 - **難易度（sim クリア率 100%）**：2026-09-15 の軽い探りで、9/10「王国は待たない」実装時 79.8%（当時から目標外と注記あり）→ 9/12 昼に 100%。全ランが「待った着地」（魔王城で勇者を退ける）で城陥落 0。勇者は段階8固定で時間で厚くならず、軍団は最強の瞬間に迎える構造。成長仕様（9/15）は無関係（Opus の比較で着手前も 100%）。**オーナー所感（9/15）：「勇者戦（二幕）は力押しで何とか勝てた程度でまあまあ。通常戦はひやひやがないのでもっと上げていい」→ 済：`missions.js` の敵倍率を 略奪 0.85→1.0／反乱 0.90→1.05／進軍 1→1.15（防衛戦・勇者は据え置き）。sim 10 で主要戦略の全滅が約2倍（19→35、10→35、8→39/10ラン）、平均勝利 26 戦は維持、クリア率は勇者据え置きのため 100% のまま。次の試遊で「ひやひや」が出たか確認。** 締めるなら候補＝①勇者隊も魔王軍レベル・施設 Lv・将軍数で厚くする ②勇者の来訪を上限到達より前に ③通常戦の敵の段階倍率を少し上げる（「ぬるめ」に効くのは③）。仕様は Claude が書き、run.js の変更は Opus。
