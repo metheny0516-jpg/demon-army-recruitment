@@ -51,7 +51,8 @@
 
 **設計中（オーナー判断待ち・2026-09-15 夕）**
 - **決定（2026-09-15 夕・オーナー「20＋10で贈るも入れる、任せる」）**：`docs/DESIGN_WORLD_CAMPAIGN_2026-09-15.md`（地図を土地20＋部族10の面に、巡回の札）と `docs/DESIGN_CAMPAIGN_ROUTE_2026-09-15.md`（三本の糸、推奨どおり＝顔役3人・第一幕から・先代の英雄を含む）で進める。
-- 段階A（`docs/SPEC_TERRITORY_A_2026-09-15.md`）：**エンジン側済み**（a4df843：`src/data/territories.js`・`src/core/territory.js`・`tools/test-territory.js` 24件）。次は Opus へ §4（run.js・ui.js・map.js・index.html 2行・sim・テスト。決めポーズ→施設詳細の後）、CodeX へ §5（地図の印20枚）。段階B（部族と首領）・D（三本の糸）のデータ枠は Claude が続けて作る。
+- 段階A（`docs/SPEC_TERRITORY_A_2026-09-15.md`）：**エンジン側済み**（a4df843：`src/data/territories.js`・`src/core/territory.js`・`tools/test-territory.js` 24件）。次は Opus へ §4（run.js・ui.js・map.js・index.html 2行・sim・テスト。決めポーズ→施設詳細の後）、CodeX へ §5（地図の印20枚）。
+- 段階B/D（`docs/SPEC_CAPTAINS_BD_2026-09-15.md`）：**エンジン側済み**（敵将13人 `src/data/enemy_captains.js`、`src/core/captains.js`、battle.js の `canSpare`／`next({ spare: true })`／`result.spared`、`hero_awaken` の `awakenAt`、`tools/test-captains.js` 30件）。次は CodeX へ §4（台詞13人×9本＋履歴書13枚、今すぐ貼れる）、Opus へ §5（段階A の後）。
 
 **判断待ち（オーナー）**
 - **難易度（sim クリア率 100%）**：2026-09-15 の軽い探りで、9/10「王国は待たない」実装時 79.8%（当時から目標外と注記あり）→ 9/12 昼に 100%。全ランが「待った着地」（魔王城で勇者を退ける）で城陥落 0。勇者は段階8固定で時間で厚くならず、軍団は最強の瞬間に迎える構造。成長仕様（9/15）は無関係（Opus の比較で着手前も 100%）。**オーナー所感（9/15）：「勇者戦（二幕）は力押しで何とか勝てた程度でまあまあ。通常戦はひやひやがないのでもっと上げていい」→ 済：`missions.js` の敵倍率を 略奪 0.85→1.0／反乱 0.90→1.05／進軍 1→1.15（防衛戦・勇者は据え置き）。sim 10 で主要戦略の全滅が約2倍（19→35、10→35、8→39/10ラン）、平均勝利 26 戦は維持、クリア率は勇者据え置きのため 100% のまま。次の試遊で「ひやひや」が出たか確認。** 締めるなら候補＝①勇者隊も魔王軍レベル・施設 Lv・将軍数で厚くする ②勇者の来訪を上限到達より前に ③通常戦の敵の段階倍率を少し上げる（「ぬるめ」に効くのは③）。仕様は Claude が書き、run.js の変更は Opus。
