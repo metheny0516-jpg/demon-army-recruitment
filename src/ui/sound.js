@@ -488,7 +488,7 @@ const Sound = {
       case "synergy": this.cue("synergy", data); break;
       // 見せ場は音でも段を作る。積んだ数・余剰の大きさで打撃の重さが変わる。
       case "overkill":
-        this.cue("overkill_hit", { ...data, weight: event.percent >= 300 ? 4 : event.percent >= 100 ? 3 : 1 });
+        this.cue("overkill_hit", { ...data, weight: event.rankId === "annihilation" ? 4 : 1 });
         break;
       case "trait_trigger":
         if (event.traitId === "overload" || event.traitId === "chain_massacre") {

@@ -600,8 +600,8 @@ const BattleScene = {
   magnitude(ev) {
     let mult = 1;
     // 深度による一律延長はしない。連鎖全体の緩急は plan() が決める。
-    // 蹂躙・粉砕+50%、消滅・魔王級+75%。小さな余剰は日常茶飯事なので短いままにし、
-    // 大きい余剰だけがはっきり長くなるようにする（尺は事件の大きさに比例）
+    // 殲滅（大技の直撃）+75%。小さな余剰は日常茶飯事なので短いままにし、
+    // 殲滅だけがはっきり長くなるようにする（尺は事件の大きさに比例）
     if (ev.type === "overkill") mult += 0.25 * (ev.emphasis || 0);
     // カットインを読み切れる尺にする
     if (ev.type === "synergy" && ev.firstDiscovery) mult += 0.45;
@@ -939,16 +939,15 @@ const BattleScene = {
         }
         this.showAction(`${ev.rank}　余剰${ev.excess}ダメージ`, 1100);
         this.pulse("overkill");
-        // 実測でOVERKILLは1戦4回出るが、その97%は余剰100%未満の「日常」。
-        // 旧しきい値（揺れ300%・カットイン500%）は実プレイでほぼ発火しておらず、
-        // 見せ場が一度も立っていなかった。蹂躙以上（100%以上・約10戦に1回）を見せ場にする。
-        if (ev.percent >= 100 && this.activeBeat?.showBurst !== false) {
+        // 全画面は殲滅（大技の直撃で倒した）だけ。余剰の割合で段を分けていた頃は
+        // 蹂躙（100%）以上が実測 0% で、見せ場が一度も立っていなかった。
+        if (ev.rankId === "annihilation" && this.activeBeat?.showBurst !== false) {
           this.shake();
           this.burst({
             kicker: "OVERKILL",
             name: ev.rank,
-            desc: `余剰 ${ev.excess} ダメージ（${ev.percent}%）`,
-            stacks: ev.percent >= 300 ? 4 : ev.percent >= 200 ? 3 : 2,
+            desc: `大技の直撃　余剰 ${ev.excess} ダメージ（${ev.percent}%）`,
+            stacks: 3,
             tone: "fx-overkill"
           });
         }

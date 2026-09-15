@@ -27,7 +27,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
           { eventId: 'a2', type: 'attack', depth: 4, label: '追加攻撃' }
         ] }
       },
-      overkillSummary: { count: 2, totalExcess: 40, maxExcess: 30, maxPercent: 180, rank: '蹂躙' },
+      overkillSummary: { count: 2, totalExcess: 40, maxExcess: 30, maxPercent: 180, rank: 'OVERKILL' },
       // 施設は城下町の軍施設ごとの Lv になった（2026-09-13）
       facility: { level: 3, facilities: [{ id: 'graveyard', name: '墓地', icon: '🪦', lv: 3, ready: true }] },
       facilitySummary: { rescuedFromWipe: true, facilities: [

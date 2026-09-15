@@ -53,11 +53,11 @@ const Battle = {
   // ここは演出の都合ではなくゲーム語彙の線引きなので core 側に置く。
   OVERKILL_MIN_PERCENT: 40,
 
-  overkillRank(percent) {
-    if (percent >= 1000) return { id: "demon_king", name: "魔王級殲滅", emphasis: 3 };
-    if (percent >= 500) return { id: "annihilation", name: "消滅", emphasis: 3 };
-    if (percent >= 300) return { id: "pulverize", name: "粉砕", emphasis: 2 };
-    if (percent >= 100) return { id: "trample", name: "蹂躙", emphasis: 2 };
+  // 段は2つだけ（2026-09-16、AUDIT_DEAD_ELEMENTS §1）。余剰の割合で4段に分けていたが、
+  // 蹂躙（100%）以上は実測 0% で一度も出なかった。上の段は「大技の直撃で倒した」＝殲滅に付け替える。
+  // プレイヤーが狙って起こせる見せ場（大技を当てて仕留める）だけに名前を与える。
+  overkillRank(percent, big) {
+    if (big) return { id: "annihilation", name: "殲滅", emphasis: 3 };
     return { id: "overkill", name: "OVERKILL", emphasis: 1 };
   },
 
@@ -713,7 +713,7 @@ const Battle = {
       if (excessPercent >= Battle.OVERKILL_MIN_PERCENT) {
         const excess = excessDamage;
         const percent = excessPercent;
-        const rank = Battle.overkillRank(percent);
+        const rank = Battle.overkillRank(percent, big);
         overkillEvent = emitCausal("overkill", {
           fromId: attacker.id, toId: target.id, excess, percent,
           rankId: rank.id, rank: rank.name, emphasis: rank.emphasis,

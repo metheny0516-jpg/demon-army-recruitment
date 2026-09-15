@@ -82,7 +82,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   await page.evaluate(() => {
     BattleScene.render({ type: 'survive', unitId: 'p0', hp: 1, maxHp: 30, emphasis: 2 });
     BattleScene.render({ type: 'revive', unitId: 'p0', hp: 10, maxHp: 30, emphasis: 2 });
-    BattleScene.render({ type: 'overkill', toId: 'e0', percent: 180, excess: 40, rank: '蹂躙', emphasis: 2 });
+    BattleScene.render({ type: 'overkill', toId: 'e0', percent: 180, excess: 40, rank: 'OVERKILL', emphasis: 2 });
   });
   await appears('guard/revive/overkill の画像VFXが出ない', () =>
     ['guard', 'revive', 'overkill'].every(kind => document.querySelector(`.bu-vfx.vfx-${kind}`)));

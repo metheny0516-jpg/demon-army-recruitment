@@ -16,7 +16,7 @@ const scenario = () => {
     ev({ type: 'synergy', id: 'arcane_circle', name: '魔法結社', desc: 'B' }),
     ev({ type: 'synergy', id: 'overload', name: '魔王軍完成', desc: 'C' }),
     ev({ type: 'attack', fromId: 'p0', toId: 'e0', dmg: 60, hp: 0, maxHp: 20, dead: true, chainId: 'c1', chainDepth: 1, text: 'a' }),
-    ev({ type: 'overkill', fromId: 'p0', toId: 'e0', excess: 40, percent: 200, rank: '蹂躙', rankId: 'overkill', emphasis: 3, chainId: 'c1', chainDepth: 2 }),
+    ev({ type: 'overkill', fromId: 'p0', toId: 'e0', excess: 40, percent: 200, rank: '殲滅', rankId: 'annihilation', emphasis: 3, chainId: 'c1', chainDepth: 2 }),
     ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', emphasis: 3, chainId: 'c1', chainDepth: 3, text: 'b' }),
     ev({ type: 'splash', fromId: 'p0', toId: 'e1', dmg: 44, hp: 0, maxHp: 20, dead: true, chainId: 'c1', chainDepth: 4, text: 'c' }),
     ev({ type: 'trait_trigger', sourceId: 'p0', traitId: 'overload', name: '魔王軍完成', emphasis: 3, chainId: 'c1', chainDepth: 5, text: 'd' }),
@@ -65,7 +65,7 @@ const watch = async (page, ms, step) => {
     assert.ok(seen.cutins.has('ゴブリン軍団') && seen.cutins.has('魔法結社'),
       `通常のシナジーは帯で流れる: ${[...seen.cutins]}`);
     assert.ok(seen.burst.includes('魔王軍完成'), '魔王軍完成は全画面で見せる');
-    assert.ok(seen.burst.includes('蹂躙'), '余剰100%以上のOVERKILLは全画面で見せる');
+    assert.ok(seen.burst.includes('殲滅'), '殲滅（大技の直撃）のOVERKILLは全画面で見せる');
     assert.ok(!seen.burst.includes('ゴブリン軍団'), '通常のシナジーで全画面は出さない（テンポを殺す）');
     // CHAINは積み上がって残る
     assert.ok(seen.chain.length > 4, `CHAINは点滅ではなく居座る（観測 ${seen.chain.length} 回）`);
