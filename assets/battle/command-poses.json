@@ -1,0 +1,437 @@
+{
+  "generator": "Built-in image_gen; source alpha preserved; Pillow only for resize, placement and WebP encoding.",
+  "spec": "docs/SPEC_COMMAND_POSE_2026-09-15.md section 1; owner requested all troll poses and succubus attack-windup revision.",
+  "scalePolicy": "Reviewed fixed body/face scale per source, never independently fit pose bounding boxes.",
+  "entries": [
+    {
+      "id": "fallen_knight",
+      "pose": "guard",
+      "source": "assets/battle/units/fallen_knight/guard-source.png",
+      "target": "assets/battle/units/fallen_knight/guard.webp",
+      "scale": 0.4,
+      "ground": 492,
+      "prompt": "Transparent PNG sprite, alpha background. Same fallen knight in a defensive stance. Sword held diagonally upright across torso, point just above shoulder. Two hands on the hilt at waist. Keep identical face, body, clothing and muted colors. Full figure and entire sword inside square canvas, ample transparent margin. One static game sprite.",
+      "generatedSource": "exec-0edf2bd4-ba1a-4800-9bd7-a126146cd456.png"
+    },
+    {
+      "id": "fallen_knight",
+      "pose": "ready",
+      "source": "assets/battle/units/fallen_knight/ready-source.png",
+      "target": "assets/battle/units/fallen_knight/ready.webp",
+      "scale": 0.425,
+      "ground": 492,
+      "prompt": "On a transparent background, draw the exact character from the reference as one isolated full-body 2D game sprite. Stand with eyes closed, both hands resting on the sword hilt, sword blade pointing down beside the feet. Preserve facial identity, physique, clothes, props, muted colors and slightly rough ink outlines of reference. Matte limited cel shading. Complete figure and all props comfortably inside canvas with transparent margins. Only one settled pose, no text or scenery.",
+      "generatedSource": "exec-5600353c-f806-4662-9545-f74a3f6c8804.png"
+    },
+    {
+      "id": "goblin",
+      "pose": "guard",
+      "source": "assets/battle/units/goblin/guard-source.png",
+      "target": "assets/battle/units/goblin/guard.webp",
+      "scale": 0.32,
+      "ground": 492,
+      "prompt": "Isolate this single game character on a genuinely empty transparent PNG canvas. Remove ALL grey/white checkerboard background, including holes between arms and props. Actual RGBA alpha, not painted squares. Preserve the exact goblin pose, proportions and colors. Entire figure visible with empty margins. No floor shadow or new elements.",
+      "generatedSource": "exec-ea04354d-291b-4716-8ab8-5544f4c6d734.png"
+    },
+    {
+      "id": "goblin",
+      "pose": "ready",
+      "source": "assets/battle/units/goblin/ready-source.png",
+      "target": "assets/battle/units/goblin/ready.webp",
+      "scale": 0.398,
+      "ground": 492,
+      "prompt": "Production 2D RPG single full-body goblin ready sprite. Image 1 is the accepted motion-source identity/style reference, not a layout to copy. Image 2 is the exact existing idle canvas: match that character's head size, body mass, outfit, colors, right-facing orientation and ground baseline, same 512x512 composition. Draw ONE character only in a square canvas, with the feet at y=492/512 and generous empty top padding like idle. Change ONLY pose: Proudly hold the crude short sword aloft after a flourish, free hand at waist, smug imperfect grin. Settled cocky COMMAND WAIT stance, not attacking. Rough uneven ink, muted matte restrained cel shading, slightly awkward charming underling, never heroic glamour. Genuine transparent PNG alpha background, no colored backdrop, no glow around silhouette, no floor/shadow, no checkerboard, no text/UI/motion lines. Keep full weapon and limbs inside frame. Use actual transparent background.",
+      "generatedSource": "exec-76fe5b1e-ac4d-487e-bb4e-de9ba806add2.png"
+    },
+    {
+      "id": "harpy",
+      "pose": "guard",
+      "source": "assets/battle/units/harpy/guard-source.png",
+      "target": "assets/battle/units/harpy/guard.webp",
+      "scale": 0.34,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-7bcaad87-71c0-44ec-be6f-ac96f3fe81f7.png"
+    },
+    {
+      "id": "harpy",
+      "pose": "ready",
+      "source": "assets/battle/units/harpy/ready-source.png",
+      "target": "assets/battle/units/harpy/ready.webp",
+      "scale": 0.34,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-5292267b-53db-472b-b535-f652012eafbc.png"
+    },
+    {
+      "id": "imp",
+      "pose": "guard",
+      "source": "assets/battle/units/imp/guard-source.png",
+      "target": "assets/battle/units/imp/guard.webp",
+      "scale": 0.25,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-15fa67e7-e38f-4670-b6aa-0eef78fcc0e5.png"
+    },
+    {
+      "id": "imp",
+      "pose": "ready",
+      "source": "assets/battle/units/imp/ready-source.png",
+      "target": "assets/battle/units/imp/ready.webp",
+      "scale": 0.25,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-6ea8d470-fd3c-43df-a53f-708837099ec8.png"
+    },
+    {
+      "id": "kobold",
+      "pose": "guard",
+      "source": "assets/battle/units/kobold/guard-source.png",
+      "target": "assets/battle/units/kobold/guard.webp",
+      "scale": 0.408,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D game sprite: kobold, guard. Reference 1 supplies character identity, reference 2 supplies existing idle body size and canvas anchor. Preserve exact identity and body proportions, outfit, muted colors, rough ink and flat shading. Draw only this new settled pose: Tan canine in olive uniform and cap: hold crude wooden spear diagonally across front as makeshift shield, knees bent and worried alert eyes. Match idle's character scale, face size and ground line in a square canvas. Whole character and props visible with padding. Transparent background with actual alpha channel. No background pattern, ground shadow, text, effects trails, or scene. Slightly clumsy ordinary monster trying its best, not heroic glamour.",
+      "generatedSource": "exec-8681bf2a-c95e-4799-9e0f-8b70c39bbc76.png"
+    },
+    {
+      "id": "kobold",
+      "pose": "ready",
+      "source": "assets/battle/units/kobold/ready-source.png",
+      "target": "assets/battle/units/kobold/ready.webp",
+      "scale": 0.44,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D game sprite: kobold, ready. Reference 1 supplies character identity, reference 2 supplies existing idle body size and canvas anchor. Preserve exact identity and body proportions, outfit, muted colors, rough ink and flat shading. Draw only this new settled pose: Tan canine in olive uniform and cap: crude wooden spear planted vertically into ground, free paw on hip, mildly proud but awkward, tail relaxed. Match idle's character scale, face size and ground line in a square canvas. Whole character and props visible with padding. Transparent background with actual alpha channel. No background pattern, ground shadow, text, effects trails, or scene. Slightly clumsy ordinary monster trying its best, not heroic glamour.",
+      "generatedSource": "exec-cf73f84e-854e-4b3e-a864-7326a8f7ca12.png"
+    },
+    {
+      "id": "lich",
+      "pose": "guard",
+      "source": "assets/battle/units/lich/guard-source.png",
+      "target": "assets/battle/units/lich/guard.webp",
+      "scale": 0.34,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-2b301692-8f99-4de6-8cbf-687136322a2f.png"
+    },
+    {
+      "id": "lich",
+      "pose": "ready",
+      "source": "assets/battle/units/lich/ready-source.png",
+      "target": "assets/battle/units/lich/ready.webp",
+      "scale": 0.34,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-32277500-b189-4d47-9e6e-86ec4f50adbf.png"
+    },
+    {
+      "id": "mage",
+      "pose": "guard",
+      "source": "assets/battle/units/mage/guard-source.png",
+      "target": "assets/battle/units/mage/guard.webp",
+      "scale": 0.31,
+      "ground": 492,
+      "prompt": "On a transparent background, draw the exact character from the reference as one isolated full-body 2D game sprite. Hold wooden staff horizontally in both hands before the torso, small thin magical shield membrane in front. Preserve facial identity, physique, clothes, props, muted colors and slightly rough ink outlines of reference. Matte limited cel shading. Complete figure and all props comfortably inside canvas with transparent margins. Only one settled pose, no text or scenery.",
+      "generatedSource": "exec-5da2375c-80a1-4e31-986d-61fcb06b8714.png"
+    },
+    {
+      "id": "mage",
+      "pose": "ready",
+      "source": "assets/battle/units/mage/ready-source.png",
+      "target": "assets/battle/units/mage/ready.webp",
+      "scale": 0.32,
+      "ground": 492,
+      "prompt": "On a transparent background, draw the exact character from the reference as one isolated full-body 2D game sprite. Hold staff upright with a tiny light at the tip, free hand lifted inside a long sleeve, composed awkward waiting stance. Preserve facial identity, physique, clothes, props, muted colors and slightly rough ink outlines of reference. Matte limited cel shading. Complete figure and all props comfortably inside canvas with transparent margins. Only one settled pose, no text or scenery.",
+      "generatedSource": "exec-68db1fd3-b7dc-41ec-8bd0-6376ba2847b3.png"
+    },
+    {
+      "id": "mandragora",
+      "pose": "guard",
+      "source": "assets/battle/units/mandragora/guard-source.png",
+      "target": "assets/battle/units/mandragora/guard.webp",
+      "scale": 0.39,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D game sprite: mandragora, guard. Reference 1 supplies character identity; last reference is the authoritative idle appearance. Preserve face, body proportions, outfit, subdued colors, rough irregular ink and flat shading. NEW SETTLED POSE: Little root mandragora in white apron: bottom half sunk into a tiny snug patch of earth, upper face and leaves visible, nervous expression. Earth only immediate plug around root, no landscape. Match idle's character size and face scale on a square canvas; all feet at same ground line near bottom. Full figure and props with generous empty margins. Actual alpha transparency. No background pattern, no floor shadow, no labels or scene. Charming species-specific awkwardness, not heroic glamour.",
+      "generatedSource": "exec-37f96fd1-b195-42f6-b06a-53c4ac8f633e.png"
+    },
+    {
+      "id": "mandragora",
+      "pose": "ready",
+      "source": "assets/battle/units/mandragora/ready-source.png",
+      "target": "assets/battle/units/mandragora/ready.webp",
+      "scale": 0.39,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D game sprite: mandragora, ready. Reference 1 supplies character identity; last reference is the authoritative idle appearance. Preserve face, body proportions, outfit, subdued colors, rough irregular ink and flat shading. NEW SETTLED POSE: Little root mandragora in white apron holding wooden spoon: leaves lifted and splayed after shaking, mouth forms tiny squeak, feet grounded. No motion lines. Match idle's character size and face scale on a square canvas; all feet at same ground line near bottom. Full figure and props with generous empty margins. Actual alpha transparency. No background pattern, no floor shadow, no labels or scene. Charming species-specific awkwardness, not heroic glamour.",
+      "generatedSource": "exec-3340c042-7938-4e8c-905d-94be26b31574.png"
+    },
+    {
+      "id": "mimic",
+      "pose": "guard",
+      "source": "assets/battle/units/mimic/guard-source.png",
+      "target": "assets/battle/units/mimic/guard.webp",
+      "scale": 0.36,
+      "ground": 492,
+      "prompt": "On a transparent background, draw the exact character from the reference as one isolated full-body 2D game sprite. Treasure chest lid tightly closed, teeth tucked inside, squat stubborn defensive pose. Preserve facial identity, physique, clothes, props, muted colors and slightly rough ink outlines of reference. Matte limited cel shading. Complete figure and all props comfortably inside canvas with transparent margins. Only one settled pose, no text or scenery.",
+      "generatedSource": "exec-7e47ebc0-e97a-42b4-a3ca-85a153462402.png"
+    },
+    {
+      "id": "mimic",
+      "pose": "ready",
+      "source": "assets/battle/units/mimic/ready-source.png",
+      "target": "assets/battle/units/mimic/ready.webp",
+      "scale": 0.4,
+      "ground": 492,
+      "prompt": "On a transparent background, draw the exact character from the reference as one isolated full-body 2D game sprite. Treasure chest lid wide open and thick tongue hanging out, settled eager waiting pose. Preserve facial identity, physique, clothes, props, muted colors and slightly rough ink outlines of reference. Matte limited cel shading. Complete figure and all props comfortably inside canvas with transparent margins. Only one settled pose, no text or scenery.",
+      "generatedSource": "exec-dc4a79c5-c70c-4a7e-86c5-e67d14b66ae4.png"
+    },
+    {
+      "id": "minotaur",
+      "pose": "guard",
+      "source": "assets/battle/units/minotaur/guard-source.png",
+      "target": "assets/battle/units/minotaur/guard.webp",
+      "scale": 0.35,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-f1a2101a-dd96-4a4c-8d58-92ec0a2027b2.png"
+    },
+    {
+      "id": "minotaur",
+      "pose": "ready",
+      "source": "assets/battle/units/minotaur/ready-source.png",
+      "target": "assets/battle/units/minotaur/ready.webp",
+      "scale": 0.35,
+      "ground": 492,
+      "prompt": "On a transparent background, draw the exact character from the reference as one isolated full-body 2D game sprite. Axe head planted on ground beside him, one hand on upright haft, horns prominently displayed, proud waiting stance. Preserve facial identity, physique, clothes, props, muted colors and slightly rough ink outlines of reference. Matte limited cel shading. Complete figure and all props comfortably inside canvas with transparent margins. Only one settled pose, no text or scenery.",
+      "generatedSource": "exec-abb977b6-78a0-45f7-9804-2d5a05343acb.png"
+    },
+    {
+      "id": "necromancer",
+      "pose": "guard",
+      "source": "assets/battle/units/necromancer/guard-source.png",
+      "target": "assets/battle/units/necromancer/guard.webp",
+      "scale": 0.36,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-ac3bbb19-f59e-430d-8524-f3fbbb3b13d3.png"
+    },
+    {
+      "id": "necromancer",
+      "pose": "ready",
+      "source": "assets/battle/units/necromancer/ready-source.png",
+      "target": "assets/battle/units/necromancer/ready.webp",
+      "scale": 0.36,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-70987a54-f6b4-46f4-8afd-ae6b06a27f4b.png"
+    },
+    {
+      "id": "ogre",
+      "pose": "guard",
+      "source": "assets/battle/units/ogre/guard-source.png",
+      "target": "assets/battle/units/ogre/guard.webp",
+      "scale": 0.32,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-f2ee4824-eedd-4be4-8cb9-35bd3696260a.png"
+    },
+    {
+      "id": "ogre",
+      "pose": "ready",
+      "source": "assets/battle/units/ogre/ready-source.png",
+      "target": "assets/battle/units/ogre/ready.webp",
+      "scale": 0.32,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-aa6ec9c1-e094-4ba7-b621-f6a63079c284.png"
+    },
+    {
+      "id": "orc",
+      "pose": "guard",
+      "source": "assets/battle/units/orc/guard-source.png",
+      "target": "assets/battle/units/orc/guard.webp",
+      "scale": 0.335,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D game sprite: orc, guard. Reference 1 supplies character identity, reference 2 supplies existing idle body size and canvas anchor. Preserve identity and body proportions, outfit, muted colors, rough ink and flat shading. Draw only this settled pose: Green tusked orc: rough wooden club held horizontally in BOTH hands across chest, hips lowered, stubborn braced expression. Match idle's character scale and face size. Whole figure and props visible with padding, ground baseline near bottom. Transparent background with actual alpha channel. No background pattern, ground shadow, text, effects trails or scene. Slightly clumsy ordinary monster trying its best, not heroic glamour.",
+      "generatedSource": "exec-54a721bf-f41e-49d6-ba05-5e002400171b.png"
+    },
+    {
+      "id": "orc",
+      "pose": "ready",
+      "source": "assets/battle/units/orc/ready-source.png",
+      "target": "assets/battle/units/orc/ready.webp",
+      "scale": 0.335,
+      "ground": 492,
+      "prompt": "Isolate this single game character on a genuinely empty transparent PNG canvas. Remove ALL grey/white checkerboard background, including holes between arms and props. Actual RGBA alpha, not painted squares. Preserve exact orc pose, proportions and colors. Entire figure visible with empty margins. No floor shadow or new elements.",
+      "generatedSource": "exec-67de9de4-3aff-4e58-b35d-1623dbe9d26b.png"
+    },
+    {
+      "id": "skeleton",
+      "pose": "guard",
+      "source": "assets/battle/units/skeleton/guard-source.png",
+      "target": "assets/battle/units/skeleton/guard.webp",
+      "scale": 0.46,
+      "ground": 492,
+      "prompt": "On a transparent background, draw this exact skeleton soldier in a defensive crouch. Hold his wooden buckler forward covering his chest, skull peeking around it, and lower the short chipped sword beside his leg. Same body proportions, helmet, orange rag scarf, ivory bones and rough ink style. One full-body game sprite with generous empty margins.",
+      "generatedSource": "exec-0579e677-beb0-461f-a36c-d10be0f4385c.png"
+    },
+    {
+      "id": "skeleton",
+      "pose": "ready",
+      "source": "assets/battle/units/skeleton/ready-source.png",
+      "target": "assets/battle/units/skeleton/ready.webp",
+      "scale": 0.4,
+      "ground": 492,
+      "prompt": "Isolate this single game character on a genuinely empty transparent PNG canvas. Remove ALL grey/white checkerboard background, including holes between arms and props. Actual RGBA alpha, not painted squares. Replace the raised long wooden SPEAR with a short chipped iron SWORD, held proudly upright, not preparing a strike. Keep skull, helmet, clothes, buckler and body identity. Entire figure visible with empty margins. No floor shadow or new elements.",
+      "generatedSource": "exec-8065b9f2-8ca2-4127-8270-0fed346e7c0a.png"
+    },
+    {
+      "id": "slime",
+      "pose": "guard",
+      "source": "assets/battle/units/slime/guard-source.png",
+      "target": "assets/battle/units/slime/guard.webp",
+      "scale": 0.34,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D game sprite: slime, guard. Reference 1 supplies character identity, reference 2 supplies existing idle body size and canvas anchor. Preserve exact identity and body proportions, outfit, muted colors, rough ink and flat shading. Draw only this new settled pose: Faceless blue slime with red necktie: flattened into a very low wide puddle clinging to ground, tie bent along surface, no face or limbs. Match idle's character scale, face size and ground line in a square canvas. Whole character and props visible with padding. Transparent background with actual alpha channel. No background pattern, ground shadow, text, effects trails, or scene. Slightly clumsy ordinary monster trying its best, not heroic glamour.",
+      "generatedSource": "exec-f4a31a4c-8ef7-4329-ab39-cf063da9378b.png"
+    },
+    {
+      "id": "slime",
+      "pose": "ready",
+      "source": "assets/battle/units/slime/ready-source.png",
+      "target": "assets/battle/units/slime/ready.webp",
+      "scale": 0.36,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D game sprite: slime, ready. Reference 1 supplies character identity, reference 2 supplies existing idle body size and canvas anchor. Preserve exact identity and body proportions, outfit, muted colors, rough ink and flat shading. Draw only this new settled pose: Faceless blue slime with red necktie: settled tall upward stretched gelatin body, comically proud chest with no actual chest. Grounded after hop, no air, no face or limbs. Match idle's character scale, face size and ground line in a square canvas. Whole character and props visible with padding. Transparent background with actual alpha channel. No background pattern, ground shadow, text, effects trails, or scene. Slightly clumsy ordinary monster trying its best, not heroic glamour.",
+      "generatedSource": "exec-fb29394d-f80a-4740-a3f0-e5697976e764.png"
+    },
+    {
+      "id": "succubus",
+      "pose": "attack-windup",
+      "source": "assets/battle/units/succubus/attack-windup-source.png",
+      "target": "assets/battle/units/succubus/attack-windup.webp",
+      "scale": 0.37,
+      "ground": 492,
+      "prompt": "On a transparent background, create one full-body 2D battle sprite of the same adult fantasy woman in the reference. A poised combat preparation: weight forward on bent front knee, one gloved hand extended ready to cast a spell, other hand pulled back, wings swept back, focused confident expression. Preserve the existing purple dress, coverage, boots, gloves, horns, burgundy hair, facial identity and body proportions. Restrained matte cel shading and rough ink outlines, muted colors. Complete figure with comfortable margins, no background, no text. Non-explicit fantasy game character.",
+      "generatedSource": "exec-7f6c723a-00ef-4475-800a-a7ec541e1fb1.png"
+    },
+    {
+      "id": "succubus",
+      "pose": "guard",
+      "source": "assets/battle/units/succubus/guard-source.png",
+      "target": "assets/battle/units/succubus/guard.webp",
+      "scale": 0.34,
+      "ground": 492,
+      "prompt": "On a transparent background, create one full-body 2D battle sprite of the same adult fantasy woman in the reference. A practical defensive stance: wings curve protectively around her shoulders and torso, arms held defensively, composed confident smile. Preserve the existing purple dress, coverage, boots, gloves, horns, burgundy hair, facial identity and body proportions. Restrained matte cel shading and rough ink outlines, muted colors. Complete figure with comfortable margins, no background, no text. Non-explicit fantasy game character.",
+      "generatedSource": "exec-0f4f7b08-b063-4efc-bb37-a7ee73236270.png"
+    },
+    {
+      "id": "succubus",
+      "pose": "ready",
+      "source": "assets/battle/units/succubus/ready-source.png",
+      "target": "assets/battle/units/succubus/ready.webp",
+      "scale": 0.37,
+      "ground": 492,
+      "prompt": "On a transparent background, fix the anatomy of this adult fantasy game sprite. There must be exactly TWO arms and TWO hands: her left arm raised to touch the back of her hair, her right arm relaxed downward beside her right thigh. Remove the erroneous third hanging arm on the other side of her torso. Preserve same face, confident smile, costume, colors, pose and full-body framing. Genuine RGBA transparency around the complete character.",
+      "generatedSource": "exec-70d7b006-8ab7-443f-a22b-536e7bc24c4a.png"
+    },
+    {
+      "id": "troll",
+      "pose": "attack-windup",
+      "source": "assets/battle/units/troll/attack-windup-source.png",
+      "target": "assets/battle/units/troll/attack-windup.webp",
+      "scale": 0.32,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D battle sprite of EXACTLY this gentle slightly dim-witted troll, in attack-windup pose. Preserve the portrait-derived kind goofy face, messy brown hair, blue eyes, big round nose, warm freckled beige skin, brown stitched tunic/shorts, huge soft body, bare feet and plain wooden club. Grasp the plain wooden club in both hands, pull it back over one shoulder ready to swing right, planted legs and earnest hesitant determined face. Same face/head/body proportions as reference. Whole body and club visible with margins. Rough uneven ink and matte muted colors, charming awkwardness. Genuine alpha transparent PNG background. No checkerboard, scenery, shadows, labels or multiple figures.",
+      "generatedSource": "exec-17be9857-4321-47c8-abbd-00aefc616947.png"
+    },
+    {
+      "id": "troll",
+      "pose": "fallen",
+      "source": "assets/battle/units/troll/fallen-source.png",
+      "target": "assets/battle/units/troll/fallen.webp",
+      "scale": 0.34,
+      "ground": 492,
+      "prompt": "See SPEC_COMMAND_POSE_2026-09-15.md and owner revisions: gentle portrait-derived troll.",
+      "generatedSource": "exec-ebdd411f-4f2d-4d03-9047-33a55de2e380.png"
+    },
+    {
+      "id": "troll",
+      "pose": "guard",
+      "source": "assets/battle/units/troll/guard-source.png",
+      "target": "assets/battle/units/troll/guard.webp",
+      "scale": 0.31,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D battle sprite of EXACTLY this gentle slightly dim-witted troll, in guard pose. Preserve the portrait-derived kind goofy face, messy brown hair, blue eyes, big round nose, warm freckled beige skin, brown stitched tunic/shorts, huge soft body, bare feet and plain wooden club. Round back and huddle down into a sturdy compact crouch like a rock, both huge forearms protect head, soft worried eyes peeking. Club laid beside his feet. Same face/head/body proportions as reference. Whole body and club visible with margins. Rough uneven ink and matte muted colors, charming awkwardness. Genuine alpha transparent PNG background. No checkerboard, scenery, shadows, labels or multiple figures.",
+      "generatedSource": "exec-229c627a-7b06-4a81-8cec-ff84c0bdc461.png"
+    },
+    {
+      "id": "troll",
+      "pose": "hurt",
+      "source": "assets/battle/units/troll/hurt-source.png",
+      "target": "assets/battle/units/troll/hurt.webp",
+      "scale": 0.31,
+      "ground": 492,
+      "prompt": "See SPEC_COMMAND_POSE_2026-09-15.md and owner revisions: gentle portrait-derived troll.",
+      "generatedSource": "exec-0c53740c-54c3-43d4-8d6b-969b767e3c8e.png"
+    },
+    {
+      "id": "troll",
+      "pose": "idle",
+      "source": "assets/battle/units/troll/idle-source.png",
+      "target": "assets/battle/units/troll/idle.webp",
+      "scale": 0.31,
+      "ground": 492,
+      "prompt": "See SPEC_COMMAND_POSE_2026-09-15.md and owner revisions: gentle portrait-derived troll.",
+      "generatedSource": "exec-da25b360-8d1b-4ed8-9d15-3fef599b2bb7.png"
+    },
+    {
+      "id": "troll",
+      "pose": "ready",
+      "source": "assets/battle/units/troll/ready-source.png",
+      "target": "assets/battle/units/troll/ready.webp",
+      "scale": 0.285,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D battle sprite of EXACTLY this gentle slightly dim-witted troll, in ready pose. Preserve the portrait-derived kind goofy face, messy brown hair, blue eyes, big round nose, warm freckled beige skin, brown stitched tunic/shorts, huge soft body, bare feet and plain wooden club. Press both big fists together at chest level after a clumsy fist-bump, shy proud smile. Club tucked into belt at back. Same face/head/body proportions as reference. Whole body and club visible with margins. Rough uneven ink and matte muted colors, charming awkwardness. Genuine alpha transparent PNG background. No checkerboard, scenery, shadows, labels or multiple figures.",
+      "generatedSource": "exec-9e91f5fd-e8d1-4798-93e7-096a7755bf8a.png"
+    },
+    {
+      "id": "troll",
+      "pose": "recover",
+      "source": "assets/battle/units/troll/recover-source.png",
+      "target": "assets/battle/units/troll/recover.webp",
+      "scale": 0.31,
+      "ground": 492,
+      "prompt": "See SPEC_COMMAND_POSE_2026-09-15.md and owner revisions: gentle portrait-derived troll.",
+      "generatedSource": "exec-5aa940f4-cddf-4644-a781-3011cdd1009e.png"
+    },
+    {
+      "id": "troll",
+      "pose": "strike",
+      "source": "assets/battle/units/troll/strike-source.png",
+      "target": "assets/battle/units/troll/strike.webp",
+      "scale": 0.32,
+      "ground": 492,
+      "prompt": "Create ONE full-body 2D battle sprite of EXACTLY this gentle slightly dim-witted troll, in strike pose. Preserve the portrait-derived kind goofy face, messy brown hair, blue eyes, big round nose, warm freckled beige skin, brown stitched tunic/shorts, huge soft body, bare feet and plain wooden club. Follow through on a powerful clumsy two-handed wooden club swing to the right, body leaning forward, wide planted feet, concentrated gentle face; no impact effects or trails. Same face/head/body proportions as reference. Whole body and club visible with margins. Rough uneven ink and matte muted colors, charming awkwardness. Genuine alpha transparent PNG background. No checkerboard, scenery, shadows, labels or multiple figures.",
+      "generatedSource": "exec-3cd5ce74-6d7e-4c15-8e48-1a3b80e47a16.png"
+    },
+    {
+      "id": "zombie",
+      "pose": "guard",
+      "source": "assets/battle/units/zombie/guard-source.png",
+      "target": "assets/battle/units/zombie/guard.webp",
+      "scale": 0.36,
+      "ground": 492,
+      "prompt": "On a transparent background, draw the exact character from the reference as one isolated full-body 2D game sprite. Curl forward slightly, both forearms protecting the head, clumsy stiff defensive pose. Preserve facial identity, physique, clothes, props, muted colors and slightly rough ink outlines of reference. Matte limited cel shading. Complete figure and all props comfortably inside canvas with transparent margins. Only one settled pose, no text or scenery.",
+      "generatedSource": "exec-6c7a67db-209d-4ff1-8aaf-573bc0b0082f.png"
+    },
+    {
+      "id": "zombie",
+      "pose": "ready",
+      "source": "assets/battle/units/zombie/ready-source.png",
+      "target": "assets/battle/units/zombie/ready.webp",
+      "scale": 0.36,
+      "ground": 492,
+      "prompt": "Remove the background from this game character. Output a transparent PNG cutout of the character with clean edges and all its details preserved. ",
+      "generatedSource": "exec-6c07820e-dbe5-4261-8a95-6f3ccdcc8f6a.png"
+    }
+  ]
+}

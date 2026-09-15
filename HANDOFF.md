@@ -21,6 +21,14 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-13 夜 現在）
 
+### 指示待ち・防御の絵（2026-09-15・CodeX）
+
+- `codex/command-pose-art`：仕様§1の18種×ready/guard＝36枚を追加。オーナー追記でトロルは立ち絵のやさしく少しまぬけな顔から全8ポーズを制作し、サキュバスattack-windupも差し替え。合計43枚の出力（既存7枚置換を含む）。`src/` は未変更。
+- 全画像512×512・透過WebP・接地基準y=492。採用PNG、プロンプト・拡大率のマニフェスト、`scripts/prepare_command_poses.py`、明暗背景の一覧を保存。詳細は `docs/COMMAND_POSE_ART_REVIEW.md`。
+- 次にやること／バックログ：Claudeが18種の `BATTLE_SPRITES` にready/guardを登録し、art-coverageを210→246へ更新。その後Opusが仕様§2を配線。readyは指示確定前、通常攻撃確定後はattack-windup、防御確定後はguard。
+- 旧motion-sourceからトロルやサキュバスの変更箇所を再出力すると旧絵に戻るため、今回の個別sourceとマニフェストを優先する。
+- 検証：43枚の寸法・alpha・接地線と明暗背景一覧を確認。既存ブラウザテスト `battlefield` / `effects` / `vfx-lifecycle` が通過。登録・新しい指示待ち演出そのものの検証は§2の取り込み時に行う。
+
 ### 引き継ぎ（2026-09-15 朝・Claude。次のセッションはここから）
 
 **役割**：Claude（Fable）＝設計・仕様書・レビュー・取り込み（マージ）・戦闘エンジン（battle.js / skill_effects.js / skills.js）。Opus＝run.js・UI・テスト。CodeX（Astra）＝絵・音・文章データ（GitHub 連携で push、テストは走らせられない）。
