@@ -75,8 +75,9 @@ const Chain = vm.runInContext('Chain', inner);
 const Battle = vm.runInContext('Battle', inner);
 const store = vm.runInContext('store', outer);
 
-if (strategies.length !== 15) {
-  throw new Error(`chain-v2-measure: 戦う戦略が15本でない（${strategies.length}本）。sim.js の変更を確認すること`);
+// 2026-09-15：地図の上の戦争（段階A）で「近い順に落とす」「港と町を優先」を足して 15 → 17 本。
+if (strategies.length !== 17) {
+  throw new Error(`chain-v2-measure: 戦う戦略が17本でない（${strategies.length}本）。sim.js の変更を確認すること`);
 }
 
 // ── 1戦闘ぶんの観測。KPI.battleFinished を包んで結果を受け取る ──

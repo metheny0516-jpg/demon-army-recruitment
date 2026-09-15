@@ -7,6 +7,10 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
 
 // 征服3（村はずれ・街道・関所が領地）／関所の次＝大神殿の前哨は制済／市場Lv2・酒場Lv1・借金20G
 const SAVE = () => {
+  // 征服度だけで塗る旧セーブの見え方を見る回（領土は空・作戦の札も持たない）。
+  // 領土が始まっているランの見え方は、この下の「領土の色と、候補の光り」で見る。
+  Game.state.territory = { lands: [], tribes: [] };
+  Game.state.missionOffers = [];
   Game.state.conquest = 3;
   Game.state.outpost = { stage: 3, cleared: true, formationId: 'standard' };
   Game.state.town = { lv: { market: 2, tavern: 1 }, debt: 20, ledger: [], builtThisSettle: 0, exchanged: {} };
@@ -217,6 +221,33 @@ const SAVE = () => {
   });
   ok(legacy.points === 14 && legacy.lots === 8, '地点も区画も出る');
   ok(legacy.first === 'mp-next', `征服0なら村はずれが次の戦い（${legacy.first}）`);
+
+  // ── 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md §2-4）──
+  console.log('\n▼ 領土の色と、候補の光り');
+  const world = await page.evaluate(() => {
+    // p1 に乗る土地（h01・h02）を両方落としてから見る。
+    // 片方だけだと、残りが候補に選ばれた回に p1 が「次の戦い」になって塗りが変わる。
+    Territory.take(Game.state, 'h01');
+    Territory.take(Game.state, 'h02');
+    Game.state.phase = 'mission';
+    Game.prepareMissions(true);
+    UI.castle('town');
+    const ids = new Set(Game.state.missionOffers.map(m => m.territoryId).filter(Boolean));
+    const points = [...document.querySelectorAll('.map-point')];
+    const owned = points.filter(p => p.classList.contains('mp-owned')).length;
+    const glow = points.filter(p => p.classList.contains('mp-candidate'));
+    return {
+      owned, glow: glow.length,
+      picks: glow.filter(p => p.dataset.action === 'missionpick').length,
+      tribes: document.querySelectorAll('.tribe-row .tribe-pin').length,
+      tribeGlow: document.querySelectorAll('.tribe-row .tribe-pin.mp-candidate').length,
+      candidates: ids.size
+    };
+  });
+  ok(world.owned >= 1, `落とした土地の地点が塗られる（${world.owned}）`);
+  ok(world.glow + world.tribeGlow >= 1, `候補が光る（土地${world.glow}／部族${world.tribeGlow}）`);
+  ok(world.picks === world.glow, `光った地点はタップでその札を選ぶ（${world.picks}/${world.glow}）`);
+  ok(world.tribes >= 8, `部族圏の印が並ぶ（${world.tribes}）`);
 
   ok(errs.length === 0, `ページエラーなし${errs.length ? '：' + errs[0] : ''}`);
   await b.close();

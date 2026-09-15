@@ -65,14 +65,21 @@ const MapUI = {
     let state = this.stateOf(st, point);
     // 領土（段階A）：落とした土地は色を塗り、候補は光らせる。
     const lands = this.landsOfPoint(point).map(l => l.id);
-    const owns = typeof Territory !== "undefined" && lands.length && lands.every(id => Territory.has(st, id));
+    // 地点1つに土地が2つ乗ることがある（12土地を8地点へ詰めている仮の割り当て）。
+    // どれか1つでも落としていれば塗る（どこまで進んだかが地図で読めるように）。
+    const owns = typeof Territory !== "undefined" && lands.some(id => Territory.has(st, id));
     const candidates = this.candidateIds(st);
     const isCandidate = lands.some(id => candidates.has(id));
     let offerIndex = -1;
-    if (state !== "fogged" && lands.length) {
-      if (owns) state = "owned";
-      else if (isCandidate) { state = "next"; offerIndex = this.offerIndexOf(st, lands); }
-      else if (state !== "owned") state = "far";
+    // 領土を1つも持っていないラン（旧セーブ・領土を使わない測定）では、
+    // 今までどおり征服度で塗る。領土が始まっていれば、そちらが正になる。
+    const started = typeof Territory !== "undefined" && Territory.init(st).lands.length > 0;
+    if (state !== "fogged" && lands.length && (started || isCandidate)) {
+      // 同じ地点に「落とした土地」と「まだの土地」が乗ることがある。
+      // その場合はまだ取れる方を優先して光らせる（次に何ができるかが読める）。
+      if (isCandidate) { state = "next"; offerIndex = this.offerIndexOf(st, lands); }
+      else if (owns) state = "owned";
+      else if (started) state = "far";
     }
     const pin = state === "owned" ? "pin-owned" : state === "outpost" ? "pin-outpost" : "pin-gray";
     const clickable = state === "next" || state === "outpost";

@@ -3,8 +3,8 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/incidents.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/traces.js','src/core/incidents.js','src/core/run.js'];
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js','src/data/territories.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/incidents.js','src/data/demon_kings.js',
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/territory.js','src/core/traces.js','src/core/incidents.js','src/core/run.js'];
 // SIM_NO_TOWN=1 で城下町（税）を読まない。再起の回帰テスト（test-chain-measure-retry）は全滅が起きる前提なので、税で楽になった後も同じ種で測れるようにする
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -150,7 +150,21 @@ function runOnce(strat, stats){
       }
       // 防衛戦（王国の反撃）は一択で来る。選ぶ余地は無いので、あればそれを受ける。
       const defendIndex = st.missionOffers.findIndex(m => m.missionKind === 'defend');
-      if (defendIndex >= 0 && kind !== 'train') Game.selectMission(defendIndex);
+      // 地図の上の戦争（段階A）：候補3つからどれを落とすか。
+      //   near     … 候補の先頭（近い順に落とす）
+      //   portTown … 港と町を優先（効き目の大きい土地から取る）
+      const takes = st.missionOffers
+        .map((m, i) => ({ m, i }))
+        .filter(x => x.m.territoryMode === 'take');
+      let territoryIndex = -1;
+      if (strat.territory && takes.length && defendIndex < 0 && kind !== 'train') {
+        if (strat.territory === 'portTown') {
+          const rich = takes.find(x => ['port', 'town'].includes(x.m.territoryKind));
+          territoryIndex = (rich || takes[0]).i;
+        } else territoryIndex = takes[0].i;
+      }
+      if (territoryIndex >= 0) Game.selectMission(territoryIndex);
+      else if (defendIndex >= 0 && kind !== 'train') Game.selectMission(defendIndex);
       else {
         const index = st.missionOffers.findIndex(m => m.missionKind === kind);
         Game.selectMission(index >= 0 ? index : Math.min(2, st.missionOffers.length - 1));
@@ -245,6 +259,9 @@ function runOnce(strat, stats){
     if (rec.clearedBy === "defense") stats.defense.byDefense++;
     else stats.defense.byConquest++;
   }
+  // 地図の上の戦争（段階A）：どこまで面を広げたか・巡回を何回まわしたか
+  stats.territory = (stats.territory || 0) + ((st.territory?.lands || []).length + (st.territory?.tribes || []).length);
+  stats.patrols = (stats.patrols || 0) + (st.patrolCount || 0);
   stats.cards ||= {settles:0,offered:0,opened:0,natural:0};
   for(const k of Object.keys(stats.cards)) stats.cards[k] += st.incidents?.stats?.[k] || 0;
   return rec;
@@ -270,6 +287,9 @@ const strategies = [
   {name:'進軍の前に訓練を1回', kind:'greedy', train:true},
   // 現実の遊び方に近い形：序盤の3回だけ（種族技が開くまで）。無制限の上と見比べる。
   {name:'訓練は序盤3回だけ', kind:'greedy', train:true, trainMax:3},
+  // 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md §2-5）
+  {name:'近い順に落とす', kind:'greedy', territory:'near'},
+  {name:'港と町を優先', kind:'greedy', territory:'portTown'},
 ];
 const N = Number(process.argv[2] || 400);
 // 連鎖測定器の既存15戦略は維持し、札の比較は通常のsim実行に追加する。
@@ -295,7 +315,7 @@ for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)
   const facility = (res.reduce((a,r)=>a+(r.townLevels||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  領土 ${((stats.territory||0)/N).toFixed(2)}／ラン  巡回 ${((stats.patrols||0)/N).toFixed(2)}回/ラン`);
   console.log(`  札: 提示 ${stats.cards.offered}／めくった ${stats.cards.opened}／自然発生 ${stats.cards.natural}／決着 ${stats.cards.settles}（波乱 ${(100*stats.cards.natural/Math.max(1,stats.cards.settles)).toFixed(2)}%）`);
   const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);
