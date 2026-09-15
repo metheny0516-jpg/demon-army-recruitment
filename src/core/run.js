@@ -57,6 +57,11 @@ const Game = {
       missionOffers: [],
       selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
+      // 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md 段階A）。
+      // 落とした土地・従えた部族が領土になる。征服度は決着ごとにここから写す。
+      territory: { lands: [], tribes: [] },
+      raided: {},          // 略奪した土地 → 回数（次に落とすとき守備が硬い）
+      patrolCount: 0,      // 巡回で戦った回数（sim の列）
       gold: demonKing.start.gold,
       food: demonKing.start.food,
       materials: demonKing.start.materials,
@@ -325,6 +330,11 @@ const Game = {
   migrateState() {
     const st = this.state;
     if (!st || typeof st !== "object") return;
+    // 領土（段階A）。旧セーブは空（魔王城だけ）から始める。征服度は今の値を残す
+    // （次の決着で Territory.conquestOf に置き換わるまで、段階表の見え方は変わらない）。
+    if (typeof Territory !== "undefined") Territory.init(st);
+    if (!st.raided || typeof st.raided !== "object") st.raided = {};
+    if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
       const legacyStage = U.clamp(Number(st.stage) || 1, 1, this.actStages().length);
@@ -1238,8 +1248,8 @@ const Game = {
     const offers = st.missionOffers;
     // 訓練は「防衛が来ている決着でも選べる」（勇者の前に鍛え直す場でもある）ので、
     // 予約中の札は「防衛＋訓練」の2枚、通常は「3系統＋訓練」の4枚になる。
-    const want = pending ? 2 : MISSION_TYPES.length + 1;
-    const stale = !Array.isArray(offers) || offers.length !== want
+    // 3択は地図の候補（段階A）。予約中は防衛＋訓練＋巡回。
+    const stale = !Array.isArray(offers) || !offers.length
       || (pending ? !offers.some(m => m.missionKind === "defend")
         : offers.some(m => m.missionKind === "defend"))
       || !offers.some(m => m.missionKind === "train");
@@ -1251,11 +1261,71 @@ const Game = {
     st.selectedMission = null;
     st.missionOffers = (pending
       ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
-      : MISSION_TYPES.map(type => this.buildMission(type, previous.get(type.id))))
+      : this.territoryOffers(previous))
+      .concat(this.patrolOffer() ? [this.patrolOffer()] : [])
       .concat([this.buildMission(MISSION_TYPES.train, previous.get("train"))]);
     st.phase = "mission";
     this.save();
     return st.missionOffers;
+  },
+
+  // 3択＝地図で隣接する候補3つ（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
+  // 人間界の土地は「落とす」（進軍の型）、部族圏は「従える」（鎮圧の型）。
+  // 土地には「略奪」、贈れる部族には「贈る」の札を**同じ場所の裏の選択肢**として並べて返す
+  // （表示側が territoryId でまとめて1枚に畳む。新しい action を増やさずに切り替えられる）。
+  territoryOffers(previous) {
+    if (typeof Territory === "undefined") {
+      return MISSION_TYPES.map(type => this.buildMission(type, (previous || new Map()).get(type.id)));
+    }
+    const st = this.state;
+    Territory.init(st);
+    const places = Territory.candidates(st, U.rand);
+    // 候補が尽きた（幕の全部を落とした）なら今までの3系統へ戻す（幕の着地は既存の経路）。
+    if (!places.length) return MISSION_TYPES.map(type => this.buildMission(type, (previous || new Map()).get(type.id)));
+    const out = [];
+    for (const place of places) {
+      const tribe = Territory.isTribe(place.id);
+      out.push(this.buildMission(tribe ? MISSION_TYPES[1] : MISSION_TYPES[2], null, place));
+      if (!tribe) out.push(this.buildMission(MISSION_TYPES[0], null, place));   // 略奪（裏の選択肢）
+      const cost = Territory.tributeCost(place.id);
+      if (cost) out.push(this.tributeOffer(place, cost));
+    }
+    return out;
+  },
+
+  // 贈る（戦わずに従える）。戦闘の札ではないので units は持たない。
+  // 選んだ時点で selectMission が支払いまで済ませる（新しい action を増やさない）。
+  tributeOffer(place, cost) {
+    return {
+      stage: this.state.turn,
+      missionKind: "tribute",
+      missionTitle: `${place.name}へ贈る`,
+      strategyLabel: "戦わずに従える",
+      strategyHint: `金 ${cost.gold}G と食料 ${cost.food} を贈る。戦わずにその種族が仲間になる。`,
+      description: "贈り物を持たせた使者を出す。魔王軍にも外交はある（たまに）。",
+      territoryId: place.id, territoryMode: "tribute", territoryKind: null,
+      territoryLine: "従えれば、その種族が応募に来る",
+      tributeCost: cost,
+      difficulty: "—", army: `${place.name}の長`, region: place.name,
+      reward: 0, foodReward: 0, materialReward: 0,
+      alertDelta: 0, conquestDelta: 0, loyaltyDelta: 0,
+      armyPressure: 0, familiarity: 0, twoStage: false, missionPhase: "main",
+      training: false, units: []
+    };
+  },
+
+  // 巡回の札。領土が1つも無ければ出さない（見回る先が無い）。
+  patrolOffer() {
+    if (typeof Territory === "undefined") return null;
+    const st = this.state;
+    const t = Territory.init(st);
+    if (!t.lands.length && !t.tribes.length) return null;
+    const stage = Territory.patrolStage(st);
+    // 名前は人間界の領土なら「辺境のパトロール隊」、部族圏なら「反乱の残党」。両方あれば交互。
+    const both = t.lands.length && t.tribes.length;
+    const rebels = both ? ((st.turn || 0) % 2 === 1) : !t.lands.length;
+    return this.buildMission(this.PATROL_TYPE, null,
+      { id: null, name: "領内", garrison: stage, army: rebels ? "反乱の残党" : "辺境のパトロール隊" });
   },
 
   // ── 訓練（docs/DESIGN_TRAINING_2026-09-13.md）────────────────
@@ -1379,7 +1449,32 @@ const Game = {
     return { tplId: look.tplId, race: look.race, icon: look.icon, rebel: true };
   },
 
-  buildMission(type, previousFormationId) {
+  // 巡回の札（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。何度でも戦える雑魚戦。
+  // 征服は進まず、警戒も上がらない。戦死はある。データ（missions.js）は触らず、
+  // 型だけここに置く（段階A のあいだは run.js に閉じる）。
+  PATROL_TYPE: {
+    id: "patrol", icon: "🛡", title: "領内を巡回する",
+    strategyLabel: "領内の見回り",
+    strategyHint: "落とした土地を見回る。攻略は進まず、王国にも気づかれない。稼ぎは薄い。",
+    descriptions: [
+      "領内に湧いた小競り合いを片付けに行く。手柄は小さいが、誰も文句を言わない。",
+      "見回りの名目で暴れる。魔王軍の日常業務である。",
+      "残党狩り。地味だが、放っておくと面倒になる。"
+    ],
+    armies: ["辺境のパトロール隊"], regions: ["領内"],
+    enemyTierOffset: 0, enemyMult: 1.0, rewardMult: 0.4, payrollCoverage: 0.5,
+    rewardJitter: [0, 1], foodReward: 1, materialReward: 0,
+    alertDelta: 0, conquestDelta: 0, loyaltyDelta: 0, difficulty: "低"
+  },
+
+  // 土地・部族圏の札に使う守備段階。略奪した土地は次に来るとき硬い。
+  placeStage(place) {
+    const rules = typeof Territory !== "undefined" ? Territory.rules() : { raid: { garrisonBonus: 1 } };
+    const raided = ((this.state.raided || {})[place.id] || 0) * (rules.raid.garrisonBonus || 0);
+    return Math.max(1, (place.garrison || 1) + raided);
+  },
+
+  buildMission(type, previousFormationId, place) {
     const st = this.state;
     // 敵も魔王軍レベルに連動する（仕様2.3）。征服段階だけで引いていた頃は、
     // 略奪を繰り返せば応募者だけ強くして敵を据え置きにできた。
@@ -1387,7 +1482,9 @@ const Game = {
     // 通常作戦の敵の段階は**征服度だけ**で決める（2026-09-10）。時間では上がらない。
     // 時間の圧力は警戒度＝王国の反撃（防衛戦は下で魔王軍レベル基準に置き換える）。
     const stages = this.actStages();
-    let baseIndex = U.clamp(st.conquest + type.enemyTierOffset, 0, stages.length - 1);
+    let baseIndex = place
+      ? U.clamp(this.placeStage(place) - 1, 0, stages.length - 1)
+      : U.clamp(st.conquest + type.enemyTierOffset, 0, stages.length - 1);
     // 防衛戦（王国の反撃）。討伐隊は段階7（聖騎士団）まで。勇者は段階8で固定。
     const counter = type.id === "defend" ? (st.counterattack || {}) : null;
     if (counter) {
@@ -1425,9 +1522,9 @@ const Game = {
     const training = type.id === "train";
     const opponent = training ? this.trainingOpponent(this.state.trainingOpponentId) : null;
     // 進軍だけが2戦制。前哨戦は敵が半分・報酬も半分・征服度は進まない。
-    const isOutpost = type.id === "invade" && !counter
+    const isOutpost = !place && type.id === "invade" && !counter
       && this.outpostNeeded(baseIndex) && !this.outpostCleared();
-    const twoStage = type.id === "invade" && !counter && this.outpostNeeded(baseIndex);
+    const twoStage = !place && type.id === "invade" && !counter && this.outpostNeeded(baseIndex);
     const jitter = U.randInt(type.rewardJitter[0], type.rewardJitter[1]);
     // 略奪は「給与を払ったうえで少し蓄えられる」資金調達策にする。
     // 固定額だけでは大所帯ほど赤字になり、寄り道する意味が逆転してしまう。
@@ -1445,7 +1542,7 @@ const Game = {
     const defenseArmy = counter
       ? (counter.armyName || (counter.kind === "hero" ? base.army : `${base.army}討伐隊`))
       : null;
-    return {
+    const mission = {
       stage: st.turn,
       missionKind: type.id,
       missionTitle: training ? `訓練：${opponent ? opponent.line : "稽古"}` : (isOutpost ? `前哨戦：${base.region}の斥候` : type.title),
@@ -1484,6 +1581,39 @@ const Game = {
       formationHint: formation.hint,
       units: training ? this.trainingUnits(units, opponent) : (isOutpost ? this.outpostUnits(units) : units)
     };
+    return place ? this.dressPlaceMission(mission, type, place) : mission;
+  },
+
+  // 場所の札の見た目と印（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
+  // 型（invade / raid / suppress / patrol）はそのまま使い、どこで誰と戦うかだけ差し替える。
+  // 征服度は決着ごとに Territory.conquestOf で写すので、札では進めない（conquestDelta 0）。
+  dressPlaceMission(mission, type, place) {
+    const kinds = typeof Territory !== "undefined" ? Territory.kinds() : {};
+    const kind = kinds[place.kind] || null;
+    const raid = type.id === "raid";
+    const patrol = type.id === "patrol";
+    const tribe = !patrol && typeof Territory !== "undefined" && Territory.isTribe(place.id);
+    mission.territoryId = patrol ? null : place.id;
+    mission.territoryMode = patrol ? "patrol" : raid ? "raid" : "take";
+    mission.territoryKind = place.kind || null;
+    mission.territoryLine = kind ? kind.line : (tribe ? "従えれば、その種族が応募に来る" : "");
+    mission.conquestDelta = 0;
+    if (patrol) {
+      mission.missionTitle = "領内を巡回する";
+      mission.region = "領内";
+      mission.army = place.army || "辺境のパトロール隊";
+      return mission;
+    }
+    mission.missionTitle = raid ? `${place.name}を略奪する` : tribe ? `${place.name}を従える` : `${place.name}を落とす`;
+    mission.region = place.name;
+    mission.army = tribe
+      ? `${place.name}の群れ`
+      : `${place.name}の守備隊`;
+    mission.strategyLabel = raid ? "資金・食料を補給" : tribe ? "仲間を増やす" : "領土を広げる";
+    mission.strategyHint = raid
+      ? "落とさずに奪って帰る。次に来たときの守りは硬くなる。"
+      : mission.territoryLine;
+    return mission;
   },
 
   selectMission(index) {
