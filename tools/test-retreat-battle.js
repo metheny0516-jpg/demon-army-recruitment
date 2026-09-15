@@ -50,6 +50,7 @@ const scene = (opts) => {
   assert(!!w && w.survived === true && w.injured === true, '倒れていた者は survived: true / injured: true');
   assert(!!t && t.survived === true && !t.injured, '立っていた者は survived: true で injured は無い');
   assert(rows.every(x => x.id !== undefined && x.name), 'contribution は既存と同じ形（id・name がある）');
+  assert(!!t && t.actions && t.actions.attack >= 1, `提案時点の戦果にも手番の記録（actions）が載る（attack=${t && t.actions && t.actions.attack}）`);
 }
 
 // 3. 続行の結末（result.contribution）は今までどおり：倒れたまま終われば戦死

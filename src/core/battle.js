@@ -1347,7 +1347,7 @@ const Battle = {
             round, emphasis: 3, downed: downed.map(snap), standing: standing.map(snap), enemies: enemiesLeft.map(snap),
             manual: true, text: `　魔王軍、退く。${downed.map(u => u.name).join("、")}を担いで城へ戻った`, cls: "mormo"
           });
-          const contribution = this.summarizeContribution(timeline, playerUnits).map(row => {
+          const contribution = this.summarizeContribution(timeline, playerUnits, actions).map(row => {   // 手番の記録（actions）も渡す。退いた戦いでも成長の偏りが効く（2026-09-15）
             if (row.mercenary || row.survived) return row;
             return { ...row, survived: true, injured: true };
           });
@@ -1569,7 +1569,7 @@ const Battle = {
           });
           // 提案時点の戦果。終了時と同じ導出関数を使い、二か所で別々に組まない。
           // 倒れていた軍団員は「担いで帰る」＝生存（負傷）。傭兵・召喚物は今までどおり。
-          const contribution = this.summarizeContribution(timeline, playerUnits).map(row => {
+          const contribution = this.summarizeContribution(timeline, playerUnits, actions).map(row => {   // 手番の記録（actions）も渡す。退いた戦いでも成長の偏りが効く（2026-09-15）
             if (row.mercenary || row.survived) return row;
             return { ...row, survived: true, injured: true };
           });
