@@ -524,6 +524,51 @@ const INCIDENTS = [
       text: "次の決着で閉会、臨時役を終了。客は隊員に数えず、出撃数・恒久職業は変えない。"
     }
   },
+  // 堕騎士（docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md 2節）。主と認めたあとに、王国が「戻れ」と言ってくる。
+  // door B ＝ 使者はもう門の外にいる。「関わらない」でも来たこと自体は消えない。
+  {
+    id: "knight_envoy",
+    tier: "mid",
+    door: "B",
+    title: "王国からの使者",
+    subject: {"kind": "unit", "race": "堕騎士"},
+    traces: ["hired", "promoted", "trained"],
+    traceScope: "関連痕跡 { hired(堕騎士)／promoted(堕騎士)／trained(堕騎士) } の異なる2種＋忠誠80以上の堕騎士がいる。",
+    state: st => (st.roster || []).some(m => m.race === "堕騎士" && (m.loyalty || 0) >= 80),
+    rumor: "門の外に王国の使者が立っている。堕騎士は鞘の布を、黙って巻き直している。",
+    choices: ["使者に会わせる", "関わらない"],
+    pick: null,
+    hidden: {
+      label: "その者の忠誠90以上か",
+      value: (st, c) => (c.subject?.loyalty || 0) >= 90 ? "90以上" : "90未満"
+    },
+    // 使者に会わせると、主を口に出して決める（忠誠+5）。
+    gain: (st, c) => {
+      c.game.incidentEffect("knight_envoy", "gain", c);
+    },
+    // 90以上→使者を斬る（王国警戒度+5・戦功+3）。90未満→断る（忠誠+10、後日 元同僚が討伐隊で来る）。
+    branches: {
+      "90以上": {
+        apply: (st, c) => {
+          c.game.incidentEffect("knight_envoy", "90以上", c);
+        },
+        text: "使者は書状を読み上げ、最後まで読み終えることはなかった。門の血は、本人が拭いた。",
+        mormo: "返事は、要らなかったようですネ。"
+      },
+      "90未満": {
+        apply: (st, c) => {
+          c.game.incidentEffect("knight_envoy", "90未満", c);
+        },
+        text: "「戻る場所は、自分で切り取りました」。使者は書状を持ったまま帰り、名簿だけを写していった。",
+        mormo: "あの写し、人事課に回りますネ。"
+      },
+    },
+    tail: {
+      after: 2,
+      id: "knight_envoy_tail",
+      text: "斬った枝は王国が黙って警戒を上げるだけ。断った枝は2決着後、写された名簿から元同僚が討伐隊に混ざる。"
+    }
+  },
 ];
 
 if (typeof module !== "undefined") module.exports = { INCIDENTS };

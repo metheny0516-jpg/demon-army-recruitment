@@ -1056,6 +1056,8 @@ const Game = {
         case "training_visitor": this.incidentApplicant("goblin");break;
         case "skeleton_choir": loyalty(this.departmentRoster("home"),3);break;
         case "succubus_party": loyalty(st.roster,5);break;
+        // 堕騎士：使者に会わせると、主を口に出して決める
+        case "knight_envoy": loyalty([m],5);break;
       }
       return;
     }
@@ -1095,6 +1097,11 @@ const Game = {
         break;
       case "skeleton_choir": if(step==="食料3以下")st.food+=3;break;
       case "succubus_party": s.party=step;break;
+      // 堕騎士：斬れば王国が気づく（警戒度+5・戦功+3）。断れば名簿を写され、後日 元同僚が討伐隊に混ざる。
+      case "knight_envoy":
+        if(step==="90以上") { st.alert=Math.max(0,(st.alert||0)+5); if(m)m.merit=(m.merit||0)+3; }
+        else { loyalty([m],10); s.envoyRoster={name:(m?.name||"堕騎士")+"の元同僚",due:(st.turn||0)+2}; }
+        break;
     }
   },
   incidentTail(t, accept) {
@@ -1123,6 +1130,14 @@ const Game = {
       case "training_visitor":delete s.biography;delete s.lessonUid;text="師匠の記事と受け身の稽古が、町の話題になった。";break;
       case "skeleton_choir":text="合唱団が帰ってきた。送別会の主役は無事に引っ越した。";break;
       case "succubus_party":delete s.party;text="夜会がお開きになり、客も隊列を解いた。";break;
+      case "knight_envoy":
+        if(t.branch==="90未満"&&s.envoyRoster) {
+          // 「元同僚が王国の隊列に出る」を、既存の防衛戦の予約で実らせる（necro_visitor と同じ口）。
+          if(st.counterattack?.pending) {s.envoyRoster.due=(st.turn||0)+1;text="元同僚はまだ来ない。先に今の防衛戦を片付けよう。";break;}
+          st.counterattack={pending:true,kind:"punitive",armyName:s.envoyRoster.name};
+          text=`写された名簿から、${s.envoyRoster.name}が討伐隊に混ざった。`;
+        } else text="王国はしばらく黙っている。使者の件は、書類の上でだけ残った。";
+        delete s.envoyRoster;break;
     }
     if(s.scenes)delete s.scenes[t.parent];
     return text;

@@ -3882,3 +3882,7 @@ button.primary::first-letter { color: var(--gold); }
 .cmd-menu-eat { margin-top: 4px; }
 .cmd-btn.cmd-eat { border-color: rgba(232, 189, 104, .45); }
 .cmd-btn.cmd-eat[disabled] { opacity: .45; }
+
+/* 忠義の一行（堕騎士）。名簿の詳細で、主と認めたかどうかを出す */
+.fealty-line { margin: 4px 0 0; font-size: 12px; color: #d9c9a0; }
+.fealty-line.sworn { color: #ffe6a8; }

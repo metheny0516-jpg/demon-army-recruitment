@@ -717,6 +717,19 @@ const UI = {
   },
 
   // 名簿と応募者で共用する人物詳細。呼び出し側は uid または applicantIndex の片方を渡す。
+  // 忠義（堕騎士の癖 fealty / oath）の一行。閾値は battle.js が正で、ここは読むだけ。
+  // 忠誠60未満＝本気を出さない（種族技も出ない）、80以上＝主と認めた。
+  FEALTY_TRAITS: ["fealty", "oath"],
+  fealtyLine(m) {
+    if (!m || !(m.traits || []).some(id => this.FEALTY_TRAITS.includes(id))) return "";
+    const loyalty = Number(m.loyalty) || 0;
+    const sworn = loyalty >= 80;
+    return `<div class="fealty-line${sworn ? " sworn" : ""}">${sworn
+      ? "🗡 主と認めた（全力で戦う）"
+      : loyalty >= 60 ? "🗡 まだ主と認めていない（忠誠80で全力になる）"
+        : "🗡 まだ主と認めていない（忠誠60までは本気を出さず、技も出さない）"}</div>`;
+  },
+
   memberDetail(uid, applicantIndex) {
     const st = Game.state;
     this.memberFrom = this.root && this.root.dataset.scene;
@@ -765,6 +778,7 @@ const UI = {
         <div><span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span>　戦功 ${m.merit || 0}${nextRank ? ` / ${nextRank.threshold}` : "・最高位"}</div></div></header>
       <div class="stats member-detail-stats">${stat("HP", "hp")}${stat("攻撃", "atk")}${stat("防御", "def")}${stat("速度", "spd")}</div>
       <div class="meta"><span>気合 ${typeof m.spirit === "number" ? m.spirit : "-"}</span><span>忠誠 ${m.loyalty}</span><span>給与 ${m.salary}G</span></div>
+      ${this.fealtyLine(m)}
       <section><h3>特性と技</h3>${traitGroup("癖", "◌", quirks)}${traitGroup("共通特性", "◆", common)}${traitGroup("遺物由来", "🏺", relicTraits)}${traitGroup("技", "🗡", skills)}
         ${skillStatus ? `<div class="skill-status">${U.esc(skillStatus)}</div>` : ""}${nextSkill ? `<div class="next-skill">次に覚える技／伝承：<b>【${U.esc(nextSkill.name)}】</b></div>` : ""}</section>
       <section><h3>記録</h3><div class="member-record">出撃 ${record.battles || 0}戦（${record.wins || 0}勝）　倒れた ${record.downed || 0}回　担がれた ${record.carried || 0}回　遅刻 ${record.late || 0}回　食べた ${record.ate || 0}回</div></section>
@@ -2076,7 +2090,8 @@ const UI = {
       goblin_market:["店主と話す","契約を断って閉店する"],
       training_visitor:["師匠の報告を聞く","教室を片付ける"],
       skeleton_choir:["合唱団を迎える","送別会の誤解を解く"],
-      succubus_party:["閉会を告げる","最後の客を送る"]
+      succubus_party:["閉会を告げる","最後の客を送る"],
+      knight_envoy:t.branch==="90未満"?["名簿の行方を聞く","忘れることにする"]:["王国の動きを聞く","剣の手入れに戻る"]
     }[t.parent]||["その後を聞く","話を収める"];
     this.set(`${this.hud()}<div class="event-desk"><h2>噂の続き</h2><p>${U.esc(Incidents.card(t.parent).title)}のその後を聞く。</p>
       <button data-action="incidenttail" data-accept="yes">${choice[0]}</button><button data-action="incidenttail" data-accept="no">${choice[1]}</button></div>`,"event");
