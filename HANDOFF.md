@@ -19,7 +19,33 @@
 
 ---
 
-## 0. 次チャットの開始点（最新が上。2026-09-13 夜 現在）
+## 0. 次チャットの開始点（最新が上。2026-09-15 夜 現在）
+
+### 引き継ぎ（2026-09-15 夜・Claude。現状の整理と残タスク。次のセッションはここから）
+
+**分担（オーナー確認済み 2026-09-15）**：Claude（Fable）＝設計・仕様書・レビュー・取り込み・戦闘エンジン。Opus（別チャット）＝run.js・UI・テストの実装。CodeX＝絵・音・文章データほか得意なもの。
+
+**このセッションで確認したこと**
+- 済（Opus、2026-09-15 夕）：**施設の詳細画面**（`docs/SPEC_FACILITY_DETAIL_2026-09-13.md` §1〜§5・§7・§8-3）＝ ccebd59（画面と `st.town.stats`・`Town.stat()`）／ daf9829（run.js からの加算：研究所・宿舎・巨大厨房・墓地）／ 1dd24c6（テスト node +4・ブラウザ +8）／ 891fff3（map のテスト：区画タップは `towndetail`）。**Claude 検証済み**：node 91本 全通過、ブラウザ `town` / `map` 通過。battle.js は未変更、数値も未変更。これで「施設の背景とモルモ」は画面に出る。
+- ブランチ：本線は `claude/hero-arrival-tavern-prototype-uy2toh`（891fff3）。**GitHub の既定ブランチ `claude/demon-king-recruitment-game-sapqsx` は 2026-09-11（c1b3d16）で止まっていて本線より 239 コミット遅い。** 新しいチャットが既定から切ると古い土台になる（今回もそうだった）。既定を本線へ追随させるか、既定ブランチ自体を本線へ切り替える（GitHub の Settings → Branches。オーナー作業）。
+- `claude/incidents-opus-2026-09-14`（Opus 版の噂の札 8 コミット）は 9/14 の二重投資で、本線には CodeX 版が入っている。ガードの1コミット（b3fd42f）だけ本線へ写してある。**残りは不採用＝削除候補。**
+
+**残タスク（順番どおり。上から）**
+1. **Opus**：段階A ＝ 地図の上の戦争（`docs/SPEC_TERRITORY_A_2026-09-15.md` §2、貼り付けは §4）。run.js・ui.js・map.js・index.html・sim・テスト。エンジン（`src/core/territory.js`・test 24件）は済み。
+2. **Opus**：段階B/D ＝ 敵将13人（`docs/SPEC_CAPTAINS_BD_2026-09-15.md` §2、貼り付けは §5）。段階A の後。エンジン・台詞117本・写真13枚は本線に入っていて、配線だけで画面に出る。
+3. **CodeX**：地図の印20枚（`SPEC_TERRITORY_A` §5）／ 大技の絵8枚＋dokan 音3本（`docs/SPEC_BIG_SKILL_FX_2026-09-15.md` §5、枝 `codex/big-skill-fx`）。どちらも素材だけ。配線は取り込み時に Claude。
+4. **Opus（軽い）**：`st.turn` の加算位置を経路で揃える（下の 9/14 メモ）。揃えたら差し押さえ音の ±1 の幅を外す。
+5. **Claude**：上がったものの取り込み・検証（node → 該当ブラウザテスト → 大きい変更なら sim 20 を1回、見るのは「0% の戦略」と「平均戦闘数の急減」だけ）。
+
+**オーナー判断待ち（急がない。試遊のあとで）**
+- 難易度：通常戦の敵倍率を上げた（c12e35e）あとの試遊で「ひやひや」が出たか。出なければ候補③（段階倍率）→ ①②（勇者隊の厚み・来訪の前倒し）。
+- 噂の札 第3便（自然発生 B 中心に 6〜8 枚。今は自然発生 2.9%）。`docs/DESIGN_INCIDENTS_2026-09-14.md`。
+- 訓練場の兵站（「訓練を選ぶ気がしない」なら食料を半分に）。
+- カタログ25本の割り当て `docs/PROPOSAL_CATALOG_ASSIGNMENT_2026-09-13.md`／大筋の波乱の縦切り `docs/ARC_IDEAS_SCORED_2026-09-14.md`／`docs/IDEA_BANK_2026-09-13.md`。
+- 古い枝の削除（GitHub の Branches 画面。オーナーか CodeX）：`codex/act2-art` `codex/f-wip` `codex/two-wins`、`claude/incidents-opus-2026-09-14`、取り込み済みの `claude/*` 旧枝一式（`owner-playtest-tuning-*`、`chain-*`、`game-*`、`design-philosophy-review-*` など 2026-09-09 以前のもの）。
+
+**テストの回し方**：node は `for f in tools/test-*.js; do node $f; done`（91本）。ブラウザは `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 npm install --no-save playwright` のあと `CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome NODE_PATH="$(pwd)/node_modules" sh tools/browser-tests/run-all.sh`。
+
 
 ### 敵将の台詞と履歴書写真（2026-09-15・CodeX）
 
@@ -49,7 +75,7 @@
 **いま動いているもの（上がったら取り込みと検証）**
 - 済（Opus、2026-09-15 午後）：成長の偏り＋読み上げ＋技の吹き出し（`docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md`、`docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md`）＝ 48d69d4 (a) run.js の成長 ／ 6c0939c (b) 読み上げ ／ fc9f240 (c) 吹き出しと order_exec の quiet 化 ／ c1643a1 (d) テスト ／ 047aba4・ecbf776 (a の続き：手番の記録が空でも与ダメージから読む保険) ／ 22ec39f skills-window の一コマ。Claude 側は 95142b6 で撤退の提案にも actions を渡した。取り込み後 node 89本・art-coverage / skill-fx / report / skills-window 通過（360f068）。
 - 大技の迫力（`docs/SPEC_BIG_SKILL_FX_2026-09-15.md`）：エンジン済み（b97f875）、**Opus の配線も済み（19f5575、skill-fx 通過）**。残りは CodeX の絵8枚＋dokan 音3本（`codex/big-skill-fx`、未着手）。
-- 施設の詳細画面（`docs/SPEC_FACILITY_DETAIL_2026-09-13.md` §8）：**CodeX 済み（背景8枚 780×600＋`MORMO_FACILITY` 32本、766ae4b で取り込み）**。次は Opus へ §8-3（town_ui / map / main / town / run.js 5行。run.js を触るので Opus 一人。決めポーズの配線の後）。
+- 施設の詳細画面（`docs/SPEC_FACILITY_DETAIL_2026-09-13.md` §8）：**CodeX 済み（背景8枚 780×600＋`MORMO_FACILITY` 32本、766ae4b で取り込み）**。**Opus の §8-3 も済み（ccebd59〜891fff3、上の 9/15 夜の項）。施設の詳細画面は絵・台詞・配線とも完了。**
 - 済（2026-09-15 午後・Claude）：CodeX の決めポーズ `ready` / 防御 `guard`（`codex/command-pose-art` 760e9d5、18種×2＝36枚＋トロル6枚とサキュバス attack-windup の差し替え）を取り込み、18種の `BATTLE_SPRITES` に登録、`art-coverage` 246 で通過。battlefield / vfx-lifecycle も通過。**Opus の配線も済み（fbbf77d、order.js 通過）。決めポーズは絵・配線とも完了。**
 - 済（Opus、2026-09-15）：堕騎士のデータ（`docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md`）＝ 556e972 (a) 種族・癖・技 ／ 00197cb (b) 札「王国からの使者」と名簿の忠義の一行 ／ 815407f (c) テスト2件。本線に取り込み済み。Opus の判断3点：面接の一言は `quotes` に5本（RECRUIT_BRIEFS は追加せず）／「元同僚」は `necro_visitor` と同じ口で実際に討伐隊として来る（防衛戦中は1決着待つ）／`rollApplicant` にデータ側 `rarity` を掛ける1行を追加（種族追加で run.js を触らない口）。
 - 済（2026-09-15・Claude）：CodeX の堕騎士の絵（`codex/fallen-knight-art` 4d41e94）を取り込み、`BATTLE_SPRITES`・`PORTRAITS`（表情 surprise/smirk/tears）に登録、`art-coverage.js` は 210（35種×6）。node 88本 全通過（2026-09-15 昼に再確認）。
