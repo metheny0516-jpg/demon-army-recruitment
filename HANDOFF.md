@@ -21,6 +21,12 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-13 夜 現在）
 
+### 施設詳細の背景と台詞（2026-09-15・CodeX）
+
+- `codex/facility-detail-art`：背景8枚 `assets/map/facility/bg-<id>.webp`（780×600）と `MORMO_FACILITY[id][lv]`（8施設×Lv0〜3）を追加。既存台詞は保持。来歴・プロンプトは `assets/map/facility/BACKGROUNDS.md`。
+- 次にやること／バックログ：本線へ取り込み後、Opusが `SPEC_FACILITY_DETAIL_2026-09-13.md` §5・§8-3の詳細画面と統計を接続する。背景・台詞だけの納品で、画面配線は未変更。
+- 検証：画像寸法、下半分の暗さ、390pxの白文字合成、台詞32本の順序・30字以内・語尾、node構文確認。数値変更なし、sim未実行。
+
 ### 指示待ち・防御の絵（2026-09-15・CodeX）
 
 - `codex/command-pose-art`：仕様§1の18種×ready/guard＝36枚を追加。オーナー追記でトロルは立ち絵のやさしく少しまぬけな顔から全8ポーズを制作し、サキュバスattack-windupも差し替え。合計43枚の出力（既存7枚置換を含む）。`src/` は未変更。
