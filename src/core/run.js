@@ -2325,7 +2325,11 @@ const Game = {
   },
   checkSpeciesSkill(monster, notes) {
     if (!monster || monster.mercenary) return null;
-    if ((this.memberRecord(monster).battles || 0) < this.unlockBattlesFor(monster, "species")) return null;
+    const battles = this.memberRecord(monster).battles || 0;
+    if (battles < this.unlockBattlesFor(monster, "species")) return null;
+    // 研究所が生んだもの＝研究所が無ければまだ覚えていなかった本数（詳細画面が読む）
+    if (typeof Town !== "undefined" && battles < this.unlockBattlesFor(monster, "species") + Town.unlockBonus(this.state, "species")
+      && this.speciesSkillFor(monster)) Town.stat(this.state, "lab", 1);
     const skill = this.speciesSkillFor(monster);
     if (!skill) return null;
     monster.skills = (monster.skills || []).concat(skill.id);
@@ -2385,6 +2389,16 @@ const Game = {
   // **settleContinue と settleRetreat の両方から呼ぶ。** deploy() の途中に書くと
   // 引数なし呼び出し（sim・テスト）と UI 経由（offerRetreat）で結果がずれる。
   // 数えるのは contribution の uid（出撃した者だけ。留守番は育たない）。
+  // 軍の2施設が生んだもの（巨大厨房＝強めた食事の回数、墓地＝呼び戻した骸骨の数）。
+  // battle.js が出す facility_trigger の要約だけを読む（battle.js は触らない）。
+  tallyFacilityStats(summary) {
+    if (typeof Town === "undefined" || !summary) return;
+    for (const f of summary.facilities || []) {
+      if (f.facilityId === "graveyard") Town.stat(this.state, "graveyard", f.summons || 0);
+      else if (f.facilityId === "grand_kitchen") Town.stat(this.state, "grand_kitchen", f.count || 0);
+    }
+  },
+
   trainSurvivors(contribution, notes) {
     const st = this.state;
     const unlocked = [];
@@ -3150,7 +3164,7 @@ const Game = {
       // 施設は「誰の手柄か」を個人へ付けない代わりに、戦果へ短い要約として残す。
       // 共通補正（Lv）と稼働施設（Joker）を分けて書き、どちらを体感したか読めるようにする。
       facility: this.facilityReport(),
-      facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
+      facilitySummary: (this.tallyFacilityStats(result.facilitySummary), result.facilitySummary || { facilities: [], rescuedFromWipe: false }),
       deathChains: result.deathChains || [],
       // 戦果の1文の材料（B1）。「誰の能力が誰の何を動かし、結果どうなったか」を
       // 根拠イベントID付きで最大1件。証拠が揃わない戦闘では null になり、表示側は
@@ -3348,7 +3362,7 @@ const Game = {
         e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
       facility: this.facilityReport(),
-      facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
+      facilitySummary: (this.tallyFacilityStats(result.facilitySummary), result.facilitySummary || { facilities: [], rescuedFromWipe: false }),
       deathChains: result.deathChains || [],
       buildChanges: pending.buildChanges,
       spotlight: typeof Spotlight !== "undefined" ? Spotlight.of(result.timeline, {
@@ -3498,8 +3512,11 @@ const Game = {
 
   // 負傷は次の1戦だけ。戦闘が一つ決着するたびに1つ減らす（勝利・敗北・撤退を問わない）。
   recoverInjuries() {
+    const early = typeof Town !== "undefined" ? Town.healBonus(this.state) : 0;   // 宿舎Lv2で1決着早い
     for (const m of this.state.roster) {
-      if (m.injured) m.injured = Math.max(0, m.injured - 1 - (typeof Town !== "undefined" ? Town.healBonus(this.state) : 0));   // 宿舎Lv2で1決着早い
+      if (!m.injured) continue;
+      if (early > 0 && m.injured <= 1 + early) Town.stat(this.state, "hostel", 1);   // 宿舎が無ければまだ治っていない
+      m.injured = Math.max(0, m.injured - 1 - early);
     }
   },
 
