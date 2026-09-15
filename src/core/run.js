@@ -60,6 +60,9 @@ const Game = {
       // 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md 段階A）。
       // 落とした土地・従えた部族が領土になる。征服度は決着ごとにここから写す。
       territory: { lands: [], tribes: [] },
+      // 名前のある敵将（docs/SPEC_CAPTAINS_BD_2026-09-15.md）。討った・見逃した・雇ったを覚える。
+      captains: {},
+      settles: 0,          // 決着の数（「⚠ ○○がいる」札の周期）
       raided: {},          // 略奪した土地 → 回数（次に落とすとき守備が硬い）
       patrolCount: 0,      // 巡回で戦った回数（sim の列）
       gold: demonKing.start.gold,
@@ -333,6 +336,8 @@ const Game = {
     // 領土（段階A）。旧セーブは空（魔王城だけ）から始める。征服度は今の値を残す
     // （次の決着で Territory.conquestOf に置き換わるまで、段階表の見え方は変わらない）。
     if (typeof Territory !== "undefined") Territory.init(st);
+    if (typeof Captains !== "undefined") Captains.init(st);
+    if (typeof st.settles !== "number") st.settles = Number(st.turn) || 0;
     if (!st.raided || typeof st.raided !== "object") st.raided = {};
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     const legacyCampaign = st.conquest === undefined;
@@ -1588,7 +1593,74 @@ const Game = {
       formationHint: formation.hint,
       units: training ? this.trainingUnits(units, opponent) : (isOutpost ? this.outpostUnits(units) : units)
     };
-    return place ? this.dressPlaceMission(mission, type, place) : mission;
+    if (place) this.dressPlaceMission(mission, type, place);
+    return this.attachCaptains(mission, place, type, scale);
+  },
+
+  // 名前のある敵将を隊列の先頭に乗せる（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
+  // 乗せ方は4つ：部族の首領・関門の将軍・「⚠ ○○がいる」札・不意打ち。
+  // 討った者と雇った者は二度と出ない（見逃した者も既定では出ない）。
+  attachCaptains(mission, place, type, scale) {
+    if (typeof Captains === "undefined" || mission.training || !mission.units) return mission;
+    const st = this.state;
+    Captains.init(st);
+    const ids = [];
+    const alive = id => { const s = Captains.state(st, id).status; return s !== "slain" && s !== "hired"; };
+    const add = id => {
+      if (!id || ids.includes(id) || !Captains.get(id) || !alive(id)) return false;
+      mission.units = Captains.attach(mission.units, id, st, 1);
+      ids.push(id);
+      return true;
+    };
+    const land = place && typeof Territory !== "undefined" ? Territory.byId(place.id) : null;
+    // 1. 部族の首領：その部族圏を従えに行けば必ず守っている
+    if (land && land.chief) add(land.chief.id);
+    // 2. 関門の将軍（王都の砦のガレス）
+    if (land) for (const id of Captains.ids()) if (Captains.get(id).gate === land.id) add(id);
+    // 3. 「⚠ ○○がいる」札：3決着に1回、糸ごとに一人
+    if (land && !ids.length && !mission.counterattack) {
+      const thread = ["village", "hamlet"].includes(land.kind) ? "village"
+        : ["checkpoint", "fort", "port", "temple", "town", "capital"].includes(land.kind) ? "kingdom" : null;
+      const pick = thread ? Captains.pickForCard(st, thread, st.settles || 0) : null;
+      if (pick && add(pick)) {
+        const c = Captains.get(pick);
+        mission.captainCard = { id: pick, short: c.short || c.name };
+        mission.missionTitle = `⚠ ${c.short || c.name}がいる　${mission.missionTitle}`;
+        mission.reward = Math.max(1, Math.round(mission.reward * Captains.rules().bountyMult));
+      }
+    }
+    // 4. 不意打ち：前哨を踏んでいない作戦だけ（訓練・防衛は起きない）
+    if (!ids.length && !mission.counterattack && type.id !== "train" && type.id !== "defend"
+      && mission.missionPhase !== "outpost" && !mission.twoStage) {
+      const hall = this.hallAmbushPool();
+      const hit = Captains.ambush(st, st.alert, U.rand, hall.length > 0);
+      if (hit && hit.kind === "captain") { if (add(hit.id)) mission.ambush = { kind: "captain", id: hit.id }; }
+      else if (hit && hit.kind === "hall" && hall.length) {
+        const who = U.pick(hall);
+        mission.units = [this.hallAmbushUnit(who, scale)].concat(mission.units);
+        mission.ambush = { kind: "hall", name: who.name };
+      }
+    }
+    mission.captainIds = ids;
+    return mission;
+  },
+
+  // 先代の英雄（過去ランの殿堂入り）。名前と種族だけを借りて、敵として一度だけ立つ。
+  hallAmbushPool() {
+    const history = typeof Storage !== "undefined" && Storage.loadHistory ? Storage.loadHistory() : [];
+    return (history || []).map(r => r && r.hallOfFame).filter(h => h && h.name && h.tplId);
+  },
+  hallAmbushUnit(who, scale) {
+    const stages = this.actStages();
+    const base = stages[U.clamp(this.armyLevel() - 1, 0, stages.length - 1)];
+    const model = (base.units || [])[0] || { hp: 40, atk: 10, def: 4, spd: 6 };
+    const k = scale || 1;
+    return {
+      name: `先代の${who.name}`, tplId: who.tplId, race: who.race, role: "brute", icon: "🏅",
+      hp: Math.round(model.hp * 1.3 * k), atk: Math.round(model.atk * 1.2 * k),
+      def: Math.round(model.def * 1.1 * k), spd: model.spd,
+      traits: [], captain: { id: "hall:" + who.name, offer: null }
+    };
   },
 
   // 場所の札の見た目と印（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
