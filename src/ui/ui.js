@@ -977,7 +977,7 @@ const UI = {
       : `<div class="muted">連鎖は起きなかった（ひと突きで終わっている）</div>`;
 
     // 「その戦闘で何を揃えて、どこまで壊れたか」を1行に畳む（作業表 B）。
-    // CHAIN・シナジー名・戦意倍率は今までバラバラの場所にあり、達成感が戦果に残らなかった。
+    // CHAIN・シナジー名は今までバラバラの場所にあり、達成感が戦果に残らなかった。
     // 数える対象は既にある戦果データだけで、新しい計算も戦闘式の変更もしていない。
     const synergyNames = (battle.synergies || []).filter(Boolean);
     const synergyLabel = synergyNames.length
@@ -985,11 +985,9 @@ const UI = {
         ? `${synergyNames.slice(0, 3).map(n => `《${n}》`).join("")}ほか${synergyNames.length - 3}種`
         : synergyNames.map(n => `《${n}》`).join(""))
       : "";
-    const momentum = Math.max(1, Number(battle.momentumPeak) || 1);
     const headline = [
       maxChain ? `⛓ CHAIN ${maxChain}` : "",
-      synergyLabel ? `⚡ ${synergyLabel}` : "",
-      momentum > 1 ? `🔥 戦意 ×${momentum.toFixed(2)}` : ""
+      synergyLabel ? `⚡ ${synergyLabel}` : ""
     ].filter(Boolean);
 
     const details = [];

@@ -370,28 +370,6 @@ const Battle = {
     const overloadStacks = activeSyn.some(s => s.id === "overload")
       ? Math.min(4, activeSyn.filter(s => !s.meta).length) : 0;
 
-    // 戦意：OVERKILLの見返り。これまでOVERKILLは伝播の入口になるだけで、
-    // それ自体には何の得も無かった（だから「明示」しようにも中身が無かった）。
-    // 余剰を出すほど味方全員の与ダメージが上がり、その倍率を画面に出し続ける。
-    // 連鎖が進むほど数字そのものが大きくなるので、「爆発力が上がった」が見える。
-    let momentum = 0;
-    const MOMENTUM_CAP = 1.2;   // 与ダメージ+120%まで。青天井にすると1戦目から壊れる
-    const gainMomentum = (percent, parent, depth) => {
-      if (momentum >= MOMENTUM_CAP) return;
-      // 余剰が大きいほど、そして連鎖が深いほど戦意が乗る
-      const gain = Math.min(.25, .04 + percent / 100 * .05 + Math.max(0, (depth || 1) - 1) * .035);
-      const before = momentum;
-      momentum = Math.min(MOMENTUM_CAP, momentum + gain);
-      if (momentum <= before) return;
-      emitCausal("momentum", {
-        gain: Math.round((momentum - before) * 100),
-        total: Math.round(momentum * 100),
-        mult: Number((1 + momentum).toFixed(2)),
-        emphasis: momentum >= .8 ? 3 : 2,
-        text: `　魔王軍の戦意が上がった！ 与ダメージ ×${(1 + momentum).toFixed(2)}`,
-        cls: "momentum"
-      }, parent);
-    };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
     const goblinPair = activeSyn.some(s => s.id === "goblin_pair");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
@@ -741,10 +719,6 @@ const Battle = {
           rankId: rank.id, rank: rank.name, emphasis: rank.emphasis,
           text: `　${rank.name}！ 余剰${excess}ダメージ（${percent}% OVERKILL）`, cls: "overkill"
         }, damageEvent);
-        // 余剰は捨て値にしない。魔王軍の戦意へ変える。
-        if (attacker.side === "player") {
-          gainMomentum(percent, overkillEvent, (opts.propagationDepth || 0) + 1);
-        }
       }
       if (survived) {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
@@ -864,8 +838,6 @@ const Battle = {
         ctx.notes.push("追い剥ぎコンビ");
         lootPairBoost = null;
       }
-      // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
-      if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
       const variance = 0.9 + U.rand() * 0.2;
       const raw = unit.atk * ctx.mult * variance * (actionOpts.mult || 1);
       const amount = Math.max(1, Math.round(raw) - Math.floor(target.def / 2));

@@ -92,7 +92,7 @@ const BattleScene = {
     battle_start: 500, round_start: 1150, synergy: 1650, synergy_trigger: 1050, facility_trigger: 1250,
     note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
     heal: 600, summon: 1250, trait_trigger: 1350, resource_gain: 1000,
-    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200,
+    resource_forfeit: 900, resource_consume: 750, overkill: 1250, result: 1200,
     order_offer: 1200, order_exec: 1900, cover: 1300
   },
   // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
@@ -113,7 +113,7 @@ const BattleScene = {
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
     "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
-    "resource_gain", "resource_forfeit", "resource_consume", "momentum",
+    "resource_gain", "resource_forfeit", "resource_consume",
     "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_offer", "order_exec", "skill_call", "result"
   ]),
 
@@ -203,8 +203,6 @@ const BattleScene = {
       scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt, .mormo-aside").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
       scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
-      const morale = document.getElementById("morale");
-      if (morale) morale.classList.remove("bump");
     }
     for (const u of Object.values(this.units || {})) {
       u.el.classList.remove("acting", "targeted", "trouble", "lunge-up", "lunge-down", "hit", "hit-big", "revive-rise", "summon-rise", "pop");
@@ -241,12 +239,6 @@ const BattleScene = {
       <div class="${sceneClass}" id="scene">
         <div class="scene-fx" id="scene-fx"></div>
         <div class="battle-streak" id="battle-streak"><i></i><i></i><i></i></div>
-        <div class="morale" id="morale">
-          <span class="morale-label">魔王軍の戦意</span>
-          <b id="morale-mult">×1.00</b>
-          <div class="morale-bar"><i id="morale-fill"></i></div>
-          <span class="morale-gain" id="morale-gain"></span>
-        </div>
         <div class="chain-flare" id="chain-flare">
           <span class="chain-label">連鎖</span><b></b><i class="chain-mult"></i>
           <div class="chain-rungs" id="chain-rungs"></div>
@@ -746,7 +738,6 @@ const BattleScene = {
           if (label) label.textContent = "遅刻中";
         }
         this.synergyNames = [];
-        this.setMorale(1, 0);
         this.showForecast(true);
         if (this.isFinalBattle) this.battleIntro();
         break;
@@ -895,14 +886,6 @@ const BattleScene = {
         if (ev.resource === "soul") this.showAction(`魂を${ev.amount}消費`, 750);
         break;
       }
-      // 戦意：OVERKILLの見返りを数字で見せ続ける。
-      // 常設のメーターが上がっていくことが「爆発力が上がった」の実体。
-      case "momentum": {
-        this.setMorale(ev.mult, ev.gain);
-        this.showAction(`戦意 +${ev.gain}%　与ダメージ ×${ev.mult.toFixed(2)}`, 900);
-        this.flash(1);
-        break;
-      }
       case "trait_trigger": {
         const u = this.units[ev.sourceId];
         this.clearFocus();
@@ -964,9 +947,7 @@ const BattleScene = {
           this.burst({
             kicker: "OVERKILL",
             name: ev.rank,
-            desc: this.units[ev.fromId]?.side === "player"
-              ? `余剰 ${ev.excess} ダメージ（${ev.percent}%）→ 魔王軍の戦意へ`
-              : `余剰 ${ev.excess} ダメージ（${ev.percent}%）`,
+            desc: `余剰 ${ev.excess} ダメージ（${ev.percent}%）`,
             stacks: ev.percent >= 300 ? 4 : ev.percent >= 200 ? 3 : 2,
             tone: "fx-overkill"
           });
@@ -1213,7 +1194,6 @@ const BattleScene = {
       const who = actor(e)?.name || "";
       if (e.type === "resource_gain") return `${who} ${e.label || "獲得"} +${e.amount}${e.resource === "gold" ? "G" : e.resource === "soul" ? "魂" : e.resource}`;
       if (e.type === "attack" || e.type === "splash") return `${who}の${e.label || (e.parentEventId ? "追撃" : "攻撃")}`;
-      if (e.type === "momentum") return `戦意 ×${Number(e.mult).toFixed(2)}`;
       if (e.type === "overkill") return `${e.rank || "OVERKILL"} ${e.percent}%`;
       if (e.type === "death") return `${who}が倒れた`;
       if (e.type === "summon" && e.late) return `${e.unit ? e.unit.name : who}が遅れて到着`;
@@ -1234,9 +1214,6 @@ const BattleScene = {
     } else if (ev.type === "resource_gain") {
       const unit = ev.resource === "gold" ? "G" : ev.resource === "soul" ? "魂" : ev.resource;
       slots = { who, by: `${cause}で${ev.label || "獲得"}`, to: "", amount: `+${ev.amount}${unit}` };
-    } else if (ev.type === "momentum") {
-      slots = { who: "味方全員", by: `${cause}の余剰ダメージで戦意上昇`, to: "",
-        amount: `与ダメージ ×${Number(ev.mult).toFixed(2)}` };
     } else if (ev.type === "overkill") {
       slots = { who: actor(parent)?.name || who, by: `${cause}が残りHPを超えた`,
         to: `${this.units[parent.toId]?.name || this.units[ev.toId]?.name || "敵"}に`,
@@ -1593,11 +1570,8 @@ const BattleScene = {
         if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
         this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
       }
-      // 連鎖の段と戦意の高さで数字の大きさが変わる
-      const surge = Math.max(
-        Math.max(0, (ev.chainDepth || 1) - 2),
-        this.moraleTier || 0
-      );
+      // 連鎖の段で数字の大きさが変わる
+      const surge = Math.max(0, (ev.chainDepth || 1) - 2);
       this.hit(to, ev.dmg, preset && preset.big ? Math.max(2, ev.emphasis || 0) : ev.emphasis, ev.label, surge);
       this.setPose(to, "hurt");
       const recoil = to.side === "player" ? -1 : 1;
@@ -2648,33 +2622,6 @@ const BattleScene = {
     return img;
   },
 
-  // 戦意メーター。戦闘のあいだ常に出ていて、上がるたびに叩かれる。
-  // 「いま何倍で殴っているか」が常に読めないと、強くなった実感が出ない。
-  setMorale(mult, gain) {
-    const box = document.getElementById("morale");
-    if (!box) return;
-    const value = Math.max(1, Number(mult) || 1);
-    document.getElementById("morale-mult").textContent = `×${value.toFixed(2)}`;
-    const fill = document.getElementById("morale-fill");
-    if (fill) fill.style.transform = `scaleX(${Math.min(1, (value - 1) / 1.2)})`;
-    box.classList.remove("m1", "m2", "m3");
-    this.moraleTier = value >= 1.6 ? 3 : value >= 1.25 ? 2 : value > 1 ? 1 : 0;
-    box.classList.add(value >= 1.6 ? "m3" : value >= 1.25 ? "m2" : "m1");
-    box.classList.toggle("lit", value > 1);
-    if (gain) {
-      const g = document.getElementById("morale-gain");
-      g.textContent = `+${gain}%`;
-      g.classList.remove("show");
-      void g.offsetWidth;
-      g.style.animationDuration = `${this.visualDuration(900)}ms`;
-      g.classList.add("show");
-      this.timers.push(setTimeout(() => g.classList.remove("show"), this.visualDuration(900)));
-    }
-    box.classList.remove("bump");
-    void box.offsetWidth;
-    box.style.setProperty("--morale-bump", `${this.visualDuration(420)}ms`);
-    box.classList.add("bump");
-  },
 
   // 一瞬の白飛び。次に来るものを「構えさせる」ための予備動作。
   flash(strength) {
@@ -2843,7 +2790,6 @@ const BattleScene = {
           if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
           if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
           if (ev.type === "revive" && u) this.setLife(u, false);
-          if (ev.type === "momentum") this.setMorale(ev.mult, 0);
           if (ev.type === "synergy") this.countSynergy();
         }
         // 答えたら、通常再生へ戻さずに続きを飛ばす（飛ばすつもりで押したのだから）。
@@ -2869,7 +2815,6 @@ const BattleScene = {
       if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
       if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
       if (ev.type === "revive" && u) this.setLife(u, false);
-      if (ev.type === "momentum") this.setMorale(ev.mult, 0);
       if (ev.type === "synergy") this.countSynergy();
       if (this.chainViewVersion >= 2) this.chainFlare(ev);
       this.tellChain(ev, false);

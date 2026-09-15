@@ -19,7 +19,7 @@ async function showResult(page, spotlight) {
       notes: ['勝利報酬 10G を獲得'], synergies: ['追い剥ぎコンビ'], incidents: [],
       contribution: [], chainSummary: { maxChain: 3, deepest: null },
       overkillSummary: { maxPercent: 120, count: 2, totalExcess: 40, rank: '蹂躙' },
-      momentumPeak: 1.4, summonCount: 0, deathChains: [],
+      summonCount: 0, deathChains: [],
       facility: { level: 0, name: '空き部屋', works: 0 },
       facilitySummary: { facilities: [] },
       spotlight

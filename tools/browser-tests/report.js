@@ -16,7 +16,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     const roster = st.roster.slice(0, 2);
     st.lastBattle = {
       victory: win, army: '王国騎士団', region: '辺境', notes: ['勝利報酬 10G を獲得'],
-      synergies: ['魔王軍完成', 'ゴブリンの群れ'], momentumPeak: 1.8,
+      synergies: ['魔王軍完成', 'ゴブリンの群れ'],
       incidents: [], summonCount: 1,
       chainSummary: {
         maxChain: 4, chainCount: 2, eventCount: 6, chains: [],
@@ -58,9 +58,9 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!winText.includes('最大OVERKILL') || !winText.includes('180%')) errors.push('最大OVERKILLが読めない');
   if (!winText.includes('今回の大暴れ')) errors.push('パネル見出しが読めない');
   if (!winText.includes('いちばん長くつながった連鎖')) errors.push('CHAINと経路の関係を説明する行が無い');
-  // 作業表 B: その戦闘の達成感（CHAIN・揃えたシナジー・戦意倍率）が1行に畳まれていること
+  // 作業表 B: その戦闘の達成感（CHAIN・揃えたシナジー）が1行に畳まれていること
   const headline = (await page.locator('.breakthrough-headline').allInnerTexts())[0] || '';
-  for (const want of ['CHAIN 4', '《魔王軍完成》', '《ゴブリンの群れ》', '戦意 ×1.80']) {
+  for (const want of ['CHAIN 4', '《魔王軍完成》', '《ゴブリンの群れ》']) {
     if (!headline.includes(want)) errors.push('戦果の1行サマリに含まれない: ' + want + ' / ' + headline);
   }
   if ((await page.locator('.breakthrough-headline').count()) !== 1) errors.push('1行サマリが1つでない');
@@ -138,17 +138,16 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     const b = Game.state.lastBattle;
     b.chainSummary = { maxChain: 1, chainCount: 1, eventCount: 1, chains: [] };
     delete b.facility; delete b.facilitySummary; delete b.deathChains;
-    delete b.momentumPeak; b.synergies = [];
+    b.synergies = [];
     UI.result();
     return document.body.innerText;
   });
   if (!oldText.includes('最大CHAIN')) errors.push('旧データで大暴れパネルが消えてしまう');
   if (await page.locator(".breakthrough-panel .chain-step").count()) errors.push("旧データなのに経路が出ている");
   if (await page.locator('.facility-panel').count()) errors.push('施設要約の無い旧データなのに施設パネルが出ている');
-  // 戦意倍率もシナジーも無い旧セーブでは、1行サマリはCHAINだけ出して壊れない
+  // シナジーの無い旧セーブでは、1行サマリはCHAINだけ出して壊れない
   const oldHeadline = (await page.locator('.breakthrough-headline').allInnerTexts())[0] || '';
   if (!oldHeadline.includes('CHAIN 1')) errors.push('旧データで1行サマリのCHAINが消えた: ' + oldHeadline);
-  if (oldHeadline.includes('戦意')) errors.push('旧データなのに戦意倍率が出ている: ' + oldHeadline);
 
   // ── 成長の読み上げ（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 2節）──
   // 0.5 秒ごとに一行ずつ／タップで残り全部／8行を超えたら「ほか ○ 件」。
