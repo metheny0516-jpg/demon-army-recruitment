@@ -94,7 +94,8 @@ const Battle = {
       // "any"＝どの技もお披露目扱い（既存テストと種族技の測定が今までどおり動く）。null なら号令でだけ出る。
       debut: m.debutSkill === undefined ? "any" : (m.debutSkill || null),
       mods: {
-        dmgMult: m.battleDmgMult || 1,
+        // 忠義（堕騎士、docs/DESIGN_HUMAN_SWORDSMAN）：忠誠 60 未満は本気を出さない（0.8）、80 以上で主と認める（1.1）
+        dmgMult: (m.battleDmgMult || 1) * ((m.traits || []).includes("fealty") ? ((m.loyalty ?? 50) < 60 ? 0.8 : (m.loyalty ?? 50) >= 80 ? 1.1 : 1) : 1),
         takenMult: m.battleTakenMult || 1,
         fireballAll: false, necroFull: false
       },
@@ -453,6 +454,7 @@ const Battle = {
       if (u.flags.winded) return "息切れ";
       if (spirit !== null && spirit < (isDebut(u, sk) ? 0 : (sk.cost || 0))) return "気合不足";
       if (sk.condition === "hp50" && u.hp < u.maxHp * 0.5) return "条件外";
+      if (sk.condition === "loyalty60" && (u.loyalty ?? 50) < 60) return "まだ主と認めていない";
       if (sk.kind === "revive" && !playerUnits.some(a => !a.alive && !a.flags.summoned)) return "条件外";
       if (sk.kind === "cover" && !playerUnits.some(a => onField(a) && a !== u)) return "条件外";
       return null;

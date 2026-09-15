@@ -459,5 +459,18 @@ console.log('▼ 11. 演出プリセット（fx）：技のイベントに skill
   ENEMY_BIG_MOVE.chance = bigChance;
 }
 
+// ── 忠義（堕騎士の癖 fealty）：忠誠で威力が変わり、60 未満は種族技が出ない ──
+{
+  SKILLS.test_iai = { name: '抜刀', species: 'test', cost: 1, kind: 'strike', target: 'enemy', power: 1.4, order: 'first', condition: 'loyalty60', fx: 'slash' };
+  const low = Battle.makeUnit({ uid: 'low', name: '低', race: '堕騎士', hp: 80, atk: 10, def: 3, spd: 5, traits: ['fealty'], tags: [], loyalty: 40, spirit: 3, skills: ['test_iai'] }, 'player');
+  const high = Battle.makeUnit({ uid: 'high', name: '高', race: '堕騎士', hp: 80, atk: 10, def: 3, spd: 5, traits: ['fealty'], tags: [], loyalty: 85, spirit: 3, skills: ['test_iai'] }, 'player');
+  assert(Math.abs(low.mods.dmgMult - 0.8) < 1e-9 && Math.abs(high.mods.dmgMult - 1.1) < 1e-9, `忠誠40は0.8倍、85は1.1倍（${low.mods.dmgMult}/${high.mods.dmgMult}）`);
+  const { prompt } = startWith([low, high], foes(1), { manual: true });
+  const pl = prompt.allies.find(a => a.name === '低').skills.find(x => x.id === 'test_iai');
+  const ph = prompt.allies.find(a => a.name === '高').skills.find(x => x.id === 'test_iai');
+  assert(pl && !pl.ready && /主/.test(pl.why) && ph && ph.ready, `忠誠40は抜刀が出ない（${pl && pl.why}）、85は出る`);
+  delete SKILLS.test_iai;
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;
