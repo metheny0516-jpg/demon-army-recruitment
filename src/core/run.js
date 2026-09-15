@@ -1621,10 +1621,29 @@ const Game = {
     if (st.phase !== "mission") return false;
     const mission = st.missionOffers[index];
     if (!mission) return false;
+    // 贈る（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。戦わない札なので、
+    // 選んだ時点で支払いまで済ませて作戦会議へ戻る（出撃の画面へは進まない）。
+    if (mission.missionKind === "tribute") return this.payTribute(mission);
     st.selectedMission = JSON.parse(JSON.stringify(mission));
     st.payrollPolicy = "regular";
     st.lastPayrollReport = null;
     st.phase = "formation";
+    this.save();
+    return true;
+  },
+
+  // 贈って従える。払えなければ何も起きない（札は残る）。決着は1つ進む。
+  payTribute(mission) {
+    const st = this.state;
+    const cost = mission.tributeCost || { gold: 0, food: 0 };
+    if ((st.gold || 0) < cost.gold || (st.food || 0) < cost.food) return false;
+    st.gold -= cost.gold;
+    st.food -= cost.food;
+    Territory.take(st, mission.territoryId);
+    st.conquest = U.clamp(Territory.conquestOf(st), 0, this.MAX_CONQUEST);
+    st.turn = (st.turn || 0) + 1;
+    st.lastTribute = { id: mission.territoryId, name: mission.region, gold: cost.gold, food: cost.food };
+    this.prepareMissions(true);
     this.save();
     return true;
   },
@@ -1735,14 +1754,17 @@ const Game = {
     // 討伐隊を退けた直後だけ、噂を聞いて1人多く来る。読んだら消える（1回きり）。
     const renown = this.state.renownBonus ? 1 : 0;
     if (renown) this.state.renownBonus = 0;
-    return U.clamp(3 + this.departmentOutput().recruit + bonus + renown, 3, 8);
+    const lands = typeof Territory !== "undefined" ? Territory.effects(this.state).applicants : 0;   // 集落・町
+    return U.clamp(3 + this.departmentOutput().recruit + bonus + renown + lands, 3, 8);
   },
 
   genApplicants() {
     const st = this.state;
     st.applicants = [];
     const n = this.applicantCount();
-    for (let i = 0; i < n; i++) st.applicants.push(this.rollApplicant());
+    // 従えた部族の種族は、応募の列に1人ずつ混ざる（docs/SPEC_TERRITORY_A_2026-09-15.md §2-3）。
+    const races = typeof Territory !== "undefined" ? Territory.effects(st).recruit.slice(0, n) : [];
+    for (let i = 0; i < n; i++) st.applicants.push(this.rollApplicant(races[i] || undefined));
     if (st.incidentApplicants?.length) { st.applicants.push(...st.incidentApplicants); st.incidentApplicants = []; }
     let legacySlot = -1;
     if (st.legacyReturn && !st.legacyOffered && st.applicants.length) {
@@ -1905,7 +1927,8 @@ const Game = {
       atk: vary(tpl.base.atk),
       def: Math.max(0, Math.round(tpl.base.def * (0.8 + U.rand() * 0.4))),
       spd: Math.max(1, Math.round(tpl.base.spd * (0.85 + U.rand() * 0.3))),
-      salary: Math.max(1, U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(level / 4) - (typeof Town !== "undefined" ? Town.salaryDiscount(st) : 0)),   // 酒場
+      salary: Math.max(1, Math.round((U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(level / 4) - (typeof Town !== "undefined" ? Town.salaryDiscount(st) : 0))
+        * (typeof Territory !== "undefined" ? Territory.effects(st).wageMult : 1))),   // 酒場と、落とした町の給与相場
       loyalty: U.randInt(tpl.loyalty[0], tpl.loyalty[1]),
       traits,
       // 技（SKILLS）は誰でも3戦で覚える。採用時は空。
@@ -3678,6 +3701,25 @@ const Game = {
     const st = this.state;
     st.alert = Math.max(0, st.alert + (mission.alertDelta || 0));
     st.conquest = U.clamp(st.conquest + (mission.conquestDelta || 0), 0, this.MAX_CONQUEST);
+    // 地図の上の戦争（段階A）。勝った札の場所を領土にし、征服度はそこから写す
+    // （段階表・討伐隊・勇者の判定は今までどおり st.conquest を読む）。
+    if (typeof Territory !== "undefined" && mission.territoryId) {
+      if (mission.territoryMode === "raid") {
+        st.raided[mission.territoryId] = (st.raided[mission.territoryId] || 0) + 1;
+        notes.push(`${mission.region}から奪って引き上げた。次に来るときは守りが硬い`);
+      } else if (mission.territoryMode === "take") {
+        Territory.take(st, mission.territoryId);
+        notes.push(`${mission.region}は魔王軍の領土になった（領土 ${Territory.init(st).lands.length + Territory.init(st).tribes.length}）`);
+      }
+    }
+    if (typeof Territory !== "undefined") {
+      const mapped = Territory.conquestOf(st);
+      if (mapped !== st.conquest) {
+        st.conquest = U.clamp(mapped, 0, this.MAX_CONQUEST);
+        notes.push(`王国攻略 ${st.conquest}/${this.MAX_CONQUEST}。王都へ一歩近づいた`);
+      }
+    }
+    if (mission.territoryMode === "patrol") st.patrolCount = (st.patrolCount || 0) + 1;
     const kind = mission.missionKind || "invade";
     st.missionCounts[kind] = (st.missionCounts[kind] || 0) + 1;
     if (mission.conquestDelta) {
@@ -3782,6 +3824,14 @@ const Game = {
     // 訓練の決着は税収が無い（王国に知られていないので領地は動かない）。利子は普通どおり取られる。
     if (dailyDay === undefined && typeof Town !== "undefined") {
       Town.settle(this, notes, { ransacked: !!st.lastRansacked || this.isTraining(mission), training: this.isTraining(mission) });
+    }
+    // 領土の効き目（docs/SPEC_TERRITORY_A_2026-09-15.md §2-3）。
+    // 食料と金だけをここで入れる（応募者・給与相場・種族は面接の側で読む）。
+    // defenseLine・noPriest・landing は段階C まで保存するだけで読まない。
+    if (dailyDay === undefined && typeof Territory !== "undefined") {
+      const gains = Territory.effects(st);
+      if (gains.food) { st.food += gains.food; notes.push(`領内の村から食料 +${gains.food}`); }
+      if (gains.gold) { st.gold += gains.gold; notes.push(`港の荷から金 +${gains.gold}G`); }
     }
     // 噂の札は城下町の有無に関わらず決着ごとに1回（城下町を読まない測定＝SIM_NO_TOWN でも
     // 札の判定は動かす。状態式が読めない札は Incidents.candidate が黙って見送る）。
