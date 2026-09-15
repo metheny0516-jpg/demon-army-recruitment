@@ -307,7 +307,9 @@ const TRAITS = {
     desc: "自身のHPが50%以下になると覚醒し、以後ダメージ+50%（1戦闘1回）",
     modDealt(ctx) {
       const u = ctx.attacker;
-      if (!u.flags.awakened && u.hp <= u.maxHp * 0.5) {
+      // 閾値は既定 50%。師（ガレス）を討たれた勇者は run.js が unit.awakenAt = 0.7 を持たせ、早く覚醒する（docs/SPEC_CAPTAINS_BD 2-3）
+      const at = (u.awakenAt !== undefined && u.awakenAt !== null) ? u.awakenAt : 0.5;
+      if (!u.flags.awakened && u.hp <= u.maxHp * at) {
         u.flags.awakened = true;
         u.mods.dmgMult *= 1.5;
         ctx.mult *= 1.5;

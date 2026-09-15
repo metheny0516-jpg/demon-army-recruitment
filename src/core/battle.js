@@ -88,6 +88,9 @@ const Battle = {
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
       introQuote: m.introQuote || "",
+      // 敵将（docs/SPEC_CAPTAINS_BD_2026-09-15.md）。{ id, offer: "spare" | "hire" }。敵側だけ。見逃す／雇うの提案の材料
+      captain: m.captain ? Object.assign({}, m.captain) : null,
+      awakenAt: (m.awakenAt === undefined || m.awakenAt === null) ? null : Number(m.awakenAt),   // 覚醒の閾値の上書き（勇者）
       // 気合（号令の限定）。名簿の値を写す。無ければ null＝制限なし（傭兵・テストの直作り）。
       spirit: (m.spirit === undefined || m.spirit === null) ? null : Number(m.spirit),
       // 上位技のお披露目。覚えた直後の戦いでだけ autoLimit 回まで勝手に出る。名簿の値が無い（テストの直作り・sim の敵）なら
@@ -697,6 +700,7 @@ const Battle = {
         traits: opts.traits || [], label: opts.label || null, emphasis,
         skillId: opts.skillId || null, fx: bigFx || (attacker.flags.bigMove && attacker.side !== target.side && !opts.incident ? "heavy" : null),
         aoe: !!opts.aoe, big,
+        toCaptain: target.captain ? target.captain.id : null,   // 敵将への一撃（Captains.settle が「討った」を読む）
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
@@ -1155,7 +1159,7 @@ const Battle = {
       return false;
     };
 
-    const wiped = us => us.every(u => !u.alive);
+    const wiped = us => us.every(u => !u.alive || u.flags.spared);   // 見逃した／雇った敵将は数に入れない（生きたまま去った）
     const all = () => [...playerUnits, ...enemyUnits];
     const tryGraveyardSummon = () => {
       if (!options.graveyard || graveyardUsed >= worksOf("graveyard")) return null;
@@ -1244,6 +1248,7 @@ const Battle = {
     const orderOffers = [];
     const orders = options.orders || {};
     let retreatedManual = false;        // コマンドで退いた（result.retreated）
+    const spared = [];                  // 見逃した／雇った敵将 [{ id, name, kind }]（result.spared。run.js が st.captains へ）
     const spiritSpent = {};             // uid → 技で払った気合（run.js が名簿へ反映）
     const offerAtRound = r => orderOffers.find(o => o.round === r) || null;
 
@@ -1310,6 +1315,9 @@ const Battle = {
         const downed = corps.filter(u => !u.alive);
         const standing = corps.filter(onField);
         const canRetreat = !options.noRetreatOffer && downed.length > 0 && standing.length > 0 && !wiped(enemyUnits);
+        // 見逃す／雇う（敵将、docs/SPEC_CAPTAINS_BD_2026-09-15.md）：敵将が立っていて HP 30% 以下なら一度だけ出る。
+        const spareTarget = enemyUnits.find(u => onField(u) && u.captain && !u.flags.spareOffered && u.hp <= u.maxHp * 0.3) || null;
+        const canSpare = spareTarget ? { id: spareTarget.id, captainId: spareTarget.captain.id, name: spareTarget.name, kind: spareTarget.captain.offer || "spare" } : null;
         const prompt = {
           type: "commands", round,
           allies: playerUnits.filter(onField).map(u => {
@@ -1332,14 +1340,27 @@ const Battle = {
           }),
           fallen: playerUnits.filter(u => !u.alive && !u.flags.summoned).map(u => ({ id: u.id, name: u.name })),
           enemies: enemyUnits.filter(onField).map(u => ({
-            id: u.id, name: u.name, hp: u.hp, maxHp: u.maxHp, role: u.role,
+            id: u.id, name: u.name, hp: u.hp, maxHp: u.maxHp, role: u.role, captain: u.captain ? u.captain.id : null,
             intent: u.flags.charging ? "big" : (u.flags.plan && u.flags.plan.intent) || "attack",
             // 盾役に守られている敵。狙っても盾役が受ける（狙い選びで見せる）
             coveredBy: (enemyUnits.find(c => onField(c) && c !== u && c.flags.covering === u.id && !c.flags.guarding) || {}).id || null
           })),
-          canRetreat, downed: downed.map(u => u.name), timelineLength: timeline.length
+          canRetreat, downed: downed.map(u => u.name), canSpare, timelineLength: timeline.length
         };
         commands = (yield prompt) || {};
+        if (commands.spare && canSpare) {
+          // 見逃す／雇う。敵将は戦場を去る（討ったことにはならない）。残りの敵との戦いは続く。一度断れば同じ戦闘では二度と出ない
+          spareTarget.flags.spareOffered = true;
+          spareTarget.flags.absent = true;
+          spareTarget.flags.spared = canSpare.kind;
+          spared.push({ id: canSpare.captainId, unitId: spareTarget.id, name: spareTarget.name, kind: canSpare.kind });
+          emit("spare", {
+            unitId: spareTarget.id, captainId: canSpare.captainId, name: spareTarget.name, kind: canSpare.kind, emphasis: 3,
+            text: canSpare.kind === "hire" ? `　${spareTarget.name}は膝をついた。魔王軍に加わる` : `　${spareTarget.name}は退いた。魔王は見逃した`, cls: "mormo"
+          });
+        } else if (spareTarget) {
+          spareTarget.flags.spareOffered = true;   // 断った（討つ）。同じ戦闘では二度と聞かない
+        }
         if (commands.retreat && canRetreat) {
           // 退く。倒れていた者は担いで帰る（撤退の提案と同じ導出）。
           const enemiesLeft = enemyUnits.filter(onField);
@@ -1651,6 +1672,8 @@ const Battle = {
       retreatOffer,
       // コマンドで退いた（retreatOffer.contribution が担いで帰った戦果）。
       retreated: retreatedManual,
+      // 見逃した／雇った敵将（コマンドバトルだけ）。run.js が st.captains を "spared" | "hired" にする
+      spared,
       spiritSpent,
       spiritGained,
       debutShown,
