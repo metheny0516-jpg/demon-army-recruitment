@@ -21,6 +21,12 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-13 夜 現在）
 
+### 敵将の台詞と履歴書写真（2026-09-15・CodeX）
+
+- `codex/captains-lines`：13人×9本の台詞と `assets/monsters/captains/<id>.png` 13枚を追加。敵将データはlines以外を完全保持。画像768×1024・各80KB以下、来歴は同フォルダのLICENSES.md。
+- 次にやること／バックログ：本線へ取り込み、Opus側で敵将の写真と台詞を表示する。ポルカenterは3回の登場順。ヴァルのspared3本は未使用予備で、offer:nullは維持。
+- 検証：117本・最長25字、lines以外不変、node構文、test-captains全通過、13枚の容量・寸法・40px顔表示を確認。数値変更なし、sim未実行。
+
 ### 施設詳細の背景と台詞（2026-09-15・CodeX）
 
 - `codex/facility-detail-art`：背景8枚 `assets/map/facility/bg-<id>.webp`（780×600）と `MORMO_FACILITY[id][lv]`（8施設×Lv0〜3）を追加。既存台詞は保持。来歴・プロンプトは `assets/map/facility/BACKGROUNDS.md`。
