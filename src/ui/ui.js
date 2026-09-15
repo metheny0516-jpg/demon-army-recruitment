@@ -910,6 +910,52 @@ const UI = {
     return text;
   },
 
+  // 成長の読み上げ（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 2節）。
+  // 決着の画面で「○○の攻撃が 1 上がった！」を **0.5 秒ごとに一行ずつ**出す。
+  // タップで残り全部。8行を超える分は「ほか ○ 件」に畳む（中高生が読める量）。
+  GROWTH_MARK: { hp: "❤", atk: "⚔", def: "🛡", spd: "💨" },
+  GROWTH_LABEL: { hp: "HP", atk: "攻撃", def: "防御", spd: "速さ" },
+  GROWTH_LINES: 8,
+  GROWTH_STEP_MS: 500,
+  growthPanel() {
+    const rows = (Game.state && Game.state.lastGrowth) || [];
+    if (!rows.length) return "";
+    const shown = rows.slice(0, this.GROWTH_LINES);
+    const rest = rows.length - shown.length;
+    return `<div class="panel growth-panel" data-growth="1">
+      <h3>🌱 一回り大きくなった</h3>
+      <ul class="growth-lines">${shown.map(r => `<li class="growth-line" hidden>
+        <span class="growth-mark">${this.GROWTH_MARK[r.key] || "✦"}</span>${U.esc(r.name || "")}の${
+        U.esc(this.GROWTH_LABEL[r.key] || r.key)}が ${r.delta} 上がった！</li>`).join("")}</ul>
+      ${rest > 0 ? `<div class="growth-rest" hidden>ほか ${rest} 件</div>` : ""}
+    </div>`;
+  },
+  // 描いたあとに1回だけ呼ぶ。行を順に出し、画面のどこかを押したら残りを全部出す。
+  playGrowth(root) {
+    const box = (root || document).querySelector(".growth-panel");
+    if (!box) return;
+    const lines = [...box.querySelectorAll(".growth-line")];
+    const rest = box.querySelector(".growth-rest");
+    if (!lines.length) return;
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let timer = null;
+    const showAll = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      for (const line of lines) line.hidden = false;
+      if (rest) rest.hidden = false;
+      document.removeEventListener("pointerdown", showAll);
+    };
+    if (reduced) return showAll();   // 低モーションでは待たせずに全部出す
+    let i = 0;
+    const step = () => {
+      if (i >= lines.length) { if (rest) rest.hidden = false; document.removeEventListener("pointerdown", showAll); return; }
+      lines[i++].hidden = false;
+      timer = setTimeout(step, this.GROWTH_STEP_MS);
+    };
+    document.addEventListener("pointerdown", showAll);
+    step();
+  },
+
   breakthroughPanel(battle) {
     if (!battle) return "";
     const chain = this.battleChainView(battle);
@@ -1854,6 +1900,7 @@ const UI = {
       </div>
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
+      ${this.growthPanel()}
       ${this.breakthroughPanel(b)}
       ${this.debtPanel()}
       ${this.facilityPanel(b)}
@@ -1883,6 +1930,7 @@ const UI = {
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
       </div>
       <button class="primary wide" data-action="afterresult">次へ</button>`, "report");
+    this.playGrowth(this.root);   // 成長は一行ずつ読み上げる（描いたあとに1回だけ）
     if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
     // 差し押さえ・荒らし・取り立てで施設が1段落ちた決着では、金庫の音を1回。
     // 控えは Town.demolishOne が置く（src/core/town.js）。鳴らしたら消すので二度は鳴らない。

@@ -100,25 +100,27 @@ function fightOnce(st) {
 }
 
 // 4. 小成長：base から積み、頭打ちがある
+// **2026-09-14 から「何戦出たか」ではなく「その数値を使った戦いの数」で伸びる**
+// （docs/SPEC_GROWTH_BY_ACTION）。攻撃の伸びを見るので、攻撃を使った戦い＝record.grow.atk を置く。
 {
   const m = member(104, 'ノビル', { hp: 40, atk: 20, def: 10 });
   const st = freshRun([m], [104]);
   const base = { ...m.base };
   const expect = n => Math.round(base.atk * SKILL_RULES.growthPerBattle * Math.min(n, SKILL_RULES.growthCapBattles));
-  Game.memberRecord(m).battles = 10;
+  Game.memberRecord(m).grow.atk = 10;
   Game.applyGrowth(m);
-  assert(m.atk === base.atk + expect(10), `10戦で atk ${base.atk} → ${m.atk}（+${expect(10)}）`);
+  assert(m.atk === base.atk + expect(10), `殴った10戦で atk ${base.atk} → ${m.atk}（+${expect(10)}）`);
   // 目安は「10戦で 1 + growthPerBattle×10」。率は sim で決めるので、率から期待値を作る。
   const expected10 = 1 + SKILL_RULES.growthPerBattle * 10;
   assert(Math.abs(m.atk / base.atk - expected10) < 0.03,
     `10戦でおよそ ×${expected10.toFixed(2)}（${(m.atk / base.atk).toFixed(3)}）`);
-  Game.memberRecord(m).battles = 13;
+  Game.memberRecord(m).grow.atk = 13;
   Game.applyGrowth(m);
   assert(m.atk === base.atk + expect(12), `13戦でも12戦ぶんで頭打ち（${m.atk}）`);
   const expectedCap = 1 + SKILL_RULES.growthPerBattle * SKILL_RULES.growthCapBattles;
   assert(Math.abs(m.atk / base.atk - expectedCap) < 0.03,
     `頭打ちはおよそ ×${expectedCap.toFixed(2)}（${(m.atk / base.atk).toFixed(3)}）`);
-  assert(m.spd === 3, 'spd は伸びない');
+  assert(m.spd === 3, '殴っただけでは spd の記録が無いので伸びない（使った数値だけが伸びる）');
   // 何度呼んでも二重に足さない
   const after = m.atk;
   Game.applyGrowth(m); Game.applyGrowth(m);
@@ -152,7 +154,11 @@ function fightOnce(st) {
   Game.settleBattle('retreat');
   const after = st.roster.find(m => m.uid === 107);
   assert(after && Game.memberRecord(after).battles === 1, '退いた戦いも1戦に数える');
-  assert(after && after.grown && after.grown.atk >= 1, `退いた戦いでも伸びる（+${after.grown.atk}）`);
+  // 退いた戦いでも、殴っていれば攻撃が伸びる（伸びるのは使った数値だけ。2026-09-14）
+  assert(after && Game.memberRecord(after).grow.atk >= 1,
+    `退いた戦いでも「殴った」が記録される（${JSON.stringify(Game.memberRecord(after).grow)}）`);
+  assert(after && after.grown && (after.grown.atk >= 1 || after.grown.hp >= 1),
+    `退いた戦いでも伸びる（atk+${after.grown.atk || 0} / hp+${after.grown.hp || 0}）`);
 }
 {
   // 6戦通すと本当に置き換わる（決着処理から呼ばれている）
@@ -180,7 +186,7 @@ function fightOnce(st) {
   assert(old.base && old.base.atk === 9, '現在値が base になる');
   assert(old.grown && old.grown.atk === 0, 'それまでの伸びは「もう入っている」扱い');
   assert(old.skillTier === 1, 'skillTier が入る');
-  Game.memberRecord(old).battles = 3;
+  Game.memberRecord(old).grow.atk = 3;
   Game.applyGrowth(old);
   assert(old.atk === 9 + Math.round(9 * SKILL_RULES.growthPerBattle * 3),
     `旧セーブでも落ちずに伸びる（${old.atk}）`);

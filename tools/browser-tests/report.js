@@ -150,6 +150,37 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!oldHeadline.includes('CHAIN 1')) errors.push('旧データで1行サマリのCHAINが消えた: ' + oldHeadline);
   if (oldHeadline.includes('戦意')) errors.push('旧データなのに戦意倍率が出ている: ' + oldHeadline);
 
+  // ── 成長の読み上げ（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 2節）──
+  // 0.5 秒ごとに一行ずつ／タップで残り全部／8行を超えたら「ほか ○ 件」。
+  const growth = await page.evaluate(async () => {
+    const st = Game.state;
+    st.lastGrowth = [
+      { uid: 1, name: 'ゴルド', key: 'atk', delta: 1 }, { uid: 1, name: 'ゴルド', key: 'spd', delta: 1 },
+      { uid: 2, name: 'プル', key: 'hp', delta: 2 }, { uid: 3, name: 'サン', key: 'def', delta: 1 },
+      { uid: 4, name: 'ヨン', key: 'hp', delta: 1 }, { uid: 5, name: 'ゴ', key: 'hp', delta: 1 },
+      { uid: 6, name: 'ロク', key: 'hp', delta: 1 }, { uid: 7, name: 'ナナ', key: 'hp', delta: 1 },
+      { uid: 8, name: 'ハチ', key: 'hp', delta: 1 }, { uid: 9, name: 'キュウ', key: 'hp', delta: 1 }
+    ];
+    UI.result();
+    const shown = () => [...document.querySelectorAll('.growth-line')].filter(l => !l.hidden).length;
+    const first = shown();
+    await new Promise(r => setTimeout(r, 620));
+    const second = shown();
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 80));
+    const rest = document.querySelector('.growth-rest');
+    return { rows: document.querySelectorAll('.growth-line').length, first, second, all: shown(),
+      rest: rest ? rest.textContent.trim() : '', restHidden: rest ? rest.hidden : null,
+      head: (document.querySelector('.growth-line') || {}).textContent.replace(/\s+/g, ' ').trim() };
+  });
+  if (growth.rows !== 8) errors.push(`8行までに畳んでいない（${growth.rows}行）`);
+  if (growth.first !== 1) errors.push(`最初は1行だけのはず（${growth.first}行）`);
+  if (growth.second <= growth.first) errors.push(`0.5秒で次の行が出ない（${growth.first}→${growth.second}）`);
+  if (growth.all !== 8) errors.push(`タップで全部出ない（${growth.all}／8）`);
+  if (!/ほか 2 件/.test(growth.rest) || growth.restHidden) errors.push(`「ほか 2 件」が出ない（${growth.rest}）`);
+  if (!/ゴルドの攻撃が 1 上がった！/.test(growth.head)) errors.push(`読み上げの文が違う（${growth.head}）`);
+  if (!/⚔/.test(growth.head)) errors.push(`伸びた数値の印が無い（${growth.head}）`);
+
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/report-panel.png', fullPage: true });
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 主要記録2つ・代表CHAIN経路・1行サマリ・非ダメージバッジ');
   await browser.close();

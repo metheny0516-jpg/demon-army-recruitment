@@ -114,6 +114,8 @@ const Game = {
       fallenRoll: [],
       lastFallen: [],
       lastPromotions: [],
+      // 直近の決着で伸びた数値（決着画面が一行ずつ読み上げる）
+      lastGrowth: [],
       generalsMade: [],
       battleIncidentTotal: 0,
       // 撤退（2026-09-10）
@@ -354,6 +356,8 @@ const Game = {
       rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
+      // 直近の決着で伸びた数値（決着画面が一行ずつ読み上げる）
+      lastGrowth: [],
       generalsMade: [],
       battleIncidentTotal: 0,
       turn: 1, conquest: 0, alert: 0, battlesWon: 0,
@@ -404,7 +408,7 @@ const Game = {
     for (const m of st.roster) {
       if (!m.injured) m.injured = 0;   // 旧セーブに負傷は無い
       if (!Array.isArray(m.relicIds)) m.relicIds = [];
-      this.memberRecord(m);            // record が無い者に record.battles++ すると落ちる
+      this.memberRecord(m);            // record が無い者に record.battles++ すると落ちる（grow もここで入る）
       this.baseOf(m);                  // base が無い旧セーブは現在値を基礎値にする
       if (!m.skillTier) m.skillTier = (m.traits || []).some(id => ((TRAITS[id] || {}).skill || {}).tier === 2) ? 2 : 1;
       if (typeof m.spirit !== "number") m.spirit = this.spiritRules().start;   // 気合（2026-09-10）。旧セーブには無い
@@ -2250,24 +2254,32 @@ const Game = {
     return monster.base;
   },
 
-  // 小成長。基礎値の 2.5%／戦、12戦で頭打ち（合計 +30%）。spd は伸びない。
+  // 小成長。基礎値の 2.5%／戦、12戦で頭打ち（合計 +30%）。
+  //
+  // **何戦出たかではなく、その数値を使った戦いの数で伸びる**（2026-09-14）。
+  // 殴れば攻撃と速さ、守れば防御、殴られれば HP。使わなかった数値は伸びない。
+  // 「伸びた戦い」の数は `record.grow` が持ち、加算は tallyBattleRecords で行う。
   //
   // 仕様は「毎回 base から現在値を組み直す」だが、**差分だけを足す**形にした。
   // 城内事件は HP を恒久的に減らす（`events.js` の負傷）ので、組み直すとその傷が
   // 黙って治ってしまう。差分方式でも二重加算は起きない（積んだ量を `m.grown` が覚えている）。
+  // 戻り値は伸びた分の `{ uid, key, delta }` の配列（決着の読み上げが読む）。
   applyGrowth(monster) {
-    if (!monster || monster.mercenary) return;
+    if (!monster || monster.mercenary) return [];
     const rules = this.skillRules();
     const base = this.baseOf(monster);
-    const battles = this.memberRecord(monster).battles || 0;
-    const steps = Math.min(battles, rules.growthCapBattles);
-    for (const key of ["hp", "atk", "def"]) {
+    const grow = this.memberRecord(monster).grow;
+    const gained = [];
+    for (const key of this.GROW_KEYS) {
+      const steps = Math.min(grow[key] || 0, rules.growthCapBattles);
       const target = Math.round((base[key] || 0) * rules.growthPerBattle * steps);
       const delta = target - (monster.grown[key] || 0);
       if (!delta) continue;
       monster[key] = Math.max(key === "def" ? 0 : 1, (monster[key] || 0) + delta);
       monster.grown[key] = target;
+      if (delta > 0) gained.push({ uid: monster.uid, name: monster.name, key, delta });
     }
+    return gained;
   },
 
   // その者が次に覚える上位技。既に覚えている／技の無い種族なら null。
@@ -2376,6 +2388,8 @@ const Game = {
   trainSurvivors(contribution, notes) {
     const st = this.state;
     const unlocked = [];
+    // 伸びた数値は決着の画面が一行ずつ読み上げる（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY 2節）。
+    st.lastGrowth = [];
     for (const row of contribution || []) {
       if (row.mercenary) continue;
       if (row.survived === false) continue;      // この戦いで戦死した者は育たない
@@ -2385,7 +2399,7 @@ const Game = {
       if (species) unlocked.push(species);
       const gained = this.checkSkillUnlock(monster, notes);
       if (gained) unlocked.push(gained);
-      this.applyGrowth(monster);
+      st.lastGrowth.push(...this.applyGrowth(monster));
     }
     return unlocked;
   },
@@ -2421,11 +2435,21 @@ const Game = {
 
   // 個人カウンタ。痕跡の器（src/core/traces.js、別仕様）が入るまでのつなぎ。
   // 旧セーブには無いので、読むときに必ずここを通して補う。
+  // 成長の器（docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md）。数値ごとに「伸びた戦い」の数を持つ。
+  // 旧セーブには無いので、**そのときは戦闘数を4つに写す**（それまでの伸びを失わせない）。
+  GROW_KEYS: ["hp", "atk", "def", "spd"],
   memberRecord(monster) {
     if (!monster) return { battles: 0, wins: 0, downed: 0, carried: 0, late: 0, ate: 0 };
     if (!monster.record) monster.record = { battles: 0, wins: 0, downed: 0, carried: 0, late: 0, ate: 0, homeStays: 0 };
     for (const key of ["battles", "wins", "downed", "carried", "late", "ate", "homeStays"]) {
       if (typeof monster.record[key] !== "number") monster.record[key] = 0;
+    }
+    if (!monster.record.grow || typeof monster.record.grow !== "object") {
+      const battles = monster.record.battles || 0;
+      monster.record.grow = { hp: battles, atk: battles, def: battles, spd: 0 };
+    }
+    for (const key of this.GROW_KEYS) {
+      if (typeof monster.record.grow[key] !== "number") monster.record.grow[key] = 0;
     }
     return monster.record;
   },
@@ -2463,6 +2487,20 @@ const Game = {
       if (row.survived === false || row.injured) record.downed += 1;
       if (row.injured) record.carried += 1;
       if (row.late > 0) record.late += 1;
+      // その戦いで使った数値だけが伸びる（1戦で各 +1 まで）。
+      // 技は当面「たたかう」と同じ扱い（仕様2節の表）。食べるでは伸びない。
+      //
+      // **手番の記録が空の戦果もある**ときの保険：撤退の提案で作る戦果が
+      // `summarizeContribution` を actions 抜きで呼んでいた（battle.js 側で修正済み。
+      // 2026-09-15）。古い保存や別経路で全部 0 のまま届いた場合に備えて残してある。
+      // そのときは残っている数字から読める分だけ数える＝**与ダメージがあれば殴っている**。
+      // 守りは数字に残らないので数えない（無い行動をでっち上げない）。
+      const acts = row.actions || {};
+      const recorded = (acts.attack || 0) + (acts.guard || 0) + (acts.skill || 0) + (acts.eat || 0) + (acts.cover || 0);
+      const attacked = recorded > 0 ? (acts.attack || 0) + (acts.skill || 0) >= 1 : (row.dealt || 0) > 0;
+      if (attacked) { record.grow.atk += 1; record.grow.spd += 1; }
+      if ((acts.guard || 0) + (acts.cover || 0) >= 1) record.grow.def += 1;
+      if ((row.taken || 0) > 0) record.grow.hp += 1;
     }
   },
 

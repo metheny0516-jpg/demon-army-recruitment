@@ -3886,3 +3886,33 @@ button.primary::first-letter { color: var(--gold); }
 /* 忠義の一行（堕騎士）。名簿の詳細で、主と認めたかどうかを出す */
 .fealty-line { margin: 4px 0 0; font-size: 12px; color: #d9c9a0; }
 .fealty-line.sworn { color: #ffe6a8; }
+
+/* 成長の読み上げ（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 2節）。
+   0.5 秒ごとに一行ずつ。タップで残り全部。数字は行の中にだけ出す */
+.growth-panel .growth-lines { list-style: none; margin: 0; padding: 0; }
+.growth-panel .growth-line { padding: 2px 0; font-size: 14px; animation: growthIn .22s ease-out; }
+.growth-panel .growth-mark { margin-right: 6px; }
+.growth-panel .growth-rest { margin-top: 4px; font-size: 12px; color: #d9c9a0; }
+@keyframes growthIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .growth-panel .growth-line { animation: none; } }
+
+/* 技の吹き出し（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 1節）。
+   繰り出す直前に本人の札の上へ。1行目が台詞、2行目が技名。1.4秒で消える */
+.bu-bubble {
+  position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -6px);
+  z-index: 6; pointer-events: none; white-space: nowrap; text-align: center;
+  padding: 4px 8px; border: 1px solid rgba(232, 189, 104, .7); border-radius: 8px;
+  background: rgba(18, 13, 26, .92); color: #f6e6c2; line-height: 1.25;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .55);
+  animation: bubbleIn .18s ease-out, bubbleOut .2s ease-in forwards;
+  animation-delay: 0s, calc(var(--bubble-life, 1400ms) - 200ms);
+}
+.bu-bubble::after {
+  content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: rgba(232, 189, 104, .7);
+}
+.bu-bubble .bu-quote { display: block; font-size: 11px; color: #e6dcc4; }
+.bu-bubble .bu-skill { display: block; font-size: 13px; color: #ffe6a8; }
+@keyframes bubbleIn { from { opacity: 0; transform: translate(-50%, 2px); } to { opacity: 1; transform: translate(-50%, -6px); } }
+@keyframes bubbleOut { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bu-bubble { animation: none; } }

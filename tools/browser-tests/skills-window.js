@@ -197,14 +197,18 @@ const SETUP = () => {
 
   console.log('\n▼ 食べる（2026-09-14）：まもるの2段目・HP が戻る・食料が減る');
   const eat = await page.evaluate(async () => {
-    // 新しい戦闘の窓が出るまで待つ（前の戦いの続きなら次のラウンドの頭）
-    for (let i = 0; i < 40 && document.getElementById('command-panel').hidden; i++) {
+    // 新しい戦闘の窓が出るまで待つ（前の戦いの続きなら次のラウンドの頭）。
+    // 技を繰り出す一瞬は「止めて見せる」ので（2026-09-14 に order_exec から skill_call へ移した）、
+    // 人がタップするのと同じように送ってやらないと次の指示待ちまで進まない。
+    for (let i = 0; i < 60 && document.getElementById('command-panel').hidden; i++) {
+      BattleScene.advanceBeat();
       await new Promise(r => setTimeout(r, 100));
     }
     const btn = document.querySelector('.cmd-btn.cmd-eat');
     const menus = [...document.querySelectorAll('.cmd-menu')];
-    const ally = BattleScene.manual.prompt.allies[BattleScene.cmdSeq.idx];
-    return btn ? {
+    const seq = BattleScene.cmdSeq;
+    const ally = seq && BattleScene.manual.prompt ? BattleScene.manual.prompt.allies[seq.idx] : null;
+    return btn && ally ? {
       text: btn.innerText.replace(/\s+/g, ' ').trim(),
       secondRow: menus.length === 2 && menus[1].contains(btn),
       ready: !btn.disabled, left: ally.eat && ally.eat.left,
