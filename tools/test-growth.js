@@ -133,7 +133,7 @@ const fight = (st, contribution, times) => {
   const st = fresh();
   const m = member(14, '退き際'), quiet = member(15, '無為');
   st.roster = [m, quiet];
-  // battle.js の撤退の提案は actions を全部 0 のまま返す（2026-09-14 時点）
+  // 手番の記録が全部 0 のまま届いた場合の保険（battle.js 側は修正済み。古い保存・別経路向け）
   const empty = { attack: 0, guard: 0, skill: 0, eat: 0, cover: 0 };
   Game.tallyBattleRecords([
     { uid: 14, survived: true, actions: { ...empty }, dealt: 37, taken: 0 },
