@@ -22,10 +22,10 @@ const path = require('node:path');
       return {mapped, failed, count:assets.length, unknown:BattleScene.artId({side:'enemy',icon:'?'}) || null};
     }, enemies);
     assert.deepEqual(result.failed, []);
-    assert.equal(result.count, 204);   // 34種×6ポーズ（2026-09-14 マンドラゴラを追加）
+    assert.equal(result.count, 210);   // 35種×6ポーズ（2026-09-15 堕騎士を追加）
     assert.equal(result.unknown, null);
     assert.ok(result.mapped.every(u => u.id), JSON.stringify(result.mapped.filter(u => !u.id)));
     assert.deepEqual([...new Set(result.mapped.map(u => u.id))].sort(), ['swordsman','archer','shield','slinger','axeman','cavalry','commander','cleric','sage','hero'].sort());
-    console.log(`✓ art coverage: ${enemies.length} enemy entries including variants, 10 roles, all 204 pose images loaded at 512px`);
+    console.log(`✓ art coverage: ${enemies.length} enemy entries including variants, 10 roles, all 210 pose images loaded at 512px`);
   } finally { await browser.close(); }
 })().catch(e => { console.error(e); process.exit(1); });

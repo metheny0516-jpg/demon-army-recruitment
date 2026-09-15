@@ -21,6 +21,28 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-13 夜 現在）
 
+### 引き継ぎ（2026-09-15 朝・Claude。次のセッションはここから）
+
+**役割**：Claude（Fable）＝設計・仕様書・レビュー・取り込み（マージ）・戦闘エンジン（battle.js / skill_effects.js / skills.js）。Opus＝run.js・UI・テスト。CodeX（Astra）＝絵・音・文章データ（GitHub 連携で push、テストは走らせられない）。
+**規則**：仕様書に触るファイルを書く。run.js と battle.js は同じコミットに入れない。run.js を触るチケットは一人だけ（両方に貼ると二重投資になる。2026-09-14 に一度起きた）。貼り付け文には宛名（Opus 用／CodeX 用）。sim・run-all・ブラウザテストは直列。
+
+**いま動いているもの（上がったら取り込みと検証）**
+- Opus：成長の偏り＋読み上げ＋技の吹き出し（`docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md`、`docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md`）。堕騎士のデータ（`docs/DESIGN_HUMAN_SWORDSMAN_2026-09-14.md`）。
+- CodeX：堕騎士の絵（履歴書・6ポーズ・表情3枚、ブランチ `codex/fallen-knight-art`）。上がったら `BATTLE_SPRITES`（battle_scene.js）と `PORTRAITS` に登録し、`art-coverage.js` の枚数を +6（今 204）。
+- エンジン側は済み：食べる（`cmd:"eat"`）、行動の記録（`contribution[].actions`）、技の台詞は手番で（`skill_call`、`order_exec` は quiet）、火の粉（`sparked`）、忠義（癖 `fealty`・condition `loyalty60`）、吸血（kind `vampiric`）、目覚めの声（`cleanse_all`）、将軍技（`might`）。
+
+**判断待ち（オーナー）**
+- 噂の札の第3便（自然発生 B を中心に6〜8枚。全部無視で波乱 2.9% → 目安 1〜2割）。`docs/DESIGN_INCIDENTS_2026-09-14.md`。
+- カタログ25本の割り当て `docs/PROPOSAL_CATALOG_ASSIGNMENT_2026-09-13.md`（サキュバスは「気付け」でなく「黒の癒し」に変更済み）。
+- 大筋の波乱の縦切り（先代の英雄＋引き抜きから）`docs/ARC_IDEAS_SCORED_2026-09-14.md`。
+- 施設の詳細画面（`docs/SPEC_FACILITY_DETAIL_2026-09-13.md`、背景8枚は CodeX）。
+- 古い CodeX の枝3本（`codex/act2-art` `codex/f-wip` `codex/two-wins`）の削除。
+
+**今日入ったものの一覧（2026-09-13〜15）**：将軍への転身、全体マップと施設の絵、城下町統合（巨大厨房・墓地）、訓練場、反乱軍の魔物化と首謀者、素材の配線（音・小物・紫炎）、噂の札の器と12枚、火の粉、第二幕の敵5種の絵、マンドラゴラ（回復役）、トロルのタンク化、サキュバス作り直し、名簿に覚えた技を表示。
+
+**テストの回し方**：node は `for f in tools/test-*.js; do node $f; done`（88本）。ブラウザは `CHROME=/opt/pw-browsers/chromium-1194/chrome-linux/chrome GAME="$(pwd)" NODE_PATH="$(pwd)/node_modules" node tools/browser-tests/<name>.js`。sim は `node tools/sim.js 20`。
+
+
 ### 取り込み確認（2026-09-14・Claude）：噂の札の器
 
 - 器4コミット（bfd572d / d339fec / 9c85fcc / d48daa1）を確認。node 88本・`browser-tests/incidents.js` 通過。
