@@ -101,7 +101,7 @@ const BattleScene = {
   PROTECTED_TYPES: new Set([
     "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
     "resource_gain", "resource_forfeit", "resource_consume", "momentum",
-    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_offer", "order_exec", "result"
+    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_offer", "order_exec", "skill_call", "result"
   ]),
 
   EFFECT_CLASSES: [
@@ -539,7 +539,8 @@ const BattleScene = {
 
   // 止めて見せる出来事。数字は「読み終える尺」。x1 で 2.6 秒、x2 で 2.6 秒、x4 で 1.3 秒。
   HOLD_MS: 2600,
-  BEAT_TYPES: new Set(["trait_trigger", "order_exec", "cover", "intent", "incident", "revive", "summon", "synergy_trigger", "facility_trigger", "retreat_offer"]),
+  // 技は「繰り出す一瞬」を止めて見せる。order_exec は指示の記録になった（quiet）ので外す。
+  BEAT_TYPES: new Set(["trait_trigger", "skill_call", "cover", "intent", "incident", "revive", "summon", "synergy_trigger", "facility_trigger", "retreat_offer"]),
   isBeat(ev) {
     if (!ev) return false;
     if (ev.type === "trait_trigger") return (ev.emphasis || 0) >= 3 || (!!ev.quote && !this.traitQuoteShown.has(ev.traitId));
@@ -1039,14 +1040,16 @@ const BattleScene = {
         this.askOrder(ev);
         break;
       // 号令の実行。魔王の一声と本人の返事。止めない（直前に選んだばかり）。
+      // 技の台詞と技名は **skill_call**（繰り出す直前）が出す。order_exec は指示の記録として
+      // 残るだけ（quiet: true）。データは消していない（お披露目の判定と sim の集計が読む）。
       case "order_exec": {
         const u = this.units[ev.unitId];
-        const sk = this.skillOf(ev.skillId);
         this.clearFocus();
+        if (u) u.el.classList.add("acting");
+        if (ev.quiet) break;
+        // 旧いタイムライン（quiet を持たない保存）を再生したときだけ、今までどおり出す。
+        const sk = this.skillOf(ev.skillId);
         if (u) {
-          u.el.classList.add("acting");
-          // 自分対象（休む・狂乱）はその場で光る。味方対象（かばう・癒やす・起こす）は
-          // 使用者を前へ出さず、対象の側の光り方（heal / cover / revive）に任せる。
           const here = ["self", "none", "all_allies"].includes(ev.target) || (sk && sk.kind === "rest");
           if (here && ev.fx) this.fxVfx(u, ev.fx, 2);
           this.float(u, ev.debut ? "お披露目！" : sk && sk.kind === "charm" ? "♥ 魅惑" : "号令",
@@ -1056,8 +1059,24 @@ const BattleScene = {
         this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」　${ev.name}「${ev.quote}」`, ev.debut ? 2000 : 1600);
         this.flash(ev.debut ? 2 : 1);
         this.pulse("order");
-        // お披露目は一段強く。覚えた技を初めて自分の手で出す一瞬なので、ここだけ止めて見せる。
         if (ev.debut) this.cutin(ev.label || ev.skillName, `${ev.name}、お披露目`, ev.skillId);
+        break;
+      }
+      // 技を繰り出す直前。本人の口元に吹き出し（台詞＋技名）。ロマサガ風に札の上へ浮かせる。
+      case "skill_call": {
+        const u = this.units[ev.unitId];
+        const sk = this.skillOf(ev.skillId);
+        if (u) {
+          u.el.classList.add("acting");
+          this.bubble(u, ev.quote, ev.label || ev.skillName);
+          // 自分・全体対象はその場で光る。味方1体を狙う技は、光るのは対象の側。
+          const here = ["self", "none", "all_allies"].includes(ev.target) || (sk && sk.kind === "rest");
+          if (here && ev.fx) this.fxVfx(u, ev.fx, 2);
+          if (ev.debut) u.el.classList.add("debut-flash");
+        }
+        this.pulse("order");
+        // お披露目のカットインは**繰り出す瞬間**へ移した（指示の時点ではもう出さない）。
+        if (ev.debut) { this.flash(2); this.cutin(ev.label || ev.skillName, `${ev.name}、お披露目`, ev.skillId); }
         break;
       }
       case "result":
@@ -2466,6 +2485,25 @@ const BattleScene = {
   },
 
   // ダメージ数字を浮かせる。カード内に絶対配置するので座標計測は不要。
+  // 技の吹き出し（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 1節）。
+  // 1行目に台詞、2行目に技名。札の上に 1.4 秒。**1体に1つ**で、次が来たら前を消す。
+  // 低モーションでは動かさず、同じ長さだけ静止で出す。
+  BUBBLE_MS: 1400,
+  bubble(u, quote, skillName) {
+    if (!u || !u.el) return null;
+    const old = u.el.querySelector(".bu-bubble");
+    if (old) old.remove();
+    const box = document.createElement("div");
+    box.className = "bu-bubble";
+    const life = this.visualDuration(this.BUBBLE_MS);
+    box.style.setProperty("--bubble-life", `${life}ms`);
+    box.innerHTML = `${quote ? `<span class="bu-quote">「${U.esc(quote)}」</span>` : ""}
+      <b class="bu-skill">${U.esc(skillName || "")}</b>`;
+    u.el.appendChild(box);
+    this.timers.push(setTimeout(() => box.remove(), life));
+    return box;
+  },
+
   float(u, text, cls) {
     const n = document.createElement("span");
     n.className = "fnum " + (cls || "");
