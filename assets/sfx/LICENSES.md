@@ -140,3 +140,16 @@
 - 変換: 55Hzハイパス／1500Hzローパス（2次Butterworth）、再生速度0.899602倍（約-1.83半音）、1.85秒へ。端フェード320ms／18ms。共通仕様へ正規化・WAV出力。
 
 検査: 5本のWAVヘッダー・長さ・ピーク・両端ゼロを確認。建設音は連続2打の波形、硬貨は短い3衝突を選定。ゲームへの配線・ブラウザ検証は本チケットの範囲外。
+
+## 2026-09-15 大技の爆発音（`recorded/dokan-a.wav` / `dokan-b.wav` / `dokan-c.wav`）
+
+- 原題: [25 CC0 bang / firework SFX](https://opengameart.org/content/25-cc0-bang-firework-sfx)／作者: rubberduck／取得日: 2026-09-15／ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（取得日に配布ページで確認）。
+- 取得音源: [25-CC0-bang-sfx.zip](https://opengameart.org/sites/default/files/25-CC0-bang-sfx.zip)。花火を録音した爆発・砲撃系OGGから変換。
+- 共通処理: ffmpegで44.1kHz mono floatへデコード、2次Butterworth 45Hz〜7kHz帯域通過、ピーク比0.006の最初の検出点の88サンプル前から切出し。先頭132サンプル線形フェード、末尾5292サンプルは線形フェードの1.3乗。初回ピーク0.70正規化後16bit化。続いてtanhソフトリミットで余韻を持ち上げ、ピーク0.70・RMS0.16へ調整。最終先頭88サンプル／末尾882サンプル線形フェード。44.1kHz・16bit・mono WAV。追加音源の合成なし。
+- 音量比較: 既存zuba-a/b/cはRMS約0.16、basun-a/b/cは約0.19。今回3本はRMS約0.16、ピーク約0.70。聴感の最終確認はゲーム接続後に実施する。
+
+| ファイル | 原音 | 切出し開始サンプル（44.1kHz） | 秒 | tanh係数 | 原音SHA-256 |
+| --- | --- | --- | --- | --- | --- |
+| dokan-a.wav | cannon_01.ogg | 358 | 0.6 | 4.037301345 | `e87ca0ee6b53da1f21cd9086cb75f456495871618fdfed63388bd2208a872596` |
+| dokan-b.wav | cannon_03.ogg | 1586 | 0.52 | 7.011708106 | `c3690a013befc16be1432e6fe62422db71c7b606980ddfe62429e864c5caf1d2` |
+| dokan-c.wav | cannon_04.ogg | 159 | 0.66 | 5.389113673 | `58714ef1d8c73a52cd9358c783de4b961ee96259de112c6493a1028bc60410e8` |
