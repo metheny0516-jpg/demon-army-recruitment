@@ -94,6 +94,60 @@ async function decideRest(page) {
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });
   ok(await page.evaluate(() => BattleScene.timeline.filter(e => e.type === 'order_exec').length === 0), '技は出ない');
 
+  // ── 指示待ちの決めポーズと行動の構え（docs/SPEC_COMMAND_POSE_2026-09-15.md §2）──
+  console.log('▼ 指示待ちの決めポーズと、決めた行動の構え');
+  await page.evaluate(() => { Game.newRun(); });
+  await enterMissionPhase(page);
+  await page.evaluate(() => {
+    Game.state.roster = [
+      { uid: 911, tplId: 'orc', name: 'ガロ', race: 'オーク', job: '', hp: 200, atk: 14, def: 6, spd: 9,
+        salary: 2, loyalty: 70, traits: [], skills: [], tags: [], quote: '', unpaid: false, injured: 0, spirit: 3 },
+      { uid: 912, tplId: 'goblin', name: 'ギド', race: 'ゴブリン', job: '', hp: 180, atk: 10, def: 5, spd: 3,
+        salary: 2, loyalty: 70, traits: [], skills: [], tags: [], quote: '', unpaid: false, injured: 0, spirit: 3 }
+    ];
+    Game.state.activeUids = [911, 912];
+    Game.state.stage = 1; Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation';
+    App.render();
+    BattleScene.speed = 4;
+  });
+  await page.click('[data-action="deploy"]');
+  await page.waitForSelector('#command-panel:not([hidden])', { timeout: 20000 });
+  const first = await page.evaluate(() => {
+    const id = document.getElementById('command-panel').dataset.unit;
+    const u = BattleScene.units[id];
+    return { id, pose: u.sprite.dataset.pose, src: u.sprite.getAttribute('src') };
+  });
+  ok(first.pose === 'ready', `指示の番が来た者は決めポーズ（${first.pose}）`);
+  ok(/\/ready\.webp$/.test(first.src), `決めポーズの絵を読む（${first.src.split('/').slice(-2).join('/')}）`);
+
+  // 一人目は「まもる」＝守りの構え。二人目の窓が開いても一人目の構えは残る
+  await page.evaluate(() => document.querySelector('.cmd-btn[data-cmd="guard"]').click());
+  const afterGuard = await page.evaluate(() => {
+    const id = document.getElementById('command-panel').dataset.unit;
+    return { decided: BattleScene.units.p0.sprite.dataset.pose, next: id,
+      nextPose: BattleScene.units[id].sprite.dataset.pose };
+  });
+  ok(afterGuard.decided === 'guard', `まもるを決めたら守りの構え（${afterGuard.decided}）`);
+  ok(afterGuard.next === 'p1' && afterGuard.nextPose === 'ready',
+    `次の者へ番が回り、その者も決めポーズ（${afterGuard.next}／${afterGuard.nextPose}）`);
+
+  // 二人目は「たたかう」＝攻撃の構え。最後の一人なので、決めた瞬間に実行へ入る
+  await page.evaluate(() => document.querySelector('.cmd-btn[data-cmd="attack"]').click());
+  await page.evaluate(async () => {
+    const pick = document.querySelector('[data-pick=""]');
+    if (pick) pick.click();
+  });
+  await page.waitForFunction(() => document.getElementById('command-panel').hidden, null, { timeout: 20000 });
+  const running = await page.evaluate(() => ({
+    p0: BattleScene.units.p0.sprite.dataset.pose,
+    p1: BattleScene.units.p1.sprite.dataset.pose
+  }));
+  ok(running.p1 === 'attack-windup' || running.p1 === 'strike',
+    `実行に入っても攻撃を選んだ者は idle に戻らない（${running.p1}）`);
+  ok(running.p0 === 'guard', `まもるを選んだ者も構えを保つ（${running.p0}）`);
+  await page.evaluate(() => BattleScene.skip());
+  await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });
+
   ok(errs.length === 0, `ページエラーなし${errs.length ? '：' + errs[0] : ''}`);
   await b.close();
   console.log(process.exitCode ? '失敗あり' : '全通過');

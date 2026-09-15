@@ -2119,6 +2119,39 @@ const BattleScene = {
   // たたかう／技を選ぶと窓が細くなり、敵をタップして狙いを決める（敵が1体なら省く）。
   // 最後の一人が決めた瞬間にラウンド開始。「もどる」で一人前へ。味方の札をタップすればその者へ飛べる。
   CMD_ICON: { attack: "⚔", guard: "🛡", skill: "✨", auto: "🤖", eat: "🍖" },
+  // 決めた行動の構え（docs/SPEC_COMMAND_POSE_2026-09-15.md §2）。
+  // たたかう・技は attack-windup のまま実行へ入り、そのまま strike へつながる。
+  // 食べる・おまかせは構えを持たないので idle。
+  COMMAND_POSE: { attack: "attack-windup", skill: "attack-windup", guard: "guard", eat: "idle", auto: "idle" },
+  // 指示の番が来たときの登場動作。種族で分けない1種類（小さく跳ねて半回転→戻る）。
+  // 絵は「止まった姿」だけなので、回る・跳ねるはここの transform で見せる。
+  POSE_ENTER_MS: 250,
+
+  // 構えを差し替える。絵の切り替わりが唐突に見えないよう 0.15 秒だけ重ねる。
+  // 倒れている者は fallen のまま（構えを取らせない）。
+  commandPose(u, pose) {
+    if (!u || !u.el || u.el.classList.contains("dead")) return;
+    this.setPose(u, pose);
+    const img = u.sprite;
+    if (!img || img.dataset.spriteFailed) return;
+    img.classList.remove("pose-swap");
+    void img.offsetWidth;
+    img.classList.add("pose-swap");
+    this.timers.push(setTimeout(() => img.classList.remove("pose-swap"), 150));
+  },
+
+  // 指示の番が回ってきた者の登場動作。吹き出し（指示窓）と同時に始める＝待たない。
+  // 2周目以降も省略しない（大事なパートなので、短縮の分岐を作らない）。
+  poseEnter(u) {
+    if (!u || !u.el || u.el.classList.contains("dead")) return;
+    const direction = u.side === "player" ? 1 : -1;
+    this.animateActor(u, [
+      { transform: "translateY(0) rotateY(0deg) scale(1)", offset: 0 },
+      { transform: `translateY(-9px) translateX(${direction * 3}px) rotateY(180deg) scale(1.04)`, offset: .45 },
+      { transform: `translateY(2px) rotateY(340deg) scale(.98,1.02)`, offset: .78 },
+      { transform: "translateY(0) rotateY(360deg) scale(1)", offset: 1 }
+    ], this.POSE_ENTER_MS);
+  },
   // 敵の役（5節）。札の名前の前に小さく出す。fighter は印を出さない（既定なので）。
   ROLE_ICON: { brute: "💪", shield: "🛡", priest: "✚", caster: "🔥", archer: "🏹", rogue: "🗡", commander: "🎖" },
   ROLE_LABEL: { brute: "大男", shield: "盾役", priest: "僧侶", caster: "術士", archer: "弓", rogue: "斥候", commander: "隊長" },
@@ -2165,7 +2198,14 @@ const BattleScene = {
       let cur = u.el.querySelector(".cmd-cursor");
       if (al.id === a.id) { if (!cur) { cur = document.createElement("i"); cur.className = "cmd-cursor"; cur.textContent = "▼"; u.el.appendChild(cur); } }
       else if (cur) cur.remove();
+      // 指示を待つ者は決めポーズ。番が回ってきた瞬間だけ登場動作を添える
+      // （狙い選びへ入った程度の描き直しでは動かさない。「もどる」で戻ってくれば もう一度やる）。
+      if (al.id === a.id) {
+        this.commandPose(u, "ready");
+        if (seq.activeId !== al.id) this.poseEnter(u);
+      } else if (done) this.commandPose(u, this.COMMAND_POSE[done.cmd] || "idle");
     }
+    seq.activeId = a.id;
     // 敵の札：構えの印と、狙い選び中のタップ対象
     for (const e of prompt.enemies) {
       const u = this.units[e.id]; if (!u) continue;
@@ -2300,6 +2340,8 @@ const BattleScene = {
     if (!seq || !prompt) return;
     this.cmdSel[unitId] = { cmd, target, skill: skill || null };
     seq.commands[unitId] = { cmd, target, skill: skill || null };
+    // 決めた瞬間に構えへ。実行に入っても idle へは戻さない（構えを保つのが要件）。
+    this.commandPose(this.units[unitId], this.COMMAND_POSE[cmd] || "idle");
     seq.mode = "menu";
     this.cmdTargetSide = null; this.cmdTargetKind = null;
     if (seq.idx >= prompt.allies.length - 1) {
