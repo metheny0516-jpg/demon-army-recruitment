@@ -54,6 +54,9 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   console.log('▼ 前哨戦／本戦の帯');
   await page.evaluate(() => {
     // 守りの厚い土地（港町 garrison 4）を候補に出す。段階1の土地には前哨が付かない。
+    // 候補の抽選を止める（毎回同じ土地が出ないと、前哨→本戦の続きを見られない）。
+    window.__rand = U.rand;
+    U.rand = () => 0;
     Game.state.territory = { lands: ['h01', 'h02', 'h03', 'h04', 'h05', 'h06', 'h07'], tribes: [] };
     Game.state.conquest = Territory.conquestOf(Game.state);
     Game.state.outpost = null;
@@ -69,7 +72,6 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   ok(/宰相モルモ「まず斥候を叩いて/.test(await page.locator('.mission-briefing').innerText()),
     '作戦会議にモルモの前哨の一言');
   const main = await page.evaluate(() => {
-    const land = [...document.querySelectorAll('.mission-card.mission-invade')][0];
     Game.state.outpost = { stage: Game.state.conquest, place: Game.state.missionOffers.find(m => m.missionKind === 'invade').territoryId,
       cleared: true, formationId: 'standard' };
     Game.prepareMissions(true); App.render();
@@ -82,6 +84,7 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   ok(/勝てば領土になる/.test(main.text), '本戦は勝てば領土になる');
   ok(/▸前哨済/.test(main.hud), `HUD に「▸前哨済」（${(main.hud.match(/王国攻略[^\n]*/) || [''])[0]}）`);
   ok(/宰相モルモ「前哨で見た顔ぶれ/.test(main.brief), '作戦会議にモルモの本戦の一言');
+  await page.evaluate(() => { U.rand = window.__rand; });
 
   // 訓練（2026-09-13）：相手3つの小ボタンと、解放の段階
   console.log('▼ 訓練の札');
