@@ -102,6 +102,14 @@ const App = {
         + `\n魔王様、第${b.actAdvance.to}幕デス。まだ終わりません。`,
         { kicker: "幕替わり", title: "宰相モルモ" });
     }
+    if (b.act2Clear) {
+      return this.report("joy",
+        (b.act2Clear.by === "defense"
+          ? "勇者を再び退け、第二幕の戦いに決着がつきましたデス！"
+          : "連合本陣を落とし、第二幕の戦いに決着がつきましたデス！")
+        + "\n軍団はこのまま残りマス。第三幕への出陣まで、訓練と周辺地の略奪を続けられますヨ。",
+        { kicker: "第二幕・決着", title: "宰相モルモ" });
+    }
     if (st.phase === "clear") {
       return this.report("joy", `${b.army}を撃破――人間界制圧デス！\n魔王様、この軍団の歴史を刻みましょう！`,
         { kicker: "最終戦果報告", title: "宰相モルモ" });

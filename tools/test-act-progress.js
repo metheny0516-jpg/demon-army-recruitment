@@ -144,16 +144,30 @@ const drawTiers = (st, times) => {
   assert(st.missionOffers[0].baseStage === 14, `勇者戦は段階14（${st.missionOffers[0].baseStage}）`);
 }
 
-// ── 5. 第二幕の着地でクリア ────────────────────────
+// ── 5. 第二幕の着地後も軍団を保存して続けられる ─────────────
 {
   const st = freshRun({ act: 2, conquest: 13, turn: 60, alert: 6 });
   Game.checkCounterattack();
   Game.prepareMissions(true); Game.selectMission(0); st.phase = "formation";
   Game.deploy();
-  assert(st.phase === "clear", `第二幕で勇者を退ければクリア（${st.phase}）`);
+  assert(st.phase === "result", `第二幕で勇者を退けても戦果へ進む（${st.phase}）`);
   assert(!st.lastBattle.actAdvance, '最後の幕では幕替わりしない');
-  assert(st.record && /第2幕/.test(st.record.cause), `魔界史の cause に幕（${st.record && st.record.cause}）`);
-  assert(st.record.act === 2 && st.record.actHistory.length >= 0, '記録に幕と履歴が入る');
+  assert(st.act2Cleared && st.act2Cleared.by === 'defense', '第二幕の決着理由を一度だけ保存する');
+  assert(!st.record, '第二幕決着では魔界史を作らない');
+  assert(!!get('Storage.loadRun()'), '第二幕決着後も現在のセーブが残る');
+  const clearMark = JSON.stringify(st.act2Cleared);
+  Game.afterResult(); if (st.phase === 'recruit') Game.skipHire();
+  assert(st.phase === 'mission', '戦果と面接の後は作戦会議へ戻る');
+  assert(st.missionOffers.map(m => m.missionKind).sort().join(',') === 'raid,train',
+    `決着後の札は略奪と訓練だけ（${st.missionOffers.map(m => m.missionKind).join(',')}）`);
+  assert(Game.checkCounterattack() === null && st.counterattack === null, '第二幕決着後は勇者を再予約しない');
+  // 略奪を1戦続けても決着印と征服度は変わらない。
+  const conquest = st.conquest;
+  Game.selectMission(st.missionOffers.findIndex(m => m.missionKind === 'raid')); st.phase = 'formation'; Game.deploy();
+  assert(JSON.stringify(st.act2Cleared) === clearMark && st.conquest === conquest, '略奪後も決着は重複せず攻略度も動かない');
+  Game.afterResult(); if (st.phase === 'recruit') Game.skipHire();
+  Game.selectMission(st.missionOffers.findIndex(m => m.missionKind === 'train')); st.phase = 'formation'; Game.deploy();
+  assert(JSON.stringify(st.act2Cleared) === clearMark && st.phase === 'result', '訓練後も同じ軍団で通常の戦果へ進む');
 }
 {
   const st = freshRun({ act: 2, conquest: 13, turn: 20 });
@@ -161,8 +175,9 @@ const drawTiers = (st, times) => {
   const invade = st.missionOffers.findIndex(m => m.missionKind === "invade");
   Game.selectMission(invade); st.phase = "formation";
   Game.deploy();
-  assert(st.conquest >= 14 && st.phase === "clear", `征服14でクリア（conquest=${st.conquest} phase=${st.phase}）`);
-  assert(/第2幕・王都攻略/.test(st.record.cause), `攻めた着地の cause（${st.record.cause}）`);
+  assert(st.conquest >= 14 && st.phase === "result", `征服14でもランを閉じない（conquest=${st.conquest} phase=${st.phase}）`);
+  assert(st.act2Cleared && st.act2Cleared.by === 'conquest', '攻めた決着理由を保存する');
+  assert(!st.record, '征服決着でも魔界史と終了記録を作らない');
 }
 
 // ── 6. 第二幕で城陥落しても幕はそのまま ──────────────────
@@ -185,11 +200,31 @@ const drawTiers = (st, times) => {
 {
   Game.newRun();
   const st = Game.state;
-  delete st.act; delete st.actHistory; delete st.actStartedTurn;
+  delete st.act; delete st.actHistory; delete st.actStartedTurn; delete st.act2Cleared;
   Game.migrateState();
   assert(st.act === 1, `幕が無い旧セーブは第一幕（${st.act}）`);
   assert(Array.isArray(st.actHistory), 'actHistory が入る');
+  assert(st.act2Cleared === null, '途中の旧セーブには第二幕未決着の既定値が入る');
   assert(Game.MAX_CONQUEST === 8, '旧セーブの征服上限も8');
+}
+{
+  const st = freshRun({ act: 2, conquest: 14, phase: 'mission',
+    act2Cleared: { by: 'conquest', turn: 30 }, gold: 77 });
+  const uid = st.roster[0].uid;
+  Game.save();
+  st.gold = 0; st.roster = [];
+  assert(Game.load(), '第二幕決着済みの保存を読み込める');
+  assert(Game.state.act2Cleared?.by === 'conquest' && Game.state.gold === 77
+    && Game.state.roster.some(m => m.uid === uid), 'ロード後も決着・資源・既存軍団を保つ');
+  Game.prepareMissions(true);
+  assert(Game.state.missionOffers.map(m => m.missionKind).sort().join(',') === 'raid,train',
+    'ロード後も継続用の札へ戻る');
+}
+{
+  const st = freshRun({ act: 2, phase: 'clear', record: { cleared: true, act: 2 } });
+  delete st.act2Cleared;
+  Game.migrateState();
+  assert(st.phase === 'clear' && st.record?.cleared, '旧版ですでに終了したクリア状態は復活させない');
 }
 
 console.log(failed ? `\n${failed} 件失敗` : '\n全件通過');

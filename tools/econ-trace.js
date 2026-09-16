@@ -31,7 +31,7 @@ for (let r = 0; r < N; r++) {
   Game.newRun();
   const st = Game.state;
   let guard = 0, battles = 0;
-  while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
+  while (st.phase !== 'gameover' && st.phase !== 'clear' && !st.act2Cleared && guard++ < 300) {
     while (st.phase === 'recruit' && st.applicants.length) {
       if (st.hiresLeft <= 0) { Game.skipHire(); break; }
       if (!Game.canHire()) { Game.skipHire(); break; }
