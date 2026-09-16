@@ -100,5 +100,40 @@ const setup = ({ pond = true, spark = true, deployed = true } = {}) => {
     `次の面接に分身が並ぶ（${waiting && waiting.name}）`);
 }
 
+// ── 4. 結合：実際の戦闘（コマンドバトル）で火球 → 火の粉 → 分裂 → 名簿 ──────
+// 自動戦闘（simulate）では種族技そのものが出ないので、ここは指示して撃たせる実プレイの経路で見る。
+{
+  const Battle = vm.runInContext('Battle', ctx);
+  let seen = null;
+  for (let i = 0; i < 20 && !seen; i++) {
+    const mage = Battle.makeUnit({ uid: 502, name: 'ミラ', race: '魔法使い', tplId: 'mage',
+      hp: 60, atk: 12, def: 3, spd: 9, traits: [], tags: ['caster'], skills: ['mage_fireball'], spirit: 9 }, 'player');
+    const slime = Battle.makeUnit({ uid: 501, name: 'ぷに', race: 'スライム', tplId: 'slime',
+      hp: 200, atk: 6, def: 3, spd: 3, traits: [], tags: [], skills: [], spirit: 3 }, 'player');
+    const foes = [1, 2].map(n => Battle.makeUnit({ uid: null, name: '敵' + n, race: '人間', tplId: 'swordsman',
+      hp: 150, atk: 2, def: 2, spd: 1, traits: [], tags: [] }, 'enemy'));
+    const h = Battle.start([mage, slime], foes, { slimeSplit: { enabled: true }, noRetreatOffer: true });
+    let step = h.next({}), guard = 0;
+    while (step && step.type === 'commands' && guard++ < 40) {
+      const cmds = {};
+      for (const a of step.allies) cmds[a.id] = a.id === 'p0' ? { cmd: 'skill', skill: 'mage_fireball' } : { cmd: 'attack' };
+      step = h.next(cmds);
+    }
+    const r = (step && step.result) || h.result || {};
+    if ((r.slimeSplit || []).length) seen = r;
+  }
+  ok(!!seen, '指示して火球を撃たせると、火の粉を浴びたスライムが実際に分裂する');
+  if (seen) {
+    const row = seen.slimeSplit[0];
+    ok(row.uid === 501 && row.byUid === 502, `分裂した者と撃った者が結果に載る（${row.uid}／${row.byUid}）`);
+    ok(row.count >= 1 && row.count <= 3, `分身の数は上限3まで（${row.count}）`);
+    // その結果をそのまま決着へ渡すと、名簿に1体だけ残る
+    const { st } = setup({});
+    const before = st.roster.length;
+    Game.applySpiritChanges({ sparked: seen.sparked || [], slimeSplit: seen.slimeSplit }, null);
+    ok(st.roster.length === before + 1, `実際の戦闘結果でも名簿は1体だけ増える（${before} → ${st.roster.length}）`);
+  }
+}
+
 console.log(failed ? `\n${failed} 件失敗` : '\n全通過');
 process.exit(failed ? 1 : 0);

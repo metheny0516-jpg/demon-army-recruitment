@@ -308,7 +308,8 @@ const strategies = [
   {name:'訓練は序盤3回だけ', kind:'greedy', train:true, trainMax:3},
   // 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md §2-5）
   // スライムの大筋②（docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-4）。火球を撃つ者が1人いる編成。
-  {name:'スライム統一+魔法職1', kind:'race', race:'スライム', caster1:true},
+  // 池の噂を**開いた**周回だけ分裂が起きる仕様なので、この戦略は札をめくる（cards:'open'）。
+  {name:'スライム統一+魔法職1', kind:'race', race:'スライム', caster1:true, cards:'open'},
   {name:'近い順に落とす', kind:'greedy', territory:'near'},
   {name:'港と町を優先', kind:'greedy', territory:'portTown'},
 ];
