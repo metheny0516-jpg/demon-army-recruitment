@@ -15,7 +15,7 @@
 | 傭兵市場 | Opus（run.js・ui・main）→ Claude（battle.js の `flags.mercenary`） | 未 |
 | 拠点接収 | Opus（段階A が入ったので落とせる） | 未 |
 | 号令エンジン＋自動撤退提案 | Opus（run.js 12か所・UI・テスト5本）→ Claude（battle.js の `offerOrder` / `retreatOffer`） | 未（段階B/D の後） |
-| 墓場文書 `docs/GRAVEYARD.md` | CodeX | 未 |
+| 墓場文書 `docs/GRAVEYARD.md` | CodeX | **済** 5c9e82e（宴45本・求人6要項・傭兵・旧OVERKILL段・戦意の文を保全。取り込み済み） |
 
 ## 1. Opus 用（段階B/D のあと。順番どおり、1つずつコミット）
 
