@@ -2831,13 +2831,16 @@ const Game = {
   settleSlimeSplit(result, find) {
     const st = this.state;
     st.lastSlimeSplit = null;   // 前の決着の分を出し続けない
+    const rows = [];
     for (const row of result.slimeSplit || []) {
       const parent = find(row.uid);
       if (!parent) continue;
       const mage = find(row.byUid) || null;
       const name = `${parent.name}の分身`;
       // 名簿に空きがあればその場で加わる。無ければ次の面接に並ぶ（押し出さない）。
-      if (st.roster.length < this.maxArmy()) {
+      // **満員かどうかは行ごとに数え直す**（1体加わった結果、次の親の分から満員になることがある）。
+      const joined = st.roster.length < this.maxArmy();
+      if (joined) {
         const clone = this.rollApplicant("slime");
         Object.assign(clone, { name, salary: 1, loyalty: 50, origin: "split" });
         st.roster.push(clone);
@@ -2849,17 +2852,21 @@ const Game = {
       }
       this.trace("incident", parent.uid, mage ? mage.uid : null, {
         id: "slime_spawn",
-        text: `${parent.name}が火を浴びて分裂した（${row.count}体）`
+        joined,
+        text: `${parent.name}が火を浴びて分裂した（${row.count}体）。${joined ? "1体が名簿に加わった" : "1体が次の面接に並んだ"}`
       });
       // 撃った本人の一言。既に何か言っている者は上書きしない。
       if (mage && !mage.faceLine) mage.faceLine = "もう火球は撃たん";
-      // 結果画面の「なぜ」欄に1行（噂の札と同じ場所に出す）
-      st.lastSlimeSplit = {
-        name: parent.name, count: row.count,
-        why: `池の噂 ＋ 火の粉を浴びた${parent.name} → 分裂して${row.count}体、1体が残った`
-      };
+      // 結果画面の「なぜ」欄の材料。**親ごとに1行**（同じ決着で二人が分裂しても両方残す）。
+      rows.push({
+        name: parent.name, count: row.count, joined,
+        why: `池の噂 ＋ 火の粉を浴びた${parent.name} → 分裂して${row.count}体、`
+          + (joined ? "1体が名簿に加わった" : "名簿が満員だったので1体が次の面接に並んだ")
+      });
       st.slimeSpawnCount = (st.slimeSpawnCount || 0) + 1;   // ③の条件に使う（表示はしない）
     }
+    if (rows.length) st.lastSlimeSplit = { rows };
+    return rows;
   },
 
   // 払った分（技）と高まった分（まもって大技を受けた・味方が倒れた）の両方。

@@ -2068,13 +2068,20 @@ const UI = {
     return `<div class="quote${m.faceLine ? " face-line" : ""}">「${U.esc(line)}」</div>`;
   },
 
-  // 増殖の元の「なぜ」欄。噂の札と同じ場所に1行だけ出す。
+  // 増殖の元の「なぜ」欄。噂の札と同じ場所に出す。
+  // 同じ決着で二人以上が分裂することがあるので、親ごとに1行ずつ並べる。
+  // 名簿に入ったのか、満員で次の面接に並んだのかは**書き分ける**（結果画面と名簿が食い違わないように）。
   slimeSplitWhy() {
-    const row = Game.state && Game.state.lastSlimeSplit;
-    if (!row) return "";
+    const box = Game.state && Game.state.lastSlimeSplit;
+    const rows = (box && box.rows) || [];
+    if (!rows.length) return "";
+    const line = r => `<li class="slime-split-line${r.joined ? " joined" : " waiting"}">${
+      U.esc(`${r.name}が火を浴びて分裂した（${r.count}体）`)} —
+      <b>${r.joined ? "1体が名簿に加わった" : "名簿は満員。1体が次の面接に並んだ"}</b></li>`;
     return `<section class="panel incident-result"><h3>🫧 池の同居人が増えた</h3>
-      <p>${U.esc(`${row.name}が火を浴びて分裂した（${row.count}体）。1体が名簿に残った。`)}</p>
-      <details><summary>なぜこうなった？</summary><p>${U.esc(row.why)}</p></details></section>`;
+      <ul class="slime-split-lines">${rows.map(line).join("")}</ul>
+      <details><summary>なぜこうなった？</summary>
+        <p>${rows.map(r => U.esc(r.why)).join("<br>")}</p></details></section>`;
   },
 
   incidentResultHtml(r) {

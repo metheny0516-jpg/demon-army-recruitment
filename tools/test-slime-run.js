@@ -72,8 +72,9 @@ const setup = ({ pond = true, spark = true, deployed = true } = {}) => {
     `痕跡が残り、分裂した者と撃った者を名指しする（${trace && JSON.stringify(trace.data)}）`);
   ok(/3体/.test(trace.data.text), '何体に分かれたかが痕跡に残る');
   ok(mage.faceLine === 'もう火球は撃たん', `撃った者の一言（${mage.faceLine}）`);
-  ok(/池の噂/.test(st.lastSlimeSplit.why) && /ぷに/.test(st.lastSlimeSplit.why),
-    `「なぜ」欄の1行（${st.lastSlimeSplit.why}）`);
+  const why = ((st.lastSlimeSplit || {}).rows || [])[0] || {};
+  ok(/池の噂/.test(why.why || '') && /ぷに/.test(why.why || '') && why.joined === true,
+    `「なぜ」欄の1行（${why.why}）`);
   ok(st.slimeSpawnCount === 1, `③の条件用に回数を数える（${st.slimeSpawnCount}）`);
 
   // 既に一言を持っている者は上書きしない
@@ -100,38 +101,115 @@ const setup = ({ pond = true, spark = true, deployed = true } = {}) => {
     `次の面接に分身が並ぶ（${waiting && waiting.name}）`);
 }
 
-// ── 4. 結合：実際の戦闘（コマンドバトル）で火球 → 火の粉 → 分裂 → 名簿 ──────
-// 自動戦闘（simulate）では種族技そのものが出ないので、ここは指示して撃たせる実プレイの経路で見る。
+// ── 4. 複数の親が分裂した決着（途中で満員になる場合も）──────────────
 {
-  const Battle = vm.runInContext('Battle', ctx);
-  let seen = null;
-  for (let i = 0; i < 20 && !seen; i++) {
-    const mage = Battle.makeUnit({ uid: 502, name: 'ミラ', race: '魔法使い', tplId: 'mage',
-      hp: 60, atk: 12, def: 3, spd: 9, traits: [], tags: ['caster'], skills: ['mage_fireball'], spirit: 9 }, 'player');
-    const slime = Battle.makeUnit({ uid: 501, name: 'ぷに', race: 'スライム', tplId: 'slime',
-      hp: 200, atk: 6, def: 3, spd: 3, traits: [], tags: [], skills: [], spirit: 3 }, 'player');
-    const foes = [1, 2].map(n => Battle.makeUnit({ uid: null, name: '敵' + n, race: '人間', tplId: 'swordsman',
-      hp: 150, atk: 2, def: 2, spd: 1, traits: [], tags: [] }, 'enemy'));
-    const h = Battle.start([mage, slime], foes, { slimeSplit: { enabled: true }, noRetreatOffer: true });
-    let step = h.next({}), guard = 0;
+  const { st } = setup({});
+  const slime2 = Object.assign(Game.rollApplicant('slime'), { uid: 503, name: 'もち' });
+  st.roster.push(slime2);
+  st.activeUids = [501, 502, 503];
+  const before = st.roster.length;
+  Game.applySpiritChanges({ sparked: [], slimeSplit: [
+    { uid: 501, byUid: 502, skillId: 'mage_fireball', count: 2 },
+    { uid: 503, byUid: 502, skillId: 'mage_fireball', count: 1 }
+  ] }, null);
+  ok(st.roster.length === before + 2, `二人が分裂すれば二人ぶん加わる（${before} → ${st.roster.length}）`);
+  const rows = (st.lastSlimeSplit || {}).rows || [];
+  ok(rows.length === 2, `「なぜ」欄は親ごとに残る（${rows.length}行）`);
+  ok(rows.map(r => r.name).join('・') === 'ぷに・もち', `どちらの親も名指しされる（${rows.map(r => r.name).join('・')}）`);
+  ok(rows.every(r => r.joined === true), '空きがあれば両方とも「名簿に加わった」');
+  const traces = (st.traces || []).filter(t => t.data && t.data.id === 'slime_spawn');
+  ok(traces.length === 2 && traces.every(t => t.data.joined === true), `痕跡にも加入先が残る（${traces.length}件）`);
+
+  // 途中で満員になる：1体目は加わり、2体目は面接待ちになる
+  const fresh = setup({});
+  const st2 = fresh.st;
+  const other = Object.assign(Game.rollApplicant('slime'), { uid: 504, name: 'こな' });
+  st2.roster.push(other);
+  st2.activeUids = [501, 502, 504];
+  while (st2.roster.length < Game.maxArmy() - 1) {
+    st2.roster.push(Object.assign(Game.rollApplicant('goblin'), { uid: 700 + st2.roster.length }));
+  }
+  const full = st2.roster.length;   // あと1人だけ入る
+  st2.incidentApplicants = [];
+  Game.applySpiritChanges({ sparked: [], slimeSplit: [
+    { uid: 501, byUid: 502, skillId: 'mage_fireball', count: 2 },
+    { uid: 504, byUid: 502, skillId: 'mage_fireball', count: 2 }
+  ] }, null);
+  ok(st2.roster.length === full + 1, `満員になった時点で加入は止まる（${full} → ${st2.roster.length}／上限 ${Game.maxArmy()}）`);
+  const rows2 = (st2.lastSlimeSplit || {}).rows || [];
+  ok(rows2.length === 2 && rows2[0].joined === true && rows2[1].joined === false,
+    `1体目は加入、2体目は面接待ちと書き分ける（${rows2.map(r => r.joined).join('／')}）`);
+  ok((st2.incidentApplicants || []).length === 1 && st2.incidentApplicants[0].name === 'こなの分身',
+    `あぶれた分身は次の面接へ（${(st2.incidentApplicants || []).map(m => m.name).join('・')}）`);
+  const traces2 = (st2.traces || []).filter(t => t.data && t.data.id === 'slime_spawn');
+  ok(traces2.length === 2 && traces2[1].data.joined === false && /面接/.test(traces2[1].data.text),
+    `痕跡も面接待ちと書く（${traces2[1] && traces2[1].data.text}）`);
+}
+
+// ── 5. 結合：Game.deploy({manual}) の条件判定 → 実戦 → 決着まで通す ──────
+// Battle へ直接 options を渡さず、**run.js が条件を判定して渡す経路**で確かめる。
+// 乱数は種で固定する（U.seeded）。種は「分裂が起きる目」を探して1つ選んである。
+{
+  const U = vm.runInContext('U', ctx);
+  const battleWith = (opts = {}) => {
+    Game.newRun();
+    const st = Game.state;
+    const slime = Object.assign(Game.rollApplicant('slime'), { uid: 501, name: 'ぷに', hp: 300, maxHp: 300, def: 8, spd: 3, skills: [] });
+    const mage = Object.assign(Game.rollApplicant('mage'), { uid: 502, name: 'ミラ', hp: 120, atk: 14, def: 5, spd: 9, spirit: 9, skills: ['mage_fireball'] });
+    st.roster = [slime, mage];
+    st.activeUids = opts.deployed === false ? [502] : [501, 502];
+    st.traces = [];
+    if (opts.pond !== false) Game.trace('incident', 501, null, { id: 'slime_pond', text: '池を調べた' });
+    if (opts.spark !== false) Game.trace('sparked', 501, 502, { skill: '火球' });
+    st.phase = 'formation';
+    st.gold = 80; st.food = 40;
+    const out = Game.deploy({ manual: true });
+    return { st, out, slime, mage };
+  };
+  // 条件が揃っていれば options が渡り、揃っていなければ渡らない（deploy の中の判定）
+  const armed = battleWith({});
+  ok(!!(armed.out && armed.out.handle), '（前提）コマンドバトルが始まる');
+  const unarmed = battleWith({ pond: false });
+  ok(Game.slimeSplitOption() === null, '池の噂が無ければ deploy でも options は渡らない');
+
+  // 実戦：火球を撃ち続ける。**種 3 は分裂が起きる目**として固定してある（同じ種なら毎回同じ戦闘）。
+  // 万一エンジン側の乱数の使い方が変わって種 3 で起きなくなったときのために、後ろの種も試す。
+  // 固定の種で落ちたら「保証している目が動いた」ということなので、種を選び直して記録し直すこと。
+  const SEEDS = [3, 1, 2, 4, 5, 6, 7, 8, 9, 10];
+  let done = null;
+  for (const seed of SEEDS) {
+    if (done) break;
+    const run = battleWith({});
+    const handle = run.out.handle;
+    // 乱数を種で固定してから回す（同じ種なら毎回同じ戦闘になる）
+    const origRand = U.rand;
+    U.rand = U.seeded(seed);
+    let step = handle.next({}), guard = 0;
     while (step && step.type === 'commands' && guard++ < 40) {
       const cmds = {};
-      for (const a of step.allies) cmds[a.id] = a.id === 'p0' ? { cmd: 'skill', skill: 'mage_fireball' } : { cmd: 'attack' };
-      step = h.next(cmds);
+      for (const a of step.allies) cmds[a.id] = a.name === 'ミラ' ? { cmd: 'skill', skill: 'mage_fireball' } : { cmd: 'attack' };
+      step = handle.next(cmds);
     }
-    const r = (step && step.result) || h.result || {};
-    if ((r.slimeSplit || []).length) seen = r;
+    U.rand = origRand;
+    const result = (step && step.result) || handle.result || null;
+    if (result && (result.slimeSplit || []).length) done = { seed, result, ...run };
   }
-  ok(!!seen, '指示して火球を撃たせると、火の粉を浴びたスライムが実際に分裂する');
-  if (seen) {
-    const row = seen.slimeSplit[0];
-    ok(row.uid === 501 && row.byUid === 502, `分裂した者と撃った者が結果に載る（${row.uid}／${row.byUid}）`);
-    ok(row.count >= 1 && row.count <= 3, `分身の数は上限3まで（${row.count}）`);
-    // その結果をそのまま決着へ渡すと、名簿に1体だけ残る
-    const { st } = setup({});
+  ok(!!done, `run.js が渡した options で、実戦でも分裂が起きる（種 ${done && done.seed}）`);
+  ok(done && done.seed === 3, `固定した種 3 で再現する（実際に使った種 ${done && done.seed}）`);
+  if (done) {
+    const st = done.st;
     const before = st.roster.length;
-    Game.applySpiritChanges({ sparked: seen.sparked || [], slimeSplit: seen.slimeSplit }, null);
-    ok(st.roster.length === before + 1, `実際の戦闘結果でも名簿は1体だけ増える（${before} → ${st.roster.length}）`);
+    Game.finishManualBattle(done.result);
+    ok(st.roster.length === before + 1, `決着まで通すと名簿に1体だけ加わる（${before} → ${st.roster.length}）`);
+    ok(st.roster[st.roster.length - 1].name === 'ぷにの分身', `名前（${st.roster[st.roster.length - 1].name}）`);
+    ok((st.traces || []).some(t => t.data && t.data.id === 'slime_spawn'), '痕跡が残る');
+    ok(done.mage.faceLine === 'もう火球は撃たん', `撃った者の一言（${done.mage.faceLine}）`);
+    ok(((st.lastSlimeSplit || {}).rows || []).length === 1, '「なぜ」欄も1行だけ残る');
+
+    // 決着を二度呼んでも分身は増えない（pending.spiritApplied の番人）
+    const after = st.roster.length;
+    Game.applySpiritChanges(done.result, { spiritApplied: true });
+    ok(st.roster.length === after, `決着を二度通しても増えない（${after} → ${st.roster.length}）`);
   }
 }
 
