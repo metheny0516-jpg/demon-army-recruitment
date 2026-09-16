@@ -844,20 +844,23 @@ button.wide { width: 100%; }
   position: absolute;
   left: 0; right: 0;
   font-weight: bold;
-  font-size: 15px;
+  font-size: 17px;
   color: #ffdd66;
   text-shadow: 0 1px 3px #000, 0 0 8px #000;
-  animation: floatUp .9s ease-out forwards;
+  animation: floatUp 1.8s ease-out forwards;
   white-space: nowrap;
 }
-.fnum.big { font-size: 21px; color: #ff8a5a; }
+.fnum.big { font-size: 24px; color: #ff8a5a; }
 .fnum.heal { color: #6fd08c; }
 .fnum.guard { color: #8fb8ff; font-size: 13px; }
 .fnum.fallen { color: #d7c2c2; font-size: 13px; }
+/* 出てすぐ止まり、寿命の7割は読める位置に留まってから消える（2026-09-16: すぐ消えて読めない） */
 @keyframes floatUp {
   0%   { transform: translateY(6px) scale(.7); opacity: 0; }
-  25%  { transform: translateY(-4px) scale(1.15); opacity: 1; }
-  100% { transform: translateY(-34px) scale(1); opacity: 0; }
+  12%  { transform: translateY(-4px) scale(1.18); opacity: 1; }
+  30%  { transform: translateY(-10px) scale(1); opacity: 1; }
+  72%  { transform: translateY(-16px) scale(1); opacity: 1; }
+  100% { transform: translateY(-36px) scale(.96); opacity: 0; }
 }
 
 /* ── 画面揺れ（決定打） ── */
@@ -889,12 +892,12 @@ button.wide { width: 100%; }
   transform: translate(-50%, -50%) scale(.92);
   pointer-events: none;
 }
+/* 字幕は自分から消えない。次の行動の字幕に置き換わるまで残る（2026-09-16: すぐ消えて読めない） */
 @keyframes actionCaption {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); }
-  18%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.04); }
+  12%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
-.action-caption.show { animation: actionCaption .62s ease-out; }
+.action-caption.show { animation: actionCaption 1.2s ease-out forwards; }
 
 .round-banner,
 .scene-intro {
