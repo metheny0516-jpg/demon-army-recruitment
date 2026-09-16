@@ -218,7 +218,6 @@ function runOnce(strat, stats){
       stats.battles++;
     }
     // 拠点接収：条件を満たしたら必ず使う（1ランに1度の建材の追い風）
-    if (Game.canSeizeStronghold()) { Game.seizeStronghold(); stats.seizes++; }
     // 城下町：建てられるものがあれば建てる（施設は城下町の1系統になった。2026-09-13）。
     // 戦略ごとの好みだけ変える。安い順に見て、最初に建てられるものを1件。
     if (Town && st.phase === 'result') {
@@ -320,7 +319,7 @@ const kpiOut = (() => {
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 const skillTriggerTotals = {};
 for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)) {
-  const stats = { generals:0, trainings:0, syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
+  const stats = { generals:0, trainings:0, syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, skillTriggers:{} };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
@@ -348,7 +347,7 @@ for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)
       + `／荒らされた ${d.ransack}回／城陥落 ${d.fall}／クリア内訳 攻めた ${d.byConquest}・待った ${d.byDefense}`);
   }
   const facTop = Object.entries(facCount).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ') || 'なし';
-  console.log(`  城下町: 何か建てた ${lv1Rate}%（Lv3 到達 ${lv3Rate}%）／主役 ${facTop}／拠点接収 ${stats.seizes}回`);
+  console.log(`  城下町: 何か建てた ${lv1Rate}%（Lv3 到達 ${lv3Rate}%）／主役 ${facTop}`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);

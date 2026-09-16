@@ -1845,16 +1845,6 @@ const UI = {
         (wiped || b.lostOnPoints) ? this.nearMissPanel(b.nearMiss) : ""}
       ${this.skillUnlockPanel(b)}
       ${this.earnedTraitPanel(b)}
-      ${Game.canSeizeStronghold() ? (() => {
-        const q = Game.seizeQuote();
-        return `<div class="panel seize-panel">
-        <h3>🏴 この拠点を接収するか</h3>
-        <div class="muted">勝ち取った拠点から資材を運び出す。<b>このランで1度きり</b>だ。<br>
-          得るもの：建材 <b>+${q.gain}</b>（備蓄 ${q.have}）。
-          代償：王国警戒度 <b>+${q.alertCost}</b>——奪った拠点は目立つ。以後の敵は少し強くなる。</div>
-        <button class="primary wide" data-action="seize">🏴 拠点から資材を運び出す</button>
-      </div>`; })() : ""}
-
       <div class="panel payroll-result">
         <h3>${payrollPolicy.icon} 給与報告：${U.esc(payrollPolicy.name)}</h3>
         <div>支払額 <b>${payrollReport.paid || 0}G</b>／通常額 ${payrollReport.base || 0}G</div>

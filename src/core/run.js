@@ -70,7 +70,6 @@ const Game = {
       materials: demonKing.start.materials,
       // 施設は城下町ただ1系統（2026-09-13、docs/SPEC_TOWN_MERGE_2026-09-13.md）。
       // 旧「戦闘の施設」の3欄（facilityLevel / activeFacilityId / buildProgress）は消した。
-      seizeUsed: false,
       lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
@@ -338,6 +337,7 @@ const Game = {
     delete st.feastPending;   // 宴は撤去（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）
     delete st.briefId; delete st.briefsThisPhase;   // 指名求人は撤去（同 §1-2）
     delete st.mercenaries; delete st.mercenaryOffers;   // 傭兵市場は撤去（同 §1-3）
+    delete st.seizeUsed;   // 拠点接収は撤去（同 §1-4。領土の「砦」が同じ役をする）
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
@@ -379,7 +379,7 @@ const Game = {
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
-      seizeUsed: false, lastDepartmentReport: null,
+      lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
@@ -837,47 +837,6 @@ const Game = {
   },
 
   // 拠点接収：建設部門に誰も置かないと施設は「存在しない」ままだった。
-  // 勝利した拠点をそのまま接収することで、施工役なしでも1ランに一度だけ最初の施設へ届く。
-  // ただし奪った拠点は目立つ（警戒度+3＝以後の敵が約6%強くなる）。
-  // Lv.2以降は従来どおり建設部門の仕事であり、この入口は「最初のJokerを試す」ためだけにある。
-  // 拠点接収。もとは「勝った拠点をそのまま最初の施設にする」入口だったが、
-  // 施設が城下町の1系統になったので **建材の一度きりの追い風** に置き換えた（2026-09-13）。
-  // 奪った拠点は目立つ（警戒度+1）という代償はそのまま。
-  SEIZE_ALERT_COST: 1,
-  SEIZE_MATERIALS: 3,
-
-  seizeQuote() {
-    return {
-      gain: this.SEIZE_MATERIALS,
-      have: this.state.materials || 0,
-      alertCost: this.SEIZE_ALERT_COST,
-      affordable: true            // 払うものが無くなったので常に受けられる（残すのは表示の互換）
-    };
-  },
-
-  // 表示・sim・実プレイで同じ条件を使う。結果画面でのみ、1ランに一度だけ提示する。
-  canSeizeStronghold() {
-    const st = this.state;
-    if (!st || st.phase !== "result") return false;
-    if (st.seizeUsed) return false;
-    if (!st.lastBattle || !st.lastBattle.victory) return false;
-    return true;
-  },
-
-  seizeStronghold() {
-    if (!this.canSeizeStronghold()) return false;
-    const st = this.state;
-    st.materials += this.SEIZE_MATERIALS;
-    st.seizeUsed = true;
-    st.alert = Math.max(0, st.alert + this.SEIZE_ALERT_COST);
-    if (st.lastBattle && Array.isArray(st.lastBattle.notes)) {
-      st.lastBattle.notes.push(`拠点接収：敵拠点から資材を運び出した（建材 +${this.SEIZE_MATERIALS}`
-        + `／王国警戒度+${this.SEIZE_ALERT_COST} 現在 ${st.alert}）`);
-    }
-    this.save();
-    return true;
-  },
-
   // シナジーの発火条件を数える母集団。出撃隊ではなく軍団全体を渡す。
   // 部門へ回した者も条件に参加できるので、「戦力か経営か」の二択が
   // 「どちらでも同じ札が効く」に変わり、同時発動が起きる。
@@ -4197,8 +4156,7 @@ const Game = {
     // ここから下は「ほぼ全ランで起きる普通の行動」。修飾は珍しさを表すためにあるので、
     // 他に何も言うことがないランだけがこの名前を名乗る。
     // 50ラン計測で上位に置いたところ、名前の半分以上がこの2つに occupied された。
-    { id: "retry", test: r => (r.retriesUsed || 0) >= 1, phrase: () => "一度死に損なった" },
-    { id: "seized", test: r => !!r.seizeUsed, phrase: () => "拠点を接収した" }
+    { id: "retry", test: r => (r.retriesUsed || 0) >= 1, phrase: () => "一度死に損なった" }
   ],
 
   // 中核は、発見したシナジーがあればそれを名乗る。無ければ主力種族。
@@ -4402,7 +4360,6 @@ const Game = {
       // 旧魔界史にこの鍵は無い。無ければ表示しないのが正しく、推定生成してはいけない。
       memory: st.memory || null,
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
-      seizeUsed: !!st.seizeUsed,
       date: new Date().toISOString().slice(0, 10)
     };
     // 名前は record が出揃ってから付ける（材料は record の中だけ）
