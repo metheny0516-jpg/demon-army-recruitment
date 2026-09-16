@@ -1481,6 +1481,8 @@ const UI = {
       if (!alt.has(m.territoryId)) alt.set(m.territoryId, []);
       alt.get(m.territoryId).push({ index: i, mission: m });
     });
+    const postAct2 = st.act2Cleared ? `<div class="panel"><h3>第二幕・決着後</h3>
+      <p>軍団と城下町はそのまま。第三幕は今後追加予定。今はこの軍団で訓練と周辺地の略奪を続けられる。</p></div>` : "";
     const cards = offers.map((m, i) => {
       if (m.territoryId && m.territoryMode !== "take") return "";   // 裏の選択肢は札にしない
       const others = m.territoryId ? (alt.get(m.territoryId) || []) : [];
@@ -1564,6 +1566,7 @@ const UI = {
       ? (isHero ? "勇者アレン一行が城へ向かっている" : `${offers[0].army}が城へ向かっている`)
       : "🗺 作戦会議";
     this.set(`${this.hud()}
+      ${postAct2}
       <div class="mission-warroom">
       <header class="mission-warroom-head">
       <div class="panel mission-briefing">

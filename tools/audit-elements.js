@@ -26,7 +26,7 @@ const inc = (o,k,n=1) => { o[k] = (o[k]||0) + n; };
 function runOnce(strat, A){
   Game.newRun(); const st = Game.state; let guard = 0;
   const seenSyn = new Set();
-  while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
+  while (st.phase !== 'gameover' && st.phase !== 'clear' && !st.act2Cleared && guard++ < 300) {
     while (st.phase === 'recruit' && st.applicants.length) {
       if (st.hiresLeft <= 0) { Game.skipHire(); break; }
       // 指名求人・傭兵・宴・合体の「使えた場面」を数える（使うかどうかは戦略で分ける）
@@ -82,13 +82,13 @@ function runOnce(strat, A){
     if (st.debts?.length) inc(A, 'debt_pending_turns');
     if (st.pendingBond) inc(A, 'bond_pending');
   }
-  inc(A, 'runs'); if (st.record?.cleared) inc(A, 'cleared');
+  inc(A, 'runs'); if (st.record?.cleared || st.act2Cleared) inc(A, 'cleared');
   inc(A, 'syn_kinds_total', seenSyn.size);
   inc(A, 'generals', (st.generalsMade||[]).length);
   inc(A, 'promoted', st.roster.filter(m => m.rankId && m.rankId !== 'recruit' && Game.rankOf(m) !== vm.runInContext('PROMOTION_RANKS[0]', ctx)).length);
   inc(A, 'debts_total', (st.debtHistory||[]).length);
   if (st.hallOfFame?.length || (Game.hallOfFameMember && Game.hallOfFameMember())) inc(A, 'hof_runs');
-  inc(A, 'lessons_offered', (Game.lessonOffers ? (Game.lessonOffers(st.record)||[]).length : 0));
+  inc(A, 'lessons_offered', (Game.lessonOffers && st.record ? (Game.lessonOffers(st.record)||[]).length : 0));
   inc(A, 'traces_kinds', new Set((Array.isArray(st.traces)?st.traces:[]).map(t=>t.kind)).size);
   inc(A, 'town_levels', Game.townLevelTotal ? Game.townLevelTotal() : 0);
   inc(A, 'territory_conq', st.conquest||0);

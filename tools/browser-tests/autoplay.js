@@ -33,10 +33,8 @@ const { autoDismissMormo } = require('./helpers.js');
     return out;
   });
   let runs = 0;
-  // 3代→2代に減らした（2026-09-14）。恒久成長で代を重ねるほど1ランが伸び、
-  // 3代目は1500手でも決着に届かない（通しで9分超）。見たいのは「最後まで進むか」
-  // ・「魔界史が代をまたいで積まれるか」なので、2代で足りる。
-  for (runs = 1; runs <= 2; runs++) {
+  // 第二幕決着後は同じ軍団で遊び続けるため、従来比較の節目へ一度到達することを確認する。
+  for (runs = 1; runs <= 1; runs++) {
     await click('[data-action="new"]');
     let steps = 0;
     const trail = [];
@@ -44,6 +42,7 @@ const { autoDismissMormo } = require('./helpers.js');
     // 手数は昔の3倍どころか、負けて再起を繰り返すと1500手を超える代もある。
     // 上限は「無限ループの保険」であって尺ではないので、大きめに取る（1手 0.2秒ほど）。
     while (steps++ < 3000) {
+      if (await page.evaluate(() => !!Game.state.act2Cleared)) break;
       const a = await actions();
       trail.push(Object.keys(a).filter(k => k !== '__banner').join('|')); if (trail.length > 6) trail.shift();
       // 敗北しても再起可能なうちは確定していない。ここでは「ここで終わる」を選んで確定させる。
@@ -53,7 +52,7 @@ const { autoDismissMormo } = require('./helpers.js');
       if (a.eventdone) { await click('[data-action="eventdone"]'); continue; }
       // 戦闘結果の「次へ」
       if (a.afterresult) { await click('[data-action="afterresult"]'); continue; }
-      // gameover(敗北確定 or 全クリア)画面だけを終端とみなす。result()の1戦ごとの勝利画面はスルーする。
+      // gameover画面だけを敗北終端とみなす。第二幕決着は上の節目判定で止める。
       if (a.__banner && !a.nextrecruit && !a['nextrecruit:off']) break;
       if (a.skip && await page.evaluate(() => Game.state.hiresLeft <= 0)) { await click('[data-action="skip"]'); continue; }
       if (a.hire) { await click('[data-action="hire"]:not([disabled])'); continue; }
@@ -75,23 +74,21 @@ const { autoDismissMormo } = require('./helpers.js');
       if (a.skip) { await click('[data-action="skip"]'); continue; }
       break;
     }
-    const over = await page.locator('.banner').count() > 0
-      && !(await page.locator('[data-action="nextrecruit"], [data-action="afterresult"]').count())
-      && !(await page.locator('[data-action="concede"]').count());
-    if (!over) { console.log(`  ラン${runs}: 決着画面に到達せず（${steps}手）`, JSON.stringify(await page.evaluate(() => ({ phase: Game.state.phase, turn: Game.state.turn, conquest: Game.state.conquest, act: Game.state.act, battlesWon: Game.state.battlesWon, wipes: Game.state.wipeCount, roster: Game.state.roster.length, gold: Game.state.gold, food: Game.state.food })))); trail.forEach(t => console.log('    …' + t)); break; }
-    const head = (await page.locator('.banner h2').innerText()).trim();
-    const cause = (await page.locator('.banner div').first().innerText()).trim();
-    console.log(`  ✓ ラン${runs} 終了: ${head} / ${cause}`);
-    await page.screenshot({ path: (process.env.SP || '.screenshots') + `/shot-gameover.png`, fullPage: true });
-    await click('[data-action="history"]');
-    // 同じカード部品を使う図鑑・実績を巻き込まないよう、保存済みの魔界史を直接数える。
-    const recs = await page.evaluate(() => Storage.loadHistory().length);
-    console.log(`    魔界史に ${recs} 代分の記録`);
-    if (recs !== runs) throw new Error(`記録数が合わない: ${recs} != ${runs}`);
-    await page.screenshot({ path: (process.env.SP || '.screenshots') + `/shot-history.png`, fullPage: true });
-    // セーブが消えていること（決着後に「続きから」が残らない）
-    if (await page.locator('[data-action="continue"]').count()) throw new Error('決着後もセーブが残っている');
-    await click('[data-action="title"]');
+    const reached = await page.evaluate(() => !!Game.state.act2Cleared);
+    const ended = await page.evaluate(() => Game.state.phase === 'gameover' || Game.state.phase === 'clear');
+    if (!reached) {
+      const summary = await page.evaluate(() => ({ phase: Game.state.phase, turn: Game.state.turn, conquest: Game.state.conquest, act: Game.state.act, battlesWon: Game.state.battlesWon, wipes: Game.state.wipeCount, roster: Game.state.roster.length, gold: Game.state.gold, food: Game.state.food }));
+      if (ended) {
+        console.log(`  ✓ ラン${runs} 正式終了: ${JSON.stringify(summary)}`);
+        continue;
+      }
+      trail.forEach(t => console.log('    …' + t));
+      throw new Error(`ラン${runs}: 第二幕決着に到達せず（${steps}手） ${JSON.stringify(summary)}`);
+    }
+    const persisted = await page.evaluate(() => ({ history: Storage.loadHistory().length, save: !!Storage.loadRun() }));
+    if (persisted.history !== 0 || !persisted.save) throw new Error(`第二幕決着時の保存契約が違う: ${JSON.stringify(persisted)}`);
+    console.log(`  ✓ ラン${runs} 第二幕決着: 軍団セーブを保持、魔界史は未記録`);
+    await page.screenshot({ path: (process.env.SP || '.screenshots') + `/shot-act2-clear.png`, fullPage: true });
   }
   console.log(errors.length ? '\n✗ JSエラー:\n' + errors.join('\n') : '\n✓ JSエラーなし');
   await browser.close();

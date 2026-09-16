@@ -51,7 +51,8 @@ function runOnce(strat, stats){
   Game.newRun();
   const st = Game.state;
   let guard = 0;
-  while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
+  // 従来比較は第二幕の決着で止める。ゲーム本体はその後も継続する。
+  while (st.phase !== 'gameover' && st.phase !== 'clear' && !st.act2Cleared && guard++ < 300) {
     if (strat.cards) {
       if (strat.cards === 'open') {
         if(st.incidents?.tail?.ready) Incidents.finishTail(Game, true);
@@ -263,7 +264,23 @@ function runOnce(strat, stats){
   // 0.5 未満なら閾値を 18 へ、3 以上なら 26 へ（この列がその判断材料）。
   if (!stats.generals) stats.generals = 0;
   stats.generals += (st.generalsMade || []).length;
-  const rec = st.record || {};
+  // 第二幕決着では endRun() を呼ばないため、魔界史を作らず測定用の要約だけ返す。
+  let rec = st.record || {};
+  if (!st.record && st.act2Cleared) {
+    rec = {
+      cleared: true, clearedBy: st.act2Cleared.by,
+      battlesWon: st.battlesWon || 0, conquest: st.conquest || 0, alert: st.alert || 0,
+      missionCounts: { ...(st.missionCounts || {}) }, payrollChoices: { ...(st.payrollChoices || {}) },
+      maxChain: st.maxChain || 0, maxOverkill: st.maxOverkill || 0, chainDefVersion: st.chainDefVersion,
+      mainRace: Object.entries(st.raceCounts || {}).sort((a,b) => b[1] - a[1])[0]?.[0] || 'なし',
+      fallenTotal: st.fallenTotal || 0, battleIncidentTotal: st.battleIncidentTotal || 0,
+      generalsMade: (st.generalsMade || []).slice(), retriesUsed: st.retriesUsed || 0,
+      townLevels: Game.townLevelTotal(), townTop: Game.townTopLevel().lv, townTopId: Game.townTopLevel().id,
+      discoveredSynergyIds: (st.discoveredSynergyIds || []).slice(),
+      maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length)
+    };
+    rec.buildName = Game.buildName(rec);
+  }
   if (rec.cause === "城陥落") stats.defense.fall++;
   if (rec.cleared) {
     if (rec.clearedBy === "defense") stats.defense.byDefense++;

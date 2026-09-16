@@ -133,6 +133,9 @@ const Game = {
       act: 1,
       actStartedTurn: 1,
       actHistory: [],
+      // 第二幕の決着はラン終了ではなく、第三幕を待つ保存可能な節目。
+      // null または { by: "defense"|"conquest", turn } を正本にする。
+      act2Cleared: null,
       // 王国の反撃（2026-09-10）。開幕の値は newRun() の末尾で入れる。
       counterattack: null,
       heroCame: false,
@@ -389,7 +392,7 @@ const Game = {
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
       retreatCount: 0, pendingBattle: null, wipeCount: 0, stageFights: {}, outpost: null,
       // 幕の進行（2026-09-11）。旧セーブは第一幕として読む。
-      act: 1, actStartedTurn: 1, actHistory: [],
+      act: 1, actStartedTurn: 1, actHistory: [], act2Cleared: null,
       // 王国の反撃（2026-09-10）
       counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
       ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false, castleFalls: 0,
@@ -1162,6 +1165,27 @@ const Game = {
     // 長さだけで判断していたので、予約が立った直後に3択のまま残ることがあった。
     const pending = !!(st.counterattack && st.counterattack.pending);
     const offers = st.missionOffers;
+    // 第二幕決着後は第三幕の実装を待つ自由活動。攻略札は再生成せず、
+    // 周辺地の略奪と訓練だけを出す。予約済みの防衛が万一残る旧セーブでは防衛を優先する。
+    if (st.act2Cleared) {
+      const validKinds = pending ? ["defend", "train"] : ["raid", "train"];
+      const stalePostAct2 = !Array.isArray(offers) || !offers.length
+        || offers.some(m => !validKinds.includes(m.missionKind))
+        || validKinds.some(kind => !offers.some(m => m.missionKind === kind));
+      if (!force && !stalePostAct2) {
+        st.phase = "mission";
+        return offers;
+      }
+      const previous = new Map((offers || []).map(m => [m.missionKind, m.formationId]));
+      st.selectedMission = null;
+      st.missionOffers = (pending
+        ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
+        : [this.buildMission(MISSION_TYPES[0], previous.get("raid"))])
+        .concat([this.buildMission(MISSION_TYPES.train, previous.get("train"))]);
+      st.phase = "mission";
+      this.save();
+      return st.missionOffers;
+    }
     // 訓練は「防衛が来ている決着でも選べる」（勇者の前に鍛え直す場でもある）ので、
     // 予約中の札は「防衛＋訓練」の2枚、通常は「3系統＋訓練」の4枚になる。
     // 3択は地図の候補（段階A）。予約中は防衛＋訓練＋巡回。
@@ -2995,6 +3019,7 @@ const Game = {
     let wipedFallen = null, wipedRelics = null;
     // 幕替わり（表示用）。起きなかった決着・旧セーブには無い。
     let actAdvance = null;
+    let act2Clear = null;
     // 防衛戦（王国の反撃）。勇者戦かどうかは段階で決まる。
     const isDefense = this.isDefenseBattle(stageData);
     const heroDefense = isDefense && (st.counterattack || {}).kind === "hero";
@@ -3063,7 +3088,7 @@ const Game = {
         st.turn += 1;
         st.phase = "result";
         this.genApplicants();
-      } else if (heroDefense || st.conquest >= this.MAX_CONQUEST) {
+      } else if (!st.act2Cleared && (heroDefense || st.conquest >= this.MAX_CONQUEST)) {
         // 幕の着地。魔王城で勇者を退けた（待った）か、王都まで落とした（攻めた）か。
         // **最後の幕でなければ、ランは終わらずに次の幕が始まる。**
         st.clearedBy = heroDefense ? "defense" : "conquest";
@@ -3072,7 +3097,14 @@ const Game = {
           st.phase = "result";
           this.genApplicants();        // 新しい顔を見せる（未決U1の既定）
         } else {
-          st.phase = "clear";          // 記録の確定は deploy() の末尾でまとめて行う
+          st.act2Cleared = { by: st.clearedBy, turn: st.turn };
+          act2Clear = { ...st.act2Cleared };
+          st.phase = "result";
+          st.counterattack = null;
+          st.alert = 0;
+          notes.push("第二幕に決着がついた。軍団は残り、第三幕への出陣まで訓練と周辺地の略奪を続けられる");
+          this.trace("act2_clear", null, null, { by: st.clearedBy });
+          this.genApplicants();
         }
       } else {
         st.phase = "result";
@@ -3143,6 +3175,8 @@ const Game = {
       spiritGained: (result && result.spiritGained) || null,
       // 幕替わり（表示用）。結果画面とモルモの報告が読む。
       actAdvance,
+      // 第二幕の決着報告。ラン終了ではないので clear にはしない。
+      act2Clear,
       // 防衛戦（王国の反撃）の結末（表示用）。
       defense: isDefense,
       castleFell,
@@ -3451,6 +3485,8 @@ const Game = {
   // 予約中の面接・編成は通常どおり動く。
   checkCounterattack() {
     const st = this.state;
+    // 第二幕の戦争は決着済み。第三幕が始まるまでは王国側の反撃を新しく予約しない。
+    if (st.act2Cleared) return null;
     if (st.counterattack && st.counterattack.pending) return null;
     const rules = this.counterRules();
     const alert = st.alert || 0;
