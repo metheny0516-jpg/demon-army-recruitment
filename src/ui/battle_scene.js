@@ -83,21 +83,24 @@ const BattleScene = {
   motions: new Set(),
   pendingHits: new Set(),
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
-  // 余韻（2026-09-12 オーナー試遊「台詞と数字がすぐ消えて追いつかない」）：x1 の基礎尺を約2割伸ばした。急ぐ人は x2/x4。
-  DURATION: { 0: 560, 1: 740, 2: 960, 3: 1200 },
+  // 2026-09-16 オーナー試遊: 「一瞬で次の人の行動に移る」。コマンドバトルは1ラウンドが短いので
+  // 総尺予算より1行動ずつの読みやすさを優先し、全段をおよそ1.6倍へ伸ばした。
+  DURATION: { 0: 760, 1: 1000, 2: 1300, 3: 1650 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
   // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
   // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
     battle_start: 500, round_start: 1150, synergy: 1650, synergy_trigger: 1050, facility_trigger: 1250,
-    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
-    heal: 600, summon: 1250, trait_trigger: 1350, resource_gain: 1000,
-    resource_forfeit: 900, resource_consume: 750, overkill: 1250, result: 1200,
-    order_offer: 1200, order_exec: 1900, cover: 1300
+    note: 260, dialogue: 1900, incident: 1700, death: 1100, revive: 1250, survive: 1000,
+    heal: 800, summon: 1250, trait_trigger: 1500, resource_gain: 1200,
+    resource_forfeit: 1200, resource_consume: 750, overkill: 1400, result: 1200,
+    order_offer: 1200, order_exec: 2000, cover: 1300
   },
   // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
   ANSWER_READ_MS: 2200,
   VICTORY_PAUSE_MS: 900,
+  // 浮かぶ数字（ダメージ・回復・獲得）の寿命
+  FLOAT_MS: 1800,
   VICTORY_HOLD_MS: 3500,
 
   // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
@@ -106,9 +109,9 @@ const BattleScene = {
   // 連鎖の中間は緩急を付ける。起点・初条件・最大余剰・蘇生・召喚・永久戦死を保護する。
   // 2026-09-05 試遊: 全段を等速3秒にした版はオーナーが否定。「強弱を付ける」へ戻し、
   // ただし連鎖の各段は CHAIN_STEP_FLOOR より短くしない（一瞬で流れて読めなかったため）。
-  BUDGET_MS: 45000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
+  BUDGET_MS: 70000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
   MIN_COMPRESS: 0.45,   // 圧縮対象イベントの最小倍率（退屈な区間なので深く縮めてよい）
-  CHAIN_STEP_FLOOR: { hit: 560, overkill: 800, other: 520 },
+  CHAIN_STEP_FLOOR: { hit: 950, overkill: 1200, other: 850 },
 
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
@@ -1496,8 +1499,9 @@ const BattleScene = {
   // 中断時は pendingHits でHPだけ確定し、次イベントやスキップと食い違わせない。
   attackMotion(from, to, ev) {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // 読む時間を長くしても、攻撃動作自体はスローモーションにしない。
-    const total = this.visualDuration(Math.min(950, this.durationOf(ev) * .88));
+    // 振りかぶり→接触→戻りのポーズを、それぞれ目で追える長さにする（2026-09-16 オーナー: ポーズが一瞬で見損ねる）。
+    // 尺の上限は倍近くまで許す。読む時間（durationOf）より先に動作が終わるのは変えない。
+    const total = this.visualDuration(Math.min(1700, this.durationOf(ev) * .85));
     // 演出プリセット。無い（通常攻撃）なら今までどおり。
     const preset = (ev.fx && this.FX[ev.fx]) || null;
     const kind = ev.type === "splash" ? "melee"
@@ -1725,11 +1729,11 @@ const BattleScene = {
     if (!c) return;
     if (this.captionTimer) clearTimeout(this.captionTimer);
     c.textContent = text;
-    c.style.animationDuration = `${this.visualDuration(duration || 600)}ms`;
+    c.style.animationDuration = `${this.visualDuration(duration || 1200)}ms`;
     c.classList.remove("show");
     void c.offsetWidth;
     c.classList.add("show");
-    // 次の説明で置き換えるまで残す。読む途中でフェードアウトしない。
+    // 次の説明で置き換えるまで残す（CSS 側が forwards で最終フレームに留める）。読む途中でフェードアウトしない。
   },
 
   // モルモは1戦闘に一度だけ顔を出す。「連発しない」を後追いの判定で守ろうとすると、
@@ -2594,7 +2598,8 @@ const BattleScene = {
     const n = document.createElement("span");
     n.className = "fnum " + (cls || "");
     n.textContent = text;
-    const life = this.visualDuration(1500);
+    // 数字は2秒近く残す。次の行動が始まっても前の数字が読める（2026-09-16）。
+    const life = this.visualDuration(this.FLOAT_MS);
     n.style.animationDuration = `${life}ms`;
     u.pop.appendChild(n);
     this.timers.push(setTimeout(() => n.remove(), life));
