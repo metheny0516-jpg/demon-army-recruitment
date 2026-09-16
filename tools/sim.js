@@ -166,8 +166,13 @@ function runOnce(strat, stats){
       if (territoryIndex >= 0) Game.selectMission(territoryIndex);
       else if (defendIndex >= 0 && kind !== 'train') Game.selectMission(defendIndex);
       else {
+        // 望んだ型が無いときの代わり（地図の候補では 'invade' が出ない決着がある）。
+        // 席順で拾うと巡回ばかり選んで前に進まなくなるので、まず「落とす／従える」を探す。
         const index = st.missionOffers.findIndex(m => m.missionKind === kind);
-        Game.selectMission(index >= 0 ? index : Math.min(2, st.missionOffers.length - 1));
+        const take = st.missionOffers.findIndex(m => m.territoryMode === 'take');
+        const fallback = take >= 0 ? take
+          : st.missionOffers.findIndex(m => !['patrol', 'tribute', 'train'].includes(m.missionKind));
+        Game.selectMission(index >= 0 ? index : fallback >= 0 ? fallback : Math.min(2, st.missionOffers.length - 1));
       }
       if (st.selectedMission && st.selectedMission.missionKind === 'train') { stats.trainings = (stats.trainings || 0) + 1; st.simTrainings = (st.simTrainings || 0) + 1; }
     }
