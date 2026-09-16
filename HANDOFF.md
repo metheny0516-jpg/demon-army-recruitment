@@ -21,7 +21,19 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-15 夜 現在）
 
-### 統括レビューの修正（§4）を作業枝で完了・取り込み待ち（2026-09-16・Opus）
+### 統括レビューの修正（§4）を本線へ取り込み済み（2026-09-16）
+
+- **分担**：統括が差分レビュー（「06c8bea を取り込んでよい」）、**Opus が検証・取り込み**を担当。
+- **取り込み**：枝 `claude/remove-dead-followup-s4` の `06c8bea` を本線
+  `claude/hero-arrival-tavern-prototype-uy2toh` へ **fast-forward で取り込み**（force push はしていない）。
+  分岐後に本線へ増えた変更は無く（本線の先端は分岐元の `2a46086` のまま）、
+  取り込み後の木は検証時の木と**差分なし**であることを確認した。
+- **取り込み後の確認**：node 全件通過、`audit-elements.js 1`・`econ-trace.js 1 careful` とも
+  例外なく終了。木が同一のため browser run-all と sim 20 は枝で通した結果（下記）をそのまま採る。
+- **次**：§2（battle.js 側の `feastUid` / `flags.mercenary` / `offerOrder` / `orderOffers` /
+  `retreatOffer`）。**スライム②はその後**（まだ着手しない）。
+
+### 統括レビューの修正（§4）の中身（2026-09-16・Opus）
 
 - **枝**：`claude/remove-dead-followup-s4`（本線 `2a46086` から分岐。**本線へは直接 push していない**）。
 - **直したもの**（`docs/TICKET_REMOVE_DEAD_2026-09-16.md` §4-1）：
