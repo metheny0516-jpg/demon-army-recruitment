@@ -83,8 +83,6 @@ const Game = {
       extraHiresThisPhase: 0,
       maxPower: 0,
       maxArmySize: 0,
-      mercenaryOffers: [],
-      mercenaries: [],
       kingSlimeMerge: true,   // 出撃時に合体するか（既定は合体。編成画面で断れる）
       maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
       maxOverkill: 0,     // 同その2。%で持つ
@@ -339,6 +337,7 @@ const Game = {
     if (!st.raided || typeof st.raided !== "object") st.raided = {};
     delete st.feastPending;   // 宴は撤去（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）
     delete st.briefId; delete st.briefsThisPhase;   // 指名求人は撤去（同 §1-2）
+    delete st.mercenaries; delete st.mercenaryOffers;   // 傭兵市場は撤去（同 §1-3）
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
@@ -360,7 +359,7 @@ const Game = {
       // 既に入っている値は defaults では上書きされない（下の undefined/null チェック）ので、
       // 途中ラン・ロード・再起で保存済みバージョンは変化しない。
       chainDefVersion: 1,
-      maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
+      maxChain: 0, maxOverkill: 0, kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       // 魔界史へ残す「記憶」1件（R3）。ラン状態の中にあるので、再起で巻き戻せば
       // 記憶も一緒に戻る（やり直した歴史の出来事は残さない）。旧セーブには無い。
@@ -2017,83 +2016,6 @@ const Game = {
   REROLL_BASE_COST: 2,
 
   // ── 傭兵市場 ──────────────────────────────
-  // 稼いだ金貨の出口。中盤で略奪した金が終盤の戦闘に対して何もしないのが、
-  // 略奪ビルドが「中盤は無双、終盤で詰む」原因だった（実測：ゴブリン5体は
-  // 第6戦100%→第7戦8%、そして5体そろえたランのクリア率は12%で最低）。
-  // 出撃5枠は壊さず、金貨で**その戦闘だけの6体目**を買えるようにする
-  // （設計憲法 第3節「6体目以降は高コストな特殊解禁として扱う」）。
-  // 同族を雇えば種族シナジーの頭数も増えるので、「硬い者を雇うか、噛み合う者を雇うか」
-  // という判断になる（実測：ゴブリン5＋オーガ傭兵61% vs ＋ゴブリン傭兵91%）。
-  MERCENARY_COSTS: [10, 20],
-  MERCENARY_OFFERS: 2,
-  // 顔なじみ価格。出撃隊に同じ種族がいるほど安く来る（1体につき10%、最大40%引き）。
-  // 傭兵市場だけだと「誰でも雇えば強くなる」に寄り、稼ぐビルドが報われない
-  // （実測：略奪ビルド +20点に対し、稼がないビルドも +17点）。
-  // 種族を統一したコミットに対して「雇いやすさ」で報いる。倍率は増やさない。
-  MERCENARY_KIN_DISCOUNT: 0.1,
-  MERCENARY_MAX_DISCOUNT: 0.4,
-
-  // 出撃隊にいる同じ種族の数（傭兵は数えない＝雇うほど安くなる連鎖は作らない）
-  mercenaryKinCount(race) {
-    return this.activeRoster().filter(m => m.race === race).length;
-  },
-
-  mercenaryBaseCost() {
-    const hired = (this.state.mercenaries || []).length;
-    return this.MERCENARY_COSTS[hired] !== undefined
-      ? this.MERCENARY_COSTS[hired]
-      : Infinity;   // 上限に達したら雇えない
-  },
-
-  // index を渡すとその候補の顔なじみ価格。省略時は割引前の値段
-  mercenaryCost(index) {
-    const base = this.mercenaryBaseCost();
-    if (!Number.isFinite(base) || index === undefined) return base;
-    const offer = this.mercenaryOffers()[index];
-    if (!offer) return base;
-    const discount = Math.min(this.MERCENARY_MAX_DISCOUNT,
-      this.MERCENARY_KIN_DISCOUNT * this.mercenaryKinCount(offer.race));
-    return Math.max(1, Math.round(base * (1 - discount)));
-  },
-
-  // 候補は作戦ごとに固定する。編成をいじるたびに引き直せると、
-  // 「今いる候補で決める」という判断が消えるため。
-  mercenaryOffers() {
-    const st = this.state;
-    if (!Array.isArray(st.mercenaryOffers)) st.mercenaryOffers = [];
-    if (!st.mercenaryOffers.length && (this.state.mercenaries || []).length < this.MERCENARY_COSTS.length) {
-      st.mercenaryOffers = Array.from({ length: this.MERCENARY_OFFERS }, () => {
-        const merc = this.rollApplicant();
-        merc.mercenary = true;
-        return merc;
-      });
-      this.save();
-    }
-    return st.mercenaryOffers;
-  },
-
-  canHireMercenary(index) {
-    const st = this.state;
-    if (!st || !["formation", "preparation"].includes(st.phase)) return false;
-    if ((st.mercenaries || []).length >= this.MERCENARY_COSTS.length) return false;
-    if (!this.mercenaryOffers()[index]) return false;
-    return st.gold >= this.mercenaryCost(index);
-  },
-
-  hireMercenary(index) {
-    if (!this.canHireMercenary(index)) return false;
-    const st = this.state;
-    const cost = this.mercenaryCost(index);
-    const merc = st.mercenaryOffers[index];
-    st.gold -= cost;
-    st.mercenaries = (st.mercenaries || []).concat([{ ...merc, hiredFor: cost }]);
-    st.mercenaryOffers = st.mercenaryOffers.filter((_, i) => i !== index);
-    this.kpi("formationChanged");   // 傭兵も編成の判断
-    this.kpi("mercenaryHired", merc, cost, this.mercenaryKinCount(merc.race) > 0);
-    this.save();
-    return true;
-  },
-
   // 合体の可否と、合体したらどうなるかの見込み。編成画面が判断材料に使う。
   kingSlimePreview() {
     const slimes = this.activeRoster().filter(m => m.race === "スライム").slice(0, 3);
@@ -2128,16 +2050,6 @@ const Game = {
     return true;
   },
 
-  // 戦闘へ出す形にする。給与も戦功も持たない。
-  // 施設の一律補正は撤去したので、自軍と同じく素の値で出る。
-  preparedMercenaries() {
-    return (this.state.mercenaries || []).map(m => ({
-      ...m, battleDmgMult: 1, battleTakenMult: 1
-    }));
-  },
-
-
-  // ── 指名求人 ────────────────────────────
   // 「こういう奴を寄越せ」と条件を指定して出す有料の求人。
   // 中盤から解禁するのは、序盤に狙い撃ちできると「まず何が出るか見る」段階が消えるため。
   // 条件はシナジーの発火条件と同じ語彙なので、これが爆発を自分で狙う手段になる。
@@ -2805,12 +2717,6 @@ const Game = {
     // 食事の伝票は倍率を掛ける前に一度だけ作り、戦闘入力・戦果・予告で同じものを読む（V2a）
     const mealPlan = battleRations ? this.mealPlan(battleRations) : null;
     const playerUnits = this.preparedRoster(battleRations, mealPlan).map(m => Battle.makeUnit(m, "player"));
-    // 雇った傭兵は出撃5枠の外から加わる。戦闘が終われば去る（次の戦闘には残らない）
-    for (const merc of this.preparedMercenaries()) {
-      const unit = Battle.makeUnit(merc, "player");
-      unit.flags.mercenary = true;
-      playerUnits.push(unit);
-    }
     const stageData = this.stageData();
     // ビルド試行の判定は戦闘前に取る（戦死・合体で編成が変わる前の「何を試したか」を見るため）
     this.kpi("battleStarted", st, stageData);
@@ -3326,12 +3232,6 @@ const Game = {
     };
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, result.victory);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
-    // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
-    if ((st.mercenaries || []).length) {
-      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
-    }
-    st.mercenaries = [];
-    st.mercenaryOffers = [];
 
     // この決着ぶんの回復を先に済ませてから、稽古で倒れた者へ負傷を付ける
     // （順番を逆にすると、付けた負傷がその場で治る。settleRetreat と同じ作法）。
@@ -3515,11 +3415,6 @@ const Game = {
     };
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, false);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
-    if ((st.mercenaries || []).length) {
-      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
-    }
-    st.mercenaries = [];
-    st.mercenaryOffers = [];
 
     // 王国の反撃の判定は決着の最後（続行側と同じ場所）。
     if (st.phase !== "gameover") this.checkCounterattack();
@@ -4353,7 +4248,6 @@ const Game = {
       }),
       roster: (st.roster || []).map(m => m.uid).sort((a, b) => a - b),
       departments: Object.fromEntries((st.roster || []).map(m => [m.uid, this.departmentOf(m).id])),
-      mercenaries: (st.mercenaries || []).map(m => m.name),
       facility: this.townSignature(),
       payroll: st.payrollPolicy || "regular",
       merge: st.kingSlimeMerge !== false,
@@ -4367,7 +4261,7 @@ const Game = {
     if (!next) return null;
     const none = {
       first: !prev, hired: [], deployed: [], benched: [], reassigned: [],
-      reordered: false, mercenaries: [], facility: null, payroll: null,
+      reordered: false, facility: null, payroll: null,
       merge: false, mission: null, changedUids: []
     };
     if (!prev) return none;
@@ -4392,7 +4286,6 @@ const Game = {
     const changed = new Set([...hired, ...deployed, ...reassigned].map(d => d.uid));
     return {
       first: false, hired, deployed, benched, reassigned, reordered,
-      mercenaries: next.mercenaries.filter(name => !prev.mercenaries.includes(name)),
       facility: prev.facility !== next.facility ? { from: prev.facility, to: next.facility } : null,
       payroll: prev.payroll !== next.payroll ? { from: prev.payroll, to: next.payroll } : null,
       merge: prev.merge !== next.merge,

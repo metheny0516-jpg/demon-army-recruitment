@@ -662,7 +662,7 @@ const UI = {
       : tab === "advisor" ? this.advisorCastlePanel()
       : tab === "town" && typeof TownUI !== "undefined" ? TownUI.panel() : this.armyPanel({ controls: true });
     if (options.formation) content += `<div class="formation-decisions">
-      ${this.payrollPanel()}${this.debtPanel()}${this.hungerPanel()}${this.mercenaryPanel()}
+      ${this.payrollPanel()}${this.debtPanel()}${this.hungerPanel()}
       ${this.kingSlimePanel()}${this.vaultPanel()}
     </div>`;
     const tabs = options.formation ? "" : `<nav class="castle-tabs" aria-label="城のメニュー">
@@ -1185,40 +1185,6 @@ const UI = {
 
   // 稼いだ金貨の出口。出撃5枠を壊さず「その戦闘だけの6体目」を買う。
   // 同族を雇えば種族シナジーの頭数も増えるので、硬い者と噛み合う者のどちらを取るかが判断になる。
-  mercenaryPanel() {
-    const st = Game.state;
-    const hired = st.mercenaries || [];
-    const offers = Game.mercenaryOffers();
-    const base = Game.mercenaryBaseCost();
-    const full = hired.length >= Game.MERCENARY_COSTS.length;
-    const hiredHtml = hired.length
-      ? `<div class="merc-hired">雇用中：${hired.map(m =>
-          `<span class="merc-chip">${this.icon(m.race)} ${U.esc(m.name)}（${U.esc(m.race)}）${m.hiredFor}G</span>`).join("")}</div>`
-      : "";
-    const cards = full ? "" : offers.map((m, i) => {
-      const cost = Game.mercenaryCost(i);
-      const kin = Game.mercenaryKinCount(m.race);
-      const afford = st.gold >= cost;
-      return `<div class="merc-card">
-        <div class="merc-name">${this.icon(m.race)} <b>${U.esc(m.name)}</b>
-          <span class="muted">${U.esc(m.race)}／${U.esc(m.job)}</span></div>
-        <div class="merc-stats">HP ${m.hp}・攻 ${m.atk}・防 ${m.def}・速 ${m.spd}</div>
-        <div class="merc-traits">${this.traitHtml(m.traits)}</div>
-        ${cost < base ? `<div class="merc-kin">🤝 顔なじみ価格 ${base}G → <b>${cost}G</b>
-          <span class="muted">（出撃隊に${U.esc(m.race)}が${kin}体）</span></div>` : ""}
-        <button class="small primary" data-action="hiremerc" data-index="${i}" ${afford ? "" : "disabled"}>
-          ${afford ? `${cost}G で雇う` : `${cost}G 必要（所持 ${st.gold}G）`}</button>
-      </div>`;
-    }).join("");
-    return `<div class="panel merc-panel">
-      <h3>🗡 傭兵市場 <span class="muted">— この戦闘だけの助っ人</span></h3>
-      <div class="muted">出撃5枠の外から加わる。給与も戦功も持たず、戦闘が終われば去る。
-        ${full ? "これ以上は雇えない。" : `次の1名は ${base}G（出撃隊に同じ種族がいるほど安くなる）。`}</div>
-      ${hiredHtml}
-      ${cards ? `<div class="merc-list">${cards}</div>` : ""}
-    </div>`;
-  },
-
   // シナジーだけ見せても「混ぜると倍率を二重に失う」の片方しか見えない。
   // 《群れの本能》のように編成で決まる特性も、実際に測った倍率で出す。
   traitSynergyHtml(roster) {
@@ -1711,7 +1677,6 @@ const UI = {
       ${opening ? "" : this.debtPanel()}
       ${this.payrollPanel()}
       ${opening ? "" : this.hungerPanel()}
-      ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
       ${this.vaultPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 留守番から最低1体を出せ。</div>` : ""}
