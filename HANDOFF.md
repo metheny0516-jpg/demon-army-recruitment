@@ -38,6 +38,13 @@
 4. **Opus（軽い）**：`st.turn` の加算位置を経路で揃える（下の 9/14 メモ）。揃えたら差し押さえ音の ±1 の幅を外す。
 5. **Claude**：上がったものの取り込み・検証（node → 該当ブラウザテスト → 大きい変更なら sim 20 を1回、見るのは「0% の戦略」と「平均戦闘数の急減」だけ）。
 
+**2026-09-16 朝（Claude）。オーナー決定：死んでいる要素の削除は進める／スライムの大筋は試遊できる所まで進める**
+- 済：戦意の削除（85b6da1）、OVERKILL の2段化＝OVERKILL／殲滅（大技の直撃）（b2fa740）。
+- 済：スライム② エンジン側（battle.js `options.slimeSplit` → `result.slimeSplit`、`tools/test-slime-split.js` 10件）。
+- チケット：`docs/TICKET_REMOVE_DEAD_2026-09-16.md`（Opus＝宴・指名求人・傭兵・接収・号令UI の順、CodeX＝墓場文書、Claude＝《魔王軍完成》＋シナジー5本と battle.js 側）。
+  `docs/SPEC_SLIME_ARC_2_2026-09-16.md`（Opus の run.js 側。貼り付けは §3）。**Opus の順番：段階B/D → 削除 §1 → スライム②。**
+- run.js 系の削除と battle.js 系の削除は同じ要素を二人で触らない：Opus が run/ui 側を落としてから Claude が battle.js 側を落とす。
+
 **取り込み・検証（2026-09-15 深夜・Claude）**
 - 済（Opus）：**段階A 地図の上の戦争**（ca6bb89〜4fa14f8、`SPEC_TERRITORY_A` §2 + 印の配置）。Claude 検証：node 92本、run-all 全通過、sim 20 は全戦略が完走。
   **sim のクリア率は 45〜100% に下がった**（段階A 前は 90〜100%。土地の守備段階が征服度ではなく garrison から引かれ、進軍の型が2戦制に戻ったため。精鋭3体 45%、訓練1回 45%、スライム統一 70%）。

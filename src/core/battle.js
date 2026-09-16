@@ -39,6 +39,11 @@ const ENEMY_BIG_MOVE = { chance: 0.15, mult: 1.8 };
 // 火の粉（2026-09-14）：味方の全体技（aoe）を撃つと、前列の味方1体に火の粉が飛ぶことがある。HP は 1 減るだけ。
 // 「痕跡になる事故は画面で一度見えたことだけ」の規則のための、見える小さな事故。run.js が result.sparked を痕跡にする。
 const SPARK = { chance: 0.3, damage: 1 };
+// 増殖の元（2026-09-16、docs/DESIGN_ARC_SLIME_2026-09-15.md ②）：options.slimeSplit.enabled のとき、
+// 火の火の粉を浴びて生き残ったスライムは、以後のラウンドの頭に分身を1体ずつ出す（1戦に cap まで）。
+// 分身は攻撃 1・HP 小の戦闘専用ユニット。run.js が result.slimeSplit を見て、1体だけ名簿へ残す。
+// 条件（札の痕跡）は run.js が判定してから options で渡す。battle.js は乱数も条件も持たない。
+const SLIME_SPLIT = { cap: 3, hpRatio: 0.3, atk: 1 };
 // 食べる（2026-09-14、docs/DESIGN_BATTLE_DEPTH_2026-09-14.md A）：戦闘中に携行食を1つ食べて HP を戻す。
 // 隊で1戦に limit 回まで（巨大厨房 Lv2 で +1）。options.rations.spare（備蓄の残り）が無ければ出ない。run.js が result.rationsEaten を食料から引く。
 const EAT = { heal: 0.3, healKitchen3: 0.4, limit: 2, limitKitchen2: 3 };
@@ -390,6 +395,9 @@ const Battle = {
     const spiritGained = {};            // uid → 戦闘中に増えた気合（run.js が名簿へ反映）
     const debutShown = [];              // お披露目を実際に使った者の uid
     const sparked = [];                 // 火の粉を浴びた味方 { uid, byUid, skillId }（run.js が痕跡に）
+    const slimeSplit = [];              // 増殖の元 { uid, byUid, skillId, count }（run.js が名簿と痕跡に）
+    const slimeSplitOn = !!(options.slimeSplit && options.slimeSplit.enabled);
+    const slimeSplitCap = Math.max(0, Number(options.slimeSplit && options.slimeSplit.cap) || SLIME_SPLIT.cap);
     const eatRules = (() => {
       const r = options.rations || {};
       const lv = Number(r.kitchenLv) || 0;
@@ -1002,6 +1010,11 @@ const Battle = {
               applyDamage(unit, front, SPARK.damage, "splash", { label: "火の粉", traits: ["火の粉"], skillId, fx, incident: true, spark: true });
               emit("note", { unitId: front.id, spark: true, skillId, emphasis: 1, text: `　${unit.name}の【${sk.name}】の火の粉が${front.name}に飛んだ`, cls: "trait" });
               if (front.uid !== null && front.uid !== undefined) sparked.push({ uid: front.uid, byUid: unit.uid, skillId });
+              // 増殖の元：火の火の粉を浴びたスライムは、次のラウンドから分身を出す（生き残っていれば）
+              if (slimeSplitOn && fx === "fire" && front.race === "スライム" && front.alive && !front.flags.split) {
+                front.flags.split = { count: 0, byUid: unit.uid, skillId, parent: timeline[timeline.length - 1] || null };
+                emit("note", { unitId: front.id, split: true, emphasis: 2, text: `　${front.name}の体が、火を浴びてぶるぶると震えている……`, cls: "trait" });
+              }
             }
           }
           if (sk.winded) unit.flags.winded = true;
@@ -1228,6 +1241,18 @@ const Battle = {
     for (round = 1; round <= this.MAX_ROUNDS; round++) {
       emit("round_start", { round, emphasis: 1, text: `── ラウンド ${round} ──`, cls: "round" });
       const deadAtRoundStart = all().filter(u => !u.alive).length;
+
+      // 増殖の元：火の粉を浴びたスライムが、ラウンドの頭に分身を1体出す（1戦に cap まで）
+      for (const u of playerUnits.filter(x => x.flags.split && onField(x))) {
+        const sp = u.flags.split;
+        if (sp.count >= slimeSplitCap) continue;
+        sp.count += 1;
+        summonUnit(u, { name: `${u.name}の分身`, race: u.race, tplId: u.tplId, job: "分身",
+          maxHp: Math.max(1, Math.round(u.maxHp * SLIME_SPLIT.hpRatio)), atk: SLIME_SPLIT.atk, def: 0, spd: u.spd }, sp.parent);
+        let rec = slimeSplit.find(r => r.uid === u.uid);
+        if (!rec) { rec = { uid: u.uid, byUid: sp.byUid, skillId: sp.skillId, count: 0 }; slimeSplit.push(rec); }
+        rec.count = sp.count;
+      }
 
       // 遅刻者の到着。その場にいなかった者が、途中から戦場に立つ。
       // 味方が全員倒れたあとに一人で着くこともある。それはそれで、そういう戦いだったということ。
@@ -1650,6 +1675,7 @@ const Battle = {
       spiritGained,
       debutShown,
       sparked,
+      slimeSplit,
       rationsEaten,
       // 号令の節目（options.offerOrder のときだけ）。answered は答えの unitId か null。
       // orderOffer は最初の節目（互換）。節目は戦況が動くたびに来るので orderOffers を見る。
