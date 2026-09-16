@@ -2147,7 +2147,8 @@ const BattleScene = {
   COMMAND_POSE: { attack: "attack-windup", skill: "attack-windup", guard: "guard", eat: "idle", auto: "idle" },
   // 指示の番が来たときの登場動作。種族で分けない1種類（小さく跳ねて半回転→戻る）。
   // 絵は「止まった姿」だけなので、回る・跳ねるはここの transform で見せる。
-  POSE_ENTER_MS: 250,
+  // 2026-09-16 オーナー試遊：250ms では半回転を見逃す。回転はそのまま、時間を 1.5 倍に。
+  POSE_ENTER_MS: 375,
 
   // 構えを差し替える。絵の切り替わりが唐突に見えないよう 0.15 秒だけ重ねる。
   // 倒れている者は fallen のまま（構えを取らせない）。
