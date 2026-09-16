@@ -120,6 +120,13 @@
 4. **Opus（軽い）**：`st.turn` の加算位置を経路で揃える（下の 9/14 メモ）。揃えたら差し押さえ音の ±1 の幅を外す。
 5. **Claude**：上がったものの取り込み・検証（node → 該当ブラウザテスト → 大きい変更なら sim 20 を1回、見るのは「0% の戦略」と「平均戦闘数の急減」だけ）。
 
+**2026-09-16 夕（Claude）。削除の battle.js 側を落とし、Opus の削除5件と合わせて本線を検証した**
+- 済（Opus 900903c〜2156e33）：宴・指名求人・傭兵市場・拠点接収・号令UI。済（Claude）：battle.js の暴食の宴・傭兵フラグ・号令エンジン、宴依存のハプニング2件、測定器の削除済み API 呼び出し。
+- 検証：node 91本、run-all 全通過、sim 20 全戦略完走（クリア率 65〜100%、0% なし）。`audit-elements 1` と `econ-trace 1` も例外なしで終わる。
+- 残した：**自動の撤退提案（`retreat_offer`、自動戦闘だけ）**。UI からは呼ばれないが run.js のテスト4本が `deploy({ offerRetreat: true })` の入口として使う。消すなら Opus がそれらを手動戦闘の `retreat: true` へ書き換えてから（急がない）。
+- **Opus に残る削除の作業は `TICKET_REMOVE_DEAD` §4-1 の 2 だけ**（`spoilFood()` の「宴を開くべきだった」の文）。その後スライム②。
+- 統括役の分担（COORDINATOR_BRIEF に追記）：ChatGPT Work は設計・指示役（本線へ push しない）、取り込み・検証役は Claude Code のセッション。
+
 **2026-09-16 昼（Claude）。別チャット（`claude/pensive-noether-e6x97b`、土台は旧既定 c1b3d16）の成果を本線へ写した**
 - 済：**戦闘の尺 1.6〜1.8倍**（a5287d2 → 本線 c4c5e52 に cherry-pick。SPECIAL_DURATION は本線の `cover`・戦意なしに合わせ、attackMotion は大技の preset を残した）。
   オーナー試遊「一瞬で次の人に移る、ポーズを見損ねる、数字がすぐ消える」への対応。コマンドバトルの上で見て、長すぎれば x2 を既定にするか戻す。

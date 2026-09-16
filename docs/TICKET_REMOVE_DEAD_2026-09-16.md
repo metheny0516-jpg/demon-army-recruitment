@@ -43,7 +43,11 @@ Opus へ。まず git pull。docs/TICKET_REMOVE_DEAD_2026-09-16.md の §1 を�
 
 ## 2. Claude 用（battle.js・engine 側）
 
-- Opus の 1・3・5 の後：battle.js の `feastUid`（暴食の宴）、`flags.mercenary`、`offerOrder / orderOffers / retreatOffer`。
+- **済（Claude、2026-09-16 夕）**：battle.js の 暴食の宴（`feastUid` は旧セーブ互換の欄として残るが読まない）、`flags.mercenary` の分岐と snapshot、号令エンジン（`orderRoster / offerOrder / orderOffers / options.orders`、round 冒頭の実行）。
+  `battle_happenings.js` の宴依存2件（feast_belt / feast_receipt）も落とした（文は GRAVEYARD にある）。
+  **自動の撤退提案（`retreat_offer`、自動戦闘だけ）は残した**：UI からは呼ばれないが、run.js のテスト4本（inheritance / experience-grant / counterattack / retreat-run）が
+  `deploy({ offerRetreat: true })` → `settleBattle("retreat")` の入口として使っている。消すならそれらを手動戦闘の `retreat: true` へ書き換えてから（Opus、急がない）。
+- 統括レビュー §4 との対応：4-1 の 1（測定器の削除済み API）は Claude が直した。4-1 の 3（test-order-battle の復元）は号令エンジンを消したので不要。**Opus に残るのは 4-1 の 2（`spoilFood()` の宴への誘導文）だけ。**
 
 ## 3. CodeX 用
 
@@ -75,6 +79,8 @@ Astra へ。docs/TICKET_REMOVE_DEAD_2026-09-16.md の §3 をお願いします�
 - skill-fxの燃焼印を待つ変更は検証条件を消していない。後続の「火球は燃焼印を残さない」はまだ固定2000ms待ちであり、今回の「すべて状態待ちに変更」とは扱わない。
 - 触るファイル：`src/core/run.js`（腐敗の表示文と説明のみ）、`tools/audit-elements.js`、`tools/econ-trace.js`、`tools/test-order-battle.js`、`tools/browser-tests/food.js`、`HANDOFF.md`、本チケット。battle.js・文章データ・ゲーム数値は範囲外。
 - 検証：Node全件 → browser run-all → sim 20を各直列。加えて `node tools/audit-elements.js 1` と `node tools/econ-trace.js 1 careful` が例外なしで終了すること（1ランは道具の動作確認で、バランスの判断には使わない）。HANDOFF先頭へ結果・残る§2・次のスライム②を記録する。
+
+> **Claude 追記（同日夕）**：4-1 の 1 と 3 は Claude 側で片付いた（上の §2）。Opus は **4-1 の 2 だけ**（run.js の `spoilFood()` の文と `food.js` の確認）。下の貼り付け文はその前提で読み替える。
 
 ### 貼り付け用（Opus用）
 ```

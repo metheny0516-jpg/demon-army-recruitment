@@ -36,16 +36,6 @@ BATTLE_HAPPENINGS.push(
     text(u) { return `${u.name}「食料不足なら現地調達です！」 足元の草の毒見に忙しく、今回の攻撃を休んだ！`; }
   },
   {
-    id: "feast_belt", name: "宴の後のベルト", kind: "skip", chance: 0.004,
-    check(u) { return u.feast && u.traits.includes("big_eater"); },
-    text(u) { return `${u.name}「宴は最高だった。ベルトは限界だ」 腰を締め直し、今回の攻撃を休んだ！`; }
-  },
-  {
-    id: "feast_receipt", name: "宴会費の精算", kind: "skip", chance: 0.004,
-    check(u) { return u.feast && u.traits.includes("greedy"); },
-    text(u) { return `${u.name}「宴会費は経費ですよね？」 領収書を数えていて、今回の攻撃を忘れた！`; }
-  },
-  {
     id: "chain_receipt", name: "追撃より小銭", kind: "skip", chance: 0.003, duringChain: true,
     check(u) { return u.chainDepth >= 3 && u.traits.includes("greedy") && !u.traits.includes("coward"); },
     text(u) { return `${u.name}「追撃？ 先に今の金貨を数える！」 小銭に気を取られ、この一撃を取り逃した！`; }
