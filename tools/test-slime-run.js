@@ -151,6 +151,8 @@ const setup = ({ pond = true, spark = true, deployed = true } = {}) => {
 // 乱数は種で固定する（U.seeded）。種は「分裂が起きる目」を探して1つ選んである。
 {
   const U = vm.runInContext('U', ctx);
+  // 分裂が起きる目として選んだ種。エンジンの乱数の使い方が変われば選び直して記録し直すこと。
+  const SEED_WITH_SPLIT = 4;
   const battleWith = (opts = {}) => {
     Game.newRun();
     const st = Game.state;
@@ -172,18 +174,19 @@ const setup = ({ pond = true, spark = true, deployed = true } = {}) => {
   const unarmed = battleWith({ pond: false });
   ok(Game.slimeSplitOption() === null, '池の噂が無ければ deploy でも options は渡らない');
 
-  // 実戦：火球を撃ち続ける。**種 3 は分裂が起きる目**として固定してある（同じ種なら毎回同じ戦闘）。
+  // 実戦：火球を撃ち続ける。**固定の種**で分裂が起きる目を選んである（同じ種なら毎回同じ戦闘）。
   // 万一エンジン側の乱数の使い方が変わって種 3 で起きなくなったときのために、後ろの種も試す。
   // 固定の種で落ちたら「保証している目が動いた」ということなので、種を選び直して記録し直すこと。
-  const SEEDS = [3, 1, 2, 4, 5, 6, 7, 8, 9, 10];
+  const SEEDS = [SEED_WITH_SPLIT, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
   let done = null;
   for (const seed of SEEDS) {
     if (done) break;
-    const run = battleWith({});
-    const handle = run.out.handle;
-    // 乱数を種で固定してから回す（同じ種なら毎回同じ戦闘になる）
+    // **deploy より前に固定する。** deploy({manual}) は自分で種を引いて Battle.start へ渡すので、
+    // 戦闘の乱数はその種で決まる。ここを固定しないと毎回違う戦闘になる（差し戻しで直した点）。
     const origRand = U.rand;
     U.rand = U.seeded(seed);
+    const run = battleWith({});
+    const handle = run.out.handle;
     let step = handle.next({}), guard = 0;
     while (step && step.type === 'commands' && guard++ < 40) {
       const cmds = {};
@@ -195,7 +198,7 @@ const setup = ({ pond = true, spark = true, deployed = true } = {}) => {
     if (result && (result.slimeSplit || []).length) done = { seed, result, ...run };
   }
   ok(!!done, `run.js が渡した options で、実戦でも分裂が起きる（種 ${done && done.seed}）`);
-  ok(done && done.seed === 3, `固定した種 3 で再現する（実際に使った種 ${done && done.seed}）`);
+  ok(done && done.seed === SEED_WITH_SPLIT, `固定した種 ${SEED_WITH_SPLIT} で再現する（実際に使った種 ${done && done.seed}）`);
   if (done) {
     const st = done.st;
     const before = st.roster.length;
