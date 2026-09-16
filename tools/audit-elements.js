@@ -10,6 +10,9 @@ const ctx = { console, Math, Date, JSON, localStorage: { getItem: k => (k in sto
 vm.createContext(ctx);
 for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename:f});
 const Game = vm.runInContext('Game', ctx), Town = vm.runInContext('Town', ctx), Synergy = vm.runInContext('Synergy', ctx);
+// 2026-09-16：宴・指名求人・傭兵市場・拠点接収を撤去したので、その戦略と列は落とした
+// （docs/TICKET_REMOVE_DEAD_2026-09-16.md）。存在チェックで隠して 0 を出し続けると、
+// 「使われていない」のか「無い」のかが読めなくなるため、列ごと畳んでいる。
 const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
 const N = Number(process.argv[2] || 30);
 
@@ -106,6 +109,7 @@ for (const s of strategies) {
   console.log(`  戦場不祥事 ${((A.happenings||0)/b).toFixed(2)}/戦、逆転 ${per('reversal')}、ニアミス ${per('nearmiss')}、死の連鎖 ${per('death_chains')}、召喚 ${per('summons')}`);
   console.log(`  撤退の提案 ${per('retreat_offered')}、号令の節目 ${per('order_offered')}、種族技 ${((A.trait_triggers||0)/b).toFixed(2)}/戦、技の台詞 ${((A.skill_calls||0)/b).toFixed(2)}/戦、施設発火 ${((A.facility_triggers||0)/b).toFixed(2)}/戦`);
   console.log(`  食べる ${((A.eat||0)/b).toFixed(2)}/戦、火の粉 ${per('sparked')}、食料不足 ${per('food_shortage')}、気合 ${((A.spirit_gained||0)/N).toFixed(1)}/ラン`);
+  console.log(`  合体可 ${A.kingslime_possible||0}`);
   console.log(`  事件 ${((A.events||0)/N).toFixed(1)}/ラン、ツケ持ち手番 ${A.debt_pending_turns||0}、縁故 ${A.bond_pending||0}、再起 ${A.retry||0}、将軍 ${((A.generals||0)/N).toFixed(2)}/ラン、昇進者 ${((A.promoted||0)/N).toFixed(1)}/ラン`);
   console.log(`  作戦: ${Object.keys(A).filter(k=>k.startsWith('mission_')).map(k=>k.slice(8)+'='+A[k]).join(' ')}　城下町Lv計 ${((A.town_levels||0)/N).toFixed(1)}　痕跡種類 ${((A.traces_kinds||0)/N).toFixed(1)}`);
 }
