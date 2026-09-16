@@ -44,16 +44,13 @@ assert(prepared.every(m => m.battleTakenMult === 1.3), '飢餓の代償として
 const units = prepared.map(m => Battle.makeUnit(m, 'player'));
 const enemy = Battle.makeUnit({ name:'訓練標的', race:'人間', hp:999, atk:1, def:0, spd:1, traits:[], tags:[] }, 'enemy');
 const result = Battle.simulate(units, [enemy], { rations: {
-  ...paid, cookUid: 3, bigEaterUids: [1, 2], hungerUid: 4, feastUid: 3
+  ...paid, cookUid: 3, bigEaterUids: [1, 2], hungerUid: 4, feastUid: 3   // feastUid は旧セーブ互換で残る欄。battle.js はもう読まない
 } });
 assert(result.timeline.some(e => e.type === 'resource_consume' && e.resource === 'food'), '食料消費を因果イベントにする');
 assert(result.timeline.some(e => e.traitId === 'big_eater'), '大食漢の発火を表示する');
 assert(result.timeline.some(e => e.traitId === 'demon_cook'), '魔界料理人の発火を表示する');
 assert(result.timeline.some(e => e.traitId === 'hunger_demon'), '食料が0へ遷移した時だけ飢餓が発火する');
-const feastAttack = result.timeline.find(e => e.type === 'attack' && e.label === '暴食の宴');
-assert(feastAttack, '食料4以上で最も遅い味方が追加行動する');
-assert(feastAttack.chainDepth === 3 && (feastAttack.traits || []).includes('CHAIN 3 ×1.25'),
-  '暴食の宴はCHAIN 3の共通倍率で増幅する');
+assert(!result.timeline.some(e => e.type === 'attack' && e.label === '暴食の宴'), '宴は消えたので feastUid を渡しても追加行動は起きない（2026-09-16）');
 
 Game.state.food = 0;
 const alreadyEmpty = Game.battleRationQuote();

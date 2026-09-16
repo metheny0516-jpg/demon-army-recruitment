@@ -46,8 +46,6 @@ function runOnce(strat, A){
       const best = st.roster.slice().sort((a,b)=> power(b) - power(a)).slice(0, Game.MAX_DEPLOY); best.sort((a,b)=> b.hp - a.hp);
       st.activeUids = best.map(m => m.uid); Game.setPayrollPolicy('regular');
       if (Game.kingSlimePreview && Game.kingSlimePreview()) inc(A, 'kingslime_possible');
-      if (Game.canHireMercenary(0)) inc(A, 'merc_affordable_phase');
-      if (strat.merc && Game.canHireMercenary(0)) { Game.hireMercenary(0); inc(A, 'merc_hired'); }
       // 発火条件は軍団全体（synergyPool）で数える。出撃隊だけで数えると《魔王軍完成》や《魔法結社》が消える（2026-09-16 に一度誤判定した）
       const syn = Synergy.active(Game.activeRoster(), { pool: Game.synergyPool() }).filter(s => s.type !== 'merge');
       inc(A, 'syn_battles_'+Math.min(3, syn.length));
@@ -75,7 +73,6 @@ function runOnce(strat, A){
       inc(A, 'spirit_gained', Object.values(r.spiritGained||{}).reduce((a,b)=>a+b,0));
       if (st.lastDepartmentReport?.foodShortage) inc(A, 'food_shortage');
     }
-    if (Game.canSeizeStronghold()) { Game.seizeStronghold(); inc(A, 'seize'); }
     if (st.phase === 'result') { for (const f of Town.facilities()) { if (Town.canBuild(Game, f.id).ok) { Town.build(Game, f.id); break; } } Game.afterResult(); }
     if (st.phase === 'event') { if (st.pendingEvent) { const o = Game.eventOptions(); if (o.length) { Game.chooseEvent(o[Math.floor(Math.random()*o.length)].i); inc(A, 'events'); } } Game.nextRecruit(); }
     if (st.phase === 'defeat') { if (Game.canRetry()) { Game.retry(); inc(A, 'retry'); } else Game.concede(); }
@@ -95,7 +92,6 @@ function runOnce(strat, A){
 }
 const strategies = [
   {name:'最強優先'}, {name:'魔法職寄せ', caster:true}, {name:'ゴブリン統一', race:'ゴブリン'},
-  {name:'最強優先+傭兵を使う', merc:true},
 ];
 for (const s of strategies) {
   const A = {}; for (let i=0;i<N;i++) runOnce(s, A);
@@ -110,7 +106,6 @@ for (const s of strategies) {
   console.log(`  戦場不祥事 ${((A.happenings||0)/b).toFixed(2)}/戦、逆転 ${per('reversal')}、ニアミス ${per('nearmiss')}、死の連鎖 ${per('death_chains')}、召喚 ${per('summons')}`);
   console.log(`  撤退の提案 ${per('retreat_offered')}、号令の節目 ${per('order_offered')}、種族技 ${((A.trait_triggers||0)/b).toFixed(2)}/戦、技の台詞 ${((A.skill_calls||0)/b).toFixed(2)}/戦、施設発火 ${((A.facility_triggers||0)/b).toFixed(2)}/戦`);
   console.log(`  食べる ${((A.eat||0)/b).toFixed(2)}/戦、火の粉 ${per('sparked')}、食料不足 ${per('food_shortage')}、気合 ${((A.spirit_gained||0)/N).toFixed(1)}/ラン`);
-  console.log(`  傭兵: 雇える場面 ${A.merc_affordable_phase||0}回 雇った ${A.merc_hired||0}　合体可 ${A.kingslime_possible||0}`);
-  console.log(`  事件 ${((A.events||0)/N).toFixed(1)}/ラン、ツケ持ち手番 ${A.debt_pending_turns||0}、縁故 ${A.bond_pending||0}、再起 ${A.retry||0}、接収 ${A.seize||0}、将軍 ${((A.generals||0)/N).toFixed(2)}/ラン、昇進者 ${((A.promoted||0)/N).toFixed(1)}/ラン`);
+  console.log(`  事件 ${((A.events||0)/N).toFixed(1)}/ラン、ツケ持ち手番 ${A.debt_pending_turns||0}、縁故 ${A.bond_pending||0}、再起 ${A.retry||0}、将軍 ${((A.generals||0)/N).toFixed(2)}/ラン、昇進者 ${((A.promoted||0)/N).toFixed(1)}/ラン`);
   console.log(`  作戦: ${Object.keys(A).filter(k=>k.startsWith('mission_')).map(k=>k.slice(8)+'='+A[k]).join(' ')}　城下町Lv計 ${((A.town_levels||0)/N).toFixed(1)}　痕跡種類 ${((A.traces_kinds||0)/N).toFixed(1)}`);
 }
