@@ -41,6 +41,7 @@ const BattleScene = {
   missingSprites: new Set(),
   traitQuoteShown: new Set(),   // 癖の台詞は1戦闘1回（play() で空にする）
   preloadedSprites: new Set(),
+  READY_SPIN_SPRITES: new Set(["goblin", "slime", "zombie"]),
   vfxPreloaded: false,
   // ready / guard は採用できる18種だけ（指示待ちの決めポーズと防御の構え、docs/SPEC_COMMAND_POSE_2026-09-15.md。2026-09-15 CodeX）
   BATTLE_SPRITES: {
@@ -208,6 +209,11 @@ const BattleScene = {
       scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
     }
     for (const u of Object.values(this.units || {})) {
+      u.readySpinToken = (u.readySpinToken || 0) + 1;
+      if (u.readySpinOnError && u.sprite) {
+        u.sprite.onerror = u.readySpinOnError;
+        u.readySpinOnError = null;
+      }
       u.el.classList.remove("acting", "targeted", "trouble", "lunge-up", "lunge-down", "hit", "hit-big", "revive-rise", "summon-rise", "pop");
       if (!u.sprite || !u.tplId || u.sprite.dataset.spriteFailed) continue;
       this.setPose(u, u.el.classList.contains("dead") ? "fallen" : "idle");
@@ -333,6 +339,10 @@ const BattleScene = {
       for (const pose of this.BATTLE_SPRITES[artId]) {
         const image = new Image();
         image.src = `${this.UNIT_DIR}${artId}/${pose}.webp`;
+      }
+      if (this.READY_SPIN_SPRITES.has(artId)) for (let frame = 0; frame < 9; frame++) {
+        const image = new Image();
+        image.src = `${this.UNIT_DIR}${artId}/ready-spin/${frame}.webp`;
       }
     }
     this.units[u.id] = {
@@ -1342,6 +1352,7 @@ const BattleScene = {
     const motion = u.actor.animate(frames, { duration, easing: "linear" });
     this.motions.add(motion);
     motion.onfinish = () => { this.motions.delete(motion); motion.cancel(); };
+    return motion;
   },
 
   meleeFrames(u, dx, dy, direction) {
@@ -2054,7 +2065,9 @@ const BattleScene = {
     const scene = document.getElementById("scene");
     if (scene) scene.classList.remove("awaiting-commands", "picking-target");
     for (const id in this.units) {
-      const el = this.units[id] && this.units[id].el;
+      const u = this.units[id];
+      this.cancelReadySpin(u);
+      const el = u && u.el;
       if (!el) continue;
       el.classList.remove("cmd-active", "cmd-pick", "cmd-decided",
         ...Object.keys(this.INTENT).map(k => "intent-" + k));
@@ -2084,6 +2097,7 @@ const BattleScene = {
   // 倒れている者は fallen のまま（構えを取らせない）。
   commandPose(u, pose) {
     if (!u || !u.el || u.el.classList.contains("dead")) return;
+    this.cancelReadySpin(u);
     this.setPose(u, pose);
     const img = u.sprite;
     if (!img || img.dataset.spriteFailed) return;
@@ -2093,17 +2107,69 @@ const BattleScene = {
     this.timers.push(setTimeout(() => img.classList.remove("pose-swap"), 150));
   },
 
+  cancelReadySpin(u) {
+    if (!u) return;
+    u.readySpinToken = (u.readySpinToken || 0) + 1;
+    if (u.readySpinMotion) {
+      u.readySpinMotion.cancel();
+      this.motions.delete(u.readySpinMotion);
+      u.readySpinMotion = null;
+    }
+    if (u.readySpinOnError) {
+      u.sprite.onerror = u.readySpinOnError;
+      u.readySpinOnError = null;
+    }
+  },
+
   // 指示の番が回ってきた者の登場動作。吹き出し（指示窓）と同時に始める＝待たない。
   // 2周目以降も省略しない（大事なパートなので、短縮の分岐を作らない）。
   poseEnter(u) {
     if (!u || !u.el || u.el.classList.contains("dead")) return;
+    if (this.READY_SPIN_SPRITES.has(u.tplId)) return this.readySpinEnter(u);
     const direction = u.side === "player" ? 1 : -1;
-    this.animateActor(u, [
+    u.readySpinMotion = this.animateActor(u, [
       { transform: "translateY(0) rotateY(0deg) scale(1)", offset: 0 },
       { transform: `translateY(-9px) translateX(${direction * 3}px) rotateY(180deg) scale(1.04)`, offset: .45 },
       { transform: `translateY(2px) rotateY(340deg) scale(.98,1.02)`, offset: .78 },
       { transform: "translateY(0) rotateY(360deg) scale(1)", offset: 1 }
     ], this.POSE_ENTER_MS);
+  },
+
+  // 承認済み3種族だけ、8方向を2周してから決める。画像は試作と同じクロマキー・切り出しを
+  // tools/extract-ready-spin-frames.cjs で事前処理し、戦闘中の Canvas 処理を避ける。
+  readySpinEnter(u) {
+    if (!u?.sprite || u.sprite.dataset.spriteFailed || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const token = u.readySpinToken = (u.readySpinToken || 0) + 1;
+    const live = () => u.readySpinToken === token && u.sprite?.isConnected && !u.el.classList.contains("dead");
+    const show = frame => { if (live()) u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/${frame}.webp`; };
+    const normalError = u.sprite.onerror;
+    u.readySpinOnError = normalError;
+    u.sprite.onerror = () => {
+      if (!live()) return;
+      u.readySpinToken++;
+      u.sprite.onerror = normalError;
+      u.readySpinOnError = null;
+      this.setPose(u, "ready");
+    };
+    show(0);
+    // 予備 0.09 秒 → 2周 0.275 秒 → 決め → 0.08 秒で軽く沈む。
+    u.readySpinMotion = this.animateActor(u, [
+      { transform: "translateY(0) scale(1.03,1)", offset: 0 },
+      { transform: "translateY(0) scale(1.03,.95)", offset: .202 },
+      { transform: "translateY(-10px) rotate(-1.4deg) scale(1.03,1)", offset: .51 },
+      { transform: "translateY(0) scale(1,.975)", offset: .82 },
+      { transform: "translateY(2px) scale(1,.975)", offset: .9 },
+      { transform: "translateY(0) scale(1)", offset: 1 }
+    ], 445);
+    for (let step = 0; step < 16; step++) {
+      this.timers.push(setTimeout(() => show(step % 8), 90 + step * (275 / 16)));
+    }
+    this.timers.push(setTimeout(() => show(8), 365));
+    this.timers.push(setTimeout(() => {
+      if (!live()) return;
+      u.sprite.onerror = normalError;
+      u.readySpinOnError = null;
+    }, 445));
   },
   // 敵の役（5節）。札の名前の前に小さく出す。fighter は印を出さない（既定なので）。
   ROLE_ICON: { brute: "💪", shield: "🛡", priest: "✚", caster: "🔥", archer: "🏹", rogue: "🗡", commander: "🎖" },
@@ -2127,6 +2193,12 @@ const BattleScene = {
     if (!allies.length) return this.submitCommands({});
     seq.idx = Math.max(0, Math.min(seq.idx, allies.length - 1));
     const a = allies[seq.idx];
+    // 味方札タップで未決定の別人へ移った場合も、前の人物の回転を残さない。
+    if (seq.activeId && seq.activeId !== a.id) {
+      const previous = this.units[seq.activeId];
+      this.cancelReadySpin(previous);
+      if (previous && !seq.commands[seq.activeId]) this.setPose(previous, "idle");
+    }
     const sel = this.cmdSel[a.id] || { cmd: "attack", target: null };
     const scene = document.getElementById("scene");
     if (scene) { scene.classList.add("awaiting-commands"); scene.classList.toggle("picking-target", seq.mode === "target"); }
@@ -2154,8 +2226,10 @@ const BattleScene = {
       // 指示を待つ者は決めポーズ。番が回ってきた瞬間だけ登場動作を添える
       // （狙い選びへ入った程度の描き直しでは動かさない。「もどる」で戻ってくれば もう一度やる）。
       if (al.id === a.id) {
-        this.commandPose(u, "ready");
-        if (seq.activeId !== al.id) this.poseEnter(u);
+        if (seq.activeId !== al.id) {
+          this.commandPose(u, "ready");
+          this.poseEnter(u);
+        }
       } else if (done) this.commandPose(u, this.COMMAND_POSE[done.cmd] || "idle");
     }
     seq.activeId = a.id;
