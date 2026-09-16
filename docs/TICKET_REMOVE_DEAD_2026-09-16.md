@@ -9,7 +9,7 @@
 |---|---|---|
 | 戦意（momentum） | Claude | **済** 85b6da1（run.js の `momentumPeak` 2か所は Opus の 1 で落とす） |
 | OVERKILL 2段（OVERKILL／殲滅＝大技の直撃） | Claude | **済** b2fa740 |
-| 《魔王軍完成》（meta）＋出ないシナジー5本 | Claude | 次 |
+| ~~《魔王軍完成》＋シナジー5本~~ | Claude | **取りやめ（09-16）**。監査の数え方の誤り。sim 20 で 魔王軍完成 158〜393回、魔法結社 345回。試しに消したら魔法職寄せが 85%→15% に落ちたので戻した |
 | 宴 | Opus（run.js・ui）→ Claude（battle.js の `feastUid`／暴食の宴） | 未 |
 | 指名求人 | Opus | 未 |
 | 傭兵市場 | Opus（run.js・ui・main）→ Claude（battle.js の `flags.mercenary`） | 未 |
@@ -37,15 +37,14 @@ Opus へ。まず git pull。docs/TICKET_REMOVE_DEAD_2026-09-16.md の §1 を�
 
 ## 2. Claude 用（battle.js・engine 側）
 
-- 《魔王軍完成》＋出ないシナジー5本（死の軍勢・魔法結社・殉職手当・骨炭魔術・巨人の成功報酬）：`synergies.js` から外し、`synergy.js` の meta 経路、battle.js の `overloadStacks` 伝播、chain.js、battle_scene / sound / styles の overload 演出、`spectacle.js` / `synergy-pool.js` / `test-sound.js` / `test-mixed-synergies.js` の期待。
 - Opus の 1・3・5 の後：battle.js の `feastUid`（暴食の宴）、`flags.mercenary`、`offerOrder / orderOffers / retreatOffer`。
 
 ## 3. CodeX 用
 
-`docs/GRAVEYARD.md` を新設し、消した要素の**言葉**を移す：宴の台詞（`events.js` / `monsters.js` / ui の文）、指名求人の6要項（`RECRUIT_BRIEFS`）、傭兵の口上、シナジー6本の名前・条件・説明（`synergies.js` の該当ブロック）、OVERKILL の旧4段の名（蹂躙・粉砕・消滅・魔王級殲滅）、戦意の文。
+`docs/GRAVEYARD.md` を新設し、消した要素の**言葉**を移す：宴の台詞（`events.js` / `monsters.js` / ui の文）、指名求人の6要項（`RECRUIT_BRIEFS`）、傭兵の口上、OVERKILL の旧4段の名（蹂躙・粉砕・消滅・魔王級殲滅）、戦意の文。（シナジーは消さないことになった）
 それぞれ「いつ・なぜ消えたか」を1行（`AUDIT_DEAD_ELEMENTS` から写す）。**src/ は触らない**（データの削除は Opus / Claude が担当）。
 
 ### 貼り付け用（CodeX 用）
 ```
-Astra へ。docs/TICKET_REMOVE_DEAD_2026-09-16.md の §3 をお願いします。docs/GRAVEYARD.md を新設し、消す要素の言葉（宴の台詞、指名求人の6要項 RECRUIT_BRIEFS、傭兵の口上、シナジー6本＝魔王軍完成・死の軍勢・魔法結社・殉職手当・骨炭魔術・巨人の成功報酬 の名前と条件と説明、OVERKILL の旧4段の名、戦意の文）を移して、それぞれ「いつ・なぜ消えたか」を1行（docs/AUDIT_DEAD_ELEMENTS_2026-09-15.md から）。src/ は触らない。ブランチ codex/graveyard、本線 claude/hero-arrival-tavern-prototype-uy2toh から切って push。
+Astra へ。docs/TICKET_REMOVE_DEAD_2026-09-16.md の §3 をお願いします。docs/GRAVEYARD.md を新設し、消す要素の言葉（宴の台詞、指名求人の6要項 RECRUIT_BRIEFS、傭兵の口上、OVERKILL の旧4段の名、戦意の文）を移して、それぞれ「いつ・なぜ消えたか」を1行（docs/AUDIT_DEAD_ELEMENTS_2026-09-15.md から）。src/ は触らない。ブランチ codex/graveyard、本線 claude/hero-arrival-tavern-prototype-uy2toh から切って push。
 ```

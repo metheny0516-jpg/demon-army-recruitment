@@ -41,7 +41,8 @@
 **2026-09-16 朝（Claude）。オーナー決定：死んでいる要素の削除は進める／スライムの大筋は試遊できる所まで進める**
 - 済：戦意の削除（85b6da1）、OVERKILL の2段化＝OVERKILL／殲滅（大技の直撃）（b2fa740）。
 - 済：スライム② エンジン側（battle.js `options.slimeSplit` → `result.slimeSplit`、`tools/test-slime-split.js` 10件）。
-- チケット：`docs/TICKET_REMOVE_DEAD_2026-09-16.md`（Opus＝宴・指名求人・傭兵・接収・号令UI の順、CodeX＝墓場文書、Claude＝《魔王軍完成》＋シナジー5本と battle.js 側）。
+- チケット：`docs/TICKET_REMOVE_DEAD_2026-09-16.md`（Opus＝宴・指名求人・傭兵・接収・号令UI の順、CodeX＝墓場文書、Claude＝battle.js 側）。
+- **訂正（09-16 昼）**：監査の「《魔王軍完成》と同時シナジーは 0%」は**数え方の誤り**（出撃隊だけで数えていた）。本線の sim 20 で 魔王軍完成 158〜393回、魔法結社 345回。試しに消したら 魔法職寄せ が 85%→15% に落ちた（煙感知器が正しく鳴った）ので**戻した**。シナジーは消さない。`audit-elements.js` は軍団全体で数えるよう直した。
   `docs/SPEC_SLIME_ARC_2_2026-09-16.md`（Opus の run.js 側。貼り付けは §3）。**Opus の順番：段階B/D → 削除 §1 → スライム②。**
 - run.js 系の削除と battle.js 系の削除は同じ要素を二人で触らない：Opus が run/ui 側を落としてから Claude が battle.js 側を落とす。
 

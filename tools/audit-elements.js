@@ -51,9 +51,10 @@ function runOnce(strat, A){
       if (Game.kingSlimePreview && Game.kingSlimePreview()) inc(A, 'kingslime_possible');
       if (Game.canHireMercenary(0)) inc(A, 'merc_affordable_phase');
       if (strat.merc && Game.canHireMercenary(0)) { Game.hireMercenary(0); inc(A, 'merc_hired'); }
-      const syn = Synergy.active(Game.activeRoster()).filter(s => s.type !== 'merge');
+      // 発火条件は軍団全体（synergyPool）で数える。出撃隊だけで数えると《魔王軍完成》や《魔法結社》が消える（2026-09-16 に一度誤判定した）
+      const syn = Synergy.active(Game.activeRoster(), { pool: Game.synergyPool() }).filter(s => s.type !== 'merge');
       inc(A, 'syn_battles_'+Math.min(3, syn.length));
-      for (const s of syn) seenSyn.add(s.name);
+      for (const s of syn) { seenSyn.add(s.name); inc(A, 'synname_'+s.name); }
       const out = Game.deploy(); if (!out) break;
       const r = out.result, tl = r.timeline || [];
       inc(A, 'battles');
@@ -108,6 +109,7 @@ for (const s of strategies) {
   console.log(`  最大CHAIN: ${[0,1,2,3,4,'5+'].map(k=>k+'='+per('chain_max_'+k)).join(' ')}`);
   console.log(`  OVERKILL: ${((A.overkill_events||0)/b).toFixed(2)}回/戦、蹂躙以上が出た戦 ${per('overkill_big_battles')}`);
   console.log(`  シナジー数/戦: 0=${per('syn_battles_0')} 1=${per('syn_battles_1')} 2=${per('syn_battles_2')} 3+=${per('syn_battles_3')}　種類 ${((A.syn_kinds_total||0)/N).toFixed(1)}/ラン`);
+  console.log(`  シナジー名: ${Object.keys(A).filter(k=>k.startsWith('synname_')).sort((a,b)=>A[b]-A[a]).map(k=>k.slice(8)+':'+A[k]).join(' ')}`);
   console.log(`  戦場不祥事 ${((A.happenings||0)/b).toFixed(2)}/戦、逆転 ${per('reversal')}、ニアミス ${per('nearmiss')}、死の連鎖 ${per('death_chains')}、召喚 ${per('summons')}`);
   console.log(`  撤退の提案 ${per('retreat_offered')}、号令の節目 ${per('order_offered')}、種族技 ${((A.trait_triggers||0)/b).toFixed(2)}/戦、技の台詞 ${((A.skill_calls||0)/b).toFixed(2)}/戦、施設発火 ${((A.facility_triggers||0)/b).toFixed(2)}/戦`);
   console.log(`  食べる ${((A.eat||0)/b).toFixed(2)}/戦、火の粉 ${per('sparked')}、食料不足 ${per('food_shortage')}、気合 ${((A.spirit_gained||0)/N).toFixed(1)}/ラン`);
