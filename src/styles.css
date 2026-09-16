@@ -585,8 +585,6 @@ button.wide { width: 100%; }
 .history-item .build-name { font-size: 14px; margin: 2px 0 4px; opacity: .95; }
 /* 拠点接収は1ランに1度きりの分岐なので、勝利バナー直下で目立たせる。
    結果画面の最下部に置いていたときは実プレイで一度も使われなかった（2画面ぶん下にあった）。 */
-.seize-panel { border: 1px solid var(--gold); box-shadow: 0 0 0 2px rgba(0,0,0,.25) inset; }
-.seize-panel h3 { color: var(--gold); }
 .build-name-panel { text-align: center; }
 /* 敗北からの方向転換。負けた直後にいちばん読ませたいので、他の集計より前に置いている */
 .lesson-panel { border: 1px solid var(--gold); }
@@ -1555,23 +1553,6 @@ button.wide { width: 100%; }
 .king-compare > div { flex: 1 1 45%; background: #1b1530; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .king-compare b { font-size: 13px; }
 .king-compare .muted { font-size: 11px; display: block; }
-
-/* 傭兵市場。金貨の出口をここに置く */
-.merc-panel { border-color: #8a6a20; }
-.merc-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.merc-card { background: #1b1530; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.merc-name { font-size: 13px; }
-.merc-name .muted { font-size: 11px; margin-left: 4px; }
-.merc-stats { font-size: 12px; color: var(--dim); margin: 2px 0 4px; }
-.merc-traits { margin-bottom: 6px; }
-.merc-kin { font-size: 11px; color: #9ef0b8; margin-bottom: 4px; }
-.merc-kin b { color: #b8ffcf; }
-.merc-hired { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
-.merc-chip {
-  font-size: 11px; padding: 2px 8px; border-radius: 10px;
-  background: #4a3a12; color: var(--gold); border: 1px solid #8a6a20;
-}
-.contrib-badge.merc { background: #4a3a12; color: var(--gold); border: 1px solid #8a6a20; }
 
 /* 編成画面のシナジー予告。効果量と「あと1体で／入れ替えると」を出す */
 .syn.on { border-left: 3px solid var(--gold); }
@@ -2885,14 +2866,6 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-recruit .hire-food.warn { color: #853f3f; border-color: #a46161; background: rgba(164,97,97,.12); }
 .department-overview .warn b { color: #ff9a9a; }
 
-/* 宴：余剰食料の使い道。備蓄が積み上がるだけの資源だと判断が生まれない。 */
-.feast-panel .feast-ready {
-  font-size: 12px; color: #f2dc9a;
-  padding: 5px 8px; border-radius: 3px;
-  border: 1px solid rgba(240, 210, 120, .45); background: rgba(240, 210, 120, .08);
-}
-.feast-panel h3 .muted { font-size: 12px; font-weight: normal; }
-
 /* 飢餓の連鎖には出口がある。見えていないと、また「不足＝詰み」に戻る。 */
 .hunger-streak {
   margin-top: 6px; font-size: 12px; color: #e9b4b4;
@@ -2900,16 +2873,6 @@ button.primary::first-letter { color: var(--gold); }
   border: 1px solid rgba(230, 140, 140, .4); background: rgba(230, 140, 140, .08);
 }
 .hunger-streak b { color: #ffd0d0; }
-
-/* 指名求人：条件を出して求人し直す。給与方針の3択と同じ見え方に揃える。 */
-.brief-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; margin-top: 8px; }
-.brief-option {
-  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
-  padding: 7px 9px; text-align: left; line-height: 1.35;
-}
-.brief-option .brief-title { font-weight: bold; }
-.brief-option .brief-note { font-size: 11px; opacity: .8; white-space: normal; }
-.brief-option.selected { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(232,189,104,.35); }
 
 /* ── 全画面演出（burst）──────────────────────────
    見せ場だけに使う。《魔王軍完成》と余剰100%以上のOVERKILL。

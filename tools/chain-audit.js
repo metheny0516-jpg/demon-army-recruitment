@@ -588,7 +588,6 @@ function playRun(env) {
       deployOrder(Game, st);
       if (!Game.deploy()) break;
     }
-    if (Game.canSeizeStronghold()) Game.seizeStronghold();
     if (st.phase === 'result') Game.afterResult();
     if (st.phase === 'facility') Game.chooseFacility('graveyard');
     if (st.phase === 'event') {

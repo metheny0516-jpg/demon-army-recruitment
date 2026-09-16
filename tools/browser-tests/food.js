@@ -1,4 +1,6 @@
-// 宴：余剰食料の使い道。備蓄上限・大食漢の倍化・アンデッド軍団では開けないことを見る。
+// 食料まわり（備蓄上限の腐敗・飢餓の出口）。
+// 宴は 2026-09-16 に撤去（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）。
+// そのとき同居していた腐敗と飢餓適応の検証だけをここへ残した（旧 feast.js）。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const assert = require('node:assert/strict');
 const { autoDismissMormo } = require('./helpers.js');
@@ -19,57 +21,7 @@ const { autoDismissMormo } = require('./helpers.js');
       };
     });
 
-    // 1) 食う者がいれば宴は成立し、備蓄が足りなければ開けない
-    const poor = await page.evaluate(() => {
-      Game.state.roster = [mk('orc', 1)];
-      Game.state.activeUids = [1];
-      Game.state.food = 0;
-      const q = Game.feastQuote();
-      return { possible: q.possible, affordable: q.affordable, held: !!Game.holdFeast() };
-    });
-    assert.equal(poor.possible, true, '食う者がいれば宴は成立する');
-    assert.equal(poor.affordable, false, '備蓄0では開けない');
-    assert.equal(poor.held, false, '開けない宴は実行されない');
-
-    // 2) 備蓄が十分なら開けて、忠誠が上がり、食料が減る
-    const rich = await page.evaluate(() => {
-      Game.state.food = 50;
-      const before = { food: Game.state.food, loyalty: Game.state.roster[0].loyalty };
-      const q = Game.feastQuote();
-      const held = Game.holdFeast();
-      return { before, cost: q.cost, gain: q.loyaltyGain, held,
-        food: Game.state.food, loyalty: Game.state.roster[0].loyalty,
-        twice: Game.holdFeast() };
-    });
-    assert.ok(rich.held, '余剰があれば宴は開ける');
-    assert.equal(rich.food, rich.before.food - rich.cost, '宴のぶんだけ食料が減る');
-    assert.equal(rich.loyalty, rich.before.loyalty + rich.gain, '食う者の忠誠が上がる');
-    assert.equal(rich.twice, null, '同じ作戦で二度は開けない');
-
-    // 3) 大食漢は食う量も効果も倍
-    const big = await page.evaluate(() => {
-      Game.state.feastPending = null;
-      const plain = Game.feastQuote();
-      Game.state.roster[0].traits = ['big_eater'];
-      const eater = Game.feastQuote();
-      Game.state.roster[0].traits = ['big_eater', 'demon_cook'];
-      const cooked = Game.feastQuote();
-      return { plain, eater, cooked };
-    });
-    assert.ok(big.eater.cost > big.plain.cost, '大食漢がいると食う量が増える');
-    assert.ok(big.eater.dmgBonus > big.plain.dmgBonus, '大食漢がいると効果も上がる');
-    assert.ok(big.cooked.cost < big.eater.cost, '魔界料理人がいると必要な食料が減る');
-
-    // 4) アンデッドだけの軍団では宴が成立しない
-    const undead = await page.evaluate(() => {
-      Game.state.roster = [mk('skeleton', 2)];
-      Game.state.activeUids = [2];
-      Game.state.feastPending = null;
-      return Game.feastQuote().possible;
-    });
-    assert.equal(undead, false, '食事不要の軍団に宴はない');
-
-    // 5) 備蓄上限を超えた食料は傷む
+    // 1) 備蓄上限を超えた食料は傷む
     const spoil = await page.evaluate(() => {
       Game.state.roster = [mk('goblin', 3)];
       Game.state.activeUids = [3];
@@ -81,9 +33,9 @@ const { autoDismissMormo } = require('./helpers.js');
     });
     assert.equal(spoil.over, 7, '上限を超えたぶんだけ傷む');
     assert.equal(spoil.food, spoil.cap, '備蓄は上限で止まる');
-    assert.ok(spoil.note.includes('宴'), '腐敗ログが宴へ誘導する');
+    assert.ok(spoil.note.length > 0, '傷んだことが一行残る');
 
-    // 6) 飢餓は3戦で「飢餓適応」へ抜ける。損失で終わらせない出口。
+    // 2) 飢餓は3戦で「飢餓適応」へ抜ける。損失で終わらせない出口。
     const hunger = await page.evaluate(() => {
       Game.state.roster = [mk('goblin', 4), mk('skeleton', 5)];
       Game.state.activeUids = [4];
@@ -114,7 +66,7 @@ const { autoDismissMormo } = require('./helpers.js');
     assert.ok(!hunger.skelTraits.includes('starved'), '元から食わない者は適応しない');
     assert.equal(hunger.reset, 0, '不足が途切れれば連鎖はリセットされる');
 
-    console.log('✓ 宴：成立条件・大食漢と料理人の倍率・アンデッド不成立・備蓄上限の腐敗／飢餓3戦→飢餓適応');
+    console.log('✓ 食料：備蓄上限の腐敗／飢餓3戦→飢餓適応');
   } finally {
     await browser.close();
   }

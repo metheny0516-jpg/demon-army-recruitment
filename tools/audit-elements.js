@@ -27,9 +27,6 @@ function runOnce(strat, A){
     while (st.phase === 'recruit' && st.applicants.length) {
       if (st.hiresLeft <= 0) { Game.skipHire(); break; }
       // 指名求人・傭兵・宴・合体の「使えた場面」を数える（使うかどうかは戦略で分ける）
-      if (Game.briefUnlocked && Game.briefUnlocked()) inc(A, 'brief_available_phase');
-            if (strat.feast && Game.feastQuote().affordable) { Game.holdFeast(); inc(A, 'feast_held'); }
-      { const bid = vm.runInContext('RECRUIT_BRIEFS[0].id', ctx); if (Game.canPostBrief(bid)) inc(A,'brief_affordable_phase'); if (strat.brief && Game.canPostBrief(bid)) { Game.postBrief(bid); inc(A, 'brief_posted'); } }
       if (!Game.canHire()) { Game.skipHire(); break; }
       const before = st.roster.length; Game.hire(pick(st.applicants, strat)); if (st.roster.length === before) { Game.skipHire(); break; }
     }
@@ -98,7 +95,7 @@ function runOnce(strat, A){
 }
 const strategies = [
   {name:'最強優先'}, {name:'魔法職寄せ', caster:true}, {name:'ゴブリン統一', race:'ゴブリン'},
-  {name:'最強優先+傭兵・宴・指名求人を使う', merc:true, feast:true, brief:true},
+  {name:'最強優先+傭兵を使う', merc:true},
 ];
 for (const s of strategies) {
   const A = {}; for (let i=0;i<N;i++) runOnce(s, A);
@@ -113,7 +110,7 @@ for (const s of strategies) {
   console.log(`  戦場不祥事 ${((A.happenings||0)/b).toFixed(2)}/戦、逆転 ${per('reversal')}、ニアミス ${per('nearmiss')}、死の連鎖 ${per('death_chains')}、召喚 ${per('summons')}`);
   console.log(`  撤退の提案 ${per('retreat_offered')}、号令の節目 ${per('order_offered')}、種族技 ${((A.trait_triggers||0)/b).toFixed(2)}/戦、技の台詞 ${((A.skill_calls||0)/b).toFixed(2)}/戦、施設発火 ${((A.facility_triggers||0)/b).toFixed(2)}/戦`);
   console.log(`  食べる ${((A.eat||0)/b).toFixed(2)}/戦、火の粉 ${per('sparked')}、食料不足 ${per('food_shortage')}、気合 ${((A.spirit_gained||0)/N).toFixed(1)}/ラン`);
-  console.log(`  傭兵: 雇える場面 ${A.merc_affordable_phase||0}回 雇った ${A.merc_hired||0}　宴 ${A.feast_held||0}　指名求人: 解禁場面 ${A.brief_available_phase||0} 出せた ${A.brief_affordable_phase||0} 出した ${A.brief_posted||0}　合体可 ${A.kingslime_possible||0}`);
+  console.log(`  傭兵: 雇える場面 ${A.merc_affordable_phase||0}回 雇った ${A.merc_hired||0}　合体可 ${A.kingslime_possible||0}`);
   console.log(`  事件 ${((A.events||0)/N).toFixed(1)}/ラン、ツケ持ち手番 ${A.debt_pending_turns||0}、縁故 ${A.bond_pending||0}、再起 ${A.retry||0}、接収 ${A.seize||0}、将軍 ${((A.generals||0)/N).toFixed(2)}/ラン、昇進者 ${((A.promoted||0)/N).toFixed(1)}/ラン`);
   console.log(`  作戦: ${Object.keys(A).filter(k=>k.startsWith('mission_')).map(k=>k.slice(8)+'='+A[k]).join(' ')}　城下町Lv計 ${((A.town_levels||0)/N).toFixed(1)}　痕跡種類 ${((A.traces_kinds||0)/N).toFixed(1)}`);
 }

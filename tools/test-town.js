@@ -157,17 +157,6 @@ assert(st.town && typeof st.town.debt === 'number', '旧セーブに town が無
   assert(s4.materials === mat4 + 9, `帳簿は Lv×3 の建材で返る（+${s4.materials - mat4}）`);
   assert((s4.lastFacilityMigration || []).some(l => /帳簿/.test(l)), '日誌に一行残る');
 
-  // 6. 拠点接収は建材 +3 の追い風になった
-  Game.newRun();
-  const s5 = Game.state;
-  s5.phase = 'result';
-  s5.lastBattle = { victory: true, notes: [] };
-  s5.materials = 0; s5.seizeUsed = false;
-  const alertBefore = s5.alert || 0;
-  assert(Game.canSeizeStronghold(), '勝った決着で1度だけ接収できる');
-  assert(Game.seizeStronghold() && s5.materials === 3, `接収で建材 +3（${s5.materials}）`);
-  assert(s5.alert === alertBefore + Game.SEIZE_ALERT_COST, '代償の警戒度は据え置き');
-  assert(!Game.canSeizeStronghold(), 'ランに1度きり');
 }
 
 // ── 生んだもの（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §2）──

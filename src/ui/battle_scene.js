@@ -94,7 +94,7 @@ const BattleScene = {
     note: 260, dialogue: 1900, incident: 1700, death: 1100, revive: 1250, survive: 1000,
     heal: 800, summon: 1250, trait_trigger: 1500, resource_gain: 1200,
     resource_forfeit: 1200, resource_consume: 750, overkill: 1400, result: 1200,
-    order_offer: 1200, order_exec: 2000, cover: 1300
+    order_exec: 2000, cover: 1300
   },
   // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
   ANSWER_READ_MS: 2200,
@@ -117,7 +117,7 @@ const BattleScene = {
   PROTECTED_TYPES: new Set([
     "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
     "resource_gain", "resource_forfeit", "resource_consume",
-    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_offer", "order_exec", "skill_call", "result"
+    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_exec", "skill_call", "result"
   ]),
 
   EFFECT_CLASSES: [
@@ -427,8 +427,6 @@ const BattleScene = {
     this.resetSpare();
     this.retreated = false;
     this.resumeSkipAfterRetreat = false;
-    this.orderAnswered = new Set();   // 答えた order_offer の eventId（節目は戦況が動くたびに来る）
-    this.resumeSkipAfterOrder = false;
     if (!this.manualStarting) { this.manual = null; this.autoRest = false; this.hideCommandPanel(); }
     this.manualStarting = false;
     this.resultPending = null;
@@ -1041,10 +1039,6 @@ const BattleScene = {
         }
         break;
       }
-      // 号令の節目。撤退の提案と同じく**必ず**止める。
-      case "order_offer":
-        this.askOrder(ev);
-        break;
       // 号令の実行。魔王の一声と本人の返事。止めない（直前に選んだばかり）。
       // 技の台詞と技名は **skill_call**（繰り出す直前）が出す。order_exec は指示の記録として
       // 残るだけ（quiet: true）。データは消していない（お披露目の判定と sim の集計が読む）。
@@ -1918,74 +1912,10 @@ const BattleScene = {
     this.finish();
   },
 
-  // 「号令を」。戦闘を止めて、名指しのボタン（最大3）と「任せる」を出す。
-  // 既定は「任せる」（今までの挙動＝命じない）。テストの自動送りも既定を押す。
-  askOrder(ev) {
-    if (this.orderAnswered.has(ev.eventId) || this.finished) return false;
-    this.currentOrderOffer = ev;
-    if (this.mormoAwaiting) this.closeAside();
-    this.mormoAwaiting = true;
-    this.paused = true;
-    this.setMormoControlsLocked(true, false);
-    const candidates = ev.candidates || [];
-    const unready = (ev.unready || []).map(u => `${u.name}は気合が抜けたまま（${u.spirit}/${u.cost}）`).join("。");
-    const box = MormoScene.aside({
-      expression: "report",
-      text: ev.text ? String(ev.text).replace(/^\s*モルモ「|」\s*$/g, "") : "号令を",
-      // 候補が3人だと説明が長くなって帯からはみ出す。3人のときは候補ごとの説明を省き、共通の一文だけにする。
-      note: `${candidates.length <= 2 ? candidates.map(c => `${c.name}：${c.note}`).join("。") + "。" : ""}${unready ? unready + "。" : ""}命じた者は次に真っ先に動いて技を必ず出す（与ダメ+50%）が、その次の手番は息が上がって動けない。`,
-      host: document.getElementById("scene"),
-      choices: [
-        ...candidates.map(c => ({ label: `📣 ${c.name}「${c.label}」${typeof c.cost === "number" && c.cost > 0 ? `（気合${c.cost}）` : ""}`, value: c.unitId })),
-        { label: "任せる", value: "none", primary: true }
-      ],
-      onChoose: choice => this.answerOrder(choice)
-    });
-    if (!box) {
-      this.mormoAwaiting = false;
-      this.paused = false;
-      this.setMormoControlsLocked(false);
-      this.orderAnswered.add(ev.eventId);
-      if (typeof this.onOrderChoice === "function") this.onOrderChoice("none");
-      return false;
-    }
-    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
-    return true;
-  },
-
-  answerOrder(choice) {
-    const ev = this.currentOrderOffer;
-    if (!ev || this.orderAnswered.has(ev.eventId)) return;
-    this.orderAnswered.add(ev.eventId);
-    // run.js が同じ種で計算し直したタイムラインを返す（任せたなら null）。
-    // 提案の手前までは同じなので、今の位置からそのまま続きを再生できる。
-    const next = typeof this.onOrderChoice === "function" ? this.onOrderChoice(choice) : null;
-    if (Array.isArray(next) && next.length > this.index) this.swapTimeline(next);
-    if (this.resumeSkipAfterOrder) {
-      this.resumeSkipAfterOrder = false;
-      this.mormoAwaiting = false;
-      this.paused = false;
-      this.setMormoControlsLocked(false);
-      return this.skip();
-    }
-    return this.continueAfterMormo(false);
-  },
-
-  // 再生中のタイムラインを差し替える（号令のあと）。手前は一致している前提なので、
-  // 位置（index）と盤面はそのまま。尺の計画と因果の索引だけ作り直す。
-  swapTimeline(next) {
-    this.timeline = next;
-    this.eventById = new Map(next.filter(e => e.eventId).map(e => [e.eventId, e]));
-    this.prepareChainView(next);
-    this.chainAnswer = this.pickChainAnswer(next);
-    this.pacing = this.plan(next);
-    this.mormoAside = this.pickMormoAside(next);
-  },
-
-  // まだ答えていない提案（撤退／号令）が、今の位置より先にあるか。
+  // まだ答えていない撤退の提案が、今の位置より先にあるか。
   pendingOfferAt() {
     return this.timeline.findIndex((e, i) => i >= this.index
-      && ((e.type === "retreat_offer" && !e.manual && !this.retreatAnswered) || (e.type === "order_offer" && !this.orderAnswered.has(e.eventId))));
+      && e.type === "retreat_offer" && !e.manual && !this.retreatAnswered);
   },
 
   // ── コマンドバトル（2026-09-11） ──────────────────────────
@@ -2808,8 +2738,8 @@ const BattleScene = {
     }
     // 提案を出したまま飛ばそうとしたら何もしない。stop() が一言ごと消してしまい、
     // 選択肢が無いまま戦闘だけが進む（＝答えずに続行したことになる）。
-    if (this.mormoAwaiting && ((!this.retreatAnswered && this.timeline.some(e => e.type === "retreat_offer" && !e.manual))
-      || this.timeline.some(e => e.type === "order_offer" && !this.orderAnswered.has(e.eventId)))) return;
+    if (this.mormoAwaiting && !this.retreatAnswered
+      && this.timeline.some(e => e.type === "retreat_offer" && !e.manual)) return;
     const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
     if (typeof Music !== "undefined") Music.suspend();
@@ -2843,14 +2773,8 @@ const BattleScene = {
           if (ev.type === "synergy") this.countSynergy();
         }
         // 答えたら、通常再生へ戻さずに続きを飛ばす（飛ばすつもりで押したのだから）。
-        const offer = this.timeline[offerAt];
-        if (offer.type === "order_offer") {
-          this.resumeSkipAfterOrder = true;
-          this.askOrder(offer);
-        } else {
-          this.resumeSkipAfterRetreat = true;
-          this.askRetreat(offer);
-        }
+        this.resumeSkipAfterRetreat = true;
+        this.askRetreat(this.timeline[offerAt]);
         return;
       }
     }

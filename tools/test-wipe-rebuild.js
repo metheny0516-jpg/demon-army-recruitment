@@ -131,16 +131,6 @@ function freshRun(roster, activeUids, gold) {
   assert(st.phase === "result", `フェーズは result（${st.phase}）`);
 }
 
-// 5. 傭兵は戦死に数えない
-{
-  const st = freshRun([...doomed(), member(105, 'ルスバン', { hp: 30 })], [101, 102]);
-  st.mercenaries = [{ uid: 999, tplId: 'orc', name: 'ヤトイ', race: 'オーク', job: '兵',
-    hp: 1, atk: 1, def: 0, spd: 1, salary: 0, loyalty: 50, traits: [], tags: [] }];
-  Game.deploy();
-  assert(!st.departed.some(d => d.name === 'ヤトイ'), '傭兵は departed に入らない');
-  assert(st.departed.length === 2, '軍団員2人だけが履歴に載る');
-}
-
 // 6. 判定負け（30ラウンド経過。全滅ではない）は撤退と同じ結末
 {
   // 両軍とも決め手を欠く編成（攻撃1・防御高）で30ラウンドを使い切らせる

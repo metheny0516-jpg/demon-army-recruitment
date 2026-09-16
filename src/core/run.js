@@ -70,7 +70,6 @@ const Game = {
       materials: demonKing.start.materials,
       // 施設は城下町ただ1系統（2026-09-13、docs/SPEC_TOWN_MERGE_2026-09-13.md）。
       // 旧「戦闘の施設」の3欄（facilityLevel / activeFacilityId / buildProgress）は消した。
-      seizeUsed: false,
       lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
@@ -83,8 +82,6 @@ const Game = {
       extraHiresThisPhase: 0,
       maxPower: 0,
       maxArmySize: 0,
-      mercenaryOffers: [],
-      mercenaries: [],
       kingSlimeMerge: true,   // 出撃時に合体するか（既定は合体。編成画面で断れる）
       maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
       maxOverkill: 0,     // 同その2。%で持つ
@@ -105,8 +102,6 @@ const Game = {
       retriesLeft: this.RETRIES_PER_RUN,
       retriesUsed: 0,
       rerollsThisPhase: 0,
-      briefId: null,
-      briefsThisPhase: 0,
       pendingEvent: null,
       eventOutcome: null,
       // 結果画面でも立ち絵と吹き出しを出すため、当事者の uid だけ残す（表示専用）
@@ -128,7 +123,6 @@ const Game = {
       battleIncidentTotal: 0,
       // 撤退（2026-09-10）
       retreatCount: 0,
-      orderCount: 0,
       stageFights: {},          // 敵の慣れ：段階ごとに戦った回数（通常作戦のみ）
       outpost: null,            // 前哨戦の札（2026-09-12）。{ stage, cleared, formationId }
       skillLore: {},            // 種族の伝承：species → 覚えた上位技 id
@@ -339,6 +333,11 @@ const Game = {
     if (typeof Captains !== "undefined") Captains.init(st);
     if (typeof st.settles !== "number") st.settles = Number(st.turn) || 0;
     if (!st.raided || typeof st.raided !== "object") st.raided = {};
+    delete st.feastPending;   // 宴は撤去（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）
+    delete st.briefId; delete st.briefsThisPhase;   // 指名求人は撤去（同 §1-2）
+    delete st.mercenaries; delete st.mercenaryOffers;   // 傭兵市場は撤去（同 §1-3）
+    delete st.seizeUsed;   // 拠点接収は撤去（同 §1-4。領土の「砦」が同じ役をする）
+    delete st.orderCount;   // 号令は撤去（同 §1-5。指示はコマンドバトルの窓でする）
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
@@ -360,7 +359,7 @@ const Game = {
       // 既に入っている値は defaults では上書きされない（下の undefined/null チェック）ので、
       // 途中ラン・ロード・再起で保存済みバージョンは変化しない。
       chainDefVersion: 1,
-      maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
+      maxChain: 0, maxOverkill: 0, kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       // 魔界史へ残す「記憶」1件（R3）。ラン状態の中にあるので、再起で巻き戻せば
       // 記憶も一緒に戻る（やり直した歴史の出来事は残さない）。旧セーブには無い。
@@ -368,7 +367,7 @@ const Game = {
       // 前回出撃の確定値（R2）。旧セーブには無いので、読み直した最初の1戦は
       // 「比較する前がない」＝差分なしとして扱う（無いものを差分として捏造しない）。
       lastBuildSnapshot: null,
-      rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
+      rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
       // 直近の決着で伸びた数値（決着画面が一行ずつ読み上げる）
@@ -380,15 +379,15 @@ const Game = {
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
-      seizeUsed: false, lastDepartmentReport: null,
+      lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
       legacyReturn: null, legacyOffered: false, lessonId: null,
-      feastPending: null, hungerStreak: 0,
+      hungerStreak: 0,
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
-      retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {}, outpost: null,
+      retreatCount: 0, pendingBattle: null, wipeCount: 0, stageFights: {}, outpost: null,
       // 幕の進行（2026-09-11）。旧セーブは第一幕として読む。
       act: 1, actStartedTurn: 1, actHistory: [],
       // 王国の反撃（2026-09-10）
@@ -717,51 +716,6 @@ const Game = {
     return over;
   },
 
-  // 宴：余った食料の使い道。余剰は今まで死に資源で、黒字にする理由がなかった。
-  // 効くのは「食う者」だけなので、アンデッド軍団では宴そのものが成立しない。
-  // 大食漢は食う量が倍になる代わりに効果も倍。負債だったオーガが資産に変わる。
-  feastQuote() {
-    const st = this.state;
-    const active = this.activeRoster();
-    const eaters = st.roster.filter(m => Aptitude.of(m).appetite > 0);
-    const activeEaters = active.filter(m => Aptitude.of(m).appetite > 0);
-    const bigEaters = active.filter(m => (m.traits || []).includes("big_eater")).length;
-    const cook = active.some(m => (m.traits || []).includes("demon_cook"));
-    const base = Math.max(1, this.foodNeed());
-    // 大食漢がいれば倍食う。料理人がいれば同じ量で足りる。
-    let cost = base * (bigEaters > 0 ? 2 : 1);
-    if (cook) cost = Math.max(1, Math.ceil(cost / 2));
-    const stock = Math.max(0, st.food || 0);
-    const dmgBonus = bigEaters > 0 ? .30 : .15;
-    const loyaltyGain = bigEaters > 0 ? 10 : 6;
-    return {
-      cost, stock, dmgBonus, loyaltyGain,
-      bigEaters, cook,
-      eaters: eaters.length,
-      activeEaters: activeEaters.length,
-      held: !!st.feastPending,
-      // 宴は「余剰の使い道」であって、備蓄を削る博打にはしない。
-      // 宴のあとに2戦ぶんの糧食が残らないなら開けない。連打しても飢えないようにする。
-      affordable: stock >= cost + base * 2,
-      possible: eaters.length > 0
-    };
-  },
-
-  holdFeast() {
-    const st = this.state;
-    const q = this.feastQuote();
-    if (st.feastPending || !q.possible || !q.affordable) return null;
-    st.food = Math.max(0, st.food - q.cost);
-    let fed = 0;
-    for (const m of st.roster) {
-      if (Aptitude.of(m).appetite === 0) continue;
-      m.loyalty = U.clamp(m.loyalty + q.loyaltyGain, 0, 100);
-      fed++;
-    }
-    st.feastPending = { dmgBonus: q.dmgBonus, cost: q.cost, fed, bigEaters: q.bigEaters };
-    return st.feastPending;
-  },
-
   prepareBattleRations(notes) {
     const quote = this.battleRationQuote();
     this.state.food = quote.foodAfter;
@@ -883,47 +837,6 @@ const Game = {
   },
 
   // 拠点接収：建設部門に誰も置かないと施設は「存在しない」ままだった。
-  // 勝利した拠点をそのまま接収することで、施工役なしでも1ランに一度だけ最初の施設へ届く。
-  // ただし奪った拠点は目立つ（警戒度+3＝以後の敵が約6%強くなる）。
-  // Lv.2以降は従来どおり建設部門の仕事であり、この入口は「最初のJokerを試す」ためだけにある。
-  // 拠点接収。もとは「勝った拠点をそのまま最初の施設にする」入口だったが、
-  // 施設が城下町の1系統になったので **建材の一度きりの追い風** に置き換えた（2026-09-13）。
-  // 奪った拠点は目立つ（警戒度+1）という代償はそのまま。
-  SEIZE_ALERT_COST: 1,
-  SEIZE_MATERIALS: 3,
-
-  seizeQuote() {
-    return {
-      gain: this.SEIZE_MATERIALS,
-      have: this.state.materials || 0,
-      alertCost: this.SEIZE_ALERT_COST,
-      affordable: true            // 払うものが無くなったので常に受けられる（残すのは表示の互換）
-    };
-  },
-
-  // 表示・sim・実プレイで同じ条件を使う。結果画面でのみ、1ランに一度だけ提示する。
-  canSeizeStronghold() {
-    const st = this.state;
-    if (!st || st.phase !== "result") return false;
-    if (st.seizeUsed) return false;
-    if (!st.lastBattle || !st.lastBattle.victory) return false;
-    return true;
-  },
-
-  seizeStronghold() {
-    if (!this.canSeizeStronghold()) return false;
-    const st = this.state;
-    st.materials += this.SEIZE_MATERIALS;
-    st.seizeUsed = true;
-    st.alert = Math.max(0, st.alert + this.SEIZE_ALERT_COST);
-    if (st.lastBattle && Array.isArray(st.lastBattle.notes)) {
-      st.lastBattle.notes.push(`拠点接収：敵拠点から資材を運び出した（建材 +${this.SEIZE_MATERIALS}`
-        + `／王国警戒度+${this.SEIZE_ALERT_COST} 現在 ${st.alert}）`);
-    }
-    this.save();
-    return true;
-  },
-
   // シナジーの発火条件を数える母集団。出撃隊ではなく軍団全体を渡す。
   // 部門へ回した者も条件に参加できるので、「戦力か経営か」の二択が
   // 「どちらでも同じ札が効く」に変わり、同時発動が起きる。
@@ -947,7 +860,6 @@ const Game = {
   // 数値・発火条件は従来のまま。ここで変えているのは「根拠を持ち回るかどうか」だけである。
   mealPlan(rations) {
     const active = this.activeRoster();
-    const feast = this.state.feastPending;
     const cook = active.find(m => (m.traits || []).includes("demon_cook")) || null;
     const hunger = active.find(m => (m.traits || []).includes("hunger_demon")) || null;
     const consumed = rations ? Math.max(0, Number(rations.consumed) || 0) : 0;
@@ -986,14 +898,12 @@ const Game = {
             .map(m => ({ uid: m.uid, name: m.name, mult: bigEaterMult }))
         : [],
       hungerUid: hunger && rations && rations.emptied ? hunger.uid : null,
-      hungerName: hunger && rations && rations.emptied ? hunger.name : null,
-      feast: feast ? { dmgBonus: feast.dmgBonus, fed: feast.fed } : null
+      hungerName: hunger && rations && rations.emptied ? hunger.name : null
     };
   },
 
   preparedRoster(rations, plan) {
     const active = this.activeRoster();
-    const feast = this.state.feastPending;
     const meal = plan || this.mealPlan(rations);
     const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
     return active.map(m => {
@@ -1001,8 +911,6 @@ const Game = {
       if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= meal.bigEaterMult;
       if (meal.targetUid !== null && m.uid === meal.targetUid) dmgMult *= 1 + meal.boost;
       if (rations && rations.emptied && hungering) { dmgMult *= 2; takenMult *= 1.3; }
-      // 宴を食えた者だけが強くなる。食事不要の軍団に宴の効果はない。
-      if (feast && Aptitude.of(m).appetite > 0) dmgMult *= 1 + feast.dmgBonus;
       // 施設の一律HP・防御補正は撤去した（設計憲法 第9節）。施設Lv.は
       // 大型Jokerが働ける回数（facilityWorks）としてのみ効く。
       const traits=(m.traits||[]).slice();
@@ -1951,8 +1859,6 @@ const Game = {
     // 作戦と征服が進むほど高ティアが出やすい
     // 教訓は出現率を3倍に寄せるだけ。確定ではないので「来なかった」も起こる。
     const favored = new Set((this.activeLesson() || {}).favor || []);
-    // 指名求人：条件に合う者へ重みを寄せる。確定ではないので「出したのに来ない」も起きる。
-    const brief = this.activeBrief();
     const pool = this.templates();
     const weights = pool.map(t => {
       let w;
@@ -1970,14 +1876,6 @@ const Game = {
       // 段階が上がっても「会えたら嬉しい」の位置のまま薄まらない。
       if (t.rarity) w *= t.rarity;
       if (favored.has(t.id)) w *= 3;
-      if (brief) {
-        // 金を払って条件を出した以上は寄る。ただし外れも残す。
-        let hit = false;
-        try { hit = !!brief.match(t); } catch (e) { hit = false; }
-        w = hit ? w * this.BRIEF_WEIGHT : w * 0.35;
-        // 指名求人は「強い奴を寄越せ」でもある。高ティアの目をさらに上げる。
-        if (hit && t.tier >= 2) w *= 1.5;
-      }
       return w;
     });
     const total = weights.reduce((a, b) => a + b, 0);
@@ -2077,83 +1975,6 @@ const Game = {
   REROLL_BASE_COST: 2,
 
   // ── 傭兵市場 ──────────────────────────────
-  // 稼いだ金貨の出口。中盤で略奪した金が終盤の戦闘に対して何もしないのが、
-  // 略奪ビルドが「中盤は無双、終盤で詰む」原因だった（実測：ゴブリン5体は
-  // 第6戦100%→第7戦8%、そして5体そろえたランのクリア率は12%で最低）。
-  // 出撃5枠は壊さず、金貨で**その戦闘だけの6体目**を買えるようにする
-  // （設計憲法 第3節「6体目以降は高コストな特殊解禁として扱う」）。
-  // 同族を雇えば種族シナジーの頭数も増えるので、「硬い者を雇うか、噛み合う者を雇うか」
-  // という判断になる（実測：ゴブリン5＋オーガ傭兵61% vs ＋ゴブリン傭兵91%）。
-  MERCENARY_COSTS: [10, 20],
-  MERCENARY_OFFERS: 2,
-  // 顔なじみ価格。出撃隊に同じ種族がいるほど安く来る（1体につき10%、最大40%引き）。
-  // 傭兵市場だけだと「誰でも雇えば強くなる」に寄り、稼ぐビルドが報われない
-  // （実測：略奪ビルド +20点に対し、稼がないビルドも +17点）。
-  // 種族を統一したコミットに対して「雇いやすさ」で報いる。倍率は増やさない。
-  MERCENARY_KIN_DISCOUNT: 0.1,
-  MERCENARY_MAX_DISCOUNT: 0.4,
-
-  // 出撃隊にいる同じ種族の数（傭兵は数えない＝雇うほど安くなる連鎖は作らない）
-  mercenaryKinCount(race) {
-    return this.activeRoster().filter(m => m.race === race).length;
-  },
-
-  mercenaryBaseCost() {
-    const hired = (this.state.mercenaries || []).length;
-    return this.MERCENARY_COSTS[hired] !== undefined
-      ? this.MERCENARY_COSTS[hired]
-      : Infinity;   // 上限に達したら雇えない
-  },
-
-  // index を渡すとその候補の顔なじみ価格。省略時は割引前の値段
-  mercenaryCost(index) {
-    const base = this.mercenaryBaseCost();
-    if (!Number.isFinite(base) || index === undefined) return base;
-    const offer = this.mercenaryOffers()[index];
-    if (!offer) return base;
-    const discount = Math.min(this.MERCENARY_MAX_DISCOUNT,
-      this.MERCENARY_KIN_DISCOUNT * this.mercenaryKinCount(offer.race));
-    return Math.max(1, Math.round(base * (1 - discount)));
-  },
-
-  // 候補は作戦ごとに固定する。編成をいじるたびに引き直せると、
-  // 「今いる候補で決める」という判断が消えるため。
-  mercenaryOffers() {
-    const st = this.state;
-    if (!Array.isArray(st.mercenaryOffers)) st.mercenaryOffers = [];
-    if (!st.mercenaryOffers.length && (this.state.mercenaries || []).length < this.MERCENARY_COSTS.length) {
-      st.mercenaryOffers = Array.from({ length: this.MERCENARY_OFFERS }, () => {
-        const merc = this.rollApplicant();
-        merc.mercenary = true;
-        return merc;
-      });
-      this.save();
-    }
-    return st.mercenaryOffers;
-  },
-
-  canHireMercenary(index) {
-    const st = this.state;
-    if (!st || !["formation", "preparation"].includes(st.phase)) return false;
-    if ((st.mercenaries || []).length >= this.MERCENARY_COSTS.length) return false;
-    if (!this.mercenaryOffers()[index]) return false;
-    return st.gold >= this.mercenaryCost(index);
-  },
-
-  hireMercenary(index) {
-    if (!this.canHireMercenary(index)) return false;
-    const st = this.state;
-    const cost = this.mercenaryCost(index);
-    const merc = st.mercenaryOffers[index];
-    st.gold -= cost;
-    st.mercenaries = (st.mercenaries || []).concat([{ ...merc, hiredFor: cost }]);
-    st.mercenaryOffers = st.mercenaryOffers.filter((_, i) => i !== index);
-    this.kpi("formationChanged");   // 傭兵も編成の判断
-    this.kpi("mercenaryHired", merc, cost, this.mercenaryKinCount(merc.race) > 0);
-    this.save();
-    return true;
-  },
-
   // 合体の可否と、合体したらどうなるかの見込み。編成画面が判断材料に使う。
   kingSlimePreview() {
     const slimes = this.activeRoster().filter(m => m.race === "スライム").slice(0, 3);
@@ -2188,57 +2009,9 @@ const Game = {
     return true;
   },
 
-  // 戦闘へ出す形にする。給与も戦功も持たない。
-  // 施設の一律補正は撤去したので、自軍と同じく素の値で出る。
-  preparedMercenaries() {
-    return (this.state.mercenaries || []).map(m => ({
-      ...m, battleDmgMult: 1, battleTakenMult: 1
-    }));
-  },
-
-
-  // ── 指名求人 ────────────────────────────
   // 「こういう奴を寄越せ」と条件を指定して出す有料の求人。
   // 中盤から解禁するのは、序盤に狙い撃ちできると「まず何が出るか見る」段階が消えるため。
   // 条件はシナジーの発火条件と同じ語彙なので、これが爆発を自分で狙う手段になる。
-  BRIEF_UNLOCK_LEVEL: 3,
-  BRIEF_BASE_COST: 6,
-  BRIEF_WEIGHT: 6,
-
-  briefUnlocked() {
-    return this.campaignLevel() >= this.BRIEF_UNLOCK_LEVEL;
-  },
-
-  activeBrief() {
-    const id = this.state && this.state.briefId;
-    if (!id) return null;
-    return RECRUIT_BRIEFS.find(b => b.id === id) || null;
-  },
-
-  // 指名は面接ごとに倍々。連打で理想の軍団を組み上げるのは経営judgementを消す。
-  briefCost() {
-    return this.BRIEF_BASE_COST * Math.pow(2, this.state.briefsThisPhase || 0);
-  },
-
-  canPostBrief(briefId) {
-    const st = this.state;
-    if (!st || st.phase !== "recruit" || !this.briefUnlocked()) return false;
-    if (!RECRUIT_BRIEFS.some(b => b.id === briefId)) return false;
-    return st.gold >= this.briefCost();
-  },
-
-  postBrief(briefId) {
-    if (!this.canPostBrief(briefId)) return false;
-    const st = this.state;
-    st.gold -= this.briefCost();
-    st.briefsThisPhase = (st.briefsThisPhase || 0) + 1;
-    st.briefId = briefId;
-    this.genApplicants();
-    // 指名で入れ替えた応募者は、そのまま無料枠で採れる（求人費とは別の話にしない）
-    this.save();
-    return true;
-  },
-
   rerollCost() {
     const n = this.state.rerollsThisPhase || 0;
     if (n < this.FREE_REROLLS) return 0;
@@ -2308,8 +2081,6 @@ const Game = {
     // 採用後も面接は閉じない。次の候補を見て、追加紹介料を払うか自分で終了する。
     if (this.canHire()) {
       st.rerollsThisPhase = 0;   // 新しい面接なので広告費もリセット
-      st.briefsThisPhase = 0;
-      st.briefId = null;
       this.genApplicants();
     } else {
       st.applicants = [];
@@ -2902,20 +2673,9 @@ const Game = {
     }
 
     const battleRations = openingBattle ? null : this.prepareBattleRations(notes);
-    const feastUsed = st.feastPending;
     // 食事の伝票は倍率を掛ける前に一度だけ作り、戦闘入力・戦果・予告で同じものを読む（V2a）
     const mealPlan = battleRations ? this.mealPlan(battleRations) : null;
     const playerUnits = this.preparedRoster(battleRations, mealPlan).map(m => Battle.makeUnit(m, "player"));
-    if (feastUsed) {
-      notes.push(`宴の余韻：${feastUsed.fed}名が満腹のまま戦場へ出た（与ダメージ+${Math.round(feastUsed.dmgBonus * 100)}%）`);
-      st.feastPending = null;
-    }
-    // 雇った傭兵は出撃5枠の外から加わる。戦闘が終われば去る（次の戦闘には残らない）
-    for (const merc of this.preparedMercenaries()) {
-      const unit = Battle.makeUnit(merc, "player");
-      unit.flags.mercenary = true;
-      playerUnits.push(unit);
-    }
     const stageData = this.stageData();
     // ビルド試行の判定は戦闘前に取る（戦死・合体で編成が変わる前の「何を試したか」を見るため）
     this.kpi("battleStarted", st, stageData);
@@ -2933,8 +2693,9 @@ const Game = {
       cookUid: playerUnits.find(u => u.traits.includes("demon_cook"))?.uid || null,
       bigEaterUids: playerUnits.filter(u => u.traits.includes("big_eater")).map(u => u.uid),
       hungerUid: playerUnits.find(u => u.traits.includes("hunger_demon"))?.uid || null,
-      feastUid: battleRations.consumed >= 4
-        ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null,
+      // 宴は撤去した（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）。
+      // battle.js がまだこの鍵を読むので、null 固定で残してある（読む側の削除は別のコミット）。
+      feastUid: null,
       // V2a: 食事強化の起点・対象・効果量。battle.js はまだ読んでいないが、
       // 追加フィールドは無視されるだけで発火順・回数・chainDepth を変えない。
       // 因果イベントとして出すのは V2b（battle.js 側）の仕事。
@@ -3008,12 +2769,10 @@ const Game = {
         .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
         .map(u => u.id).filter(Boolean)
     };
-    // 号令の節目がある戦闘は、答えを聞くまで戦闘の中身が確定しない。記録（発見・最大CHAIN・KPI）は
-    // 確定してから取る（answerOrder）。それ以外はここで確定させる。
-    if (!(options.offerRetreat && result.orderOffer)) this.recordBattleResult(pending);
-    // 退く道か号令の節目がある戦闘だけ、UI の求めに応じて決着を保留する。
+    this.recordBattleResult(pending);
+    // 退く道がある戦闘だけ、UI の求めに応じて決着を保留する。
     // 保留中はラン状態を一切変えない（所持金・名簿・警戒度は答えを聞いてから動く）。
-    if (options.offerRetreat && (result.retreatOffer || result.orderOffer)) {
+    if (options.offerRetreat && result.retreatOffer) {
       st.pendingBattle = pending;
       st.phase = "battle";
       this.save();
@@ -3096,79 +2855,11 @@ const Game = {
   },
 
   // 号令に答える。UI だけが呼ぶ。unitId が null／"none" なら任せる（計算済みの結末のまま）。
-  // 名指しなら同じ種・同じ入力で計算し直す。提案の手前までは同じ展開、そこから先だけ分岐する。
-  // 戻り値：新しいタイムライン（計算し直した場合）か null（変わらない場合）。
-  // 決着は、撤退の提案がまだ後に控えていなければここで行う（settleBattle と同じ二経路）。
-  // 節目は戦況が動くたびに来る。答えは pending.orders に積み、名指しのたびに同じ種で計算し直す。
-  // 次の提案は計算し直したタイムラインの中から拾う（UI は order_offer に当たるたびにここを呼ぶ）。
-  nextOrderOffer(pending) {
-    const offers = (pending.result && pending.result.orderOffers) || (pending.result && pending.result.orderOffer ? [pending.result.orderOffer] : []);
-    const answered = pending.answeredRounds || {};
-    return offers.find(o => !answered[o.round]) || null;
-  },
-  answerOrder(unitId) {
-    const st = this.state;
-    const pending = st.pendingBattle;
-    if (!pending || !pending.result) return null;
-    const offer = this.nextOrderOffer(pending);
-    if (!offer) return null;
-    pending.answeredRounds = pending.answeredRounds || {};
-    pending.answeredRounds[offer.round] = true;
-    pending.orders = pending.orders || {};
-    let changed = null;
-    const chosen = unitId && unitId !== "none" && offer.candidates.some(c => c.unitId === unitId) ? unitId : null;
-    if (chosen && pending.replay) {
-      const rp = pending.replay;
-      const playerUnits = JSON.parse(JSON.stringify(rp.playerUnits));
-      const enemyUnits = JSON.parse(JSON.stringify(rp.enemyUnits));
-      const orders = Object.assign({}, pending.orders, { [offer.round]: chosen });
-      const options = Object.assign({}, rp.options, { orders });
-      const result = Battle.simulate(playerUnits, enemyUnits, options);
-      // 前半が一致しないなら（乱数の消費が食い違った）、命じなかった結末を使う。黙って別の戦闘にしない。
-      const same = result.timeline.length > offer.index
-        && pending.result.timeline.slice(0, offer.index).every((e, i) => e.type === result.timeline[i].type);
-      if (same) {
-        pending.result = result;
-        pending.orders = orders;
-        pending.ordered = { unitId: chosen, round: offer.round };
-        changed = result.timeline;
-        // 気合を引く。名指しした瞬間に払う（決着で出撃の +1 が戻るので実質 cost−1）。
-        const cand = offer.candidates.find(c => c.unitId === chosen);
-        const unit = rp.playerUnits.find(u => u.id === chosen);
-        const monster = unit && unit.uid != null ? st.roster.find(m => m.uid === unit.uid) : null;
-        if (monster && cand && typeof monster.spirit === "number") monster.spirit = Math.max(0, monster.spirit - (cand.cost || 0));
-        if (monster && cand) this.trace("ordered", monster.uid, null, { skill: cand.skillName, round: offer.round });
-        st.orderCount = (st.orderCount || 0) + 1;
-      }
-    }
-    // まだ後に提案（撤退か次の号令）が控えていれば決着は待つ。
-    const retreatLater = pending.result.retreatOffer && pending.result.retreatOffer.index > offer.index && !pending.retreatAnswered;
-    const orderLater = !!this.nextOrderOffer(pending);
-    if (!retreatLater && !orderLater) {
-      this.recordBattleResult(pending);
-      st.pendingBattle = null;
-      this.settleContinue(pending);
-    } else {
-      this.save();
-    }
-    return changed;
-  },
-
   // 撤退の提案に答える。UI だけが呼ぶ。戻り値は決着後のフェーズ名。
   settleBattle(choice) {
     const st = this.state;
     const pending = st.pendingBattle;
     if (!pending) return false;
-    if (choice !== "retreat") {
-      // 号令の節目が撤退の提案より後に控えていれば、続行の答えだけ覚えて決着は号令の答えを待つ。
-      const offer = this.nextOrderOffer(pending);
-      const retreat = pending.result && pending.result.retreatOffer;
-      if (offer && retreat && offer.index > retreat.index) {
-        pending.retreatAnswered = true;
-        this.save();
-        return st.phase;
-      }
-    }
     st.pendingBattle = null;
     if (choice === "retreat") this.settleRetreat(pending);
     else this.settleContinue(pending);
@@ -3409,11 +3100,6 @@ const Game = {
       // 旧セーブにこの鍵は無い。読む側は「無ければV1表示」で、推定生成してはいけない。
       chainView,
       overkillSummary: result.overkillSummary,
-      // 戦意（momentum）の到達倍率。戦闘中は帯に出続けるが、終わると消えてしまい
-      // 「今日はどれだけ乗ったのか」が戦果に残らなかった。タイムラインから導出するだけで、
-      // 戦闘式・数値は変えていない。古いセーブには無いので表示側で 1 として扱う。
-      momentumPeak: (result.timeline || []).reduce((max, e) =>
-        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
       // 施設は「誰の手柄か」を個人へ付けない代わりに、戦果へ短い要約として残す。
       // 共通補正（Lv）と稼働施設（Joker）を分けて書き、どちらを体感したか読めるようにする。
@@ -3435,12 +3121,6 @@ const Game = {
     };
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, result.victory);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
-    // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
-    if ((st.mercenaries || []).length) {
-      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
-    }
-    st.mercenaries = [];
-    st.mercenaryOffers = [];
 
     // この決着ぶんの回復を先に済ませてから、稽古で倒れた者へ負傷を付ける
     // （順番を逆にすると、付けた負傷がその場で治る。settleRetreat と同じ作法）。
@@ -3613,8 +3293,6 @@ const Game = {
       chainSummary: result.chainSummary,
       chainView,
       overkillSummary: result.overkillSummary,
-      momentumPeak: (result.timeline || []).reduce((max, e) =>
-        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
       facility: this.facilityReport(),
       facilitySummary: (this.tallyFacilityStats(result.facilitySummary), result.facilitySummary || { facilities: [], rescuedFromWipe: false }),
@@ -3626,11 +3304,6 @@ const Game = {
     };
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, false);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
-    if ((st.mercenaries || []).length) {
-      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
-    }
-    st.mercenaries = [];
-    st.mercenaryOffers = [];
 
     // 王国の反撃の判定は決着の最後（続行側と同じ場所）。
     if (st.phase !== "gameover") this.checkCounterattack();
@@ -4413,8 +4086,7 @@ const Game = {
     // ここから下は「ほぼ全ランで起きる普通の行動」。修飾は珍しさを表すためにあるので、
     // 他に何も言うことがないランだけがこの名前を名乗る。
     // 50ラン計測で上位に置いたところ、名前の半分以上がこの2つに occupied された。
-    { id: "retry", test: r => (r.retriesUsed || 0) >= 1, phrase: () => "一度死に損なった" },
-    { id: "seized", test: r => !!r.seizeUsed, phrase: () => "拠点を接収した" }
+    { id: "retry", test: r => (r.retriesUsed || 0) >= 1, phrase: () => "一度死に損なった" }
   ],
 
   // 中核は、発見したシナジーがあればそれを名乗る。無ければ主力種族。
@@ -4464,7 +4136,6 @@ const Game = {
       }),
       roster: (st.roster || []).map(m => m.uid).sort((a, b) => a - b),
       departments: Object.fromEntries((st.roster || []).map(m => [m.uid, this.departmentOf(m).id])),
-      mercenaries: (st.mercenaries || []).map(m => m.name),
       facility: this.townSignature(),
       payroll: st.payrollPolicy || "regular",
       merge: st.kingSlimeMerge !== false,
@@ -4478,7 +4149,7 @@ const Game = {
     if (!next) return null;
     const none = {
       first: !prev, hired: [], deployed: [], benched: [], reassigned: [],
-      reordered: false, mercenaries: [], facility: null, payroll: null,
+      reordered: false, facility: null, payroll: null,
       merge: false, mission: null, changedUids: []
     };
     if (!prev) return none;
@@ -4503,7 +4174,6 @@ const Game = {
     const changed = new Set([...hired, ...deployed, ...reassigned].map(d => d.uid));
     return {
       first: false, hired, deployed, benched, reassigned, reordered,
-      mercenaries: next.mercenaries.filter(name => !prev.mercenaries.includes(name)),
       facility: prev.facility !== next.facility ? { from: prev.facility, to: next.facility } : null,
       payroll: prev.payroll !== next.payroll ? { from: prev.payroll, to: next.payroll } : null,
       merge: prev.merge !== next.merge,
@@ -4620,7 +4290,6 @@ const Game = {
       // 旧魔界史にこの鍵は無い。無ければ表示しないのが正しく、推定生成してはいけない。
       memory: st.memory || null,
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
-      seizeUsed: !!st.seizeUsed,
       date: new Date().toISOString().slice(0, 10)
     };
     // 名前は record が出揃ってから付ける（材料は record の中だけ）
@@ -4860,8 +4529,6 @@ const Game = {
     st.pendingVacancies = 0;
     st.rerollsThisPhase = 0;
     // 指名は面接1回ぶん。次の面接へは持ち越さない（払い続けないと狙い撃ちできない）
-    st.briefsThisPhase = 0;
-    st.briefId = null;
     st.pendingEvent = null;
     st.eventOutcome = null;
     st.eventCast = null;

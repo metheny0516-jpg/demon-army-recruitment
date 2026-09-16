@@ -29,7 +29,7 @@ const assert = (cond, msg) => { if (!cond) throw new Error(msg); console.log(`�
 const run = (over) => ({
   gen: 1, demonKingId: 'standard', startedAt: 0, endedAt: 1, cleared: false, conquest: 0,
   battles: 3, buildAttempts: 2, formationChanges: 1, speedChanges: 0, logSkips: 0, reportSkips: 0,
-  mercenariesHired: 0, mercenaryGold: 0, kinHires: 0, mergesRefused: 0, paidHires: 0, paidHireGold: 0,
+  mergesRefused: 0, paidHires: 0, paidHireGold: 0,
   triggerKinds: { 'trait:greedy': 3, 'facility:graveyard': 1 },
   chainMax: 0, chainAbilityMax: 0, chainSample: null, chainBattles: 3,
   retriesUsed: 0, sessionRun: 1, quickRetry: false, seconds: 600, ...over
@@ -249,8 +249,8 @@ assert(JSON.stringify(KPI.load().runs.map(r => [r.chainDefVersion, r.chainMax]))
 // ── 6. 既存V1 KPIのJSON契約を壊していない ──────────────
 const kept = KPI.load().runs[0];
 for (const key of ['gen', 'demonKingId', 'startedAt', 'endedAt', 'cleared', 'conquest', 'battles',
-  'buildAttempts', 'formationChanges', 'speedChanges', 'logSkips', 'reportSkips', 'mercenariesHired',
-  'mercenaryGold', 'kinHires', 'mergesRefused', 'paidHires', 'paidHireGold', 'triggerKinds',
+  'buildAttempts', 'formationChanges', 'speedChanges', 'logSkips', 'reportSkips',
+  'mergesRefused', 'paidHires', 'paidHireGold', 'triggerKinds',
   'chainMax', 'chainAbilityMax', 'chainSample', 'chainBattles', 'retriesUsed', 'sessionRun',
   'quickRetry', 'seconds']) {
   if (!(key in kept)) throw new Error(`既存KPIの鍵が消えている: ${key}`);

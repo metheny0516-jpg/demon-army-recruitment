@@ -662,7 +662,7 @@ const UI = {
       : tab === "advisor" ? this.advisorCastlePanel()
       : tab === "town" && typeof TownUI !== "undefined" ? TownUI.panel() : this.armyPanel({ controls: true });
     if (options.formation) content += `<div class="formation-decisions">
-      ${this.payrollPanel()}${this.debtPanel()}${this.feastPanel()}${this.mercenaryPanel()}
+      ${this.payrollPanel()}${this.debtPanel()}${this.hungerPanel()}
       ${this.kingSlimePanel()}${this.vaultPanel()}
     </div>`;
     const tabs = options.formation ? "" : `<nav class="castle-tabs" aria-label="城のメニュー">
@@ -1073,35 +1073,14 @@ const UI = {
   },
 
   // 余った食料の使い道。備蓄が積み上がるだけの資源だったので、判断に変える。
-  feastPanel() {
-    const q = Game.feastQuote();
+  // 飢餓の出口（宴の札に同居していたが、宴の撤去で行き場が無くなったので独立させた。
+  // docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1。飢餓そのものは撤去していない）。
+  hungerPanel() {
     const streak = Game.state.hungerStreak || 0;
-    // 飢餓は損失で終わらない。出口が見えていないと、また「不足＝詰み」に戻る。
-    const hunger = streak > 0
-      ? `<div class="hunger-streak">🥀 飢餓 ${streak}戦目 —
-          あと${Game.HUNGER_ADAPT_TURNS - streak}戦を生き延びた者は<b>飢餓適応</b>（食料を消費しない／最大HP-15%）</div>`
-      : "";
-    if (!q.possible) {
-      return `<div class="panel feast-panel"><h3>🍗 宴</h3>
-        <div class="muted">この軍団は誰も食事を必要としない。宴は開けない。</div>${hunger}</div>`;
-    }
-    const links = [
-      q.bigEaters > 0 ? `大食漢${q.bigEaters}体：食う量2倍・効果2倍` : "",
-      q.cook ? "魔界料理人：必要な食料が半分" : ""
-    ].filter(Boolean);
-    const body = q.held
-      ? `<div class="feast-ready">宴は済んだ。${U.esc(String(Game.state.feastPending.fed))}名が満腹で出撃する（食う者の与ダメージ+${Math.round(Game.state.feastPending.dmgBonus * 100)}%）</div>`
-      : `<button class="wide" data-action="feast" ${q.affordable ? "" : "disabled"}>
-           🍗 宴を開く（食料 ${q.cost} 消費）
-         </button>
-         <div class="muted">${q.affordable
-            ? `食う者${q.eaters}名の忠誠+${q.loyaltyGain}、出撃した食う者の与ダメージ+${Math.round(q.dmgBonus * 100)}%（次の戦闘のみ）。`
-            : `備蓄 ${q.stock}。宴には ${q.cost} と、2戦ぶんの糧食を残す余裕が要る。`}</div>`;
-    return `<div class="panel feast-panel">
-      <h3>🍗 宴 <span class="muted">備蓄 ${q.stock} / 上限 ${Game.foodCapacity()}</span></h3>
-      ${body}
-      ${links.length ? `<div class="synergy-hint">${links.map(U.esc).join(" / ")}</div>` : ""}
-      ${hunger}
+    if (!streak) return "";
+    return `<div class="panel hunger-panel">
+      <div class="hunger-streak">🥀 飢餓 ${streak}戦目 —
+        あと${Game.HUNGER_ADAPT_TURNS - streak}戦を生き延びた者は<b>飢餓適応</b>（食料を消費しない／最大HP-15%）</div>
     </div>`;
   },
 
@@ -1206,40 +1185,6 @@ const UI = {
 
   // 稼いだ金貨の出口。出撃5枠を壊さず「その戦闘だけの6体目」を買う。
   // 同族を雇えば種族シナジーの頭数も増えるので、硬い者と噛み合う者のどちらを取るかが判断になる。
-  mercenaryPanel() {
-    const st = Game.state;
-    const hired = st.mercenaries || [];
-    const offers = Game.mercenaryOffers();
-    const base = Game.mercenaryBaseCost();
-    const full = hired.length >= Game.MERCENARY_COSTS.length;
-    const hiredHtml = hired.length
-      ? `<div class="merc-hired">雇用中：${hired.map(m =>
-          `<span class="merc-chip">${this.icon(m.race)} ${U.esc(m.name)}（${U.esc(m.race)}）${m.hiredFor}G</span>`).join("")}</div>`
-      : "";
-    const cards = full ? "" : offers.map((m, i) => {
-      const cost = Game.mercenaryCost(i);
-      const kin = Game.mercenaryKinCount(m.race);
-      const afford = st.gold >= cost;
-      return `<div class="merc-card">
-        <div class="merc-name">${this.icon(m.race)} <b>${U.esc(m.name)}</b>
-          <span class="muted">${U.esc(m.race)}／${U.esc(m.job)}</span></div>
-        <div class="merc-stats">HP ${m.hp}・攻 ${m.atk}・防 ${m.def}・速 ${m.spd}</div>
-        <div class="merc-traits">${this.traitHtml(m.traits)}</div>
-        ${cost < base ? `<div class="merc-kin">🤝 顔なじみ価格 ${base}G → <b>${cost}G</b>
-          <span class="muted">（出撃隊に${U.esc(m.race)}が${kin}体）</span></div>` : ""}
-        <button class="small primary" data-action="hiremerc" data-index="${i}" ${afford ? "" : "disabled"}>
-          ${afford ? `${cost}G で雇う` : `${cost}G 必要（所持 ${st.gold}G）`}</button>
-      </div>`;
-    }).join("");
-    return `<div class="panel merc-panel">
-      <h3>🗡 傭兵市場 <span class="muted">— この戦闘だけの助っ人</span></h3>
-      <div class="muted">出撃5枠の外から加わる。給与も戦功も持たず、戦闘が終われば去る。
-        ${full ? "これ以上は雇えない。" : `次の1名は ${base}G（出撃隊に同じ種族がいるほど安くなる）。`}</div>
-      ${hiredHtml}
-      ${cards ? `<div class="merc-list">${cards}</div>` : ""}
-    </div>`;
-  },
-
   // シナジーだけ見せても「混ぜると倍率を二重に失う」の片方しか見えない。
   // 《群れの本能》のように編成で決まる特性も、実際に測った倍率で出す。
   traitSynergyHtml(roster) {
@@ -1487,26 +1432,6 @@ const UI = {
       <div class="spacer" style="height:8px"></div>
       <div class="member-rows">${st.roster.map(m => this.memberRow(m, { controls: false })).join("")}</div>
     </div>` : "";
-    // 指名求人：金を払って「こういう奴を寄越せ」と条件を出す。中盤から解禁。
-    // 条件をシナジーの発火条件と同じ語彙にしてあるので、狙って揃える手段になる。
-    const briefPanel = (() => {
-      if (!Game.briefUnlocked()) return "";
-      const cost = Game.briefCost();
-      const active = Game.activeBrief();
-      const buttons = RECRUIT_BRIEFS.map(b => `
-        <button class="brief-option ${active && active.id === b.id ? "selected" : ""}"
-          data-action="brief" data-brief="${b.id}" ${Game.canPostBrief(b.id) ? "" : "disabled"}>
-          <span class="brief-title">${b.icon} ${U.esc(b.name)}</span>
-          <span class="brief-note">${U.esc(b.note)}</span>
-        </button>`).join("");
-      return `<div class="panel brief-panel">
-        <h3>📣 指名求人 <span class="muted">— 求人費 ${cost}G（出すたび倍）</span></h3>
-        <div class="muted">条件を指定して求人を出し直す。合う者が来やすくなり、格上も出やすくなる。
-          ${active ? `いまの指名：<b>${active.icon} ${U.esc(active.name)}</b>` : "確実ではない。来ないこともある。"}</div>
-        <div class="brief-options">${buttons}</div>
-        ${st.gold < cost ? `<div class="payroll-warning">指名には ${cost}G 必要（現在 ${st.gold}G）</div>` : ""}
-      </div>`;
-    })();
     this.set(`${this.hud()}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
@@ -1530,7 +1455,6 @@ const UI = {
         <div class="cards recruit-applicants">${cards}</div>
         <div class="recruit-roster">${rosterPanel}</div>
       </div>
-      ${briefPanel}
       <div class="spacer"></div>
       <div class="row">
         <button data-action="reroll" ${Game.canReroll() ? "" : "disabled"}>
@@ -1751,9 +1675,8 @@ const UI = {
         <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を ${Game.facilityLv("grand_kitchen") + 1} 倍にする。</span>
       </div>` : ""}
       ${opening ? "" : this.debtPanel()}
-      ${opening ? "" : this.feastPanel()}
       ${this.payrollPanel()}
-      ${opening ? "" : this.mercenaryPanel()}
+      ${opening ? "" : this.hungerPanel()}
       ${this.kingSlimePanel()}
       ${this.vaultPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 留守番から最低1体を出せ。</div>` : ""}
@@ -1783,7 +1706,6 @@ const UI = {
   battleManual(out) {
     this.set(BattleScene.shell(out.stageData));
     BattleScene.onRetreatChoice = null;
-    BattleScene.onOrderChoice = null;
     BattleScene.playManual(out.handle, result => Game.finishManualBattle(result));
   },
 
@@ -1794,7 +1716,6 @@ const UI = {
     // 保留されていない戦闘（提案が出なかった／開幕の防衛戦）では settleBattle が false を返すだけ。
     BattleScene.onRetreatChoice = choice => Game.settleBattle(choice);
     // 号令の答え。名指しなら run.js が同じ種で計算し直した新しいタイムラインを返し、描画側が差し替える。
-    BattleScene.onOrderChoice = unitId => Game.answerOrder(unitId);
     BattleScene.play(result.timeline);
   },
 
@@ -1922,16 +1843,6 @@ const UI = {
         (wiped || b.lostOnPoints) ? this.nearMissPanel(b.nearMiss) : ""}
       ${this.skillUnlockPanel(b)}
       ${this.earnedTraitPanel(b)}
-      ${Game.canSeizeStronghold() ? (() => {
-        const q = Game.seizeQuote();
-        return `<div class="panel seize-panel">
-        <h3>🏴 この拠点を接収するか</h3>
-        <div class="muted">勝ち取った拠点から資材を運び出す。<b>このランで1度きり</b>だ。<br>
-          得るもの：建材 <b>+${q.gain}</b>（備蓄 ${q.have}）。
-          代償：王国警戒度 <b>+${q.alertCost}</b>——奪った拠点は目立つ。以後の敵は少し強くなる。</div>
-        <button class="primary wide" data-action="seize">🏴 拠点から資材を運び出す</button>
-      </div>`; })() : ""}
-
       <div class="panel payroll-result">
         <h3>${payrollPolicy.icon} 給与報告：${U.esc(payrollPolicy.name)}</h3>
         <div>支払額 <b>${payrollReport.paid || 0}G</b>／通常額 ${payrollReport.base || 0}G</div>

@@ -124,14 +124,15 @@ const FX = ['heavy', 'slash_multi', 'fire', 'dark', 'holy', 'nature', 'wind', 'a
   ok(marks.before.cover === 1 && marks.before.covering, 'かばいの印と縁取り');
   ok(marks.after === 0, `次のラウンド頭で全部消える（残り${marks.after}）`);
   // 燃焼は「燃え移る技」だけ
+  // 印は着弾のときに付く。戦闘の尺が伸びた（2026-09-16 の c4c5e52）ぶん、待ちも伸ばす。
   await page.evaluate(() => BattleScene.render({ type: 'attack', fromId: 'p0', toId: 'e2', dmg: 5, hp: 70, maxHp: 100, fx: 'fire', skillId: 'lich_pulse', aoe: false, emphasis: 1 }));
-  await page.waitForTimeout(500);
+  await page.waitForFunction(() => document.querySelectorAll('#bu-e2 .bu-mark-burn').length > 0, null, { timeout: 5000 }).catch(() => {});
   const withBurn = await page.evaluate(() => document.querySelectorAll('#bu-e2 .bu-mark-burn').length);
   await page.evaluate(() => {
     BattleScene.render({ type: 'round_start', round: 3 });
     BattleScene.render({ type: 'attack', fromId: 'p0', toId: 'e2', dmg: 5, hp: 65, maxHp: 100, fx: 'fire', skillId: 'mage_fireball', aoe: false, emphasis: 1 });
   });
-  await page.waitForTimeout(500);
+  await page.waitForTimeout(2000);
   const burn = { withBurn, without: await page.evaluate(() => document.querySelectorAll('#bu-e2 .bu-mark-burn').length) };
   ok(burn.withBurn === 1, `燃焼を残す技には炎の印（${burn.withBurn}）`);
   ok(burn.without === 0, `残さない技（火球）には付かない（${burn.without}）`);
