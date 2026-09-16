@@ -60,6 +60,9 @@ const Game = {
       // 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md 段階A）。
       // 落とした土地・従えた部族が領土になる。征服度は決着ごとにここから写す。
       territory: { lands: [], tribes: [] },
+      // 名前のある敵将（docs/SPEC_CAPTAINS_BD_2026-09-15.md）。討った・見逃した・雇ったを覚える。
+      captains: {},
+      settles: 0,          // 決着の数（「⚠ ○○がいる」札の周期）
       raided: {},          // 略奪した土地 → 回数（次に落とすとき守備が硬い）
       patrolCount: 0,      // 巡回で戦った回数（sim の列）
       gold: demonKing.start.gold,
@@ -333,6 +336,8 @@ const Game = {
     // 領土（段階A）。旧セーブは空（魔王城だけ）から始める。征服度は今の値を残す
     // （次の決着で Territory.conquestOf に置き換わるまで、段階表の見え方は変わらない）。
     if (typeof Territory !== "undefined") Territory.init(st);
+    if (typeof Captains !== "undefined") Captains.init(st);
+    if (typeof st.settles !== "number") st.settles = Number(st.turn) || 0;
     if (!st.raided || typeof st.raided !== "object") st.raided = {};
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     const legacyCampaign = st.conquest === undefined;
@@ -1588,7 +1593,95 @@ const Game = {
       formationHint: formation.hint,
       units: training ? this.trainingUnits(units, opponent) : (isOutpost ? this.outpostUnits(units) : units)
     };
-    return place ? this.dressPlaceMission(mission, type, place) : mission;
+    if (place) this.dressPlaceMission(mission, type, place);
+    return this.attachCaptains(mission, place, type, scale);
+  },
+
+  // 名前のある敵将を隊列の先頭に乗せる（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
+  // 乗せ方は4つ：部族の首領・関門の将軍・「⚠ ○○がいる」札・不意打ち。
+  // 討った者と雇った者は二度と出ない（見逃した者も既定では出ない）。
+  attachCaptains(mission, place, type, scale) {
+    if (typeof Captains === "undefined" || mission.training || !mission.units) return mission;
+    const st = this.state;
+    Captains.init(st);
+    const ids = [];
+    const alive = id => { const s = Captains.state(st, id).status; return s !== "slain" && s !== "hired"; };
+    const add = id => {
+      if (!id || ids.includes(id) || !Captains.get(id) || !alive(id)) return false;
+      mission.units = Captains.attach(mission.units, id, st, 1);
+      ids.push(id);
+      return true;
+    };
+    const land = place && typeof Territory !== "undefined" ? Territory.byId(place.id) : null;
+    // 1. 部族の首領：その部族圏を従えに行けば必ず守っている
+    if (land && land.chief) add(land.chief.id);
+    // 2. 関門の将軍（王都の砦のガレス）
+    if (land) for (const id of Captains.ids()) if (Captains.get(id).gate === land.id) add(id);
+    // 3. 「⚠ ○○がいる」札：3決着に1回、糸ごとに一人
+    if (land && !ids.length && !mission.counterattack) {
+      const thread = ["village", "hamlet"].includes(land.kind) ? "village"
+        : ["checkpoint", "fort", "port", "temple", "town", "capital"].includes(land.kind) ? "kingdom" : null;
+      const pick = thread ? Captains.pickForCard(st, thread, st.settles || 0) : null;
+      if (pick && add(pick)) {
+        const c = Captains.get(pick);
+        mission.captainCard = { id: pick, short: c.short || c.name };
+        mission.missionTitle = `⚠ ${c.short || c.name}がいる　${mission.missionTitle}`;
+        mission.reward = Math.max(1, Math.round(mission.reward * Captains.rules().bountyMult));
+      }
+    }
+    // 4. 不意打ち：前哨を踏んでいない作戦だけ（訓練・防衛は起きない）
+    if (!ids.length && !mission.counterattack && type.id !== "train" && type.id !== "defend"
+      && mission.missionPhase !== "outpost" && !mission.twoStage) {
+      const hall = this.hallAmbushPool();
+      const hit = Captains.ambush(st, st.alert, U.rand, hall.length > 0);
+      if (hit && hit.kind === "captain") { if (add(hit.id)) mission.ambush = { kind: "captain", id: hit.id }; }
+      else if (hit && hit.kind === "hall" && hall.length) {
+        const who = U.pick(hall);
+        mission.units = [this.hallAmbushUnit(who, scale)].concat(mission.units);
+        mission.ambush = { kind: "hall", name: who.name };
+      }
+    }
+    // 最終戦（都）の顔ぶれ（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-3）。
+    // 勇者アレンの隣に「討たなかった者」が立つ。雇った者はこちらにいるので外れる。
+    if (land && land.kind === "capital") {
+      mission.units = Captains.heroParty(st, mission.units, 1);
+      for (const u of mission.units) if (u.captain && u.captain.id) ids.push(u.captain.id);
+      // 師（ガレス）を討たれた勇者は覚醒が早い（50% → 70%）。癖の表は触らない。
+      if (Captains.state(st, "gareth").status === "slain") {
+        const hero = mission.units.find(u => u.role === "commander");
+        if (hero) hero.awakenAt = 0.7;
+        mission.heroAwakened = true;
+      }
+      // 雇った敵将がこちらの隊列にいると、勇者は開戦で気づく
+      const hired = (st.roster || []).some(m => m.captainId && st.activeUids.includes(m.uid));
+      if (hired) {
+        mission.heroNoticesHired = true;
+        const hero = mission.units.find(u => u.role === "commander");
+        if (hero) hero.introQuote = "……お前も、そちらか。";   // 開戦の一言（battle.js の dialogue が読む）
+      }
+      mission.heroParty = mission.units.filter(u => u.captain).map(u => u.name);
+      st.lastHeroParty = mission.heroParty;   // sim の列（最終戦が既定の3人だけか、混成か）
+    }
+    mission.captainIds = ids;
+    return mission;
+  },
+
+  // 先代の英雄（過去ランの殿堂入り）。名前と種族だけを借りて、敵として一度だけ立つ。
+  hallAmbushPool() {
+    const history = typeof Storage !== "undefined" && Storage.loadHistory ? Storage.loadHistory() : [];
+    return (history || []).map(r => r && r.hallOfFame).filter(h => h && h.name && h.tplId);
+  },
+  hallAmbushUnit(who, scale) {
+    const stages = this.actStages();
+    const base = stages[U.clamp(this.armyLevel() - 1, 0, stages.length - 1)];
+    const model = (base.units || [])[0] || { hp: 40, atk: 10, def: 4, spd: 6 };
+    const k = scale || 1;
+    return {
+      name: `先代の${who.name}`, tplId: who.tplId, race: who.race, role: "brute", icon: "🏅",
+      hp: Math.round(model.hp * 1.3 * k), atk: Math.round(model.atk * 1.2 * k),
+      def: Math.round(model.def * 1.1 * k), spd: model.spd,
+      traits: [], captain: { id: "hall:" + who.name, offer: null }
+    };
   },
 
   // 場所の札の見た目と印（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
@@ -3101,6 +3194,7 @@ const Game = {
     this.recordBattleResult(pending);   // 号令で保留した戦闘はここで初めて確定する（済んでいれば何もしない）
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
     this.consumeBattleRations(result, notes);
+    this.settleCaptains(stageData, result, notes);   // 敵将：討った・見逃した・雇った
     // 城下町：防衛戦に負けた決着は税収が無い（processDepartments が読む）。勝ちも遠征も false
     st.lastRansacked = this.isDefenseBattle(stageData) && !result.victory;
     const goldBefore = st.gold;
@@ -3380,6 +3474,7 @@ const Game = {
     this.recordBattleResult(pending);
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
     this.consumeBattleRations(result, notes);
+    this.settleCaptains(stageData, result, notes);   // 退いた戦いでも、見逃した・雇った者は記録に残る
     st.lastRansacked = this.isDefenseBattle(stageData);   // 城下町：防衛戦から退いた決着も税収は無い
     const goldBefore = st.gold;
     const lostOnPoints = !!options.lostOnPoints;
@@ -3704,8 +3799,57 @@ const Game = {
     return won ? "main-cleared" : "main-lost";
   },
 
+  // 敵将の決着（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
+  // 討てば首級（報酬と名声）、雇えば名簿に増える、見逃せば去る。
+  // 状態の更新そのものは Captains.settle に任せる（captains.js は触らない）。
+  settleCaptains(mission, result, notes) {
+    if (typeof Captains === "undefined" || !mission) return null;
+    const st = this.state;
+    const ids = mission.captainIds || [];
+    if (!ids.length && !(result.spared || []).length) return null;
+    const before = {};
+    for (const id of ids) before[id] = Captains.state(st, id).status;
+    Captains.settle(st, result, ids);
+    const rules = Captains.rules();
+    const out = { slain: [], spared: [], hired: [] };
+    for (const id of ids) {
+      const now = Captains.state(st, id).status;
+      if (now === before[id]) continue;
+      const c = Captains.get(id); if (!c) continue;
+      const short = c.short || c.name;
+      if (now === "slain") {
+        const bounty = Math.max(1, Math.round(mission.reward * (rules.bountyMult - 1)));
+        st.gold += bounty;
+        st.fame = (st.fame || 0) + (rules.fame || 0);
+        out.slain.push(short);
+        notes.push(`${short}を討った。首級 +${bounty}G`);
+        this.trace("captain_slain", null, null, { id, name: short });
+      } else if (now === "spared") { out.spared.push(short); notes.push(`${short}を見逃した。戦場を去っていった`); }
+    }
+    // 雇った者は名簿へ（rollApplicant と同じ形の1体。名前は敵将の short）
+    for (const x of result.spared || []) {
+      if (x.kind !== "hire") continue;
+      const c = Captains.get(x.id); if (!c || !c.hire) continue;
+      const m = this.rollApplicant(c.hire.race);
+      m.name = c.short || c.name;
+      m.loyalty = c.hire.loyalty;
+      m.job = c.hire.job || m.job;
+      if (c.hire.trait && !(m.traits || []).includes(c.hire.trait)) m.traits = (m.traits || []).concat(c.hire.trait);
+      m.captainId = x.id;
+      st.roster.push(m);
+      this.memberRecord(m);
+      this.baseOf(m);
+      out.hired.push(m.name);
+      notes.push(`${m.name}が魔王軍に加わった（忠誠 ${m.loyalty}）`);
+      this.trace("captain_hired", m.uid, null, { id: x.id, name: m.name });
+    }
+    st.lastCaptains = out;
+    return out;
+  },
+
   applyMissionOutcome(mission, notes) {
     const st = this.state;
+    st.settles = (st.settles || 0) + 1;   // 「⚠ ○○がいる」札の周期
     st.alert = Math.max(0, st.alert + (mission.alertDelta || 0));
     st.conquest = U.clamp(st.conquest + (mission.conquestDelta || 0), 0, this.MAX_CONQUEST);
     // 地図の上の戦争（段階A）。勝った札の場所を領土にし、征服度はそこから写す

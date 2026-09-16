@@ -41,7 +41,8 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
   await step('2人目採用 → 作戦会議 → 編成画面', async () => {
     await page.click('[data-action="hire"]');
     await enterMissionPhase(page);   // 開幕3日は daily.js の担当。ここは通常ループを通しで見る
-    await page.locator('[data-action="missionpick"]').last().click();
+    // 札の中の「略奪」「贈る」は裏の選択肢なので、代表の1枚を選ぶ（2026-09-15）
+    await page.locator('[data-action="missionpick"]:not(.mission-alt)').last().click();
     await page.waitForSelector('[data-action="deploy"]');
   });
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/shot-formation.png', fullPage: true });
@@ -103,7 +104,8 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
         else await page.click('[data-action="skip"]');
       }
       if (await page.locator('[data-action="missionpick"]').count()) {
-        await page.locator('[data-action="missionpick"]').last().click();
+        // 札の中の「略奪」「贈る」は裏の選択肢なので、代表の1枚を選ぶ（2026-09-15）
+    await page.locator('[data-action="missionpick"]:not(.mission-alt)').last().click();
       }
       if (await page.locator('[data-action="deploy"]').count()) {
         await page.click('[data-action="deploy"]');
