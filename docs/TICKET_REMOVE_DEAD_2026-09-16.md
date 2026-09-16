@@ -10,14 +10,18 @@
 | 戦意（momentum） | Claude | **済** 85b6da1（run.js の `momentumPeak` 2か所は Opus の 1 で落とす） |
 | OVERKILL 2段（OVERKILL／殲滅＝大技の直撃） | Claude | **済** b2fa740 |
 | ~~《魔王軍完成》＋シナジー5本~~ | Claude | **取りやめ（09-16）**。監査の数え方の誤り。sim 20 で 魔王軍完成 158〜393回、魔法結社 345回。試しに消したら魔法職寄せが 85%→15% に落ちたので戻した |
-| 宴 | Opus（run.js・ui）→ Claude（battle.js の `feastUid`／暴食の宴） | 未 |
-| 指名求人 | Opus | 未 |
-| 傭兵市場 | Opus（run.js・ui・main）→ Claude（battle.js の `flags.mercenary`） | 未 |
-| 拠点接収 | Opus（段階A が入ったので落とせる） | 未 |
-| 号令エンジン＋自動撤退提案 | Opus（run.js 12か所・UI・テスト5本）→ Claude（battle.js の `offerOrder` / `retreatOffer`） | 未（段階B/D の後） |
+| 宴 | Opus（run.js・ui）→ Claude（battle.js の `feastUid`／暴食の宴） | **Opus 済** 900903c（`feastUid` は null 固定で残してある。飢餓と腐敗の検証は browser-tests/food.js へ退避） |
+| 指名求人 | Opus | **済** c31f0ae（`RECRUIT_BRIEFS` のデータは残置） |
+| 傭兵市場 | Opus（run.js・ui・main）→ Claude（battle.js の `flags.mercenary`） | **Opus 済** a9eb333（run.js の `row.mercenary` を見る枝は battle.js を落とすまで残置） |
+| 拠点接収 | Opus（段階A が入ったので落とせる） | **済** 0d46095 |
+| 号令エンジン＋自動撤退提案 | Opus（run.js 12か所・UI・テスト5本）→ Claude（battle.js の `offerOrder` / `retreatOffer`） | **Opus 済** 2156e33（`browser-tests/order.js` は残置＝前半はコマンドバトルの指示窓の検証。`test-order-run.js` / `test-order-battle.js` は削除） |
 | 墓場文書 `docs/GRAVEYARD.md` | CodeX | **済** 5c9e82e（宴45本・求人6要項・傭兵・旧OVERKILL段・戦意の文を保全。取り込み済み） |
 
 ## 1. Opus 用（段階B/D のあと。順番どおり、1つずつコミット）
+
+> **2026-09-16：§1 は 5 件とも完了**（900903c / c31f0ae / a9eb333 / 0d46095 / 2156e33）。
+> 各コミットで node 全件と該当ブラウザテスト、最後に sim 20（0% の戦略なし・戦闘数の急減なし）と
+> ブラウザ直列の全通過を確認済み。残るのは §2（Claude・battle.js 側）だけ。
 
 1. **宴**：`Game.feastQuote / holdFeast`、`st.feastPending`、ui.js の宴ボタンと表示、styles.css、`browser-tests/feast.js`（run-all から外す）、`main.js` の action。
    `rationContext.feastUid` は **null 固定で残す**（battle.js は Claude が後で落とす。同じコミットに入れない）。旧セーブ：`migrateState` で `feastPending` を捨てる。
