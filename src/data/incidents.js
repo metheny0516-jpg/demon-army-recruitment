@@ -19,6 +19,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { sparked(スライム)／ate(スライム)／carried_materials(スライム) } の異なる2種＋宿舎Lv1以上。",
     state: st => Town.lv(st, "hostel") >= 1,
     rumor: "宿舎裏の池で、スライムの数だけ水面の顔が増えている。",
+    mormoLine: "魔王様、宿舎裏の池でスライムの顔が増えているデス",
     choices: ["池を調べる", "やめる"],
     pick: "viewer",
     hidden: {
@@ -62,6 +63,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { sparked(当時の研究担当者)／trained(研究所での稽古)／carried_materials(研究所への運搬) } の異なる2種＋研究所Lv1以上。",
     state: st => Town.lv(st, "lab") >= 1,
     rumor: "研究所は無人なのに、置き去りの斧だけが授業の鐘に合わせて光る。",
+    mormoLine: "魔王様、無人の研究所で斧が鐘に合わせて光るデス",
     choices: ["光を調べる", "やめる"],
     pick: "viewer",
     hidden: {
@@ -103,6 +105,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { carried_materials(K)／carried(K)／ransacked(K在籍中) } の異なる2種＋建材1以上。",
     state: st => st.materials >= 1,
     rumor: "ポチが地下から戻るたびに、頭を下げる相手が一人ずつ増えている。",
+    mormoLine: "魔王様、地下帰りのコボルトに知り合いが増えているデス",
     choices: ["地下の建材を運び出す", "やめる"],
     pick: null,
     hidden: {
@@ -146,6 +149,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { hired(N)／fallen(N在籍中の同僚)／carried(N) } の異なる2種＋墓地Lv1以上。",
     state: st => Town.lv(st, "graveyard") >= 1,
     rumor: "墓地の見知らぬ骸骨が、面接の練習で何度も前の主の名前を言う。",
+    mormoLine: "魔王様、墓地の骸骨が前の主の名で面接の練習中デス",
     choices: ["骸骨の身元を保証する", "やめる"],
     pick: null,
     hidden: {
@@ -189,6 +193,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { late(H)／defended(H在籍中)／carried(H) } の異なる2種＋領地1以上。",
     state: st => st.conquest >= 1,
     rumor: "ピリカが拾った封筒を開けずに、宛名を何度も読み返している。",
+    mormoLine: "魔王様、ハーピーが封筒の宛名を気にしているデス",
     choices: ["封筒を開く", "やめる"],
     pick: null,
     hidden: {
@@ -232,6 +237,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { promoted(PまたはQ)／trained(PまたはQ)／downed(PまたはQ) } の異なる2種＋将軍が2人以上。",
     state: st => (st.roster || []).filter(m => m.rankId === "general").length >= 2,
     rumor: "二人の将軍が、相手の名札を自分の胸に当てて笑っている。",
+    mormoLine: "魔王様、将軍同士で相手の名札を胸に当てているデス",
     choices: ["模擬戦を認める", "関わらない"],
     pick: null,
     hidden: {
@@ -275,6 +281,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { hired(M)／carried(M)／carried_materials(M) } の異なる2種＋遺物あり。",
     state: st => (st.relics || []).length > 0,
     rumor: "箱丸が遺物を返そうとすると、留め金が口の端に引っかかって離れない。",
+    mormoLine: "魔王様、ミミックの口から遺物が離れない様子デス",
     choices: ["遺物を鑑定する", "やめる"],
     pick: null,
     hidden: {
@@ -316,6 +323,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { carried_materials(宿舎への運搬)／cooked(宿舎の炊事)／trained(宿舎の避難稽古) } の異なる2種＋宿舎Lv1以上。",
     state: st => Town.lv(st, "hostel") >= 1,
     rumor: "宿舎では、寝台の下へしまった荷物が毎朝きれいに廊下へ並んでいる。",
+    mormoLine: "魔王様、しまった荷物が毎朝廊下に整列するデス",
     choices: ["荷物を預けて整理を頼む", "やめる"],
     pick: null,
     hidden: {
@@ -359,6 +367,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { carried_materials(G)／ransacked(G在籍中)／hired(G) } の異なる2種＋市場Lv1以上。",
     state: st => Town.lv(st, "market") >= 1,
     rumor: "ギギの露店では、品物を買わずに城の間取りだけ聞く客がいる。",
+    mormoLine: "魔王様、露店に城の間取りばかり聞く客がいるデス",
     choices: ["露店を開く", "やめる"],
     pick: null,
     hidden: {
@@ -402,6 +411,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { trained(P)／promoted(P)／carried(P) } の異なる2種＋訓練場利用可能。",
     state: st => !!st && (st.conquest || 0) >= 0,
     rumor: "稽古場の旅人が、先生の休憩の取り方まで帳面に写している。",
+    mormoLine: "魔王様、旅人が先生の休み方まで書き写しているデス",
     choices: ["見学を許す", "やめる"],
     pick: null,
     hidden: {
@@ -448,6 +458,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { hired(骸骨兵)／fallen(骸骨兵が在籍した軍団の同僚)／cooked(骸骨兵) } の異なる2種＋骸骨兵が在籍。",
     state: st => (st.roster || []).some(m => m.race === "骸骨兵"),
     rumor: "骸骨たちの歌は、空の食器を叩くところだけ妙に元気だ。",
+    mormoLine: "魔王様、骸骨の合唱は空の食器を叩く時だけ元気デス",
     choices: ["一曲頼む", "関わらない"],
     pick: null,
     hidden: {
@@ -491,6 +502,7 @@ const INCIDENTS = [
     traceScope: "関連痕跡 { cooked(S)／trained(S)／hired(S) } の異なる2種＋酒場Lv1以上。",
     state: st => Town.lv(st, "tavern") >= 1,
     rumor: "リリィが夜会の席札を並べると、なぜか全員が姿勢を正す。",
+    mormoLine: "魔王様、夜会の席札だけで皆が姿勢を正すデス",
     choices: ["夜会を開く", "関わらない"],
     pick: null,
     hidden: {
