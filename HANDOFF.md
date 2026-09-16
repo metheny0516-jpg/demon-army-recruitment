@@ -21,6 +21,25 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-15 夜 現在）
 
+### 統括レビューの修正（§4）を作業枝で完了・取り込み待ち（2026-09-16・Opus）
+
+- **枝**：`claude/remove-dead-followup-s4`（本線 `2a46086` から分岐。**本線へは直接 push していない**）。
+- **直したもの**（`docs/TICKET_REMOVE_DEAD_2026-09-16.md` §4-1）：
+  1. 測定器に残っていた削除済みAPIの呼び出し。`tools/audit-elements.js` の
+     `canHireMercenary / hireMercenary`、`tools/audit-elements.js`・`tools/econ-trace.js` の
+     `canSeizeStronghold / seizeStronghold`。**存在チェックで隠さず、廃止機能の戦略
+     （「最強優先+傭兵を使う」）と列（傭兵・接収）ごと畳んだ**ので、偽の 0 は出ない。
+     シナジー集計の母集団は軍団全体（`synergyPool`）のまま。
+  2. `spoilFood()` の腐敗ログから、撤去した宴への誘導を外した（上限と傷んだ量の事実だけ）。
+     `browser-tests/food.js` に「宴へ誘導しない」検証を追加。
+  3. `tools/test-order-battle.js` を `cf45476` から復元（battle.js の号令エンジンが残っている間の検証）。
+- **検証**：Node 全件通過 → browser `run-all.sh` ✓ 全テスト通過 → `sim.js 20`（クリア率 100%・
+  0% の戦略なし・戦闘数の急減なし）。`audit-elements.js 1` と `econ-trace.js 1 careful` は
+  いずれも例外なく終了（1ランは道具の動作確認であり、バランスの判断材料にはしない）。
+  battle.js・文章データ・ゲーム数値は触っていない。
+- **次**：統括がこの枝を検証して取り込む → §2（battle.js 側の `feastUid` / `flags.mercenary` /
+  `offerOrder` / `orderOffers` / `retreatOffer`）→ その後 Opus へスライム②（`SPEC_SLIME_ARC_2` §3）。
+
 ### Opus削除報告の統括レビュー（2026-09-16）
 
 - **済／本線入りの確認**：`900903c`（宴）→ `c31f0ae`（指名求人）→ `a9eb333`（傭兵）→ `0d46095`（接収）→ `2156e33`（号令UI）、`e529f36`（skill-fx待機）、`7f679bd`（チケット進捗）。`cf45476`の子孫で、battle.js・src/dataは無変更。成果は既に本線へ直接pushされていたため再マージはしていない。以後、実装担当は本線から別枝を切り、統括が検証して取り込む。

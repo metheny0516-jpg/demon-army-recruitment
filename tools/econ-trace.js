@@ -78,7 +78,6 @@ for (let r = 0; r < N; r++) {
         gold0, reward: out.result.victory ? (mission ? mission.reward : 0) : 0, salary, paid: rep.paid ?? null, gold1: st.gold, roster, home: roster - st.activeUids.length,
         tax: (st.town && Array.isArray(st.town.ledger) && st.town.ledger.length) ? (st.town.ledger[st.town.ledger.length - 1].tax || 0) : 0 });
     }
-    if (Game.canSeizeStronghold()) Game.seizeStronghold();
     // 城下町：建てられるものがあれば市場から順に建てる（税収の乗数。sim と同じ「安い順に1件」ではなく市場優先）
     if (typeof Town !== 'undefined' && st.phase === 'result') {
       for (const id of ['market', 'tavern', 'smithy', 'graveyard', 'hostel', 'lab', 'factory', 'grand_kitchen']) { if (Town.canBuild(Game, id).ok) { Town.build(Game, id); break; } }

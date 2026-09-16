@@ -711,7 +711,8 @@ const Game = {
     const over = Math.max(0, (this.state.food || 0) - cap);
     if (over > 0) {
       this.state.food = cap;
-      if (notes) notes.push(`備蓄庫の上限 ${cap} を超えた食料 ${over} が傷んだ。腐らせる前に宴を開くべきだった`);
+      // 宴は撤去したので勧めない（docs/TICKET_REMOVE_DEAD_2026-09-16.md §4-1）。事実だけを残す。
+      if (notes) notes.push(`備蓄庫の上限 ${cap} を超えた食料 ${over} が傷んだ`);
     }
     return over;
   },

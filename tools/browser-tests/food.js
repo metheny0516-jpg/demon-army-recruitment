@@ -33,7 +33,8 @@ const { autoDismissMormo } = require('./helpers.js');
     });
     assert.equal(spoil.over, 7, '上限を超えたぶんだけ傷む');
     assert.equal(spoil.food, spoil.cap, '備蓄は上限で止まる');
-    assert.ok(spoil.note.length > 0, '傷んだことが一行残る');
+    assert.ok(/傷んだ/.test(spoil.note), `傷んだことが一行残る（${spoil.note}）`);
+    assert.ok(!/宴/.test(spoil.note), '撤去した宴へ誘導しない');
 
     // 2) 飢餓は3戦で「飢餓適応」へ抜ける。損失で終わらせない出口。
     const hunger = await page.evaluate(() => {
