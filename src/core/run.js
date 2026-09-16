@@ -123,7 +123,6 @@ const Game = {
       battleIncidentTotal: 0,
       // 撤退（2026-09-10）
       retreatCount: 0,
-      orderCount: 0,
       stageFights: {},          // 敵の慣れ：段階ごとに戦った回数（通常作戦のみ）
       outpost: null,            // 前哨戦の札（2026-09-12）。{ stage, cleared, formationId }
       skillLore: {},            // 種族の伝承：species → 覚えた上位技 id
@@ -338,6 +337,7 @@ const Game = {
     delete st.briefId; delete st.briefsThisPhase;   // 指名求人は撤去（同 §1-2）
     delete st.mercenaries; delete st.mercenaryOffers;   // 傭兵市場は撤去（同 §1-3）
     delete st.seizeUsed;   // 拠点接収は撤去（同 §1-4。領土の「砦」が同じ役をする）
+    delete st.orderCount;   // 号令は撤去（同 §1-5。指示はコマンドバトルの窓でする）
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
@@ -387,7 +387,7 @@ const Game = {
       hungerStreak: 0,
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
-      retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {}, outpost: null,
+      retreatCount: 0, pendingBattle: null, wipeCount: 0, stageFights: {}, outpost: null,
       // 幕の進行（2026-09-11）。旧セーブは第一幕として読む。
       act: 1, actStartedTurn: 1, actHistory: [],
       // 王国の反撃（2026-09-10）
@@ -2769,12 +2769,10 @@ const Game = {
         .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
         .map(u => u.id).filter(Boolean)
     };
-    // 号令の節目がある戦闘は、答えを聞くまで戦闘の中身が確定しない。記録（発見・最大CHAIN・KPI）は
-    // 確定してから取る（answerOrder）。それ以外はここで確定させる。
-    if (!(options.offerRetreat && result.orderOffer)) this.recordBattleResult(pending);
-    // 退く道か号令の節目がある戦闘だけ、UI の求めに応じて決着を保留する。
+    this.recordBattleResult(pending);
+    // 退く道がある戦闘だけ、UI の求めに応じて決着を保留する。
     // 保留中はラン状態を一切変えない（所持金・名簿・警戒度は答えを聞いてから動く）。
-    if (options.offerRetreat && (result.retreatOffer || result.orderOffer)) {
+    if (options.offerRetreat && result.retreatOffer) {
       st.pendingBattle = pending;
       st.phase = "battle";
       this.save();
@@ -2857,79 +2855,11 @@ const Game = {
   },
 
   // 号令に答える。UI だけが呼ぶ。unitId が null／"none" なら任せる（計算済みの結末のまま）。
-  // 名指しなら同じ種・同じ入力で計算し直す。提案の手前までは同じ展開、そこから先だけ分岐する。
-  // 戻り値：新しいタイムライン（計算し直した場合）か null（変わらない場合）。
-  // 決着は、撤退の提案がまだ後に控えていなければここで行う（settleBattle と同じ二経路）。
-  // 節目は戦況が動くたびに来る。答えは pending.orders に積み、名指しのたびに同じ種で計算し直す。
-  // 次の提案は計算し直したタイムラインの中から拾う（UI は order_offer に当たるたびにここを呼ぶ）。
-  nextOrderOffer(pending) {
-    const offers = (pending.result && pending.result.orderOffers) || (pending.result && pending.result.orderOffer ? [pending.result.orderOffer] : []);
-    const answered = pending.answeredRounds || {};
-    return offers.find(o => !answered[o.round]) || null;
-  },
-  answerOrder(unitId) {
-    const st = this.state;
-    const pending = st.pendingBattle;
-    if (!pending || !pending.result) return null;
-    const offer = this.nextOrderOffer(pending);
-    if (!offer) return null;
-    pending.answeredRounds = pending.answeredRounds || {};
-    pending.answeredRounds[offer.round] = true;
-    pending.orders = pending.orders || {};
-    let changed = null;
-    const chosen = unitId && unitId !== "none" && offer.candidates.some(c => c.unitId === unitId) ? unitId : null;
-    if (chosen && pending.replay) {
-      const rp = pending.replay;
-      const playerUnits = JSON.parse(JSON.stringify(rp.playerUnits));
-      const enemyUnits = JSON.parse(JSON.stringify(rp.enemyUnits));
-      const orders = Object.assign({}, pending.orders, { [offer.round]: chosen });
-      const options = Object.assign({}, rp.options, { orders });
-      const result = Battle.simulate(playerUnits, enemyUnits, options);
-      // 前半が一致しないなら（乱数の消費が食い違った）、命じなかった結末を使う。黙って別の戦闘にしない。
-      const same = result.timeline.length > offer.index
-        && pending.result.timeline.slice(0, offer.index).every((e, i) => e.type === result.timeline[i].type);
-      if (same) {
-        pending.result = result;
-        pending.orders = orders;
-        pending.ordered = { unitId: chosen, round: offer.round };
-        changed = result.timeline;
-        // 気合を引く。名指しした瞬間に払う（決着で出撃の +1 が戻るので実質 cost−1）。
-        const cand = offer.candidates.find(c => c.unitId === chosen);
-        const unit = rp.playerUnits.find(u => u.id === chosen);
-        const monster = unit && unit.uid != null ? st.roster.find(m => m.uid === unit.uid) : null;
-        if (monster && cand && typeof monster.spirit === "number") monster.spirit = Math.max(0, monster.spirit - (cand.cost || 0));
-        if (monster && cand) this.trace("ordered", monster.uid, null, { skill: cand.skillName, round: offer.round });
-        st.orderCount = (st.orderCount || 0) + 1;
-      }
-    }
-    // まだ後に提案（撤退か次の号令）が控えていれば決着は待つ。
-    const retreatLater = pending.result.retreatOffer && pending.result.retreatOffer.index > offer.index && !pending.retreatAnswered;
-    const orderLater = !!this.nextOrderOffer(pending);
-    if (!retreatLater && !orderLater) {
-      this.recordBattleResult(pending);
-      st.pendingBattle = null;
-      this.settleContinue(pending);
-    } else {
-      this.save();
-    }
-    return changed;
-  },
-
   // 撤退の提案に答える。UI だけが呼ぶ。戻り値は決着後のフェーズ名。
   settleBattle(choice) {
     const st = this.state;
     const pending = st.pendingBattle;
     if (!pending) return false;
-    if (choice !== "retreat") {
-      // 号令の節目が撤退の提案より後に控えていれば、続行の答えだけ覚えて決着は号令の答えを待つ。
-      const offer = this.nextOrderOffer(pending);
-      const retreat = pending.result && pending.result.retreatOffer;
-      if (offer && retreat && offer.index > retreat.index) {
-        pending.retreatAnswered = true;
-        this.save();
-        return st.phase;
-      }
-    }
     st.pendingBattle = null;
     if (choice === "retreat") this.settleRetreat(pending);
     else this.settleContinue(pending);

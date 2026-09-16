@@ -71,38 +71,7 @@ const spiritOf = (st, uid) => (st.roster.find(m => m.uid === uid) || {}).spirit;
   assert(spiritOf(st2, 103) === rules.max, '上限を超えない');
 }
 
-// 3. 名指しで cost を引く。足りなければ候補に出ない
-{
-  let got = null;
-  for (let i = 0; i < 40 && !got; i++) {
-    const st = freshRun([1, 3, 1]);
-    const out = Game.deploy({ offerRetreat: true });
-    if (out && out.result.orderOffer) got = { st, out };
-  }
-  assert(!!got, '（前提）気合3のガロで号令の節目が出る戦闘を引ける');
-  if (got) {
-    const { st, out } = got;
-    const cand = out.result.orderOffer.candidates.find(c => c.skillId === 'brute');
-    assert(cand && cand.cost === 1 && cand.spirit === 3, '候補に cost 1・気合3 が載る');
-    Game.answerOrder(cand.unitId);
-    const after = spiritOf(st, 102);
-    // 引いて（3→2）、決着で出撃の +1 が戻る（→3）。撤退の提案が後に控えていれば決着前なので 2。
-    assert(after === 2 || after === 3, `名指しで cost を引く（3 → ${after}）`);
-  }
-  let none = true;
-  for (let i = 0; i < 25 && none; i++) {
-    const st = freshRun([1, 0, 1]);
-    const out = Game.deploy({ offerRetreat: true });
-    // 味方が倒れると気合が+1される（2026-09-12）ので、誰も倒れていないのに提案が出た回だけを数える
-    const fellBefore = out && out.result.orderOffer && out.result.timeline.slice(0, out.result.orderOffer.index || 0).some(e => e.type === 'death' && String(e.unitId).startsWith('p'));
-    if (out && out.result.orderOffer && !fellBefore) none = false;
-    if (st.pendingBattle) Game.answerOrder('none');
-    if (st.pendingBattle) Game.settleBattle('continue');
-  }
-  assert(none, '気合0のガロ（cost 1）では提案が出ない');
-}
-
-// 4. 技を覚えた直後の戦いだけ debutSkill が立ち、その決着で消える
+// 3. 技を覚えた直後の戦いだけ debutSkill が立ち、その決着で消える
 {
   const st = freshRun([1, 1, 1]);
   const garo = st.roster.find(m => m.uid === 102);

@@ -1706,7 +1706,6 @@ const UI = {
   battleManual(out) {
     this.set(BattleScene.shell(out.stageData));
     BattleScene.onRetreatChoice = null;
-    BattleScene.onOrderChoice = null;
     BattleScene.playManual(out.handle, result => Game.finishManualBattle(result));
   },
 
@@ -1717,7 +1716,6 @@ const UI = {
     // 保留されていない戦闘（提案が出なかった／開幕の防衛戦）では settleBattle が false を返すだけ。
     BattleScene.onRetreatChoice = choice => Game.settleBattle(choice);
     // 号令の答え。名指しなら run.js が同じ種で計算し直した新しいタイムラインを返し、描画側が差し替える。
-    BattleScene.onOrderChoice = unitId => Game.answerOrder(unitId);
     BattleScene.play(result.timeline);
   },
 
