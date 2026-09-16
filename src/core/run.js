@@ -406,6 +406,8 @@ const Game = {
     if (!Array.isArray(st.applicants)) st.applicants = [];
     if (!Array.isArray(st.debts)) st.debts = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
+    for (const mission of st.missionOffers) this.applyInvasionReward(mission);
+    this.applyInvasionReward(st.selectedMission);
     this.migrateOldFacility(st);
     st.hiresLeft = Math.max(0, Number(st.hiresLeft) || 0);
     st.extraHiresThisPhase = Math.max(0, Number(st.extraHiresThisPhase) || 0);
@@ -1503,7 +1505,18 @@ const Game = {
       units: training ? this.trainingUnits(units, opponent) : (isOutpost ? this.outpostUnits(units) : units)
     };
     if (place) this.dressPlaceMission(mission, type, place);
-    return this.attachCaptains(mission, place, type, scale);
+    return this.applyInvasionReward(this.attachCaptains(mission, place, type, scale));
+  },
+
+  // 第一幕の侵攻は、前哨・本戦とも勝利1決着につき固定12G（試遊値）。
+  // reward は表示・入金の総額。敵将賞金にはこの固定加算を含めない。
+  // 札に確定額を持たせ、出撃・旧セーブの決着でも二重に足さない。
+  applyInvasionReward(mission) {
+    if (!mission || mission.invasionRewardBonus !== undefined) return mission;
+    mission.invasionRewardBonus = (this.state.act || 1) === 1
+      && mission.missionKind === "invade" && !mission.training ? 12 : 0;
+    mission.reward += mission.invasionRewardBonus;
+    return mission;
   },
 
   // 名前のある敵将を隊列の先頭に乗せる（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
@@ -2695,7 +2708,7 @@ const Game = {
     // 食事の伝票は倍率を掛ける前に一度だけ作り、戦闘入力・戦果・予告で同じものを読む（V2a）
     const mealPlan = battleRations ? this.mealPlan(battleRations) : null;
     const playerUnits = this.preparedRoster(battleRations, mealPlan).map(m => Battle.makeUnit(m, "player"));
-    const stageData = this.stageData();
+    const stageData = this.applyInvasionReward(this.stageData());
     // ビルド試行の判定は戦闘前に取る（戦死・合体で編成が変わる前の「何を試したか」を見るため）
     this.kpi("battleStarted", st, stageData);
     const enemyUnits = stageData.units.map(e => Battle.makeUnit(e, "enemy"));
@@ -2949,6 +2962,8 @@ const Game = {
 
   settleContinue(pending) {
     const st = this.state;
+    if (!pending || pending.settled) return st.phase;
+    this.applyInvasionReward(pending.stageData); // 更新前に保存した戦闘にも1回だけ適用
     this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);   // 号令で保留した戦闘はここで初めて確定する（済んでいれば何もしない）
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
@@ -2967,6 +2982,7 @@ const Game = {
     const freeTraining = training && st.incidents?.freeTraining;
     if (training) this.softenTrainingCasualties(result.contribution);
     if (!training && !result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
+    pending.settled = true;
     if (mealPlan?.boost > 0 && mealPlan.cookUid != null) this.trace("cooked", mealPlan.cookUid, null, { facility: this.facilityLv("grand_kitchen") > 0 ? "grand_kitchen" : null });
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
@@ -3218,6 +3234,9 @@ const Game = {
   // 倒れていた軍団員は担いで帰る（戦死しない）が、報酬は無く、征服も進まない。
   settleRetreat(pending, options = {}) {
     const st = this.state;
+    if (!pending || pending.settled) return st.phase;
+    pending.settled = true;
+    this.applyInvasionReward(pending.stageData);
     this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
@@ -3559,7 +3578,7 @@ const Game = {
       const c = Captains.get(id); if (!c) continue;
       const short = c.short || c.name;
       if (now === "slain") {
-        const bounty = Math.max(1, Math.round(mission.reward * (rules.bountyMult - 1)));
+        const bounty = Math.max(1, Math.round((mission.reward - (mission.invasionRewardBonus || 0)) * (rules.bountyMult - 1)));
         st.gold += bounty;
         st.fame = (st.fame || 0) + (rules.fame || 0);
         out.slain.push(short);
