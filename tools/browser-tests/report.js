@@ -180,6 +180,34 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!/ゴルドの攻撃が 1 上がった！/.test(growth.head)) errors.push(`読み上げの文が違う（${growth.head}）`);
   if (!/⚔/.test(growth.head)) errors.push(`伸びた数値の印が無い（${growth.head}）`);
 
+  // ── 増殖の元の「なぜ」欄（docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-2）──
+  // 即加入・面接待ち・複数の親、の3つが書き分けられているかを画面で見る。
+  const split = await page.evaluate(() => {
+    Game.state.lastSlimeSplit = { rows: [
+      { name: 'ぷに', count: 3, joined: true, why: '池の噂 ＋ 火の粉を浴びたぷに → 分裂して3体、1体が名簿に加わった' },
+      { name: 'もち', count: 2, joined: false, why: '池の噂 ＋ 火の粉を浴びたもち → 分裂して2体、名簿が満員だったので1体が次の面接に並んだ' }
+    ] };
+    UI.result();
+    const box = document.querySelector('.slime-split-lines');
+    const lines = [...document.querySelectorAll('.slime-split-line')];
+    return {
+      shown: !!box,
+      count: lines.length,
+      joined: lines.filter(l => l.classList.contains('joined')).map(l => l.innerText.replace(/\s+/g, ' ')),
+      waiting: lines.filter(l => l.classList.contains('waiting')).map(l => l.innerText.replace(/\s+/g, ' ')),
+      why: (document.querySelector('.slime-split-lines') || {}).closest
+        ? (document.querySelector('.slime-split-lines').closest('section').innerText || '').replace(/\s+/g, ' ') : ''
+    };
+  });
+  if (!split.shown) errors.push('分裂の「なぜ」欄が出ない');
+  if (split.count !== 2) errors.push(`親ごとに1行にならない（${split.count}行）`);
+  if (!split.joined.some(t => /ぷに/.test(t) && /名簿に加わった/.test(t))) errors.push(`即加入の書き方が違う（${split.joined.join(' / ')}）`);
+  if (!split.waiting.some(t => /もち/.test(t) && /面接/.test(t))) errors.push(`面接待ちの書き方が違う（${split.waiting.join(' / ')}）`);
+  if (/1体が名簿に残った/.test(split.why)) errors.push('満員でも「名簿に残った」と言ってしまっている');
+  // 何も起きていない決着では出さない
+  const quiet = await page.evaluate(() => { Game.state.lastSlimeSplit = null; UI.result(); return !!document.querySelector('.slime-split-lines'); });
+  if (quiet) errors.push('分裂が無い決着でも「なぜ」欄が残る');
+
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/report-panel.png', fullPage: true });
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 主要記録2つ・代表CHAIN経路・1行サマリ・非ダメージバッジ');
   await browser.close();

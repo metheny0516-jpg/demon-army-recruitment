@@ -25,6 +25,12 @@ const tier2SkillIds = Object.keys(TRAITS).filter(id => TRAITS[id].skill && TRAIT
 const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
 
 function chooseIndex(apps, roster, strat){
+  // 「スライム統一＋魔法職1」：火球を撃つ者が1人だけ要る（増殖の元の起点）。
+  // 1人確保できたら、あとは統一の規則に戻る。
+  if (strat.caster1 && !roster.some(m => (m.tags || []).includes('caster'))) {
+    const hit = apps.findIndex(m => m.tags.includes('caster'));
+    if (hit >= 0) return hit;
+  }
   if (strat.kind === 'race') {
     const hit = apps.findIndex(m => m.race === strat.race);
     if (hit >= 0) return hit;
@@ -272,6 +278,7 @@ function runOnce(strat, stats){
     stats.capMixed = (stats.capMixed || 0) + ((st.lastHeroParty || []).length ? 1 : 0);
   }
   // 地図の上の戦争（段階A）：どこまで面を広げたか・巡回を何回まわしたか
+  stats.splits = (stats.splits || 0) + (st.slimeSpawnCount || 0);   // 増殖の元（分裂した回数）
   stats.territory = (stats.territory || 0) + ((st.territory?.lands || []).length + (st.territory?.tribes || []).length);
   stats.patrols = (stats.patrols || 0) + (st.patrolCount || 0);
   stats.cards ||= {settles:0,offered:0,opened:0,natural:0};
@@ -300,6 +307,9 @@ const strategies = [
   // 現実の遊び方に近い形：序盤の3回だけ（種族技が開くまで）。無制限の上と見比べる。
   {name:'訓練は序盤3回だけ', kind:'greedy', train:true, trainMax:3},
   // 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md §2-5）
+  // スライムの大筋②（docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-4）。火球を撃つ者が1人いる編成。
+  // 池の噂を**開いた**周回だけ分裂が起きる仕様なので、この戦略は札をめくる（cards:'open'）。
+  {name:'スライム統一+魔法職1', kind:'race', race:'スライム', caster1:true, cards:'open'},
   {name:'近い順に落とす', kind:'greedy', territory:'near'},
   {name:'港と町を優先', kind:'greedy', territory:'portTown'},
 ];
@@ -327,7 +337,7 @@ for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)
   const facility = (res.reduce((a,r)=>a+(r.townLevels||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  領土 ${((stats.territory||0)/N).toFixed(2)}／ラン  巡回 ${((stats.patrols||0)/N).toFixed(2)}回/ラン  敵将 討${((stats.capSlain||0)/N).toFixed(2)}／雇${((stats.capHired||0)/N).toFixed(2)}／最終戦が混成 ${stats.capMixed||0}ラン`);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  領土 ${((stats.territory||0)/N).toFixed(2)}／ラン  巡回 ${((stats.patrols||0)/N).toFixed(2)}回/ラン  敵将 討${((stats.capSlain||0)/N).toFixed(2)}／雇${((stats.capHired||0)/N).toFixed(2)}／最終戦が混成 ${stats.capMixed||0}ラン  分裂 ${((stats.splits||0)/N).toFixed(2)}回/ラン`);
   console.log(`  札: 提示 ${stats.cards.offered}／めくった ${stats.cards.opened}／自然発生 ${stats.cards.natural}／決着 ${stats.cards.settles}（波乱 ${(100*stats.cards.natural/Math.max(1,stats.cards.settles)).toFixed(2)}%）`);
   const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);

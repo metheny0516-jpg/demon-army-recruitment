@@ -358,7 +358,7 @@ const UI = {
       ${this.aptitudeHtml(m)}
       ${opts.resume ? "" : `<div class="traits">${this.traitHtml(m.traits, relicByTrait)}</div>`}
       ${rank.id === "general" ? `<div class="general-ability">⚔ 将軍の号令：出撃中、味方全員の与ダメージ+15%</div>` : ""}
-      ${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}
+      ${this.faceQuote(m)}
       ${opts.resume ? "" : (opts.footer || "")}
     </div>`;
   },
@@ -783,7 +783,7 @@ const UI = {
         ${skillStatus ? `<div class="skill-status">${U.esc(skillStatus)}</div>` : ""}${nextSkill ? `<div class="next-skill">次に覚える技／伝承：<b>【${U.esc(nextSkill.name)}】</b></div>` : ""}</section>
       <section><h3>記録</h3><div class="member-record">出撃 ${record.battles || 0}戦（${record.wins || 0}勝）　倒れた ${record.downed || 0}回　担がれた ${record.carried || 0}回　遅刻 ${record.late || 0}回　食べた ${record.ate || 0}回</div></section>
       ${held.length ? `<section><h3>遺物</h3>${held.map(r => `<span class="relic-chip">🏺 ${U.esc(r.name)}</span>`).join("")}</section>` : ""}
-      ${relicActions}${this.resumeHtml(m)}${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}${actions}
+      ${relicActions}${this.resumeHtml(m)}${this.faceQuote(m)}${actions}
     </article></div>`, "member");
   },
 
@@ -1837,6 +1837,7 @@ const UI = {
       ${this.incidentCards("B")}
       ${st.incidents?.tail?.ready ? '<p><button data-action="incidenttailview">📜 噂の続きが届いている</button></p>' : ""}
       ${this.incidentResultHtml(st.incidents?.result)}
+      ${this.slimeSplitWhy()}
       ${st.incidents?.biography ? `<section class="panel"><h3>魔界日報：${U.esc(st.incidents.biography.name)}の歩み</h3>${st.incidents.biography.lines.map(t=>`<p>${U.esc(t)}</p>`).join("")}</section>` : ""}
       ${/* 敗因メモ（ニアミス）は「どこまで届いたか」を残す。全滅と敗走のときだけ出す。
            再起画面がほぼ出なくなった（再建の仕様）ので、ここに無いと二度と読まれない。 */
@@ -2059,6 +2060,30 @@ const UI = {
     const tail=s.tail?.ready?`<article class="mission-card rumor"><h3>📜 噂の続き</h3><p>${U.esc(Incidents.card(s.tail.parent)?.title||"その後")}</p><button data-action="incidenttailview">その後を聞く</button></article>`:"";
     return html+(door==="A"?tail:"");
   },
+  // 札に出す一言。出来事で変わった一言（faceLine）があればそちらを出す
+  // （docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-2。今は「もう火球は撃たん」だけ）。
+  faceQuote(m) {
+    const line = (m && m.faceLine) || (m && m.quote) || "";
+    if (!line) return "";
+    return `<div class="quote${m.faceLine ? " face-line" : ""}">「${U.esc(line)}」</div>`;
+  },
+
+  // 増殖の元の「なぜ」欄。噂の札と同じ場所に出す。
+  // 同じ決着で二人以上が分裂することがあるので、親ごとに1行ずつ並べる。
+  // 名簿に入ったのか、満員で次の面接に並んだのかは**書き分ける**（結果画面と名簿が食い違わないように）。
+  slimeSplitWhy() {
+    const box = Game.state && Game.state.lastSlimeSplit;
+    const rows = (box && box.rows) || [];
+    if (!rows.length) return "";
+    const line = r => `<li class="slime-split-line${r.joined ? " joined" : " waiting"}">${
+      U.esc(`${r.name}が火を浴びて分裂した（${r.count}体）`)} —
+      <b>${r.joined ? "1体が名簿に加わった" : "名簿は満員。1体が次の面接に並んだ"}</b></li>`;
+    return `<section class="panel incident-result"><h3>🫧 池の同居人が増えた</h3>
+      <ul class="slime-split-lines">${rows.map(line).join("")}</ul>
+      <details><summary>なぜこうなった？</summary>
+        <p>${rows.map(r => U.esc(r.why)).join("<br>")}</p></details></section>`;
+  },
+
   incidentResultHtml(r) {
     if(!r)return "";
     return `<section class="panel incident-result"><h3>${U.esc(r.title)}</h3><p>${U.esc(r.text)}</p>

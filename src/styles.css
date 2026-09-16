@@ -3531,6 +3531,17 @@ button.primary::first-letter { color: var(--gold); }
 .projectile-wind::before { width: 26px; height: 3px; top: -1px; left: -26px; border-radius: 2px;
   background: linear-gradient(90deg, transparent, #dff4ff); box-shadow: 0 4px 0 -1px #dff4ff80, 0 -4px 0 -1px #dff4ff80; }
 
+/* 増殖の元：親ごとに1行。名簿に入ったのか、面接待ちなのかを書き分ける */
+.slime-split-lines { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; }
+.slime-split-line { font-size: 13px; padding-left: 16px; position: relative; }
+.slime-split-line::before { position: absolute; left: 0; }
+.slime-split-line.joined::before { content: "🫧"; }
+.slime-split-line.waiting::before { content: "⏳"; }
+.slime-split-line.waiting b { color: #e9c98a; }
+
+/* 出来事で変わった一言（分裂を見た魔法使いなど）。素の口上と見分けが付く程度に */
+.quote.face-line { color: #ffd9a8; font-style: italic; }
+
 /* ── 名のある敵（docs/SPEC_CAPTAINS_BD_2026-09-15.md）── */
 .mission-captain { margin: 4px 0; padding: 4px 6px; border-radius: 4px;
   background: rgba(150, 40, 40, .22); border: 1px solid rgba(220, 120, 120, .45); font-size: 12px; }
