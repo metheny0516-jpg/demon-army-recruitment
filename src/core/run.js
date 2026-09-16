@@ -2391,12 +2391,12 @@ const Game = {
       this.processCasualties(result.contribution, notes);
       this.awardMerit(result.contribution, notes);
       if (this.isDefenseBattle(stageData)) {
-        // 城を守った。報酬は無いが、討伐隊の荷を押収する。
+        // 城を守った。討伐隊の軍資金（stageData.reward＝進軍報酬の6割）は上の勝利報酬で入り、荷も押収する。
         const rules = this.counterRules();
         st.alert = Math.max(0, st.alert - rules.threshold);
         st.materials += rules.seize.materials;
         st.food += rules.seize.food;
-        notes.push(`討伐隊を退けた。押収：建材 +${rules.seize.materials} / 食料 +${rules.seize.food}`);
+        notes.push(`討伐隊を退けた。押収：軍資金 ${stageData.reward}G / 建材 +${rules.seize.materials} / 食料 +${rules.seize.food}`);
         notes.push(`王国の警戒がひとまず引いた（現在 ${st.alert}）`);
         // 名が上がる。次の面接だけ応募者が1人増える。
         st.renownBonus = 1;

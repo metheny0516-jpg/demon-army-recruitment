@@ -2,7 +2,7 @@
 // units の並び順が配置（先頭が狙われやすい）。
 const ENEMY_STAGES = [
   {
-    stage: 1, army: "見習い冒険者たち", region: "村はずれ", reward: 6,
+    stage: 1, army: "見習い冒険者たち", region: "村はずれ", reward: 9,
     units: [
       { name: "剣士見習いテト", icon: "🗡", hp: 14, atk: 5, def: 2, spd: 6 },
       { name: "剣士見習いポル", icon: "🗡", hp: 14, atk: 5, def: 2, spd: 5 }
@@ -14,7 +14,7 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 2, army: "駆け出し冒険者パーティ", region: "街道", reward: 8,
+    stage: 2, army: "駆け出し冒険者パーティ", region: "街道", reward: 12,
     units: [
       { name: "剣士ロイ", icon: "🗡", hp: 20, atk: 7, def: 3, spd: 6 },
       { name: "弓手ミナ", icon: "🏹", hp: 14, atk: 8, def: 1, spd: 8 }
@@ -27,7 +27,7 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 3, army: "国境の傭兵団", region: "関所", reward: 11,
+    stage: 3, army: "国境の傭兵団", region: "関所", reward: 16,
     units: [
       { name: "傭兵ガレス", icon: "⚔️", hp: 26, atk: 9, def: 4, spd: 5 },
       { name: "傭兵ボルド", icon: "⚔️", hp: 26, atk: 9, def: 4, spd: 5 },
@@ -41,7 +41,7 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 4, army: "神殿騎士団", region: "大神殿", reward: 14,
+    stage: 4, army: "神殿騎士団", region: "大神殿", reward: 20,
     units: [
       { name: "神殿騎士ユーグ", icon: "🛡️", hp: 38, atk: 12, def: 7, spd: 5 },
       { name: "神殿騎士セラ", icon: "🛡️", hp: 38, atk: 12, def: 7, spd: 5 },
@@ -56,7 +56,7 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 5, army: "王国軍先遣隊", region: "城塞都市", reward: 18,
+    stage: 5, army: "王国軍先遣隊", region: "城塞都市", reward: 26,
     units: [
       { name: "王国兵アルド", icon: "⚔️", hp: 30, atk: 10, def: 5, spd: 6 },
       { name: "王国兵ベイン", icon: "⚔️", hp: 30, atk: 10, def: 5, spd: 6 },
@@ -71,7 +71,7 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 6, army: "王国軍本隊", region: "大平原", reward: 23,
+    stage: 6, army: "王国軍本隊", region: "大平原", reward: 33,
     units: [
       { name: "精鋭兵ダン", icon: "⚔️", hp: 38, atk: 13, def: 7, spd: 6 },
       { name: "精鋭兵エド", icon: "⚔️", hp: 38, atk: 13, def: 7, spd: 6 },
@@ -88,7 +88,7 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 7, army: "聖騎士団", region: "王都城門", reward: 30,
+    stage: 7, army: "聖騎士団", region: "王都城門", reward: 42,
     units: [
       { name: "聖騎士オルガ", icon: "🛡️", hp: 48, atk: 16, def: 10, spd: 7 },
       { name: "聖騎士ジン", icon: "🛡️", hp: 48, atk: 16, def: 10, spd: 7 },
@@ -103,7 +103,7 @@ const ENEMY_STAGES = [
     ]
   },
   {
-    stage: 8, army: "勇者アレン一行", region: "王都", reward: 50,
+    stage: 8, army: "勇者アレン一行", region: "王都", reward: 60,
     units: [
       { name: "戦士ドルフ", icon: "🪓", hp: 90, atk: 18, def: 10, spd: 7 },
       { name: "勇者アレン", icon: "👑", hp: 120, atk: 24, def: 12, spd: 10, traits: ["hero_awaken"],
@@ -126,7 +126,7 @@ const ENEMY_GROWTH = { familiarityPerFight: 0.04, familiarityCap: 5 };
 // ACT_STAGE_CAP[現在の幕] に切り替え、この配列を第一幕クリア後の段階として合流させる。
 const ENEMY_STAGES_ACT2 = [
   {
-    stage: 9, army: "国境警備隊", region: "隣国国境", reward: 58,
+    stage: 9, army: "国境警備隊", region: "隣国国境", reward: 64,
     units: [
       { name: "国境兵レオ", icon: "⚔️", hp: 96, atk: 19, def: 11, spd: 7 },
       { name: "国境兵マルコ", icon: "⚔️", hp: 96, atk: 19, def: 11, spd: 7 },
@@ -140,7 +140,7 @@ const ENEMY_STAGES_ACT2 = [
     ]
   },
   {
-    stage: 10, army: "隣国重装歩兵", region: "街道の砦", reward: 66,
+    stage: 10, army: "隣国重装歩兵", region: "街道の砦", reward: 72,
     units: [
       { name: "重装歩兵ガル", icon: "🛡️", hp: 110, atk: 20, def: 14, spd: 6 },
       { name: "重装歩兵ヴォス", icon: "🛡️", hp: 110, atk: 20, def: 14, spd: 6 },
@@ -154,7 +154,7 @@ const ENEMY_STAGES_ACT2 = [
     ]
   },
   {
-    stage: 11, army: "聖教会審問団", region: "大聖堂", reward: 74,
+    stage: 11, army: "聖教会審問団", region: "大聖堂", reward: 81,
     units: [
       { name: "審問官セイラ", icon: "🔥", hp: 78, atk: 27, def: 7, spd: 8 },
       { name: "審問官トマス", icon: "🔥", hp: 78, atk: 27, def: 7, spd: 8 },
@@ -168,7 +168,7 @@ const ENEMY_STAGES_ACT2 = [
     ]
   },
   {
-    stage: 12, army: "竜騎兵団", region: "高地", reward: 84,
+    stage: 12, army: "竜騎兵団", region: "高地", reward: 92,
     units: [
       { name: "竜騎兵ロナ", icon: "🐉", hp: 100, atk: 26, def: 10, spd: 11 },
       { name: "竜騎兵ファウ", icon: "🐉", hp: 100, atk: 26, def: 10, spd: 11 },
@@ -182,7 +182,7 @@ const ENEMY_STAGES_ACT2 = [
     ]
   },
   {
-    stage: 13, army: "連合軍砲兵陣地", region: "連合本陣前", reward: 95,
+    stage: 13, army: "連合軍砲兵陣地", region: "連合本陣前", reward: 104,
     units: [
       { name: "護衛兵カド", icon: "🛡️", hp: 120, atk: 20, def: 14, spd: 6 },
       { name: "護衛兵ジエン", icon: "🛡️", hp: 120, atk: 20, def: 14, spd: 6 },
@@ -198,7 +198,7 @@ const ENEMY_STAGES_ACT2 = [
     ]
   },
   {
-    stage: 14, army: "勇者アレン一行（再）", region: "連合本陣", reward: 110,
+    stage: 14, army: "勇者アレン一行（再）", region: "連合本陣", reward: 120,
     units: [
       { name: "戦士ドルフ", icon: "🪓", hp: 117, atk: 23, def: 13, spd: 8 },
       { name: "勇者アレン", icon: "👑", hp: 156, atk: 31, def: 16, spd: 12, traits: ["hero_awaken"],

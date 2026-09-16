@@ -13,7 +13,7 @@
 const { execFileSync } = require('child_process');
 const fs = require('fs'), os = require('os'), path = require('path');
 
-const N = 11;                                   // 再現ケース（11ラン目）を含む最小本数
+const N = 30;                                   // 再現ケース（11ラン目）を含む。2026-09-16 の経済調整で敗北が減り、11本では再起が0件になったので30本へ
 const out = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'chain-measure-')), 'm.json');
 
 execFileSync(process.execPath, [path.join(__dirname, 'chain-v2-measure.js'), String(N), '--json', out],

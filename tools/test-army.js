@@ -33,7 +33,7 @@ assert(Game.moveDeployedToFront(4) && Game.state.activeUids.join(',') === '4,1,2
 assert(Game.moveDeployedToFront(4) === false && Game.state.activeUids.join(',') === '4,1,2,3,5',
   'すでに最前列なら並びを変えない');
 Game.state.activeUids = [1, 2, 3, 4, 5];
-assert(Game.salaryTotal() === 15 + 5 * 2, '給与は出撃5体が満額、残り5体は留守番として半額手当（控えは無い）');
+assert(Game.salaryTotal() === 15 + 5 * 1, '給与は出撃5体が満額、残り5体は留守番として四分の一の手当（控えは無い）');
 st.gold = 100;
 Game.paySalaries([]);
 assert(st.roster.find(m => m.uid === 1).loyalty === 72 && st.roster.find(m => m.uid === 6).loyalty === 72,

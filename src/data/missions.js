@@ -81,13 +81,15 @@ MISSION_TYPES.defend = {
   icon: "🛡",
   title: "城を守る",
   strategyLabel: "討伐隊を迎え撃つ",
-  strategyHint: "王国の討伐隊が城へ向かっている。防衛の報酬はない。",
+  strategyHint: "王国の討伐隊が城へ向かっている。退ければ討伐隊の軍資金を押収できる。",
   descriptions: [
-    "魔王城へ迫る討伐隊を迎え撃つ。ここを失えば、蓄えが荒らされる。"
+    "魔王城へ迫る討伐隊を迎え撃つ。ここを失えば、蓄えが荒らされる。勝てば奴らの遠征費は魔王軍のものだ。"
   ],
   enemyTierOffset: 1,
   enemyMult: 1,
-  rewardMult: 0,
+  // 2026-09-16: 報酬0だと防衛のたびに給与ぶんだけ赤字になり、防衛が全戦闘の2〜3割を占めるため
+  // 所持金が10〜30Gに張り付いていた（tools/econ-trace.js）。討伐隊の軍資金として進軍報酬の6割を押収する。
+  rewardMult: 0.6,
   payrollCoverage: 0,
   rewardJitter: [0, 0],
   foodReward: 0,

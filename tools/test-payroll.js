@@ -39,23 +39,23 @@ function setup() {
 }
 
 let st = setup();
-assert(Game.salaryTotal() === 6, '通常給与4G＋生活手当2Gを集計');
-assert(Game.payrollQuote('advance').cost === 9, '厚遇費は通常額の1.5倍を切り上げ');
+assert(Game.salaryTotal() === 5, '通常給与4G＋留守手当1G（4Gの四分の一）を集計');
+assert(Game.payrollQuote('advance').cost === 8, '厚遇費は通常額の1.5倍を切り上げ（5G→8G）');
 assert(!Game.setPayrollPolicy('invalid') && Game.setPayrollPolicy('advance'), '編成中だけ有効な給与方針を選べる');
 
-st.gold = 8;
+st.gold = 7;   // 厚遇費8Gに1G足りない
 const before = JSON.stringify(st.roster);
 assert(!Game.preparePayrollForBattle([]), '資金不足では厚遇出撃を拒否');
-assert(st.gold === 8 && JSON.stringify(st.roster) === before && st.payrollChoices.advance === 0,
+assert(st.gold === 7 && JSON.stringify(st.roster) === before && st.payrollChoices.advance === 0,
   '拒否された厚遇は資金・人材・選択回数を汚さない');
 
 st.gold = 20;
 const advanceNotes = [];
 assert(Game.preparePayrollForBattle(advanceNotes), '資金があれば厚遇を確定できる');
-assert(st.gold === 11 && st.roster.every(m => !m.unpaid && m.unpaidStreak === 0 && m.loyalty === 68),
-  '厚遇は出撃前に9G払い、未払い解消・忠誠+8');
+assert(st.gold === 12 && st.roster.every(m => !m.unpaid && m.unpaidStreak === 0 && m.loyalty === 68),
+  '厚遇は出撃前に8G払い、未払い解消・忠誠+8');
 Game.paySalaries(advanceNotes);
-assert(st.gold === 11, '厚遇は勝利後に二重払いしない');
+assert(st.gold === 12, '厚遇は勝利後に二重払いしない');
 
 st = setup();
 st.gold = 20;
@@ -77,7 +77,7 @@ const regularNotes = [];
 assert(Game.preparePayrollForBattle(regularNotes), '通常支給を確定できる');
 assert(st.roster.every(m => m.unpaid), '通常支給は勝利前の未払いを先に消さない');
 Game.paySalaries(regularNotes);
-assert(st.gold === 94 && st.roster.every(m => !m.unpaid && m.unpaidStreak === 0 && m.loyalty === 62),
+assert(st.gold === 95 && st.roster.every(m => !m.unpaid && m.unpaidStreak === 0 && m.loyalty === 62),
   '通常支給は勝利後に支払い、未払いを解消して忠誠+2');
 
 delete st.payrollPolicy;

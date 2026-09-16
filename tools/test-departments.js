@@ -35,7 +35,7 @@ st.roster = [
     salary: 3, loyalty: 60, traits: [], tags: [], department: 'life' }
 ];
 st.activeUids = [1];
-assert(Game.salaryTotal() === 9, '出撃は満額、建設・生活は半額手当');
+assert(Game.salaryTotal() === 7, '出撃は満額、留守番は四分の一の手当（5G→2G、3G→1G）');
 
 // ── 部門適性 ──
 // 「何人置いたか」ではなく「誰を置いたか」で数字が変わることを守る。

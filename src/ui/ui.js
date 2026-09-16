@@ -1617,7 +1617,7 @@ const UI = {
       <aside class="formation-briefing">
       <div class="panel formation-heading">
         <h2>${opening ? `📅 ${st.day}日目：${deadline}` : "🏰 出撃と留守番"} <span class="muted">— ${U.esc(st.selectedMission && st.selectedMission.missionTitle || (opening ? "準備日" : "作戦未選択"))}</span></h2>
-        <div class="muted">${opening ? "配置と給与方針は翌日も維持される。変えたい所だけ直し、業務終了で日次決算を行う。" : "出撃は最大5体。城に残した者は職と特性で勝手に働く（食料の調達、建材の投入、経理、人事）。留守手当は希望給与の半額。"}</div>
+        <div class="muted">${opening ? "配置と給与方針は翌日も維持される。変えたい所だけ直し、業務終了で日次決算を行う。" : "出撃は最大5体。城に残した者は職と特性で勝手に働く（食料の調達、建材の投入、経理、人事）。留守手当は希望給与の四分の一。"}</div>
         ${this.departmentSummary()}
       </div>
       ${opening ? "" : `<div class="panel"><b>🍖 戦闘糧食 ${rations.consumed}/${rations.need}</b>
