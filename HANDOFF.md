@@ -32,7 +32,7 @@
 
 **残タスク（順番どおり。上から）**
 1. 済（Opus 4fa14f8、Claude 検証済み）：段階A ＝ 地図の上の戦争。
-2. **進行中（Opus）**：段階B/D ＝ 敵将13人（`docs/SPEC_CAPTAINS_BD_2026-09-15.md` §2）。エンジン・台詞117本・写真13枚は本線に入っていて、配線だけで画面に出る。
+2. 済（Opus 14226bf、Claude 検証済み）：段階B/D ＝ 敵将13人。**次に Opus へ：`TICKET_REMOVE_DEAD` §1（削除）→ `SPEC_SLIME_ARC_2` §2（スライム②）。どちらも run.js。同時に二人へ渡さない。**
 3. 済（CodeX、Claude 取り込み・弾の配線済み）：大技の絵8枚＋dokan 音3本。CodeX に今すぐ貼れるものは無い（次はスライムの大筋か、監査の「墓場」文書の整理）。
    - 済（CodeX 36baa6c、Claude 取り込み済み）：地図の印20枚 `assets/map/pins/`（64×64 可逆 WebP・ID は `territories.js` と一致・review.png で明暗確認）。**表示への接続は段階A（上の 1）で Opus が `Territory` の kind / tribe から `kind-<kind>.webp` / `tribe-<id>.webp` を引く。** 背景と座標は段階E。
 4. **Opus（軽い）**：`st.turn` の加算位置を経路で揃える（下の 9/14 メモ）。揃えたら差し押さえ音の ±1 の幅を外す。
@@ -53,7 +53,7 @@
 - 済（CodeX `codex/big-skill-fx`）：**大技の絵8枚＋dokan 音3本**を取り込み。512×512 可逆 WebP、爆発音は CC0（rubberduck、来歴は `assets/sfx/LICENSES.md`）。
   Opus の配線は `big-<fx>.webp` と `dokan-a/b/c.wav` を既に参照していたので着弾と音はそのまま出る。**弾の大きい絵だけ Claude が `battlefield.css` に2行**（`.big.projectile-fire/wind::before` を新しい webp・3倍に）。skill-fx / ranged / battlefield / effects 通過、実画像で確認。
   **これで大技の迫力は絵・音・配線とも完了。** 原画 `assets/battle/effects/big-skill-sources/`（14MB）は CodeX の方針どおり保持。
-- 進行中（Opus）：**段階B/D 敵将13人**（`SPEC_CAPTAINS_BD` §2。オーナーが 09-15 深夜に貼り付け済み）。上がったら取り込みと検証（test-captains、run-all、sim 20 を1回）。
+- 済（Opus 9c9599f〜14226bf）：**段階B/D 敵将13人**。Claude 検証（09-16 昼）：node 94本、run-all 全通過、sim 20 は全戦略完走（0% なし。敵将 討 7〜10/ラン、雇 0＝sim は提案に答えない）。sim の「代わりを落とす／従えるから探す」（40fea64）でクリア率は 75〜100% に戻った。
 - 次に Opus へ：`st.turn` の加算位置合わせ（軽い）。その後はオーナー判断（下の2件）。
 
 **オーナー判断待ち（2026-09-15 夜に足した2件。朝に一言ほしい）**
