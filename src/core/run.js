@@ -339,6 +339,7 @@ const Game = {
     if (typeof Captains !== "undefined") Captains.init(st);
     if (typeof st.settles !== "number") st.settles = Number(st.turn) || 0;
     if (!st.raided || typeof st.raided !== "object") st.raided = {};
+    delete st.feastPending;   // 宴は撤去（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
@@ -385,7 +386,7 @@ const Game = {
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
       legacyReturn: null, legacyOffered: false, lessonId: null,
-      feastPending: null, hungerStreak: 0,
+      hungerStreak: 0,
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
       retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {}, outpost: null,
@@ -717,51 +718,6 @@ const Game = {
     return over;
   },
 
-  // 宴：余った食料の使い道。余剰は今まで死に資源で、黒字にする理由がなかった。
-  // 効くのは「食う者」だけなので、アンデッド軍団では宴そのものが成立しない。
-  // 大食漢は食う量が倍になる代わりに効果も倍。負債だったオーガが資産に変わる。
-  feastQuote() {
-    const st = this.state;
-    const active = this.activeRoster();
-    const eaters = st.roster.filter(m => Aptitude.of(m).appetite > 0);
-    const activeEaters = active.filter(m => Aptitude.of(m).appetite > 0);
-    const bigEaters = active.filter(m => (m.traits || []).includes("big_eater")).length;
-    const cook = active.some(m => (m.traits || []).includes("demon_cook"));
-    const base = Math.max(1, this.foodNeed());
-    // 大食漢がいれば倍食う。料理人がいれば同じ量で足りる。
-    let cost = base * (bigEaters > 0 ? 2 : 1);
-    if (cook) cost = Math.max(1, Math.ceil(cost / 2));
-    const stock = Math.max(0, st.food || 0);
-    const dmgBonus = bigEaters > 0 ? .30 : .15;
-    const loyaltyGain = bigEaters > 0 ? 10 : 6;
-    return {
-      cost, stock, dmgBonus, loyaltyGain,
-      bigEaters, cook,
-      eaters: eaters.length,
-      activeEaters: activeEaters.length,
-      held: !!st.feastPending,
-      // 宴は「余剰の使い道」であって、備蓄を削る博打にはしない。
-      // 宴のあとに2戦ぶんの糧食が残らないなら開けない。連打しても飢えないようにする。
-      affordable: stock >= cost + base * 2,
-      possible: eaters.length > 0
-    };
-  },
-
-  holdFeast() {
-    const st = this.state;
-    const q = this.feastQuote();
-    if (st.feastPending || !q.possible || !q.affordable) return null;
-    st.food = Math.max(0, st.food - q.cost);
-    let fed = 0;
-    for (const m of st.roster) {
-      if (Aptitude.of(m).appetite === 0) continue;
-      m.loyalty = U.clamp(m.loyalty + q.loyaltyGain, 0, 100);
-      fed++;
-    }
-    st.feastPending = { dmgBonus: q.dmgBonus, cost: q.cost, fed, bigEaters: q.bigEaters };
-    return st.feastPending;
-  },
-
   prepareBattleRations(notes) {
     const quote = this.battleRationQuote();
     this.state.food = quote.foodAfter;
@@ -947,7 +903,6 @@ const Game = {
   // 数値・発火条件は従来のまま。ここで変えているのは「根拠を持ち回るかどうか」だけである。
   mealPlan(rations) {
     const active = this.activeRoster();
-    const feast = this.state.feastPending;
     const cook = active.find(m => (m.traits || []).includes("demon_cook")) || null;
     const hunger = active.find(m => (m.traits || []).includes("hunger_demon")) || null;
     const consumed = rations ? Math.max(0, Number(rations.consumed) || 0) : 0;
@@ -986,14 +941,12 @@ const Game = {
             .map(m => ({ uid: m.uid, name: m.name, mult: bigEaterMult }))
         : [],
       hungerUid: hunger && rations && rations.emptied ? hunger.uid : null,
-      hungerName: hunger && rations && rations.emptied ? hunger.name : null,
-      feast: feast ? { dmgBonus: feast.dmgBonus, fed: feast.fed } : null
+      hungerName: hunger && rations && rations.emptied ? hunger.name : null
     };
   },
 
   preparedRoster(rations, plan) {
     const active = this.activeRoster();
-    const feast = this.state.feastPending;
     const meal = plan || this.mealPlan(rations);
     const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
     return active.map(m => {
@@ -1001,8 +954,6 @@ const Game = {
       if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= meal.bigEaterMult;
       if (meal.targetUid !== null && m.uid === meal.targetUid) dmgMult *= 1 + meal.boost;
       if (rations && rations.emptied && hungering) { dmgMult *= 2; takenMult *= 1.3; }
-      // 宴を食えた者だけが強くなる。食事不要の軍団に宴の効果はない。
-      if (feast && Aptitude.of(m).appetite > 0) dmgMult *= 1 + feast.dmgBonus;
       // 施設の一律HP・防御補正は撤去した（設計憲法 第9節）。施設Lv.は
       // 大型Jokerが働ける回数（facilityWorks）としてのみ効く。
       const traits=(m.traits||[]).slice();
@@ -2902,14 +2853,9 @@ const Game = {
     }
 
     const battleRations = openingBattle ? null : this.prepareBattleRations(notes);
-    const feastUsed = st.feastPending;
     // 食事の伝票は倍率を掛ける前に一度だけ作り、戦闘入力・戦果・予告で同じものを読む（V2a）
     const mealPlan = battleRations ? this.mealPlan(battleRations) : null;
     const playerUnits = this.preparedRoster(battleRations, mealPlan).map(m => Battle.makeUnit(m, "player"));
-    if (feastUsed) {
-      notes.push(`宴の余韻：${feastUsed.fed}名が満腹のまま戦場へ出た（与ダメージ+${Math.round(feastUsed.dmgBonus * 100)}%）`);
-      st.feastPending = null;
-    }
     // 雇った傭兵は出撃5枠の外から加わる。戦闘が終われば去る（次の戦闘には残らない）
     for (const merc of this.preparedMercenaries()) {
       const unit = Battle.makeUnit(merc, "player");
@@ -2933,8 +2879,9 @@ const Game = {
       cookUid: playerUnits.find(u => u.traits.includes("demon_cook"))?.uid || null,
       bigEaterUids: playerUnits.filter(u => u.traits.includes("big_eater")).map(u => u.uid),
       hungerUid: playerUnits.find(u => u.traits.includes("hunger_demon"))?.uid || null,
-      feastUid: battleRations.consumed >= 4
-        ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null,
+      // 宴は撤去した（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）。
+      // battle.js がまだこの鍵を読むので、null 固定で残してある（読む側の削除は別のコミット）。
+      feastUid: null,
       // V2a: 食事強化の起点・対象・効果量。battle.js はまだ読んでいないが、
       // 追加フィールドは無視されるだけで発火順・回数・chainDepth を変えない。
       // 因果イベントとして出すのは V2b（battle.js 側）の仕事。
@@ -3409,11 +3356,6 @@ const Game = {
       // 旧セーブにこの鍵は無い。読む側は「無ければV1表示」で、推定生成してはいけない。
       chainView,
       overkillSummary: result.overkillSummary,
-      // 戦意（momentum）の到達倍率。戦闘中は帯に出続けるが、終わると消えてしまい
-      // 「今日はどれだけ乗ったのか」が戦果に残らなかった。タイムラインから導出するだけで、
-      // 戦闘式・数値は変えていない。古いセーブには無いので表示側で 1 として扱う。
-      momentumPeak: (result.timeline || []).reduce((max, e) =>
-        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
       // 施設は「誰の手柄か」を個人へ付けない代わりに、戦果へ短い要約として残す。
       // 共通補正（Lv）と稼働施設（Joker）を分けて書き、どちらを体感したか読めるようにする。
@@ -3613,8 +3555,6 @@ const Game = {
       chainSummary: result.chainSummary,
       chainView,
       overkillSummary: result.overkillSummary,
-      momentumPeak: (result.timeline || []).reduce((max, e) =>
-        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
       facility: this.facilityReport(),
       facilitySummary: (this.tallyFacilityStats(result.facilitySummary), result.facilitySummary || { facilities: [], rescuedFromWipe: false }),

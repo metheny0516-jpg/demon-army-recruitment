@@ -462,10 +462,6 @@ const App = {
         Game.postBrief(data.brief);
         return this.render();
 
-      case "feast":
-        Game.holdFeast();
-        return this.render();
-
       case "payrollpolicy":
         Game.setPayrollPolicy(data.policy);
         return this.render();

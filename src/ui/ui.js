@@ -662,7 +662,7 @@ const UI = {
       : tab === "advisor" ? this.advisorCastlePanel()
       : tab === "town" && typeof TownUI !== "undefined" ? TownUI.panel() : this.armyPanel({ controls: true });
     if (options.formation) content += `<div class="formation-decisions">
-      ${this.payrollPanel()}${this.debtPanel()}${this.feastPanel()}${this.mercenaryPanel()}
+      ${this.payrollPanel()}${this.debtPanel()}${this.hungerPanel()}${this.mercenaryPanel()}
       ${this.kingSlimePanel()}${this.vaultPanel()}
     </div>`;
     const tabs = options.formation ? "" : `<nav class="castle-tabs" aria-label="城のメニュー">
@@ -1073,35 +1073,14 @@ const UI = {
   },
 
   // 余った食料の使い道。備蓄が積み上がるだけの資源だったので、判断に変える。
-  feastPanel() {
-    const q = Game.feastQuote();
+  // 飢餓の出口（宴の札に同居していたが、宴の撤去で行き場が無くなったので独立させた。
+  // docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1。飢餓そのものは撤去していない）。
+  hungerPanel() {
     const streak = Game.state.hungerStreak || 0;
-    // 飢餓は損失で終わらない。出口が見えていないと、また「不足＝詰み」に戻る。
-    const hunger = streak > 0
-      ? `<div class="hunger-streak">🥀 飢餓 ${streak}戦目 —
-          あと${Game.HUNGER_ADAPT_TURNS - streak}戦を生き延びた者は<b>飢餓適応</b>（食料を消費しない／最大HP-15%）</div>`
-      : "";
-    if (!q.possible) {
-      return `<div class="panel feast-panel"><h3>🍗 宴</h3>
-        <div class="muted">この軍団は誰も食事を必要としない。宴は開けない。</div>${hunger}</div>`;
-    }
-    const links = [
-      q.bigEaters > 0 ? `大食漢${q.bigEaters}体：食う量2倍・効果2倍` : "",
-      q.cook ? "魔界料理人：必要な食料が半分" : ""
-    ].filter(Boolean);
-    const body = q.held
-      ? `<div class="feast-ready">宴は済んだ。${U.esc(String(Game.state.feastPending.fed))}名が満腹で出撃する（食う者の与ダメージ+${Math.round(Game.state.feastPending.dmgBonus * 100)}%）</div>`
-      : `<button class="wide" data-action="feast" ${q.affordable ? "" : "disabled"}>
-           🍗 宴を開く（食料 ${q.cost} 消費）
-         </button>
-         <div class="muted">${q.affordable
-            ? `食う者${q.eaters}名の忠誠+${q.loyaltyGain}、出撃した食う者の与ダメージ+${Math.round(q.dmgBonus * 100)}%（次の戦闘のみ）。`
-            : `備蓄 ${q.stock}。宴には ${q.cost} と、2戦ぶんの糧食を残す余裕が要る。`}</div>`;
-    return `<div class="panel feast-panel">
-      <h3>🍗 宴 <span class="muted">備蓄 ${q.stock} / 上限 ${Game.foodCapacity()}</span></h3>
-      ${body}
-      ${links.length ? `<div class="synergy-hint">${links.map(U.esc).join(" / ")}</div>` : ""}
-      ${hunger}
+    if (!streak) return "";
+    return `<div class="panel hunger-panel">
+      <div class="hunger-streak">🥀 飢餓 ${streak}戦目 —
+        あと${Game.HUNGER_ADAPT_TURNS - streak}戦を生き延びた者は<b>飢餓適応</b>（食料を消費しない／最大HP-15%）</div>
     </div>`;
   },
 
@@ -1751,8 +1730,8 @@ const UI = {
         <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を ${Game.facilityLv("grand_kitchen") + 1} 倍にする。</span>
       </div>` : ""}
       ${opening ? "" : this.debtPanel()}
-      ${opening ? "" : this.feastPanel()}
       ${this.payrollPanel()}
+      ${opening ? "" : this.hungerPanel()}
       ${opening ? "" : this.mercenaryPanel()}
       ${this.kingSlimePanel()}
       ${this.vaultPanel()}
