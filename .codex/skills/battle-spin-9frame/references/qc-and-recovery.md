@@ -5,10 +5,12 @@
 View a labeled contact sheet and the exact-speed preview. Check frames individually, then both cycles at speed.
 
 - Compare `7→0` twice for center, baseline, silhouette width, hair, tail, and wings.
-- Compare `7→8` for a deliberate finish rather than an accidental jump.
+- Compare `7→8` for a deliberate command-request finish rather than an accidental jump.
+- Compare `8→0` when a command is confirmed and `7→9` when the short acknowledgment turn lands.
 - Inspect all four cell edges for clipped outlines or neighboring-cell contamination.
 - Zoom frames containing detached parts. Wings, tails, weapons, hair strands, droplets, and effects may be valid components far from the torso.
 - Confirm identity, costume, colors, limb count, and prop continuity.
+- Confirm frame 9 reads as “ready and waiting” rather than command request, attack impact, guard, damage, or idle relaxation.
 - For black clothing or dark outlines, reject black chroma-key removal. It can silently erase the costume even when the thumbnail looks plausible.
 
 Automated geometry can detect dimensions, alpha bounds, center, baseline, empty frames, and gross edge contact. It cannot reliably judge identity, foreign fragments, intended detached parts, or motion continuity.
@@ -22,6 +24,7 @@ Do not regenerate source art first. Repair the earliest defective local stage:
 3. Center/baseline jump: renormalize only that cell from its accepted transparent crop.
 4. Clipped wing/tail/effect: restore margin from the original cell and disable destructive component filtering.
 5. Preview mismatch: rebuild only the preview from unchanged normalized cells.
+6. Frame-9 mismatch: revise only the separately generated combat-ready pose; do not regenerate the accepted 0–8 set.
 
 After any repair, rerun the exact-speed preview and full nine-frame QC because a local fix can alter a transition.
 

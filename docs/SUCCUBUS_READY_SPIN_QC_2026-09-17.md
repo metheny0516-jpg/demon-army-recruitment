@@ -26,6 +26,10 @@ The lost commit `e5ed4b0` is not represented as recovered. `ready-spin-source.pn
 
 `src/` integration is intentionally outside this commit.
 
+## Ten-image follow-up
+
+The recovered Succubus set is the accepted legacy 0–8 command-request motion. The revised reusable skill now requires a separate `9.webp` combat-ready hold after command confirmation. Succubus frame 9 remains pending; it was not fabricated or derived from the recovered cells in this documentation-only skill revision.
+
 ## Recovery facts carried into the skill
 
 The reusable procedure explicitly covers stopped Work sessions, rescue of uncommitted artifacts, insufficient cell boundaries, adjacent-cell contamination, detached parts such as wings, and dark-costume chroma-key hazards. It uses stage checkpoints and `manifest.json` so a later character can resume from its last verified output.

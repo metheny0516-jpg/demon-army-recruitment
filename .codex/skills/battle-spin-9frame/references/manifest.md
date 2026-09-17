@@ -4,13 +4,14 @@ Keep `manifest.json` in the character workspace. Paths should be relative to the
 
 Required top-level fields:
 
-- `schema_version`: currently `1`.
+- `schema_version`: currently `2` for the ten-image contract. Version 1 is the legacy nine-image format.
 - `character`: stable character or species ID.
 - `source_sheet`: path or `null`; add a note when the source was lost.
 - `frames_dir`, `preview_dir`, `qc_dir`.
-- `motion`: `lead_seconds`, `spin_seconds`, `settle_seconds`, and the exact sequence.
+- `motion.command_request`: lead, spin, settle, and `0..7,0..7,8` sequence.
+- `motion.command_confirm`: the short `0..7,9` acknowledgment turn and hold timing.
 - `normalization`: canvas, anchor, baseline, alpha policy, component-filter policy.
-- `stages`: status for `spec`, `reference`, `source`, `split`, `transparency`, `normalize`, `preview`, `qc`, and `delivery`.
+- `stages`: status for `spec`, `reference`, `source`, `split`, `transparency`, `normalize`, `command_pose`, `preview`, `qc`, and `delivery`.
 - `artifacts`: SHA-256 checksums for accepted deliverables.
 - `recovery`: whether work was rescued, regenerated, and the last verified stage.
 
@@ -24,13 +25,22 @@ Resume rules:
 4. Use a temporary output beside the destination, validate it, then rename it into place.
 5. After delivery, record destination paths and hashes so a future session can distinguish accepted assets from working copies.
 
-The standard motion values are:
+The standard version 2 motion values are:
 
 ```json
 {
-  "lead_seconds": 0.09,
-  "spin_seconds": 0.275,
-  "settle_seconds": 0.08,
-  "sequence": [0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7,8]
+  "command_request": {
+    "lead_seconds": 0.09,
+    "spin_seconds": 0.275,
+    "settle_seconds": 0.08,
+    "sequence": [0,1,2,3,4,5,6,7,0,1,2,3,4,5,6,7,8]
+  },
+  "command_confirm": {
+    "spin_seconds": 0.16,
+    "sequence": [0,1,2,3,4,5,6,7,9],
+    "hold_frame": 9
+  }
 }
 ```
+
+For a recovered version 1 character with only frames 0–8, do not invent frame 9 or mark version 2 complete. Preserve its accepted files, record `command_pose: pending`, and upgrade it only through a separately approved frame-9 production pass.

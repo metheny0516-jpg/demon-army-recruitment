@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checkpointed helper for nine-frame battle ready-spin assets."""
+"""Checkpointed helper for ten-image battle command motion assets."""
 
 from __future__ import annotations
 
@@ -13,7 +13,9 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-SEQUENCE = list(range(8)) * 2 + [8]
+FRAME_COUNT = 10
+REQUEST_SEQUENCE = list(range(8)) * 2 + [8]
+CONFIRM_SEQUENCE = list(range(8)) + [9]
 CANVAS = (512, 512)
 ANCHOR_X = 256
 BASELINE_Y = 480
@@ -45,7 +47,7 @@ def sha256(path: Path) -> str:
 
 def frame_paths(workspace: Path, manifest: dict) -> list[Path]:
     root = workspace / manifest["frames_dir"]
-    return [root / f"{index}.webp" for index in range(9)]
+    return [root / f"{index}.webp" for index in range(FRAME_COUNT)]
 
 
 def split(args) -> None:
@@ -85,7 +87,7 @@ def normalize(args) -> None:
     input_dir = args.input_dir.resolve()
     out_dir = workspace / manifest["frames_dir"]
     out_dir.mkdir(parents=True, exist_ok=True)
-    for index in range(9):
+    for index in range(FRAME_COUNT):
         candidates = [input_dir / f"{index}.png", input_dir / f"{index}.webp"]
         source_path = next((path for path in candidates if path.exists()), None)
         if source_path is None:
@@ -110,6 +112,7 @@ def normalize(args) -> None:
             temp_path.replace(target)
     manifest["stages"]["transparency"] = "complete"
     manifest["stages"]["normalize"] = "complete"
+    manifest["stages"]["command_pose"] = "complete"
     manifest["recovery"]["last_completed_stage"] = "normalize"
     atomic_json(manifest_path, manifest)
     print(out_dir)
@@ -125,15 +128,18 @@ def init(args) -> None:
     if path.exists() and not args.force:
         raise SystemExit(f"manifest exists: {path}; use --force only for an intentional reset")
     data = {
-        "schema_version": 1,
+        "schema_version": 2,
         "character": args.character,
         "source_sheet": None,
         "frames_dir": "05-normalized",
         "preview_dir": "06-preview",
         "qc_dir": "07-qc",
-        "motion": {"lead_seconds": 0.09, "spin_seconds": 0.275, "settle_seconds": 0.08, "sequence": SEQUENCE},
+        "motion": {
+            "command_request": {"lead_seconds": 0.09, "spin_seconds": 0.275, "settle_seconds": 0.08, "sequence": REQUEST_SEQUENCE},
+            "command_confirm": {"spin_seconds": 0.16, "sequence": CONFIRM_SEQUENCE, "hold_frame": 9},
+        },
         "normalization": {"canvas": list(CANVAS), "anchor_x": ANCHOR_X, "baseline_y": BASELINE_Y, "alpha_mode": "preserve", "black_chroma_key": False, "minimum_component_pixels": 500, "component_filter_frames": []},
-        "stages": {name: "pending" for name in ("spec", "reference", "source", "split", "transparency", "normalize", "preview", "qc", "delivery")},
+        "stages": {name: "pending" for name in ("spec", "reference", "source", "split", "transparency", "normalize", "command_pose", "preview", "qc", "delivery")},
         "artifacts": {},
         "recovery": {"rescued_from_stopped_work_session": False, "regenerated_source": False, "last_completed_stage": None, "notes": []},
     }
@@ -171,7 +177,7 @@ def qc(args) -> None:
         "automated_pass": not failures,
         "failed_frames": failures,
         "frames": rows,
-        "visual_qc_required": ["exact-speed two cycles", "7-to-0", "7-to-8", "identity", "foreign fragments", "detached parts"],
+        "visual_qc_required": ["exact-speed two cycles", "7-to-0", "7-to-8", "8-to-0 command confirm", "7-to-9 landing", "frame-9 combat readiness", "identity", "foreign fragments", "detached parts"],
     }
     out = workspace / manifest["qc_dir"] / "qc.json"
     atomic_json(out, report)
@@ -186,10 +192,11 @@ def qc(args) -> None:
 
 
 def contact_sheet(images: list[Image.Image], out: Path) -> None:
-    sheet = Image.new("RGB", (1536, 1536), (232, 229, 225))
+    columns, rows = 4, 3
+    sheet = Image.new("RGB", (columns * 512, rows * 512), (232, 229, 225))
     draw = ImageDraw.Draw(sheet)
     for index, image in enumerate(images):
-        x, y = (index % 3) * 512, (index // 3) * 512
+        x, y = (index % columns) * 512, (index // columns) * 512
         sheet.paste(image, (x, y), image)
         draw.text((x + 8, y + 8), str(index), fill=(25, 25, 25))
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -218,8 +225,12 @@ def preview(args) -> None:
         temp = Path(temp_dir)
         lead_frames, spin_frames, settle_frames = 9, 28, 8
         timeline = [0] * lead_frames
-        timeline += [SEQUENCE[min(int(i * 16 / spin_frames), 15)] for i in range(spin_frames)]
+        timeline += [REQUEST_SEQUENCE[min(int(i * 16 / spin_frames), 15)] for i in range(spin_frames)]
         timeline += [8] * settle_frames
+        timeline += [8] * 40  # Simulated command-selection hold for review.
+        confirm_frames = 16
+        timeline += [CONFIRM_SEQUENCE[min(int(i * 8 / confirm_frames), 7)] for i in range(confirm_frames)]
+        timeline += [9] * 30
         for number, frame in enumerate(timeline):
             images[frame].save(temp / f"{number:04d}.png")
         mp4_path = preview_dir / "actual-speed.mp4"

@@ -58,6 +58,7 @@
     "split": "complete",
     "transparency": "complete",
     "normalize": "complete",
+    "command_pose": "pending",
     "preview": "complete",
     "qc": "complete",
     "delivery": "complete"
@@ -72,9 +73,9 @@
     "../../assets/battle/units/succubus/ready-spin/6.webp": "f57050b5de40c25a1a71060581d107608f8339863b6339c08e0262b7984b8767",
     "../../assets/battle/units/succubus/ready-spin/7.webp": "e80539416a698f18142384261ad05f55ed6030dda612038a7146c03a8378b87b",
     "../../assets/battle/units/succubus/ready-spin/8.webp": "27e4e8006a69f7eced93efbc8b3a80a419d896daa79a1a4e2d87c92cf8e2d610",
-    "../../assets/battle/units/succubus/ready-spin-review.png": "d7031b48f7f2c00b28b2244523db06b7966a9db085e658de3fb40ebfa9eb43be",
+    "../../assets/battle/units/succubus/ready-spin-review.png": "57f6ace4bb7b645905f62fa018108f8e2c4a0cdd124de08eee803491677f2a64",
     "actual-speed.mp4": "f0cf81810ba9e2dd3250d6c3e2a3c2cbc18dec82665dd5b4ad5ef2c37f24bdd7",
-    "contact-sheet.png": "7737fc82fb5c6a1192aaf8dda61596d0f5d7d4f0a844eae3a51c0e7e1c55064a",
+    "contact-sheet.png": "e9e3aeee131e4e48eb26d11f17c0d72941ce07d8b06761d31251427abc9d4734",
     "qc.json": "1233b5474d9373a5f3772d2956abab53eb1249478e975936b41db25d8dc9bd64"
   },
   "recovery": {
@@ -84,7 +85,8 @@
     "notes": [
       "The lost e5ed4b0 commit was not reconstructed.",
       "The accepted normalized cells were recovered unchanged and are the authoritative Succubus deliverables.",
-      "ready-spin-source.png was lost with the stopped Work session and is intentionally not regenerated or reconstructed."
+      "ready-spin-source.png was lost with the stopped Work session and is intentionally not regenerated or reconstructed.",
+      "This recovered asset remains a legacy nine-image set. Frame 9 combat-ready production is pending and was not fabricated during recovery."
     ]
   }
 }
