@@ -106,7 +106,9 @@
 **その他の気づき**：
 - `tools/browser-tests/run-all.sh` の一覧に `ready-spin` が入っていない（2a3068e で追加されたテスト）。Opus が上の修正と同じコミットで足す。
 - 未取り込みの枝 **`codex/succubus-ready-spin-assets`（`327ad93`、本線 `adc5ff9` 直上、Terra）**：サキュバスの ready-spin 9コマ＋制作 Skill（`.codex/skills/battle-spin-9frame/`）＋QC文書。`src/` 未変更。HANDOFF の 2節に載っていなかった。
-  **オーナー決定（09-17 昼）：サキュバスの画像はまだ制作中。組み込みは画像が完成してから。** 今は取り込まない・Opus にも回さない。完成したら別チケット（`battle_scene.js` の `READY_SPIN_SPRITES` に `succubus` を足す＋ `ready-spin.js` に1種追加）。
+  ~~オーナー決定（09-17 昼）：画像完成後~~ → **オーナー決定（09-17 午後）：組み込む。** 枝は `183a3ee`（2コミット、`adc5ff9` 基点、本線と HANDOFF.md だけ衝突）。9コマ（0〜8）は揃っている。`assets/battle/units/succubus/ready.webp` があるので画像失敗時の戻り先もある。サキュバスは第二幕・tier4 なので**見えるのは第二幕の戦闘**。
+  チケット（Opus）：本線へ通常 merge → `battle_scene.js` の `READY_SPIN_SPRITES` に `succubus` → `ready-spin.js` に4種目 → 390px で中間コマ `[0-7]`→`8` の着地、回転中の「まもる」割り込み、低モーションで静止 `ready.webp` を目視（`READY_SPIN_INTEGRATION_2026-09-16.md` の煙試験と同じ）。
+  **注意**：CodeX の Skill（`183a3ee`）は「10枚目 `9.webp`＝指示確定後の構え」という**新しい契約**を書いているが、サキュバスにも3種族にも `9.webp` は無く、`battle_scene.js` も読まない。今回は 9 コマ契約のまま組み込む。10枚目を採るかは別のオーナー判断（演出の追加。問7以外に効かないので急がない）。
 - `claude/pensive-noether-e6x97b` はまだ remote に残っている（削除してよい、は 2節どおり）。GitHub の既定ブランチはまだ `claude/demon-king-recruitment-game-sapqsx`（`c1b3d16`、本線より 314 コミット遅れ）。
 
 **次**：Opus に赤3件（＋run-all の一覧）を1枝で直させ、`test-two-stage.js`・`test-chain-measure-retry.js`・`autoplay.js` が通ったら本線へ。その後に 4-2「張り紙を待たない」。
