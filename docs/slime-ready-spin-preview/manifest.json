@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "character": "slime",
+  "source_sheet": null,
+  "frames_dir": "../../assets/battle/units/slime/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": "../slime-ready-spin-qc",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": []
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "unavailable",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/slime/ready-spin/0.webp": "5af7bac8871568ac5772b6a0f42b889087a8abd5040c46ec8b014103cc3d9a02",
+    "../../assets/battle/units/slime/ready-spin/1.webp": "a18e0b14f2b1d39b4e08fb4583eed38cb8b7bbcac0fea4ee97d758a0e8ce7461",
+    "../../assets/battle/units/slime/ready-spin/2.webp": "65cac828ec0250caf3998ffdd5e654fcf8c8672d02eaac30502b40e910911069",
+    "../../assets/battle/units/slime/ready-spin/3.webp": "e349d97ad90c89619268047e057366c66ad0d53b577a990518ad3cd61b39811a",
+    "../../assets/battle/units/slime/ready-spin/4.webp": "fb3a3d55457ce89150fb3ee160aa6cc2bb5996e2ae98a3d21a4173e69fe36c39",
+    "../../assets/battle/units/slime/ready-spin/5.webp": "a9a1f6cb08abd04c43cd60beadb90f77af066af0916be16bf278f65f26d56214",
+    "../../assets/battle/units/slime/ready-spin/6.webp": "b2a419c0e40a5a501a4a8cdf0adac47ac5ee69f0dda904d25fccd16f1bf6913d",
+    "../../assets/battle/units/slime/ready-spin/7.webp": "0045905b0b74e8718531c622f17d69601ffbaead71f12e838fdefb2d90c6f878",
+    "../../assets/battle/units/slime/ready-spin/8.webp": "6461475ffe783f04e1cfda773ab35db290c691f497c4a1bb1dbb7379a4578b77",
+    "../../assets/battle/units/slime/ready-spin/9.webp": "d32402eb1a206f544e8a0ff81187ee5755ebe41593f90a37981eb6f8e689b1c0",
+    "contact-sheet.png": "6257d1a4c84e17ea6994ae5b048d20803d2c277a683d82e065bfbd67e0071979",
+    "actual-speed.mp4": "1a32b0b3f5013fbd673e919919eed6b7c2317278cc394f772d16a1d87310a63c",
+    "../slime-ready-spin-qc/qc.json": "b5870b52e3757994fba1c7dfd72a862c714be937ca8b3474bacd1a061df22ee1"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": false,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": [
+      "Accepted historical frames 0–8 were copied byte-for-byte into this verification workspace; their original source sheet is unavailable and was not regenerated.",
+      "Frame 9 is a separate Slime combat-ready pose: low forward-leaning gel body with scarf and droplets, ready and waiting; distinct from frame 8's taller command-request pose.",
+      "Rights/source: original project-bound AI-generated frame-9 source at docs/slime-ready-spin-source/command-pose-source.png. Background removal uses a connected blue-grey background predicate and does not use black chroma key.",
+      "Visual QC passed after a transparency-only repair: exact-speed preview is 1.31 s; inspected 7→0, 7→8, 8→0, and 7→9 for baseline, gel body, scarf, droplets, and foreign fragments."
+    ]
+  }
+}

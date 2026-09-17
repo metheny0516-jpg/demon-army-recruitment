@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "character": "kobold",
+  "source_sheet": "/workspace/scratch/2a7e56be1139/demon-army-recruitment/docs/kobold-ready-spin-source/kobold-ready-spin-source-repacked.png",
+  "frames_dir": "../../assets/battle/units/kobold/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": "../kobold-ready-spin-qc",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": []
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "complete",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/kobold/ready-spin/0.webp": "aa0f6aaff69a245b15f3f66eb5072a2f3fcf2e76d2a1059431fd7fdac834464d",
+    "../../assets/battle/units/kobold/ready-spin/1.webp": "6e0effa89aa2f9be8e0ac926221d3631a5141a5dba1e1a746ac62f6e07234580",
+    "../../assets/battle/units/kobold/ready-spin/2.webp": "03355fbe2bcccc0f6ac8d6ae377a1c53a7ad1921688cfa90c414581d800b18ce",
+    "../../assets/battle/units/kobold/ready-spin/3.webp": "cc597a0904a17f4d8eac7ad083db421c83a834bbbd2cbbe28ce0f241c9d7a246",
+    "../../assets/battle/units/kobold/ready-spin/4.webp": "1c748f971e479fc0906f16e1036d7d6cf4423c33588c4034949910db2ae08cc3",
+    "../../assets/battle/units/kobold/ready-spin/5.webp": "6d0dd3fdb76c18a9a7589eaf122ebadfe67407cc7f0c58d4d8bb5b94b045707b",
+    "../../assets/battle/units/kobold/ready-spin/6.webp": "341ccd85aeb53ddb823b9d97554342ba07de0d58323a11e3ce772e3950539f11",
+    "../../assets/battle/units/kobold/ready-spin/7.webp": "4145785d8c19c284e7cbcbf904f6071d5f751d1c30ce5f7acf4a952793f01beb",
+    "../../assets/battle/units/kobold/ready-spin/8.webp": "4828d92ffdedb41751905396cc0408d9f7dce23a690f94bf7faf4a1f15146cf5",
+    "../../assets/battle/units/kobold/ready-spin/9.webp": "196953a7fa8628a40490fb585315f3854ffdd473d3538e6fbc30fc89dd8d0b36",
+    "contact-sheet.png": "06376c5986a5fd1b0a31b954c471c72ac40cfa6a39c760b0655c992e585438c8",
+    "actual-speed.mp4": "a9681b542e6b6cf547185e4a68ca539225ff5efc65e228128fb725f3e5964dc0",
+    "../kobold-ready-spin-qc/qc.json": "823f2cec967b6cca50597c581f2c5f4b7e228093e7bc4bccde2f03d79f2b7171"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": false,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": []
+  },
+  "grid": {
+    "column_edges": [
+      0,
+      418,
+      836,
+      1254
+    ],
+    "row_edges": [
+      0,
+      418,
+      836,
+      1254
+    ]
+  }
+}

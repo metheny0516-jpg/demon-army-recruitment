@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "character": "imp",
+  "source_sheet": "/workspace/scratch/2a7e56be1139/demon-army-recruitment/docs/imp-ready-spin-source/imp-ready-spin-source-repacked.png",
+  "frames_dir": "../../assets/battle/units/imp/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": "../imp-ready-spin-qc",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": []
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "complete",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/imp/ready-spin/0.webp": "d8e30a2cc1e4d72652148410952fdc6f94d2f8e9bfef2439b04b1d9f9b87eec7",
+    "../../assets/battle/units/imp/ready-spin/1.webp": "49dfe7a99ad827ccffd56cbc3fbab9ae73fc441ddbfe5731b266454305908f80",
+    "../../assets/battle/units/imp/ready-spin/2.webp": "f6e6718ccfdd04e639e2be24bb46a2b289da3802b9c345517bf54fccefaba0c2",
+    "../../assets/battle/units/imp/ready-spin/3.webp": "5ede8f895cd03458b98cd70f5531c20b272351f756164c358006aebc9eb5335f",
+    "../../assets/battle/units/imp/ready-spin/4.webp": "6ef77218e2e00ec99915e0881d0297d0bfb362563b28f46dd9f053df7b4c9a88",
+    "../../assets/battle/units/imp/ready-spin/5.webp": "d8268ccbe83de9ac8a6bec6bc8c64e484dc6ab7e2a8e8948e53871f0b3b0bf8a",
+    "../../assets/battle/units/imp/ready-spin/6.webp": "6f4d2b6edeb57e34c8b5774503b119119919f0a912bfb8180aff80db9859fce3",
+    "../../assets/battle/units/imp/ready-spin/7.webp": "6e60ca704de8ad2becac9e8cd64a4f1435385f9cb9b819cc8eaede28ab22af25",
+    "../../assets/battle/units/imp/ready-spin/8.webp": "00b3efd1e0609ddab1276e451c468a4fdd324d7be5377b8300596517385aaefa",
+    "../../assets/battle/units/imp/ready-spin/9.webp": "e903ac9d258b1cd2ee342465c87d04acfa8b17e2fab8d226df64df3f0cd0bcf8",
+    "contact-sheet.png": "068645cd7c630ab2d3a143c6b72f4f98adee0134b2ebad4ce44ca5434a4b365e",
+    "actual-speed.mp4": "f48c51e9d2ecf98fcc95eb9c2a91bd153505e0f5dd62ca9ee811b21367a08b18",
+    "../imp-ready-spin-qc/qc.json": "8417ed4429b31c8486b6f0c0a9914d6c5dbfcbbdbb9c583f3cebed4cda8a0e53"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": false,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": [
+      "Visual QC passed after targeted frame-9 renormalization; accepted 0-8 source art was not regenerated.",
+      "Checked wings, tail, staff tip, flame, identity, foreign fragments, and transitions 7->0, 7->8, 8->0, and 7->9.",
+      "Delivered runtime frames and documentation artifacts without modifying src/."
+    ]
+  },
+  "grid": {
+    "column_edges": [
+      0,
+      408,
+      815,
+      1223
+    ],
+    "row_edges": [
+      0,
+      428,
+      843,
+      1286
+    ]
+  }
+}
