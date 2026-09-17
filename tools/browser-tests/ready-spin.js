@@ -58,7 +58,23 @@ const assert = require('assert');
   await page.waitForTimeout(500);
   assert.match(await page.evaluate(() => BattleScene.units.p1.sprite.getAttribute('src')), /\/slime\/idle\.webp$/,
     'stop must prevent old frame timers from polluting the next scene');
+  // サキュバスは指示を確定すると、どの行動でも魔力を蓄える構え（回転の着地コマ）で受ける
+  // （2026-09-17 オーナー決定）。他の種族は従来どおり行動ごとの構え。
+  for (const cmd of ['attack', 'skill', 'guard', 'eat', 'auto']) {
+    await page.evaluate(command => {
+      const u = BattleScene.units.p3;
+      BattleScene.commandPose(u, BattleScene.COMMAND_POSE[command] || 'idle');
+    }, cmd);
+    await page.waitForTimeout(40);
+    assert.match(await page.evaluate(() => BattleScene.units.p3.sprite.getAttribute('src')),
+      /\/succubus\/ready-spin\/8\.webp$/, `succubus must hold the magic-gathering pose for ${cmd}`);
+  }
+  await page.evaluate(() => BattleScene.commandPose(BattleScene.units.p0, 'guard'));
+  await page.waitForTimeout(40);
+  assert.match(await page.evaluate(() => BattleScene.units.p0.sprite.getAttribute('src')),
+    /\/goblin\/guard\.webp$/, 'other species keep the per-command pose');
+
   assert.deepEqual(errors, []);
   await browser.close();
-  console.log('ready spin: 4 species, redraw stability, command cancellation, stop cancellation OK');
+  console.log('ready spin: 4 species, redraw stability, command cancellation, stop cancellation, succubus command hold OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -2088,6 +2088,13 @@ const BattleScene = {
   // たたかう・技は attack-windup のまま実行へ入り、そのまま strike へつながる。
   // 食べる・おまかせは構えを持たないので idle。
   COMMAND_POSE: { attack: "attack-windup", skill: "attack-windup", guard: "guard", eat: "idle", auto: "idle" },
+  // 種族ごとの「指示確定後の構え」。ここに載っている種族は、どの行動を決めても
+  // この1枚で受ける（2026-09-17 オーナー決定）。サキュバスは回転の着地コマ＝
+  // 魔力を蓄える構えで、たたかう・技・まもる・食べる・おまかせのすべてを受ける。
+  // 指示待ちの回転（ready）はこれに置き換えない——回る前から構えていては予兆にならない。
+  // 値は UNIT_DIR/<種族>/ 以下の相対パス。BATTLE_SPRITES（6ポーズ＋ready/guard）の
+  // 表には載せない——あれは「採用18種が持つ絵」の契約で、回転のコマは別勘定のため。
+  COMMAND_HOLD_SPRITE: { succubus: "ready-spin/8" },
   // 指示の番が来たときの登場動作。種族で分けない1種類（小さく跳ねて半回転→戻る）。
   // 絵は「止まった姿」だけなので、回る・跳ねるはここの transform で見せる。
   // 2026-09-16 オーナー試遊：250ms では半回転を見逃す。回転はそのまま、時間を 1.5 倍に。
@@ -2098,7 +2105,11 @@ const BattleScene = {
   commandPose(u, pose) {
     if (!u || !u.el || u.el.classList.contains("dead")) return;
     this.cancelReadySpin(u);
-    this.setPose(u, pose);
+    const hold = pose === "ready" ? null : this.COMMAND_HOLD_SPRITE[u.tplId];
+    if (hold && u.sprite && !u.sprite.dataset.spriteFailed) {
+      u.sprite.dataset.pose = pose;
+      u.sprite.src = `${this.UNIT_DIR}${u.tplId}/${hold}.webp`;
+    } else this.setPose(u, pose);
     const img = u.sprite;
     if (!img || img.dataset.spriteFailed) return;
     img.classList.remove("pose-swap");
