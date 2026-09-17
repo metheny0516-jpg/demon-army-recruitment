@@ -21,6 +21,43 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
 
+### 済：張り紙を待たない——モルモが決着ごとに札を持ってくる（2026-09-17 昼・Opus）
+
+`docs/SPEC_FORCED_OMEN_2026-09-16.md` §6 の Opus 担当分（器）＋ §2-4（arc の口）。
+枝 `claude/forced-omen-vessel` を本線へ通常 merge。battle.js は触っていない。
+
+**入ったもの**
+- `st.incidents.pending`：決着で新しく出た札・ready になった続き・大筋の予兆を積む待ち行列。
+  順は 大筋＞続き＞自然発生(B)＞噂の札(A)、同順は tier 大→中→小。
+  `settle` を `settleCore` + `syncPending` に割った（settleCore は途中で return するため）。
+- `App.presentPending(done)`：決着の報告のあと、次の画面に入る前に最大2件を全画面で読み上げ、
+  「めくる／やめる／あとで（張り紙に残す）」を出す。予兆は「わかった」1つ。
+  呼ぶ場所は `afterresult` と、事件が立った決着では `eventdone`（事件が先）。
+- `MormoScene.show` に `choices`。読み切ってから並び、押すまで閉じない（Enter/Escape でも）。
+- 本文は `Incidents.pendingText`＝CodeX の `mormoLine` 優先、無ければ rumor。
+- 張り紙・結果画面は**まだ pending にある札を出さない**。城下町の見出しは
+  「張り紙（あとで、と言った噂）」。新しい画面は作っていない。
+- run.js に `Game.noteArcOmens()` の口。`Game.arcOmens = st => [{id, text}]` を差せば積まれる
+  （st.arc 自体はまだ無いので既定は空）。
+
+**測ってわかって直したこと（本体のバグ）**
+- 失効して出直した札は別の提示なので `presented` を落とす。落とさないと二度とモルモが
+  持ってこず、sim の表示率が 0.2 前後まで落ちていた。
+
+**検証結果**
+- node 全件通過（`test-incidents.js` は 22→29件）。
+- ブラウザ回帰 `sh tools/browser-tests/run-all.sh` 全テスト通過。
+  `incidents.js` に3本追加（決着後・面接前に3択で出る／あとで→張り紙に残る／やめる→残らない）。
+- `node tools/sim.js 20`：**22戦略すべてで「表示された札／出た札」＝1.00**。
+  クリア率は 80〜100%（第一幕 +12G 以降の既知の高さ。今回の変更で動いていない。
+  「札を全部めくる」と「全部無視」の差も従来どおり）。
+
+**次に誰へ何を**
+- CodeX へ：`knight_envoy` と tail の札には `mormoLine` が無く、いまは rumor（三人称の掲示）を
+  モルモが読む形になっている。口で言う文が要るならそこ。
+- 統括へ：`st.arc`（大筋）が入ったら `Game.arcOmens` に繋ぐだけで予兆が口に乗る。
+- バランス：クリア率の高さは別件。今回の器は数値に触っていない。
+
 ### 済：赤3件をテスト側で直した（2026-09-17 昼・Opus）
 
 `bb3cef9`（枝 `claude/fix-red-tests-0917` → 本線へ通常 merge）。run.js・battle.js は触っていない。
