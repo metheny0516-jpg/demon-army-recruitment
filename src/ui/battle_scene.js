@@ -41,7 +41,7 @@ const BattleScene = {
   missingSprites: new Set(),
   traitQuoteShown: new Set(),   // 癖の台詞は1戦闘1回（play() で空にする）
   preloadedSprites: new Set(),
-  READY_SPIN_SPRITES: new Set(["goblin", "slime", "zombie"]),
+  READY_SPIN_SPRITES: new Set(["goblin", "slime", "zombie", "succubus"]),
   vfxPreloaded: false,
   // ready / guard は採用できる18種だけ（指示待ちの決めポーズと防御の構え、docs/SPEC_COMMAND_POSE_2026-09-15.md。2026-09-15 CodeX）
   BATTLE_SPRITES: {
