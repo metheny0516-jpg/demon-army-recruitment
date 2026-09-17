@@ -210,6 +210,7 @@ const BattleScene = {
     }
     for (const u of Object.values(this.units || {})) {
       u.readySpinToken = (u.readySpinToken || 0) + 1;
+      this.cancelConfirmSpin(u);
       if (u.readySpinOnError && u.sprite) {
         u.sprite.onerror = u.readySpinOnError;
         u.readySpinOnError = null;
@@ -340,9 +341,16 @@ const BattleScene = {
         const image = new Image();
         image.src = `${this.UNIT_DIR}${artId}/${pose}.webp`;
       }
-      if (this.READY_SPIN_SPRITES.has(artId)) for (let frame = 0; frame < 9; frame++) {
-        const image = new Image();
-        image.src = `${this.UNIT_DIR}${artId}/ready-spin/${frame}.webp`;
+      if (this.READY_SPIN_SPRITES.has(artId)) {
+        for (let frame = 0; frame < 9; frame++) {
+          const image = new Image();
+          image.src = `${this.UNIT_DIR}${artId}/ready-spin/${frame}.webp`;
+        }
+        // 10コマ目（指示確定後の構え）は、素材が届いた種族だけ先読みする。
+        if (this.CONFIRM_SPIN_SPRITES.has(artId)) {
+          const tail = new Image();
+          tail.src = `${this.UNIT_DIR}${artId}/ready-spin/9.webp`;
+        }
       }
     }
     this.units[u.id] = {
@@ -386,6 +394,7 @@ const BattleScene = {
   },
 
   setLife(u, dead, permanent = false) {
+    if (dead) { this.cancelReadySpin(u); this.cancelConfirmSpin(u); }
     u.el.classList.toggle("dead", dead);
     u.el.dataset.life = dead ? (permanent ? "fallen" : "down") : "alive";
     const label = u.el.querySelector(".bu-state");
@@ -2088,13 +2097,17 @@ const BattleScene = {
   // たたかう・技は attack-windup のまま実行へ入り、そのまま strike へつながる。
   // 食べる・おまかせは構えを持たないので idle。
   COMMAND_POSE: { attack: "attack-windup", skill: "attack-windup", guard: "guard", eat: "idle", auto: "idle" },
-  // 種族ごとの「指示確定後の構え」。ここに載っている種族は、どの行動を決めても
-  // この1枚で受ける（2026-09-17 オーナー決定）。サキュバスは回転の着地コマ＝
-  // 魔力を蓄える構えで、たたかう・技・まもる・食べる・おまかせのすべてを受ける。
-  // 指示待ちの回転（ready）はこれに置き換えない——回る前から構えていては予兆にならない。
-  // 値は UNIT_DIR/<種族>/ 以下の相対パス。BATTLE_SPRITES（6ポーズ＋ready/guard）の
-  // 表には載せない——あれは「採用18種が持つ絵」の契約で、回転のコマは別勘定のため。
-  COMMAND_HOLD_SPRITE: { succubus: "ready-spin/8" },
+  // 指示確定後の戦闘準備姿勢（10コマ契約の 9.webp）。
+  // 8＝指示待ちの見せ場、9＝命令を受けて戦闘態勢に入った姿。用途が違う。
+  // 0.16秒で 0→7 を1周してから 9 に着地し、自分の行動順が来るまで保つ。
+  // 有効にするのは 9.webp を持つ種族だけ。持たない旧9コマの種族は従来の構えのまま。
+  // 素材が届いた種族をここに足す（READY_SPIN_SPRITES と同じ運用）。ファイルの有無を
+  // 実行時に探ると、未収録の種族ぶんだけ 404 がコンソールに出る（scene.js が拾う）。
+  // confirmSpinReady は「読めなくなった種族を落とす」ための実行時の札で、
+  // 既定は一覧のとおり。
+  CONFIRM_SPIN_SPRITES: new Set([]),
+  CONFIRM_SPIN_MS: 160,
+  confirmSpinReady: {},
   // 指示の番が来たときの登場動作。種族で分けない1種類（小さく跳ねて半回転→戻る）。
   // 絵は「止まった姿」だけなので、回る・跳ねるはここの transform で見せる。
   // 2026-09-16 オーナー試遊：250ms では半回転を見逃す。回転はそのまま、時間を 1.5 倍に。
@@ -2105,11 +2118,10 @@ const BattleScene = {
   commandPose(u, pose) {
     if (!u || !u.el || u.el.classList.contains("dead")) return;
     this.cancelReadySpin(u);
-    const hold = pose === "ready" ? null : this.COMMAND_HOLD_SPRITE[u.tplId];
-    if (hold && u.sprite && !u.sprite.dataset.spriteFailed) {
-      u.sprite.dataset.pose = pose;
-      u.sprite.src = `${this.UNIT_DIR}${u.tplId}/${hold}.webp`;
-    } else this.setPose(u, pose);
+    this.cancelConfirmSpin(u);
+    this.setPose(u, pose);
+    // 10コマ目が読めなかったときに戻る先（＝従来の構え）を覚えておく。
+    if (u.sprite && pose !== "ready") u.sprite.dataset.commandPose = pose;
     const img = u.sprite;
     if (!img || img.dataset.spriteFailed) return;
     img.classList.remove("pose-swap");
@@ -2149,7 +2161,13 @@ const BattleScene = {
   // 承認済み3種族だけ、8方向を2周してから決める。画像は試作と同じクロマキー・切り出しを
   // tools/extract-ready-spin-frames.cjs で事前処理し、戦闘中の Canvas 処理を避ける。
   readySpinEnter(u) {
-    if (!u?.sprite || u.sprite.dataset.spriteFailed || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (!u?.sprite || u.sprite.dataset.spriteFailed) return;
+    // 低モーションでは回さず、指示待ちの決めポーズ（8.webp）へ直接切り替える。
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      u.sprite.dataset.pose = "ready-hold";
+      u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/8.webp`;
+      return;
+    }
     const token = u.readySpinToken = (u.readySpinToken || 0) + 1;
     const live = () => u.readySpinToken === token && u.sprite?.isConnected && !u.el.classList.contains("dead");
     const show = frame => { if (live()) u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/${frame}.webp`; };
@@ -2181,6 +2199,63 @@ const BattleScene = {
       u.sprite.onerror = normalError;
       u.readySpinOnError = null;
     }, 445));
+  },
+
+  // 指示が確定した瞬間の短い1周（0→7、約0.16秒）と、9.webp への着地。
+  // 着地したら行動順が来るまで保つ（`confirmHeld`）。行動が始まれば既存の
+  // 攻撃・技・防御のモーションが 9 を上書きする。
+  //
+  // 呼ぶのは decideCommand だけ＝「対象を含む最終行動が確定した1回」。
+  // 対象選びへ進んだだけ・もどる・同じ人物の再描画・説明の開閉では呼ばない。
+  // 取り消しと画面遷移は既存の個体トークン（cancelReadySpin / stop）でまとめて畳む。
+  confirmSpinEnter(u) {
+    if (!u?.sprite || u.sprite.dataset.spriteFailed) return false;
+    if (!this.CONFIRM_SPIN_SPRITES.has(u.tplId) || this.confirmSpinReady[u.tplId] === false) return false;
+    const land = () => { u.sprite.dataset.pose = "confirm"; u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/9.webp`; };
+    u.confirmHeld = true;
+    // 低モーションでは回さず、そのまま戦闘準備姿勢へ。
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { land(); return true; }
+    // 指示待ちの回転とは別のトークンで数える。最後の一人が決めた瞬間に指示窓が畳まれ、
+    // そこで readySpinToken は必ず進む。同じ札を使うと、確定後回転が出る前に消える。
+    const token = u.confirmSpinToken = (u.confirmSpinToken || 0) + 1;
+    const live = () => u.confirmSpinToken === token && u.sprite?.isConnected && !u.el.classList.contains("dead");
+    const normalError = u.sprite.onerror;
+    u.confirmSpinOnError = normalError;
+    u.sprite.onerror = () => {
+      // 10コマ目が読めなくなったら従来の構えへ戻す（旧9コマの種族と同じ見え方）。
+      if (!live()) return;
+      u.confirmSpinToken++;
+      u.confirmHeld = false;
+      this.confirmSpinReady[u.tplId] = false;
+      u.sprite.onerror = normalError;
+      u.confirmSpinOnError = null;
+      this.setPose(u, u.sprite.dataset.commandPose || "idle");
+    };
+    const step = this.CONFIRM_SPIN_MS / 8;
+    // 0コマ目はその場で。直前に置いた従来の構えが1瞬だけ見えるのを避ける。
+    u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/0.webp`;
+    for (let frame = 1; frame < 8; frame++) {
+      this.timers.push(setTimeout(() => { if (live()) u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/${frame}.webp`; }, frame * step));
+    }
+    this.timers.push(setTimeout(() => {
+      if (!live()) return;
+      land();
+      u.sprite.onerror = normalError;
+      u.confirmSpinOnError = null;
+    }, this.CONFIRM_SPIN_MS));
+    return true;
+  },
+
+  // 確定後回転を畳む。指示窓を閉じるだけでは畳まない（畳むとラウンド開始と同時に消える）。
+  // 畳むのは 指示を決め直した・死んだ・画面が変わった（stop）の3つ。
+  cancelConfirmSpin(u) {
+    if (!u) return;
+    u.confirmSpinToken = (u.confirmSpinToken || 0) + 1;
+    u.confirmHeld = false;
+    if (u.confirmSpinOnError && u.sprite) {
+      u.sprite.onerror = u.confirmSpinOnError;
+      u.confirmSpinOnError = null;
+    }
   },
   // 敵の役（5節）。札の名前の前に小さく出す。fighter は印を出さない（既定なので）。
   ROLE_ICON: { brute: "💪", shield: "🛡", priest: "✚", caster: "🔥", archer: "🏹", rogue: "🗡", commander: "🎖" },
@@ -2241,7 +2316,7 @@ const BattleScene = {
           this.commandPose(u, "ready");
           this.poseEnter(u);
         }
-      } else if (done) this.commandPose(u, this.COMMAND_POSE[done.cmd] || "idle");
+      } else if (done && !u.confirmHeld) this.commandPose(u, this.COMMAND_POSE[done.cmd] || "idle");
     }
     seq.activeId = a.id;
     // 敵の札：構えの印と、狙い選び中のタップ対象
@@ -2379,7 +2454,10 @@ const BattleScene = {
     this.cmdSel[unitId] = { cmd, target, skill: skill || null };
     seq.commands[unitId] = { cmd, target, skill: skill || null };
     // 決めた瞬間に構えへ。実行に入っても idle へは戻さない（構えを保つのが要件）。
+    // 10コマ揃っている種族は、そこから短く1周して戦闘準備姿勢（9.webp）へ着地する。
+    // ここは「対象を含む最終行動が確定した」唯一の地点なので、確定後回転もここだけ。
     this.commandPose(this.units[unitId], this.COMMAND_POSE[cmd] || "idle");
+    this.confirmSpinEnter(this.units[unitId]);
     seq.mode = "menu";
     this.cmdTargetSide = null; this.cmdTargetKind = null;
     if (seq.idx >= prompt.allies.length - 1) {
