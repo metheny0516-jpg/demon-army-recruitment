@@ -115,4 +115,84 @@ test('使者は忠誠80から来る。斬れば王国が気づき、断れば後
   assert.equal(ignore.incidents.done.knight_envoy.branch,'ignored','関わらないは記録に残る');
   assert.equal(ignore.food,food,'関わらなければ何も起きない');
 });
+
+// ── 張り紙を待たない（docs/SPEC_FORCED_OMEN_2026-09-16.md §2-1・§2-2・§4）──
+test('決着で出た札は待ち行列に積まれ、順は 予兆＞続き＞自然発生＞噂の札',()=>{
+  const st=fresh(['slime']);trace(st,'ate');trace(st,'sparked');
+  Incidents.settle(Game);
+  assert.deepEqual(st.incidents.pending.map(p=>p.id),['slime_pond'],'出た札が待ち行列に入る');
+  assert.equal(st.incidents.pending[0].kind,'A');
+  // 続きと予兆を足すと、予兆＞続き＞札 の順に並び替わる
+  st.incidents.tail={id:'slime_pond_tail',parent:'slime_pond',ready:true,due:0};
+  Incidents.pushOmen(Game,{id:'swamp_moves',text:'沼が動いているそうデス'});
+  Incidents.syncPending(st);
+  assert.deepEqual(st.incidents.pending.map(p=>p.kind),['arc','tail','A']);
+});
+test('1決着に出すのは2件まで。残りは次の決着へ繰り越す',()=>{
+  const st=fresh(['slime']);trace(st,'ate');trace(st,'sparked');
+  Incidents.settle(Game);
+  Incidents.pushOmen(Game,{id:'o1',text:'ひとつめ'});
+  Incidents.pushOmen(Game,{id:'o2',text:'ふたつめ'});
+  assert.equal(st.incidents.pending.length,3);
+  // presentPending は UI 側。器としては「2件見せたら残る」ことを見る
+  Incidents.markPresented(st,st.incidents.pending[0].id);
+  Incidents.markPresented(st,st.incidents.pending[0].id);
+  assert.equal(st.incidents.pending.length,1,'3件目は繰り越す');
+  Incidents.settle(Game);
+  assert.equal(st.incidents.pending[0].id,'slime_pond','繰り越した札は次の決着でも先頭に残る');
+});
+test('見せた札は待ち行列から外れ、二度目は積み直さない',()=>{
+  const st=fresh(['slime']);trace(st,'ate');trace(st,'sparked');
+  Incidents.settle(Game);
+  Incidents.later(Game,'slime_pond');
+  assert.equal(st.incidents.pending.length,0,'「あとで」で待ち行列から外れる');
+  assert(st.incidents.offered.slime_pond,'offered には残る＝張り紙で読み返せる');
+  Incidents.settle(Game);
+  assert.equal(st.incidents.pending.length,0,'次の決着でも積み直さない');
+});
+test('めくる・断るでも待ち行列から外れる',()=>{
+  const st=fresh(['slime']);trace(st,'ate');trace(st,'sparked');
+  Incidents.settle(Game);Incidents.open(Game,'slime_pond',1);
+  assert.equal(st.incidents.pending.length,0);
+  const st2=fresh(['skeleton']);trace(st2,'hired');trace(st2,'cooked');
+  Incidents.settle(Game);assert.equal(st2.incidents.pending.length,1);
+  Incidents.decline(Game,'skeleton_choir');
+  assert.equal(st2.incidents.pending.length,0);
+});
+test('失効・主役の死で消えた札は待ち行列からも消える。あとでと言った札の失効は日誌に1行',()=>{
+  // 主役が死ねば札ごと消える（再提示もされない）
+  const st=fresh(['slime','goblin']);st.town.lv.market=1;
+  trace(st,'ate');trace(st,'sparked');
+  Incidents.settle(Game);
+  assert.equal(st.incidents.pending.length,1);
+  st.roster=st.roster.filter(m=>m.uid===2);
+  Incidents.settle(Game);
+  assert(!st.incidents.pending.some(p=>p.id==='slime_pond'),'消えた札は待ち行列に残らない');
+  assert(!st.traces.some(t=>t.kind==='incident'&&t.data.phase==='blown'),'見せていない札では日誌に出ない');
+  // 「あとで」と言った札が失効したときだけ1行
+  const st2=fresh(['slime']);trace(st2,'ate');trace(st2,'sparked');
+  Incidents.settle(Game);Incidents.later(Game,'slime_pond');
+  st2.turn+=3;Incidents.settle(Game);
+  assert(st2.traces.some(t=>t.kind==='incident'&&t.data.phase==='blown'),'張り紙が風で飛んだ');
+});
+test('予兆は初回だけ積む。モルモの本文は mormoLine を優先する',()=>{
+  const st=fresh(['slime']);
+  assert.equal(Incidents.pushOmen(Game,{id:'swamp',text:'沼が動くデス'}),true);
+  assert.equal(Incidents.pushOmen(Game,{id:'swamp',text:'沼が動くデス'}),false,'2回目は積まない');
+  assert.equal(Incidents.pendingText(st,st.incidents.pending[0]),'沼が動くデス');
+  trace(st,'ate');trace(st,'sparked');Incidents.settle(Game);
+  const entry=st.incidents.pending.find(p=>p.id==='slime_pond');
+  assert.equal(Incidents.pendingText(st,entry),Incidents.card('slime_pond').mormoLine);
+});
+test('run.js の予兆の口は、差し込まれた分だけ積む',()=>{
+  const st=fresh(['slime']);
+  assert.equal(Game.noteArcOmens(),0,'既定では何も積まない');
+  Game.arcOmens=()=>[{id:'lab_smoke',text:'研究所から煙が上がっているデス'}];
+  try {
+    assert.equal(Game.noteArcOmens(),1);
+    assert.equal(Game.noteArcOmens(),0,'同じ予兆は初回だけ');
+    assert.equal(st.incidents.pending[0].kind,'arc');
+  } finally { delete Game.arcOmens; }
+});
+
 console.log(`${passed} incident tests passed`);

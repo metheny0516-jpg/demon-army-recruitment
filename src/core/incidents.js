@@ -131,9 +131,11 @@ const Incidents = {
   markPresented(st, id) {
     const s=this.init(st);
     s.presented[id]=true;
-    const before=s.pending.length;
+    const entry=s.pending.find(p=>p.id===id);
     s.pending=s.pending.filter(p=>p.id!==id);
-    if (s.pending.length<before) s.stats.shown=(s.stats.shown||0)+1;
+    // 数えるのは「出た札（offered）を見せたか」だけ。続きと予兆は offered に入らないので
+    // 両辺がずれる（§5 の 表示された札／出た札 が 1.0 にならなくなる）。
+    if (entry && (entry.kind==="A" || entry.kind==="B")) s.stats.shown=(s.stats.shown||0)+1;
     if (s.omens[id]) delete s.omens[id];
   },
   later(game,id) { this.markPresented(game.state,id); if(game.save)game.save(); return true; },
@@ -165,6 +167,9 @@ const Incidents = {
         b.offer.by[0]-a.offer.by[0] || a.card.id.localeCompare(b.card.id));
     if (!candidates.length) { s.dry++; return; }
     const {card,offer}=candidates[0]; s.dry=0;
+    // 同じ札が失効のあと出直したら、それは別の提示。もう一度モルモが持ってくる
+    // （presented は「この提示を見せたか」であって「この札を見たか」ではない）。
+    delete s.presented[card.id];
     s.offered[card.id]=offer; s.stats.offered++;
     if (card.door==="B") {
       s.stats.natural++;
