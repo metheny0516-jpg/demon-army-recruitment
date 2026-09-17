@@ -21,6 +21,14 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
 
+### 統括レビュー：「張り紙を待たない」（9f68161）は承認。ただし arc 予兆の再表示バグ1件（2026-09-17・統括 Claude Fable）
+
+- **承認**：battle.js 不変、`Incidents.open/decline` の契約不変、新画面なし、mormoLine 優先、失効で出直した札の `presented` 落とし（本体バグの修正）も妥当。差し戻しなし。
+- **見つけたバグ（潜在。今は `Game.arcOmens` を誰も差していないので発火しない）**：`Incidents.markPresented()` が `s.omens[id]` を消すため、`pushOmen()` の「同じ id は初回だけ」判定が効かず、**次の決着でまた積まれてモルモが毎回言う**（§2-4「初回だけ」に反する）。
+  再現：`Game.arcOmens=()=>[{id:"swamp",text:"…"}]` を差して `noteArcOmens()`→`markPresented("swamp")` を4決着回すと 4回表示（期待1回）。
+  直し方：`pushOmen` で `s.presented[omen.id]` も見て弾く（`omens` は消したままでよい）。`test-incidents.js` に「同じ予兆は2決着目に積まれない」を1件。**スライム③（4-4）で `arcOmens` を差す前に直す。Opus、小チケット。**
+- 次：Opus はこの小修正 → その後は統括が書くスライム③の仕様書待ち。CodeX へは `knight_envoy`・tail の `mormoLine`（Opus の引き継ぎどおり。文は統括が仕様書で渡す）。
+
 ### 済：張り紙を待たない——モルモが決着ごとに札を持ってくる（2026-09-17 昼・Opus）
 
 `docs/SPEC_FORCED_OMEN_2026-09-16.md` §6 の Opus 担当分（器）＋ §2-4（arc の口）。
