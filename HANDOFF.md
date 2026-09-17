@@ -158,6 +158,13 @@ CodeX（Astra／Terra）＝**画像素材の制作だけ**（利用上限）。�
 - run.js の同じ要素を二人で触ると二重投資になる（削除チケット §4 で一度起きた）。run.js は常に一人。
 - 自動の撤退提案（`retreat_offer`）は UI から呼ばれないが、run.js のテスト4本の入口なので残してある。消すならテストを手動戦闘へ書き換えてから。
 
+### Succubusの回収済み9コマと制作Skill（2026-09-17・CodeX）
+
+- 停止したWorkセッションの消失コミット `e5ed4b0` は復元せず、回収できた完成版 `0.webp`〜`8.webp` を正本として新しい正式コミットへ収録する。
+- 9枚は前回確認時のbyte sizeと一致し、再生成・再加工なし。レビュー画像、実速度preview、contact sheet、QC JSONも回収した。原画 `ready-spin-source.png` は消失したため未収録で、再構成していない。
+- `.codex/skills/battle-spin-9frame/` は1キャラ単位・manifest checkpoint方式。Work停止、未コミット成果物救出、セル境界不足、隣セル混入、離れた翼等、黒衣装への黒クロマ禁止をQC/復旧手順へ明記。
+- `src/` は未変更。本編へのSuccubus組み込みは別タスク。
+
 ### 指示待ちの2D回転（ゴブリン・スライム・ゾンビ）を本線へ取り込み済み（2026-09-16・Opus）
 
 - **取り込み**：`codex/ready-spin-three-units` の `2a3068e` を **fast-forward**（基点 `4d10ad8` の直上、
