@@ -65,10 +65,15 @@ const { autoDismissMormo } = require('./helpers.js');
         continue;
       }
       if (a.missionpick) {
-        // 最後の札＝いちばん攻めた作戦を選ぶ。訓練（2026-09-13）は進行しないので除く
-        // （選び続けるとランが終わらず、この通し試遊が止まる）。
-        const real = page.locator('.mission-card:not(.mission-train) [data-action="missionpick"]:not(.mission-alt)');
-        await clickOne(await real.count() ? real.last() : page.locator('[data-action="missionpick"]').last());
+        // 王国攻略が進む札を選ぶ。訓練（2026-09-13）と巡回（領地・段階A 2026-09-15）は
+        // 王国を削らないので除く（選び続けるとランが終わらず、この通し試遊が止まる）。
+        const invade = page.locator('.mission-card.mission-invade:not(.mission-train):not(.mission-patrol)'
+          + ' [data-action="missionpick"]:not(.mission-alt)');
+        const real = page.locator('.mission-card:not(.mission-train):not(.mission-patrol)'
+          + ' [data-action="missionpick"]:not(.mission-alt)');
+        const pick = await invade.count() ? invade.last()
+          : (await real.count() ? real.last() : page.locator('[data-action="missionpick"]').last());
+        await clickOne(pick);
         continue;
       }
       if (a.skip) { await click('[data-action="skip"]'); continue; }
