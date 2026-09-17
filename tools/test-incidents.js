@@ -184,6 +184,17 @@ test('予兆は初回だけ積む。モルモの本文は mormoLine を優先す
   const entry=st.incidents.pending.find(p=>p.id==='slime_pond');
   assert.equal(Incidents.pendingText(st,entry),Incidents.card('slime_pond').mormoLine);
 });
+test('同じ予兆は2決着目に積まれない（見せたあとも言い直さない）',()=>{
+  // markPresented は omens から落とすので、omens だけを見ていると毎決着に再表示される。
+  const st=fresh(['slime']);
+  let shown=0;
+  for(let i=0;i<4;i++){
+    Incidents.pushOmen(Game,{id:'swamp',text:'沼が動いているそうデス'});
+    if(st.incidents.pending.some(p=>p.id==='swamp')){ shown++; Incidents.markPresented(st,'swamp'); }
+    Incidents.settle(Game);
+  }
+  assert.equal(shown,1,'4決着回しても予兆が出るのは初回だけ');
+});
 test('run.js の予兆の口は、差し込まれた分だけ積む',()=>{
   const st=fresh(['slime']);
   assert.equal(Game.noteArcOmens(),0,'既定では何も積まない');
