@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "character": "succubus",
+  "source_sheet": null,
+  "frames_dir": "../../assets/battle/units/succubus/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": ".",
+  "motion": {
+    "lead_seconds": 0.09,
+    "spin_seconds": 0.275,
+    "settle_seconds": 0.08,
+    "sequence": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "unavailable",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "pending",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/succubus/ready-spin/0.webp": "8b351ff244b0369183d48a815673466ab7dc69bed3ec98abf490203b509cfc13",
+    "../../assets/battle/units/succubus/ready-spin/1.webp": "d83444b1ba371726d06a2193927819bf6773b93f6f686b15c4a1b3d91fb15b86",
+    "../../assets/battle/units/succubus/ready-spin/2.webp": "688066a75400ff2956baf94cfe5b73d33ee7f93884de7769193b8f2e949d9aeb",
+    "../../assets/battle/units/succubus/ready-spin/3.webp": "0cec8f33cf094646e1ea45c4af58f85e1d4c6a8b209c6c157ec7f588a27def0f",
+    "../../assets/battle/units/succubus/ready-spin/4.webp": "4efd12e950534e226f6ba3a9450e6988645c6db0cf15f3b052ca95b56a46ee23",
+    "../../assets/battle/units/succubus/ready-spin/5.webp": "5cbdc5d5111aa279f875c4b4487cb143ddcce119a2fdf9d48216f05018c9fad9",
+    "../../assets/battle/units/succubus/ready-spin/6.webp": "f57050b5de40c25a1a71060581d107608f8339863b6339c08e0262b7984b8767",
+    "../../assets/battle/units/succubus/ready-spin/7.webp": "e80539416a698f18142384261ad05f55ed6030dda612038a7146c03a8378b87b",
+    "../../assets/battle/units/succubus/ready-spin/8.webp": "27e4e8006a69f7eced93efbc8b3a80a419d896daa79a1a4e2d87c92cf8e2d610",
+    "../../assets/battle/units/succubus/ready-spin-review.png": "57f6ace4bb7b645905f62fa018108f8e2c4a0cdd124de08eee803491677f2a64",
+    "actual-speed.mp4": "f0cf81810ba9e2dd3250d6c3e2a3c2cbc18dec82665dd5b4ad5ef2c37f24bdd7",
+    "contact-sheet.png": "e9e3aeee131e4e48eb26d11f17c0d72941ce07d8b06761d31251427abc9d4734",
+    "qc.json": "1233b5474d9373a5f3772d2956abab53eb1249478e975936b41db25d8dc9bd64"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": true,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": [
+      "The lost e5ed4b0 commit was not reconstructed.",
+      "The accepted normalized cells were recovered unchanged and are the authoritative Succubus deliverables.",
+      "ready-spin-source.png was lost with the stopped Work session and is intentionally not regenerated or reconstructed.",
+      "This recovered asset remains a legacy nine-image set. Frame 9 combat-ready production is pending and was not fabricated during recovery."
+    ]
+  }
+}

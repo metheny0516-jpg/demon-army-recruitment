@@ -14,15 +14,17 @@ const assert = require('assert');
   await page.evaluate(() => {
     const mk = (uid, tplId, race, spd) => ({ uid, tplId, name: race, race, job: '', hp: 180, atk: 10, def: 5, spd,
       salary: 2, loyalty: 70, traits: [], skills: [], tags: [], quote: '', unpaid: false, injured: 0, spirit: 3 });
-    Game.state.roster = [mk(911, 'goblin', 'ゴブリン', 9), mk(912, 'slime', 'スライム', 6), mk(913, 'zombie', 'ゾンビ', 3)];
-    Game.state.activeUids = [911, 912, 913];
+    // サキュバスは第二幕・tier4 なので、通常の採用では並ばない。ここは名簿を差し替えて出す。
+    Game.state.roster = [mk(911, 'goblin', 'ゴブリン', 9), mk(912, 'slime', 'スライム', 6),
+      mk(913, 'zombie', 'ゾンビ', 3), mk(914, 'succubus', 'サキュバス', 7)];
+    Game.state.activeUids = [911, 912, 913, 914];
     Game.state.stage = 1; Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation';
     App.render(); BattleScene.speed = 4;
   });
   await page.click('[data-action="deploy"]');
   await page.waitForSelector('#command-panel:not([hidden])', { timeout: 20000 });
 
-  for (const [id, species] of [['p0', 'goblin'], ['p1', 'slime'], ['p2', 'zombie']]) {
+  for (const [id, species] of [['p0', 'goblin'], ['p1', 'slime'], ['p2', 'zombie'], ['p3', 'succubus']]) {
     await page.evaluate(unitId => {
       const u = BattleScene.units[unitId]; BattleScene.commandPose(u, 'ready'); BattleScene.poseEnter(u);
     }, id);
@@ -58,5 +60,5 @@ const assert = require('assert');
     'stop must prevent old frame timers from polluting the next scene');
   assert.deepEqual(errors, []);
   await browser.close();
-  console.log('ready spin: 3 species, redraw stability, command cancellation, stop cancellation OK');
+  console.log('ready spin: 4 species, redraw stability, command cancellation, stop cancellation OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });
