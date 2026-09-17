@@ -107,7 +107,9 @@ const Incidents = {
   // 呼ぶのは st.arc を更新する側（run.js）。Incidents は運ぶだけ。
   pushOmen(game, omen) {
     const st=game.state||game, s=this.init(st);
-    if (!omen || !omen.id || s.omens[omen.id]) return false;
+    // 一度見せた予兆は積み直さない。markPresented は omens から落とすので、
+    // omens だけを見ていると毎決着に言い直してしまう（＝予兆ではなく警報になる）。
+    if (!omen || !omen.id || s.omens[omen.id] || s.presented[omen.id]) return false;
     s.omens[omen.id]={ text:String(omen.text||""), turn:st.turn||0 };
     s.pending.push({ id:omen.id, kind:"arc", turn:st.turn||0 });
     this.syncPending(st);
