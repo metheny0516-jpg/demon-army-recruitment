@@ -41,7 +41,7 @@
 **その他の気づき**：
 - `tools/browser-tests/run-all.sh` の一覧に `ready-spin` が入っていない（2a3068e で追加されたテスト）。Opus が上の修正と同じコミットで足す。
 - 未取り込みの枝 **`codex/succubus-ready-spin-assets`（`327ad93`、本線 `adc5ff9` 直上、Terra）**：サキュバスの ready-spin 9コマ＋制作 Skill（`.codex/skills/battle-spin-9frame/`）＋QC文書。`src/` 未変更。HANDOFF の 2節に載っていなかった。
-  素材の QC は済んでいるが **本編組み込み（`battle_scene.js` の `READY_SPIN_SPRITES` に `succubus` を足す＋ `ready-spin.js` に1種追加）は別チケット**。取り込むかはオーナー判断（サキュバスの回転を本編に出すか）。
+  **オーナー決定（09-17 昼）：サキュバスの画像はまだ制作中。組み込みは画像が完成してから。** 今は取り込まない・Opus にも回さない。完成したら別チケット（`battle_scene.js` の `READY_SPIN_SPRITES` に `succubus` を足す＋ `ready-spin.js` に1種追加）。
 - `claude/pensive-noether-e6x97b` はまだ remote に残っている（削除してよい、は 2節どおり）。GitHub の既定ブランチはまだ `claude/demon-king-recruitment-game-sapqsx`（`c1b3d16`、本線より 314 コミット遅れ）。
 
 **次**：Opus に赤3件（＋run-all の一覧）を1枝で直させ、`test-two-stage.js`・`test-chain-measure-retry.js`・`autoplay.js` が通ったら本線へ。その後に 4-2「張り紙を待たない」。
