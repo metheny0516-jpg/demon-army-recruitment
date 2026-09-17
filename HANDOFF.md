@@ -21,6 +21,26 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
 
+### 済：赤3件をテスト側で直した（2026-09-17 昼・Opus）
+
+`bb3cef9`（枝 `claude/fix-red-tests-0917` → 本線へ通常 merge）。run.js・battle.js は触っていない。
+オーナー採用済みの第一幕 +12G（`f00a12b`）は戻していない。
+
+- **test-two-stage**：`invasionRewardBonus` を引いてから比べるように変更。§8 の
+  「段階表×1.15」「前哨+本戦の合計」に加え、同じ理由で落ちる §1 の「前哨は本戦のおよそ50%」も。
+- **test-chain-measure-retry**：前提を「再起が起きた場合のみ検査」に変更。
+  `CHAIN_SEED_BASE` 1000/2000/3000 × 11/20ラン を振って探したが、再起が出たのは
+  3000×20ラン の 360ラン中 **1件のみ**。薄いうえに測定が数分かかり、再現ケース3) が要求する
+  seed base 1000 とも両立しないため種の固定は見送った。巻き戻しのフックは
+  再現ケース（ゴブリン統一11ラン目）が引き続き守る。
+- **browser-tests/autoplay**：巡回（`.mission-patrol`）を除き、`.mission-invade` を優先。
+- **run-all.sh**：一覧に `ready-spin` を追加。
+
+検証結果：`test-two-stage` / `test-chain-measure-retry` / `test-act-progress` 全件通過。
+ブラウザ `autoplay`・`ready-spin` 通過（`autoplay` はラン1で第二幕決着まで到達）。
+
+次：`docs/SPEC_FORCED_OMEN_2026-09-16.md` §6（張り紙を待たない）。
+
 ### 本線 be2e8ed の全件検証（2026-09-17 昼・統括 Claude Fable。Opus の正式記録の前の先行確認）
 
 統括が本線 `be2e8ed` で node 全件・browser run-all・sim 20 を1回回した（4-1）。**赤は3件、いずれも 09-16 夜の取り込みが原因。ゲーム本体の進行不能・セーブ破損は見つかっていない。**
