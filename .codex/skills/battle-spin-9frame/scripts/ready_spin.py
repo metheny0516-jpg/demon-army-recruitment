@@ -232,7 +232,11 @@ def preview(args) -> None:
         timeline += [CONFIRM_SEQUENCE[min(int(i * 8 / confirm_frames), 7)] for i in range(confirm_frames)]
         timeline += [9] * 30
         for number, frame in enumerate(timeline):
-            images[frame].save(temp / f"{number:04d}.png")
+            # H.264/yuv420p cannot preserve alpha.  Flatten explicitly so hidden
+            # RGB beneath transparent WebP pixels cannot appear as false streaks.
+            encoded = Image.new("RGB", CANVAS, (232, 229, 225))
+            encoded.paste(images[frame], (0, 0), images[frame])
+            encoded.save(temp / f"{number:04d}.png")
         mp4_path = preview_dir / "actual-speed.mp4"
         tmp_mp4 = preview_dir / ".actual-speed.tmp.mp4"
         subprocess.run([ffmpeg, "-y", "-loglevel", "error", "-framerate", "100", "-i", str(temp / "%04d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(tmp_mp4)], check=True)

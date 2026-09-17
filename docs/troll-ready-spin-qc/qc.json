@@ -9,14 +9,14 @@
         512
       ],
       "bounds": [
-        102,
-        54,
-        411,
+        96,
+        92,
+        417,
         481
       ],
       "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "8b351ff244b0369183d48a815673466ab7dc69bed3ec98abf490203b509cfc13",
+      "sha256": "e9f5711b18c8386a59dffb7281525f6ba7105b4cb1d1700793096942470e103e",
       "passes": true
     },
     {
@@ -26,14 +26,14 @@
         512
       ],
       "bounds": [
-        134,
-        54,
-        378,
+        95,
+        94,
+        418,
         481
       ],
-      "center_x": 255.5,
+      "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "d83444b1ba371726d06a2193927819bf6773b93f6f686b15c4a1b3d91fb15b86",
+      "sha256": "613f50e5e8e9f95e2d43d223760afdf35e3ac9e959e9a8f6122f6af3cd4b727b",
       "passes": true
     },
     {
@@ -43,14 +43,14 @@
         512
       ],
       "bounds": [
-        97,
-        54,
-        415,
+        118,
+        94,
+        394,
         481
       ],
       "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "688066a75400ff2956baf94cfe5b73d33ee7f93884de7769193b8f2e949d9aeb",
+      "sha256": "09fee411ff014164598e8918a1b82aa98310978872d0916a1b26dd352752169c",
       "passes": true
     },
     {
@@ -60,14 +60,14 @@
         512
       ],
       "bounds": [
-        104,
-        66,
-        409,
+        139,
+        112,
+        374,
         481
       ],
       "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "0cec8f33cf094646e1ea45c4af58f85e1d4c6a8b209c6c157ec7f588a27def0f",
+      "sha256": "9679e363617f98d4a56a3c83593a70c423ad1e4d5a738454fc89bbc2b5583371",
       "passes": true
     },
     {
@@ -77,14 +77,14 @@
         512
       ],
       "bounds": [
-        103,
-        66,
-        410,
+        99,
+        113,
+        414,
         481
       ],
       "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "4efd12e950534e226f6ba3a9450e6988645c6db0cf15f3b052ca95b56a46ee23",
+      "sha256": "3b5c15c2e019aede5c902b1852d5dd447abef387548cae0fbeacd0d28fdfc645",
       "passes": true
     },
     {
@@ -94,14 +94,14 @@
         512
       ],
       "bounds": [
-        131,
-        66,
-        382,
+        103,
+        114,
+        410,
         481
       ],
       "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "5cbdc5d5111aa279f875c4b4487cb143ddcce119a2fdf9d48216f05018c9fad9",
+      "sha256": "776a3852f856288d1cdf71f9f95485428191126a7512bc9f1cbe983a74507281",
       "passes": true
     },
     {
@@ -111,14 +111,14 @@
         512
       ],
       "bounds": [
-        103,
-        56,
-        409,
+        108,
+        78,
+        405,
         481
       ],
-      "center_x": 255.5,
+      "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "f57050b5de40c25a1a71060581d107608f8339863b6339c08e0262b7984b8767",
+      "sha256": "e55874bfbc5c4e7b953d15dd5e2753e051e5fe2a88a43e30e5dde8766b3a8934",
       "passes": true
     },
     {
@@ -128,14 +128,14 @@
         512
       ],
       "bounds": [
-        99,
-        54,
-        415,
+        92,
+        83,
+        421,
         481
       ],
-      "center_x": 256.5,
+      "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "e80539416a698f18142384261ad05f55ed6030dda612038a7146c03a8378b87b",
+      "sha256": "0f9462664264ce1e2188aa0c63fcbbf701d2c60144360fefaa5997dd1a8e93ca",
       "passes": true
     },
     {
@@ -145,14 +145,14 @@
         512
       ],
       "bounds": [
-        98,
-        56,
-        415,
+        90,
+        77,
+        423,
         481
       ],
       "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "27e4e8006a69f7eced93efbc8b3a80a419d896daa79a1a4e2d87c92cf8e2d610",
+      "sha256": "36111cd5f38ed5efa31b709b28968f9329fa65df64f91bd447987de49e24c096",
       "passes": true
     },
     {
@@ -162,14 +162,14 @@
         512
       ],
       "bounds": [
-        69,
-        68,
-        444,
+        86,
+        111,
+        426,
         481
       ],
-      "center_x": 256.0,
+      "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "cf840ec3172661fb74a3a5d4164b38cc777d7c63bb44756d33a76fd57bfb8825",
+      "sha256": "de63cc565553abb3f1de412b74616fff6c7fbbbbb9c08c57e1e0f8622f1c65dd",
       "passes": true
     }
   ],

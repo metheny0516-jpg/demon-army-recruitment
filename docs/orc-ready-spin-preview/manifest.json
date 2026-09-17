@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "character": "orc",
+  "source_sheet": "/workspace/scratch/2a7e56be1139/demon-army-recruitment/docs/orc-ready-spin-source/orc-ready-spin-source-repacked.png",
+  "frames_dir": "../../assets/battle/units/orc/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": "../orc-ready-spin-qc",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": []
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "complete",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/orc/ready-spin/0.webp": "dce89c6d02aba155647ba1e93c937e7a5e2aaeb9bdadef1adfd1ababe8b89d08",
+    "../../assets/battle/units/orc/ready-spin/1.webp": "ea49109ff32ff4e49c27841c6bc502319971f54564343d0345205ab58f43289b",
+    "../../assets/battle/units/orc/ready-spin/2.webp": "a1b7ad882a8d6ba5945e66b13ffea3395b53188a9f2ab4852047b34b1e488474",
+    "../../assets/battle/units/orc/ready-spin/3.webp": "d4a274ff4f69475edc6e165557f74f3504993a62d17f71d5e50040f208c3fc9d",
+    "../../assets/battle/units/orc/ready-spin/4.webp": "ab2a13971e01283a4b25008ae125bea58e78fa04142854ca0f14fc5f226dfdfb",
+    "../../assets/battle/units/orc/ready-spin/5.webp": "0c0048112d4baac38a83458c291413bc7ff9a726cf260cdc9ac69dfa339b22ab",
+    "../../assets/battle/units/orc/ready-spin/6.webp": "ff27c7cf91321fba17dab1f98e003158744bc27e7d2cc083ded5c16b8d9e2943",
+    "../../assets/battle/units/orc/ready-spin/7.webp": "a22a617ce65b362157c3960b9897c6ecfda41d4ec8a5b966907339c30ac3f090",
+    "../../assets/battle/units/orc/ready-spin/8.webp": "f39dc247b20545e3e73c6309fde18485a581f858924f8c28d0b5a4c5ae4776aa",
+    "../../assets/battle/units/orc/ready-spin/9.webp": "bc3e613aa07811f4aaa5e44a5f24cecb02587b18acc207e946b869321c7f835a",
+    "contact-sheet.png": "365b13fd504ce28596e3f00c79aa802dd4af47ea99320766c6c1ca70d02a0d0b",
+    "actual-speed.mp4": "978990694aaf8b5e01b88e487c6b17b9da7d24eb275c6a94bf5fa1f5caddc40c",
+    "../orc-ready-spin-qc/qc.json": "6bf923d982fb509fca0ab268f75a204cffe9fa4fae27657d4e80ec34e32f0fbf"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": false,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": []
+  },
+  "grid": {
+    "column_edges": [
+      0,
+      418,
+      836,
+      1254
+    ],
+    "row_edges": [
+      0,
+      418,
+      836,
+      1254
+    ]
+  }
+}

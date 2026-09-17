@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "character": "zombie",
+  "source_sheet": null,
+  "frames_dir": "../../assets/battle/units/zombie/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": "../zombie-ready-spin-qc",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": []
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "unavailable",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/zombie/ready-spin/0.webp": "5d2b668b749aa6191de1e1176e8b2da33837d9f5af258ce1acb089d9b90d3e8c",
+    "../../assets/battle/units/zombie/ready-spin/1.webp": "66ca80e26d0ce73739c326e182f3aaad4cad4f1db3e8ae64a31a6ceb2d9dfd1a",
+    "../../assets/battle/units/zombie/ready-spin/2.webp": "1124fc73bcd814fff708096fd596cb7c4d7ee9dc68f5a483174e40120ca24d19",
+    "../../assets/battle/units/zombie/ready-spin/3.webp": "8f7c2b46cfa85e4bba9334a3665f2e9a8fac0f88616b0bb49b30f815b455183e",
+    "../../assets/battle/units/zombie/ready-spin/4.webp": "dd23abb36432e078e8fa97aa9fba51de730e568655538edf860c38c6bf9cb97c",
+    "../../assets/battle/units/zombie/ready-spin/5.webp": "fade785573e5f0f893bef1016636813df220810761f870c743e6564b0dab0f97",
+    "../../assets/battle/units/zombie/ready-spin/6.webp": "8c0414f13c8bdec6e729f002d9ce10634e3244784104b8f9bcfb7e15fe1a9ed9",
+    "../../assets/battle/units/zombie/ready-spin/7.webp": "14647dcf9daa85f0267d7cc494cc41d1289a3cf054f105dec039e1cee1af73b7",
+    "../../assets/battle/units/zombie/ready-spin/8.webp": "fcd44cb950b2f7114daf1bed92338835d39913fac812cefd829493cafba903f3",
+    "../../assets/battle/units/zombie/ready-spin/9.webp": "535095e277378dd2a1cc83bb0e935018c5e8ae78c43034983c0415daeafddb3e",
+    "contact-sheet.png": "bb5a51f433da7cda6f925f3f0635c0c08cd5ec6becec5bfa0cc46f9ecf6aacd1",
+    "actual-speed.mp4": "b5ebcfcd3fb394a46775cf5592fd1ffa5be8b23a5b807a8d7b2a8ee88536b7b3",
+    "../zombie-ready-spin-qc/qc.json": "bea1851d7b6024d7a38d2a915562fb371cb95ba082a43d0d8cb7d16788dc13ac"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": false,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": [
+      "Accepted historical frames 0–8 were copied byte-for-byte into this verification workspace; their original source sheet is unavailable and was not regenerated.",
+      "Frame 9 is a separate Zombie combat-ready pose: low forward zombie reach, ready and waiting; distinct from frame 8's arms-high command-request pose.",
+      "Rights/source: original project-bound AI-generated frame-9 source at docs/zombie-ready-spin-source/command-pose-source.png. Background removal uses a connected blue-grey background predicate and does not use black chroma key.",
+      "Visual QC passed: exact-speed preview is 1.31 s; inspected 7→0, 7→8, 8→0, and 7→9 for baseline, face, hands, tie, shoes, and foreign fragments."
+    ]
+  }
+}

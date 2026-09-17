@@ -1,0 +1,99 @@
+{
+  "schema_version": 2,
+  "character": "goblin",
+  "source_sheet": null,
+  "frames_dir": "../../assets/battle/units/goblin/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": "../goblin-ready-spin-qc",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": []
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "unavailable",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/goblin/ready-spin/0.webp": "9140877f512c91af5c50d75f85c8cf65e246ada5e283cc0f3af6ac9d2492562d",
+    "../../assets/battle/units/goblin/ready-spin/1.webp": "3256469bfcaf713404aefb8f379a6bb3db78fabdd3f28f92c8740d7903a4093b",
+    "../../assets/battle/units/goblin/ready-spin/2.webp": "dfba07cff8938de783d0e276f70462a461115b446832e4fe76833cb3b50f960d",
+    "../../assets/battle/units/goblin/ready-spin/3.webp": "d96b2c5c2e1e23832672c7e8d7a82a3c141a849b0c7634e09b56941016e2a0cb",
+    "../../assets/battle/units/goblin/ready-spin/4.webp": "114038450ac940872646e9daa5b0f91d96b32d81f991f24f120ad97933c2dfd8",
+    "../../assets/battle/units/goblin/ready-spin/5.webp": "bb8cf45389e99e0068698711cf55e3431a5bf4738e768cdbbfd28b90956a0f97",
+    "../../assets/battle/units/goblin/ready-spin/6.webp": "d7620a1ab344eba87f75d6bfe1d5e59c137a71140955ad8029b7d9693ceeffc8",
+    "../../assets/battle/units/goblin/ready-spin/7.webp": "3cca8409818e75db157d45dc97a9ae1634fe75be6bef51eb3d90d11e5c467511",
+    "../../assets/battle/units/goblin/ready-spin/8.webp": "eb9febac3bdf194d3299e81d83a07283c05bc1e41e7db5fbfb068bfb6d91fe90",
+    "../../assets/battle/units/goblin/ready-spin/9.webp": "92531c88a44c3b5c7bb975a432910d4f22e933199b190793dc55346f05b4eeb1",
+    "contact-sheet.png": "22d06f6a0435b5b8b2c75560423bd020213a6d3fd97b42ab6d06a7fdd1cfd606",
+    "actual-speed.mp4": "4f427bfaf33cf5aa79b1910f69565e84436ed357a24d51f39eb6e07ca09a69d4",
+    "../goblin-ready-spin-qc/qc.json": "68216e40a890c371d323bdec48784c0fd0f37680e2e2a51880dc8d0191909834"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": false,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": [
+      "Accepted historical frames 0–8 were copied byte-for-byte into this verification workspace; their original source sheet is unavailable and was not regenerated.",
+      "Frame 9 is a separately generated Goblin combat-ready pose: low two-handed short-sword guard, front-facing, ready and waiting; distinct from frame 8's raised-sword command-request pose.",
+      "Rights/source: original project-bound AI-generated frame-9 source at docs/goblin-ready-spin-source/command-pose-source.png. Background removal uses a connected blue-grey background predicate and does not use black chroma key.",
+      "Visual QC passed: exact-speed preview is 1.31 s; inspected 7→0, 7→8, 8→0, and 7→9 for baseline, identity, sword, ears, scarf, and foreign fragments."
+    ]
+  }
+}

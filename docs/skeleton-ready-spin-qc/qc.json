@@ -9,14 +9,14 @@
         512
       ],
       "bounds": [
-        102,
-        54,
-        411,
+        118,
+        121,
+        394,
         481
       ],
-      "center_x": 256.0,
+      "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "8b351ff244b0369183d48a815673466ab7dc69bed3ec98abf490203b509cfc13",
+      "sha256": "bb2a60994948007e6e8e7006777f2eaedeeb3580ce12e672b59f7be3e450548b",
       "passes": true
     },
     {
@@ -26,14 +26,14 @@
         512
       ],
       "bounds": [
-        134,
-        54,
-        378,
+        106,
+        121,
+        406,
         481
       ],
       "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "d83444b1ba371726d06a2193927819bf6773b93f6f686b15c4a1b3d91fb15b86",
+      "sha256": "cdae1a6444707df59e352562e31d2291e4a63df1631821fc97c7e3df853af0eb",
       "passes": true
     },
     {
@@ -43,14 +43,14 @@
         512
       ],
       "bounds": [
-        97,
-        54,
-        415,
+        123,
+        121,
+        389,
         481
       ],
       "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "688066a75400ff2956baf94cfe5b73d33ee7f93884de7769193b8f2e949d9aeb",
+      "sha256": "80a2c9bd09e60d45ca5a50675ba101c647c024558658a0ab97427954722cf6fb",
       "passes": true
     },
     {
@@ -60,14 +60,14 @@
         512
       ],
       "bounds": [
-        104,
-        66,
-        409,
+        117,
+        121,
+        395,
         481
       ],
-      "center_x": 256.0,
+      "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "0cec8f33cf094646e1ea45c4af58f85e1d4c6a8b209c6c157ec7f588a27def0f",
+      "sha256": "195e9ca1d65904bf56fa0a3a16d9941446ce8333fc6cd23b697c6cfeb67bdcf4",
       "passes": true
     },
     {
@@ -77,14 +77,14 @@
         512
       ],
       "bounds": [
-        103,
-        66,
-        410,
+        98,
+        121,
+        415,
         481
       ],
       "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "4efd12e950534e226f6ba3a9450e6988645c6db0cf15f3b052ca95b56a46ee23",
+      "sha256": "5216075c72c43ec72908385a5874dd8c0e9ddbbbf2637fb3d1a36c39ef6c61f0",
       "passes": true
     },
     {
@@ -94,14 +94,14 @@
         512
       ],
       "bounds": [
-        131,
-        66,
-        382,
+        110,
+        121,
+        402,
         481
       ],
-      "center_x": 256.0,
+      "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "5cbdc5d5111aa279f875c4b4487cb143ddcce119a2fdf9d48216f05018c9fad9",
+      "sha256": "67d15e9195f42228c2cde67d010a66523ffe650491b7d9544630b2e466701cd4",
       "passes": true
     },
     {
@@ -111,14 +111,14 @@
         512
       ],
       "bounds": [
-        103,
-        56,
-        409,
+        152,
+        121,
+        361,
         481
       ],
-      "center_x": 255.5,
+      "center_x": 256.0,
       "foot_y": 480,
-      "sha256": "f57050b5de40c25a1a71060581d107608f8339863b6339c08e0262b7984b8767",
+      "sha256": "ce98508593b197ea2e6a17ba3d8b7671de68e2d3b9adf2745cb0965a025e6c46",
       "passes": true
     },
     {
@@ -128,14 +128,14 @@
         512
       ],
       "bounds": [
-        99,
-        54,
-        415,
+        98,
+        121,
+        414,
         481
       ],
-      "center_x": 256.5,
+      "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "e80539416a698f18142384261ad05f55ed6030dda612038a7146c03a8378b87b",
+      "sha256": "01cdb785d4ebf1ff4c3079c9cdc2be15fc633c4e9b3e0d3baf3fa43497d65786",
       "passes": true
     },
     {
@@ -145,14 +145,14 @@
         512
       ],
       "bounds": [
-        98,
-        56,
-        415,
+        129,
+        121,
+        383,
         481
       ],
-      "center_x": 256.0,
+      "center_x": 255.5,
       "foot_y": 480,
-      "sha256": "27e4e8006a69f7eced93efbc8b3a80a419d896daa79a1a4e2d87c92cf8e2d610",
+      "sha256": "628f80ac8cd5239f61537a51196ea1a9ff9009f4fe2066eeff84c7eeb4366ad2",
       "passes": true
     },
     {
@@ -162,14 +162,14 @@
         512
       ],
       "bounds": [
-        69,
-        68,
-        444,
-        481
+        21,
+        33,
+        437,
+        461
       ],
-      "center_x": 256.0,
-      "foot_y": 480,
-      "sha256": "cf840ec3172661fb74a3a5d4164b38cc777d7c63bb44756d33a76fd57bfb8825",
+      "center_x": 228.5,
+      "foot_y": 460,
+      "sha256": "8bc1bdd8e2110df11f53b4792beb8c869cdf0f69fd403b746edcae4c79814232",
       "passes": true
     }
   ],
