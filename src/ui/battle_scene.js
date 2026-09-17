@@ -41,7 +41,9 @@ const BattleScene = {
   missingSprites: new Set(),
   traitQuoteShown: new Set(),   // 癖の台詞は1戦闘1回（play() で空にする）
   preloadedSprites: new Set(),
-  READY_SPIN_SPRITES: new Set(["goblin", "slime", "zombie", "succubus"]),
+  // 指示待ちの高速2回転を持つ種族（10コマ素材が届いた11種、2026-09-17 CodeX）。
+  READY_SPIN_SPRITES: new Set(["goblin", "harpy", "imp", "kobold", "minotaur", "orc",
+    "skeleton", "slime", "succubus", "troll", "zombie"]),
   vfxPreloaded: false,
   // ready / guard は採用できる18種だけ（指示待ちの決めポーズと防御の構え、docs/SPEC_COMMAND_POSE_2026-09-15.md。2026-09-15 CodeX）
   BATTLE_SPRITES: {
@@ -2103,9 +2105,11 @@ const BattleScene = {
   // 有効にするのは 9.webp を持つ種族だけ。持たない旧9コマの種族は従来の構えのまま。
   // 素材が届いた種族をここに足す（READY_SPIN_SPRITES と同じ運用）。ファイルの有無を
   // 実行時に探ると、未収録の種族ぶんだけ 404 がコンソールに出る（scene.js が拾う）。
+  // 2026-09-17：11種ぶんの 0〜9.webp が届いたので、両方の一覧が同じ顔ぶれになった。
   // confirmSpinReady は「読めなくなった種族を落とす」ための実行時の札で、
   // 既定は一覧のとおり。
-  CONFIRM_SPIN_SPRITES: new Set([]),
+  CONFIRM_SPIN_SPRITES: new Set(["goblin", "harpy", "imp", "kobold", "minotaur", "orc",
+    "skeleton", "slime", "succubus", "troll", "zombie"]),
   CONFIRM_SPIN_MS: 160,
   confirmSpinReady: {},
   // 指示の番が来たときの登場動作。種族で分けない1種類（小さく跳ねて半回転→戻る）。

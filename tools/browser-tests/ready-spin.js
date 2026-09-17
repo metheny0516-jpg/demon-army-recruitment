@@ -16,15 +16,16 @@ const assert = require('assert');
       salary: 2, loyalty: 70, traits: [], skills: [], tags: [], quote: '', unpaid: false, injured: 0, spirit: 3 });
     // サキュバスは第二幕・tier4 なので、通常の採用では並ばない。ここは名簿を差し替えて出す。
     Game.state.roster = [mk(911, 'goblin', 'ゴブリン', 9), mk(912, 'slime', 'スライム', 6),
-      mk(913, 'zombie', 'ゾンビ', 3), mk(914, 'succubus', 'サキュバス', 7)];
-    Game.state.activeUids = [911, 912, 913, 914];
+      mk(913, 'zombie', 'ゾンビ', 3), mk(914, 'succubus', 'サキュバス', 7),
+      mk(915, 'minotaur', 'ミノタウロス', 5)];
+    Game.state.activeUids = [911, 912, 913, 914, 915];
     Game.state.stage = 1; Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation';
     App.render(); BattleScene.speed = 4;
   });
   await page.click('[data-action="deploy"]');
   await page.waitForSelector('#command-panel:not([hidden])', { timeout: 20000 });
 
-  for (const [id, species] of [['p0', 'goblin'], ['p1', 'slime'], ['p2', 'zombie'], ['p3', 'succubus']]) {
+  for (const [id, species] of [['p0', 'goblin'], ['p1', 'slime'], ['p2', 'zombie'], ['p3', 'succubus'], ['p4', 'minotaur']]) {
     await page.evaluate(unitId => {
       const u = BattleScene.units[unitId]; BattleScene.commandPose(u, 'ready'); BattleScene.poseEnter(u);
     }, id);
@@ -73,19 +74,17 @@ const assert = require('assert');
     'a confirmed action plays the confirm turn exactly once');
   await page.evaluate(() => { BattleScene.confirmSpinEnter = BattleScene.rawConfirmSpinEnter; });
 
-  // (4) 確定時は 0→7 を1周して 9 に着地する。素材が無くても順番は検査できるよう、
-  //     img.src の代入だけを記録する（読み込みは起こさない）。
+  // (4) 確定時は 0→7 を1周して 9 に着地する。素材が入ったので実物で見る
+  //     （MutationObserver で src の変化をそのまま拾う）。
   const order = await page.evaluate(async () => {
     const u = BattleScene.units.p3, img = u.sprite, rec = [];
-    const real = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
-    Object.defineProperty(img, 'src', {
-      configurable: true, get() { return rec[rec.length - 1] || ''; },
-      set(v) { rec.push(String(v).split('/').slice(-2).join('/')); }
-    });
-    BattleScene.CONFIRM_SPIN_SPRITES.add('succubus');
+    const push = () => { const v = img.getAttribute('src').split('/').slice(-2).join('/'); if (rec[rec.length - 1] !== v) rec.push(v); };
+    const observer = new MutationObserver(push);
+    observer.observe(img, { attributes: true, attributeFilter: ['src'] });
     BattleScene.confirmSpinEnter(u);
+    push();
     await new Promise(r => setTimeout(r, 320));
-    delete img.src; void real;
+    observer.disconnect();
     return rec;
   });
   assert.deepEqual(order, ['ready-spin/0.webp', 'ready-spin/1.webp', 'ready-spin/2.webp', 'ready-spin/3.webp',
@@ -134,18 +133,47 @@ const assert = require('assert');
   assert.match(await page.evaluate(() => BattleScene.units.p3.sprite.getAttribute('src')),
     /\/succubus\/(idle|fallen)\.webp$/, 'stop must not leave the confirm frames on screen');
 
-  // (9) 9.webp を持たない旧9コマの種族は従来どおり。いまはサキュバスもこちら。
+  // (9) 10コマを持たない種族は従来どおり。一覧から外して同じ呼び出しを試す
+  //     （素材が揃っていない種族が将来も混ざるので、その道が生きていることを見る）。
   const legacy = await page.evaluate(async () => {
     const u = BattleScene.units.p3;
     BattleScene.CONFIRM_SPIN_SPRITES.delete('succubus');
     BattleScene.commandPose(u, 'guard');
     const played = BattleScene.confirmSpinEnter(u);
     await new Promise(r => setTimeout(r, 220));
+    BattleScene.CONFIRM_SPIN_SPRITES.add('succubus');
     return { played, src: u.sprite.getAttribute('src'), confirmHeld: u.confirmHeld };
   });
   assert.equal(legacy.played, false, 'a nine-frame character must not play the confirm turn');
   assert.equal(legacy.confirmHeld, false);
   assert.match(legacy.src, /\/succubus\/guard\.webp$/, 'a nine-frame character keeps its existing pose');
+
+  // 倍速でも着地する。回転の尺は BattleScene.speed に縛られない固定値なので、
+  // 速度を上げても 9 を取り逃がさないことだけを見る（コマ落ちは許す）。
+  for (const speed of [1, 4]) {
+    const landed = await page.evaluate(async rate => {
+      BattleScene.speed = rate;
+      const u = BattleScene.units.p4;
+      BattleScene.commandPose(u, 'guard');
+      BattleScene.confirmSpinEnter(u);
+      await new Promise(r => setTimeout(r, 320));
+      return { src: u.sprite.getAttribute('src'), confirmHeld: u.confirmHeld };
+    }, speed);
+    assert.match(landed.src, /\/minotaur\/ready-spin\/9\.webp$/, `speed x${speed} must land on frame 9`);
+    assert.equal(landed.confirmHeld, true, `speed x${speed} must hold the combat-ready pose`);
+  }
+
+  // スマホ縦（390px）で、回っている駒が画面からはみ出さない。
+  const inside = await page.evaluate(() => {
+    const out = [];
+    for (const id of ['p0', 'p1', 'p2', 'p3', 'p4']) {
+      const r = BattleScene.units[id].el.getBoundingClientRect();
+      if (r.left < -1 || r.right > innerWidth + 1 || r.width < 20 || r.height < 20) out.push(`${id} ${Math.round(r.left)},${Math.round(r.right)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+    }
+    return { out, width: innerWidth, scrollX: document.documentElement.scrollWidth };
+  });
+  assert.deepEqual(inside.out, [], '390px で駒がはみ出す: ' + inside.out.join('、'));
+  assert.ok(inside.scrollX <= inside.width + 1, '横スクロールが出ている: ' + JSON.stringify(inside));
 
   // (10) 低モーションでは回さず、8（指示待ち）と 9（戦闘準備）へ直接切り替える。
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -155,15 +183,13 @@ const assert = require('assert');
     /\/succubus\/ready-spin\/8\.webp$/, 'reduced motion goes straight to the command-request pose');
   const reduced = await page.evaluate(async () => {
     const u = BattleScene.units.p3, img = u.sprite, rec = [];
-    Object.defineProperty(img, 'src', {
-      configurable: true, get() { return rec[rec.length - 1] || ''; },
-      set(v) { rec.push(String(v).split('/').slice(-2).join('/')); }
-    });
-    BattleScene.CONFIRM_SPIN_SPRITES.add('succubus');
+    const push = () => { const v = img.getAttribute('src').split('/').slice(-2).join('/'); if (rec[rec.length - 1] !== v) rec.push(v); };
+    const observer = new MutationObserver(push);
+    observer.observe(img, { attributes: true, attributeFilter: ['src'] });
     BattleScene.confirmSpinEnter(u);
+    push();
     await new Promise(r => setTimeout(r, 220));
-    delete img.src;
-    BattleScene.CONFIRM_SPIN_SPRITES.delete('succubus');
+    observer.disconnect();
     return rec;
   });
   assert.deepEqual(reduced, ['ready-spin/9.webp'],
@@ -172,6 +198,6 @@ const assert = require('assert');
 
   assert.deepEqual(errors, []);
   await browser.close();
-  console.log('ready spin: 4 species, redraw stability, command/stop cancellation, '
-    + 'confirm turn 0..7→9, held until the action, redraw-safe, nine-frame fallback, reduced motion OK');
+  console.log('ready spin: 5 species, redraw stability, command/stop cancellation, '
+    + 'confirm turn 0..7→9, held until the action, redraw-safe, nine-frame fallback, reduced motion, x1/x4, 390px OK');
 })().catch(error => { console.error(error); process.exitCode = 1; });

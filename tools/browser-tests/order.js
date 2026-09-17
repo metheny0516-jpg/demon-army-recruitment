@@ -118,7 +118,10 @@ async function decideRest(page) {
     return { id, pose: u.sprite.dataset.pose, src: u.sprite.getAttribute('src') };
   });
   ok(first.pose === 'ready', `指示の番が来た者は決めポーズ（${first.pose}）`);
-  ok(/\/ready\.webp$/.test(first.src), `決めポーズの絵を読む（${first.src.split('/').slice(-2).join('/')}）`);
+  // 10コマ素材を持つ種族は、決めポーズへ着地するまで回転のコマを出す（2026-09-17）。
+  // 持たない種族は従来どおり ready.webp。どちらも「決めポーズを見せている」状態。
+  ok(/\/ready\.webp$/.test(first.src) || /\/ready-spin\/[0-8]\.webp$/.test(first.src),
+    `決めポーズの絵を読む（${first.src.split('/').slice(-2).join('/')}）`);
 
   // 一人目は「まもる」＝守りの構え。二人目の窓が開いても一人目の構えは残る
   await page.evaluate(() => document.querySelector('.cmd-btn[data-cmd="guard"]').click());
@@ -127,7 +130,10 @@ async function decideRest(page) {
     return { decided: BattleScene.units.p0.sprite.dataset.pose, next: id,
       nextPose: BattleScene.units[id].sprite.dataset.pose };
   });
-  ok(afterGuard.decided === 'guard', `まもるを決めたら守りの構え（${afterGuard.decided}）`);
+  // 10コマ素材を持つ種族は、この直後に短く1周して戦闘準備姿勢（confirm）へ移る。
+  // ここで見たいのは「決めた瞬間に構えへ入る」ことなので、どちらでも通す。
+  ok(afterGuard.decided === 'guard' || afterGuard.decided === 'confirm',
+    `まもるを決めたら構えへ入る（${afterGuard.decided}）`);
   ok(afterGuard.next === 'p1' && afterGuard.nextPose === 'ready',
     `次の者へ番が回り、その者も決めポーズ（${afterGuard.next}／${afterGuard.nextPose}）`);
 
