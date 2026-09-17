@@ -77,9 +77,12 @@ function invadeOnce(st) {
   } else {
     assert(true, '（この段階の本戦に役つきの敵が居ないので省略）');
   }
+  // 第一幕の侵攻は前哨・本戦とも固定 +12G（f00a12b）。割合を見るときは、その固定分を引いてから比べる。
+  const outpostBase = outpost.reward - (outpost.invasionRewardBonus || 0);
+  const mainBase = main.reward - (main.invasionRewardBonus || 0);
   assert(outpost.reward < main.reward, `報酬は本戦より少ない（前哨${outpost.reward} / 本戦${main.reward}）`);
-  assert(Math.abs(outpost.reward - Math.round(main.reward * 0.5)) <= 1,
-    `前哨の報酬は本戦のおよそ50%（${outpost.reward} vs ${Math.round(main.reward * 0.5)}）`);
+  assert(Math.abs(outpostBase - Math.round(mainBase * 0.5)) <= 1,
+    `前哨の報酬は本戦のおよそ50%（${outpostBase} vs ${Math.round(mainBase * 0.5)}／固定分を除く）`);
   assert(outpost.alertDelta === Math.ceil(main.alertDelta / 2),
     `警戒も半分（前哨${outpost.alertDelta} / 本戦${main.alertDelta}）`);
   assert(outpost.foodReward === 2, `前哨の食料は2（${outpost.foodReward}）`);
@@ -203,12 +206,16 @@ function invadeOnce(st) {
   st.outpost = { stage: 3, cleared: true, formationId: 'standard' };
   const main = Game.buildMission(invadeType());
   const stage = ENEMY_STAGES[3];
-  assert(Math.abs(main.reward - Math.round(stage.reward * Game.TWO_STAGE_REWARD_MULT)) <= 1,
-    `本戦の報酬は段階表の1.15倍（段階${stage.reward} → ${main.reward}）`);
+  // 第一幕の侵攻には +12G の試行補正が別に乗る（f00a12b）。ここで見たいのは
+  // 「2戦に割ったぶんの 1.15 倍」だけなので、その補正を引いてから比べる。
+  const mainBase = main.reward - (main.invasionRewardBonus || 0);
+  assert(Math.abs(mainBase - Math.round(stage.reward * Game.TWO_STAGE_REWARD_MULT)) <= 1,
+    `本戦の報酬は段階表の1.15倍（段階${stage.reward} → ${mainBase}${main.invasionRewardBonus ? `／別に侵攻補正 +${main.invasionRewardBonus}` : ''}）`);
   st.outpost = null;
   const outpost = Game.buildMission(invadeType());
-  assert(outpost.reward + main.reward > stage.reward,
-    `前哨+本戦の合計は1段階ぶんより多い（${outpost.reward}+${main.reward} > ${stage.reward}）`);
+  const outpostBase = outpost.reward - (outpost.invasionRewardBonus || 0);
+  assert(outpostBase + mainBase > stage.reward,
+    `前哨+本戦の合計は1段階ぶんより多い（${outpostBase}+${mainBase} > ${stage.reward}）`);
 }
 
 console.log(failed ? `\n${failed} 件失敗` : '\n全件通過');
