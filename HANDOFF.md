@@ -21,6 +21,25 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
 
+### 済：サキュバスの指示待ち2D回転を本編へ組み込み（2026-09-17 昼・Opus）
+
+`codex/succubus-ready-spin-assets`（`183a3ee`、Terra の9枚）を本線へ取り込み、
+`READY_SPIN_SPRITES` に `succubus` を追加（4種目）。9コマ契約は変えていない。
+枝 `claude/succubus-ready-spin` を本線へ通常 merge。run.js・battle.js は触っていない。
+
+検証結果（390px 目視 + 自動）:
+- 中間コマ 0→3→6→1 が流れて `ready-spin/8.webp` に着地
+- 回転中に「まもる」を決めると即 `guard.webp`（古いコマのタイマーが残らない）
+- 同じ人物の描き直しで `readySpinToken` は変わらず、回り直さない
+- `prefers-reduced-motion: reduce` では中間コマ0枚・静止 `ready.webp`
+- ページエラーなし。`ready-spin.js`（4種目へ更新）と `order.js` は通過
+
+**注意（オーナーへ確認済みの食い違い）**：
+- サキュバスの `guard.webp` は**ある**（2026-09-15 の18種セット）。order.js でも表示を確認済み。
+- 一方 Skill 文書のいう10枚目 `ready-spin/9.webp` は**無い**。
+  `docs/SUCCUBUS_READY_SPIN_QC_2026-09-17.md` に「frame 9 は pending。捏造も流用もしない」と明記。
+  「すべての行動で10番目の構えポーズ」にするなら、まず Terra に 9.webp を起こしてもらう必要がある。
+
 ### 済：大筋の予兆が毎決着に再表示されるバグを修正（2026-09-17 昼・Opus）
 
 統括レビューで記録された潜在バグ。`markPresented` が `omens` から落とすため、`pushOmen` が
