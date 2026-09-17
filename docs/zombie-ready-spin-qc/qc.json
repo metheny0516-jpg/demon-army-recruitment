@@ -1,0 +1,187 @@
+{
+  "automated_pass": true,
+  "failed_frames": [],
+  "frames": [
+    {
+      "frame": 0,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        139,
+        91,
+        374,
+        481
+      ],
+      "center_x": 256.0,
+      "foot_y": 480,
+      "sha256": "5d2b668b749aa6191de1e1176e8b2da33837d9f5af258ce1acb089d9b90d3e8c",
+      "passes": true
+    },
+    {
+      "frame": 1,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        154,
+        92,
+        359,
+        481
+      ],
+      "center_x": 256.0,
+      "foot_y": 480,
+      "sha256": "66ca80e26d0ce73739c326e182f3aaad4cad4f1db3e8ae64a31a6ceb2d9dfd1a",
+      "passes": true
+    },
+    {
+      "frame": 2,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        148,
+        84,
+        366,
+        481
+      ],
+      "center_x": 256.5,
+      "foot_y": 480,
+      "sha256": "1124fc73bcd814fff708096fd596cb7c4d7ee9dc68f5a483174e40120ca24d19",
+      "passes": true
+    },
+    {
+      "frame": 3,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        145,
+        70,
+        369,
+        481
+      ],
+      "center_x": 256.5,
+      "foot_y": 480,
+      "sha256": "8f7c2b46cfa85e4bba9334a3665f2e9a8fac0f88616b0bb49b30f815b455183e",
+      "passes": true
+    },
+    {
+      "frame": 4,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        148,
+        74,
+        366,
+        481
+      ],
+      "center_x": 256.5,
+      "foot_y": 480,
+      "sha256": "dd23abb36432e078e8fa97aa9fba51de730e568655538edf860c38c6bf9cb97c",
+      "passes": true
+    },
+    {
+      "frame": 5,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        151,
+        71,
+        363,
+        481
+      ],
+      "center_x": 256.5,
+      "foot_y": 480,
+      "sha256": "fade785573e5f0f893bef1016636813df220810761f870c743e6564b0dab0f97",
+      "passes": true
+    },
+    {
+      "frame": 6,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        139,
+        104,
+        374,
+        481
+      ],
+      "center_x": 256.0,
+      "foot_y": 480,
+      "sha256": "8c0414f13c8bdec6e729f002d9ce10634e3244784104b8f9bcfb7e15fe1a9ed9",
+      "passes": true
+    },
+    {
+      "frame": 7,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        146,
+        108,
+        368,
+        481
+      ],
+      "center_x": 256.5,
+      "foot_y": 480,
+      "sha256": "14647dcf9daa85f0267d7cc494cc41d1289a3cf054f105dec039e1cee1af73b7",
+      "passes": true
+    },
+    {
+      "frame": 8,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        120,
+        99,
+        393,
+        481
+      ],
+      "center_x": 256.0,
+      "foot_y": 480,
+      "sha256": "fcd44cb950b2f7114daf1bed92338835d39913fac812cefd829493cafba903f3",
+      "passes": true
+    },
+    {
+      "frame": 9,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        129,
+        71,
+        383,
+        481
+      ],
+      "center_x": 255.5,
+      "foot_y": 480,
+      "sha256": "535095e277378dd2a1cc83bb0e935018c5e8ae78c43034983c0415daeafddb3e",
+      "passes": true
+    }
+  ],
+  "visual_qc_required": [
+    "exact-speed two cycles",
+    "7-to-0",
+    "7-to-8",
+    "8-to-0 command confirm",
+    "7-to-9 landing",
+    "frame-9 combat readiness",
+    "identity",
+    "foreign fragments",
+    "detached parts"
+  ]
+}

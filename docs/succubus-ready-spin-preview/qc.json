@@ -154,12 +154,32 @@
       "foot_y": 480,
       "sha256": "27e4e8006a69f7eced93efbc8b3a80a419d896daa79a1a4e2d87c92cf8e2d610",
       "passes": true
+    },
+    {
+      "frame": 9,
+      "size": [
+        512,
+        512
+      ],
+      "bounds": [
+        69,
+        68,
+        444,
+        481
+      ],
+      "center_x": 256.0,
+      "foot_y": 480,
+      "sha256": "cf840ec3172661fb74a3a5d4164b38cc777d7c63bb44756d33a76fd57bfb8825",
+      "passes": true
     }
   ],
   "visual_qc_required": [
     "exact-speed two cycles",
     "7-to-0",
     "7-to-8",
+    "8-to-0 command confirm",
+    "7-to-9 landing",
+    "frame-9 combat readiness",
     "identity",
     "foreign fragments",
     "detached parts"

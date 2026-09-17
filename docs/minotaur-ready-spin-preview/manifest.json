@@ -1,0 +1,115 @@
+{
+  "schema_version": 2,
+  "character": "minotaur",
+  "source_sheet": "/workspace/scratch/2a7e56be1139/demon-army-recruitment/docs/minotaur-ready-spin-source/minotaur-ready-spin-source-repacked.png",
+  "frames_dir": "../../assets/battle/units/minotaur/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": "../minotaur-ready-spin-qc",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": []
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "complete",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/minotaur/ready-spin/0.webp": "a183cd4e75056da94fd690c0e97e13e195f84f4d7495f9c77dfa711f491eb761",
+    "../../assets/battle/units/minotaur/ready-spin/1.webp": "bb337d9a75184dc6e86af795b0eeb3e0dfc4911b5a20a9c2fab9401fde9ec3ce",
+    "../../assets/battle/units/minotaur/ready-spin/2.webp": "eb38005ba386817cf3658f121d8ed19955b8d8afa5565394859aec1bcd47d670",
+    "../../assets/battle/units/minotaur/ready-spin/3.webp": "56ddf8814eaf5e08d8cb55ca12ae5e1259e40f117de15b8b2b479c4585b539dc",
+    "../../assets/battle/units/minotaur/ready-spin/4.webp": "d28a14b71b83c6863662f6053367291affbca00645a3e6bf22f3fe22df14bbb0",
+    "../../assets/battle/units/minotaur/ready-spin/5.webp": "704fd0dd651d1e7a40bdfebf9acf6477dfd2498e9769b78144f48ddeb766c1f9",
+    "../../assets/battle/units/minotaur/ready-spin/6.webp": "2d4b67f864b18215ca3824b0c3e1e3b40720b93ed475738e51467c39ccaa020d",
+    "../../assets/battle/units/minotaur/ready-spin/7.webp": "2ddffa81effea9b3af6a07950497efb8d59d8500025f9e64f16f708965cfc8f7",
+    "../../assets/battle/units/minotaur/ready-spin/8.webp": "957fb052e5164546f13c9583f9f6093091fb87a832ea0018c8aa28f14d509264",
+    "../../assets/battle/units/minotaur/ready-spin/9.webp": "b67652cf7850471fb4bdba0b227f0fc148a802966b2a1b8f1fa8a4f1f4d07d3a",
+    "contact-sheet.png": "825d8d62088fba061279f79360460f2822fb29856ad985bd824425ea8f3e5b64",
+    "actual-speed.mp4": "a7e8d07d15782304dea21f35e85ab89be8a1493474c4d134e160607e8f1acccc",
+    "../minotaur-ready-spin-qc/qc.json": "87281153bbaa5348aa30c8f4eeabc65ad452b248571a3d292f80757ea53b8faa"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": false,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": [
+      "Visual QC passed after repacking the nine accepted source components into crop-safe cells; source art was not regenerated.",
+      "Tiny foreign fragments in frames 5 and 8 were removed locally without altering the connected character, axe, horns, tail, or chains.",
+      "Frames 3 and 4 were reordered locally to preserve a coherent continuous turn through the rear view.",
+      "Frame 9 was separately generated, then locally renormalized to match the turn scale and baseline.",
+      "Checked horns, tail, chains, full axe and handle, hooves, identity, foreign fragments, and transitions 7->0, 7->8, 8->0, and 7->9.",
+      "Delivered runtime frames and documentation artifacts without modifying src/."
+    ]
+  },
+  "grid": {
+    "column_edges": [
+      0,
+      480,
+      960,
+      1440
+    ],
+    "row_edges": [
+      0,
+      480,
+      960,
+      1440
+    ]
+  }
+}
