@@ -34,6 +34,15 @@
 - `prefers-reduced-motion: reduce` では中間コマ0枚・静止 `ready.webp`
 - ページエラーなし。`ready-spin.js`（4種目へ更新）と `order.js` は通過
 
+**追記（同日・オーナー決定）**：回転の着地コマ `ready-spin/8.webp` は「魔力を蓄えている」姿なので、
+これを**サキュバスの指示確定後の構え**として全行動（たたかう・技・まもる・食べる・おまかせ）で使う。
+`COMMAND_HOLD_SPRITE`（種族ごとの opt-in 表）を `battle_scene.js` に追加し、`commandPose` が
+そこに載る種族だけ差し替える。指示待ちの回転は差し替えない（回る前から構えていては予兆にならない）。
+`BATTLE_SPRITES` の表には載せない——art-coverage の枚数契約（246枚）とは別勘定。
+検証：`ready-spin.js` に5行動ぶんの検査と「他種族は従来どおり」を追加して通過。
+order・battlefield・scene・skills・skill-fx・counterattack・art-coverage も通過。
+この結果、サキュバスは `guard.webp` を使わなくなった（絵は残してある）。
+
 **注意（オーナーへ確認済みの食い違い）**：
 - サキュバスの `guard.webp` は**ある**（2026-09-15 の18種セット）。order.js でも表示を確認済み。
 - 一方 Skill 文書のいう10枚目 `ready-spin/9.webp` は**無い**。
