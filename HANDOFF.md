@@ -21,6 +21,45 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
 
+### 済：11種の10コマ回転を本編で有効化（2026-09-17 夜・Opus）
+
+素材 `codex/ready-spin-ten-frame-batch`（`7f00c7c`、11種×10枚＝110枚）を取り込み、
+前コミットで入れた再生契約を11種へ開いた。枝 `claude/ready-spin-ten-frame` を本線へ通常 merge。
+run.js・battle.js は触っていない。画像の再生成・再加工・再圧縮もしていない。
+
+対象：goblin / harpy / imp / kobold / minotaur / orc / skeleton / slime / succubus / troll / zombie
+
+- `READY_SPIN_SPRITES` 4種 → 11種、`CONFIRM_SPIN_SPRITES` 空 → 同じ11種。
+  **素材が増えたらこの2つに種族名を足すだけ**で有効になる。
+
+**素材の取り込み方**：`7f00c7c` を通常 merge。runtime の WebP は衝突なし
+（goblin/slime/zombie/succubus の `0〜8.webp` は本線と blob 一致で、新規は `9.webp` だけ）。
+衝突したのは CodeX 側の検証資料5件だけ（`ready_spin.py`、succubus の manifest/qc/preview 動画/接触シート）で、
+いずれも**素材枝のほうが新しい**（manifest schema v1→v2＝確定後回転を含む、スクリプトはα合成の修正）ため
+素材枝の版を採用した。runtime 資産は1枚も上書きしていない。
+
+**通しの確認**（390px、ミノタウロス＋ハーピー、x1 と x4 の両方で同じ結果）:
+```
+① 指示開始   0..7 → 0..7 → 8（入力待ちで保持）
+② たたかう→狙い選びへ   無再生
+③ 対象確定   0..7 → 9（行動待ちで保持）。同時に次の者の ① が始まる
+④ 行動順     attack-windup → strike → recover
+```
+ページエラーなし。390px のスクリーンショットは `.screenshots/ready-spin-390.png`。
+
+**テスト**
+- `art-coverage.js`：110枚が 512px で読めること、確定後回転の顔ぶれが指示待ち回転と一致すること。
+- `ready-spin.js`：5種目（minotaur）を追加。確定後回転は実物の src 変化を MutationObserver で拾う形へ。
+  倍速 x1/x4 で 9 に着地、390px で駒がはみ出さない・横スクロールが出ないことも見る。
+- `order.js`：10コマ種族は決めポーズへ着地するまで回転のコマを出すので、`ready.webp` と
+  `ready-spin/[0-8].webp` の両方を通す。決めた直後の構えも `guard` / `confirm` の両方を通す。
+- **node 全件通過・ブラウザ回帰 `run-all.sh` 全テスト通過。**
+
+**未解決**
+- ミミック等、10コマが無い種族は従来動作のまま（フォールバックの道はテスト済み）。
+- 回転の尺（2周0.275秒／確定0.16秒）は `BattleScene.speed` に連動しない固定値。
+  倍速でも着地は確認済みだが、倍速時に回転だけ相対的に長く感じるかは試遊の判断待ち。
+
 ### 済：指示確定後の回転と戦闘準備姿勢（10コマ契約）（2026-09-17 夕・Opus）
 
 `.codex/skills/battle-spin-9frame/SKILL.md` の10コマ契約を実装。
