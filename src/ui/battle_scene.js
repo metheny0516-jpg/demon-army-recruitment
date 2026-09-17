@@ -2186,6 +2186,10 @@ const BattleScene = {
     };
     show(0);
     // 予備 0.09 秒 → 2周 0.275 秒 → 決め → 0.08 秒で軽く沈む。
+    // 倍速では回転も一緒に速くする（2026-09-17 オーナー指摘）。尺の決め方は
+    // 他の演出と同じ visualDuration（= ms × eventScale ÷ speed）に合わせる。
+    // x4 ではコマ落ちするが、8 への着地は必ず起きる（タイマーの順序は保たれる）。
+    const t = ms => this.visualDuration(ms);
     u.readySpinMotion = this.animateActor(u, [
       { transform: "translateY(0) scale(1.03,1)", offset: 0 },
       { transform: "translateY(0) scale(1.03,.95)", offset: .202 },
@@ -2193,16 +2197,16 @@ const BattleScene = {
       { transform: "translateY(0) scale(1,.975)", offset: .82 },
       { transform: "translateY(2px) scale(1,.975)", offset: .9 },
       { transform: "translateY(0) scale(1)", offset: 1 }
-    ], 445);
+    ], t(445));
     for (let step = 0; step < 16; step++) {
-      this.timers.push(setTimeout(() => show(step % 8), 90 + step * (275 / 16)));
+      this.timers.push(setTimeout(() => show(step % 8), t(90 + step * (275 / 16))));
     }
-    this.timers.push(setTimeout(() => show(8), 365));
+    this.timers.push(setTimeout(() => show(8), t(365)));
     this.timers.push(setTimeout(() => {
       if (!live()) return;
       u.sprite.onerror = normalError;
       u.readySpinOnError = null;
-    }, 445));
+    }, t(445)));
   },
 
   // 指示が確定した瞬間の短い1周（0→7、約0.16秒）と、9.webp への着地。
@@ -2235,7 +2239,8 @@ const BattleScene = {
       u.confirmSpinOnError = null;
       this.setPose(u, u.sprite.dataset.commandPose || "idle");
     };
-    const step = this.CONFIRM_SPIN_MS / 8;
+    // 指示待ちの回転と同じく、倍速では確定後回転も速くする。
+    const spin = this.visualDuration(this.CONFIRM_SPIN_MS), step = spin / 8;
     // 0コマ目はその場で。直前に置いた従来の構えが1瞬だけ見えるのを避ける。
     u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/0.webp`;
     for (let frame = 1; frame < 8; frame++) {
@@ -2246,7 +2251,7 @@ const BattleScene = {
       land();
       u.sprite.onerror = normalError;
       u.confirmSpinOnError = null;
-    }, this.CONFIRM_SPIN_MS));
+    }, spin));
     return true;
   },
 

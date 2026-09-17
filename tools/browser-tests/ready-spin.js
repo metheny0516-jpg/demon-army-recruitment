@@ -20,7 +20,8 @@ const assert = require('assert');
       mk(915, 'minotaur', 'ミノタウロス', 5)];
     Game.state.activeUids = [911, 912, 913, 914, 915];
     Game.state.stage = 1; Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation';
-    App.render(); BattleScene.speed = 4;
+    // 回転の尺は速度に連動するようになった（2026-09-17）。コマの並びを見るあいだは等速。
+    App.render(); BattleScene.speed = 1;
   });
   await page.click('[data-action="deploy"]');
   await page.waitForSelector('#command-panel:not([hidden])', { timeout: 20000 });
@@ -148,20 +149,31 @@ const assert = require('assert');
   assert.equal(legacy.confirmHeld, false);
   assert.match(legacy.src, /\/succubus\/guard\.webp$/, 'a nine-frame character keeps its existing pose');
 
-  // 倍速でも着地する。回転の尺は BattleScene.speed に縛られない固定値なので、
-  // 速度を上げても 9 を取り逃がさないことだけを見る（コマ落ちは許す）。
+  // 倍速では回転も速くなる。x4 の尺が x1 より明らかに短く、それでも 9 に着地することを見る。
+  const spinMs = {};
   for (const speed of [1, 4]) {
     const landed = await page.evaluate(async rate => {
       BattleScene.speed = rate;
       const u = BattleScene.units.p4;
       BattleScene.commandPose(u, 'guard');
+      const started = performance.now();
+      let landedAt = 0;
+      const observer = new MutationObserver(() => {
+        if (/ready-spin\/9\.webp$/.test(u.sprite.getAttribute('src')) && !landedAt) landedAt = performance.now() - started;
+      });
+      observer.observe(u.sprite, { attributes: true, attributeFilter: ['src'] });
       BattleScene.confirmSpinEnter(u);
       await new Promise(r => setTimeout(r, 320));
-      return { src: u.sprite.getAttribute('src'), confirmHeld: u.confirmHeld };
+      observer.disconnect();
+      return { src: u.sprite.getAttribute('src'), confirmHeld: u.confirmHeld, landedAt };
     }, speed);
     assert.match(landed.src, /\/minotaur\/ready-spin\/9\.webp$/, `speed x${speed} must land on frame 9`);
     assert.equal(landed.confirmHeld, true, `speed x${speed} must hold the combat-ready pose`);
+    spinMs[speed] = landed.landedAt;
   }
+  assert.ok(spinMs[4] < spinMs[1] * 0.6,
+    `x4 の確定後回転は x1 より明らかに速い（x1 ${Math.round(spinMs[1])}ms / x4 ${Math.round(spinMs[4])}ms）`);
+  await page.evaluate(() => { BattleScene.speed = 1; });
 
   // スマホ縦（390px）で、回っている駒が画面からはみ出さない。
   const inside = await page.evaluate(() => {
