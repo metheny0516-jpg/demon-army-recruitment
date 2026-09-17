@@ -40,6 +40,66 @@ const App = {
     return this.render();
   },
 
+  // 張り紙を待たない（docs/SPEC_FORCED_OMEN_2026-09-16.md §2-2・§2-3）。
+  // 決着で出た札を、次の画面に入る前にモルモが持ってくる。1決着に出す上限は2件。
+  // 残りは pending に残り、次の決着で先頭に来る。
+  //
+  // done は「札を出し終えたあとに続ける元の流れ」（帰還報告など）。
+  // 「めくる」だけは UI.incident へ抜けるので、戻ってくる先を pendingResume に預ける。
+  PENDING_LIMIT: 2,
+  pendingResume: null,
+
+  presentPending(done, shown = 0) {
+    const finish = () => { this.pendingResume = null; return done ? done() : undefined; };
+    if (typeof Incidents === "undefined" || typeof MormoScene === "undefined") return finish();
+    const st = Game.state;
+    if (!st || !st.incidents) return finish();
+    const queue = st.incidents.pending || [];
+    if (shown >= this.PENDING_LIMIT || !queue.length) return finish();
+    const entry = queue[0];
+    const text = Incidents.pendingText(st, entry);
+    if (!text) { Incidents.markPresented(st, entry.id); return this.presentPending(done, shown); }
+    const card = Incidents.card(entry.id);
+    const next = () => this.presentPending(done, shown + 1);
+    const choices = entry.kind === "arc"
+      // 予兆は分岐点ではないので判断を求めない（§2-4）。
+      ? [{ label: "わかった", action: "incidentlater", id: entry.id,
+           onSelect: () => { Incidents.later(Game, entry.id); next(); } }]
+      : [
+        { label: entry.kind === "tail" ? "その後を聞く" : (card?.choices?.[0] || "めくる"),
+          action: "incidentopen", id: entry.id,
+          onSelect: () => {
+            this.pendingResume = { done, shown: shown + 1 };
+            if (typeof Sound !== "undefined") Sound.cue("shuffle");
+            Incidents.markPresented(st, entry.id);
+            return entry.kind === "tail" ? UI.incidentTail() : UI.incident(entry.id);
+          } },
+        { label: card?.choices?.[1] || "やめる", action: "incidentdecline", id: entry.id,
+          onSelect: () => {
+            if (entry.kind === "tail") Incidents.later(Game, entry.id);
+            else Incidents.decline(Game, entry.id);
+            next();
+          } },
+        { label: "あとで（張り紙に残す）", action: "incidentlater", id: entry.id,
+          onSelect: () => { Incidents.later(Game, entry.id); next(); } },
+      ];
+    return this.report(entry.kind === "arc" ? "worried" : "report", text, {
+      kicker: entry.kind === "A" ? "城下町の噂" : entry.kind === "B" ? "報告"
+        : entry.kind === "tail" ? "噂の続き" : "予兆",
+      title: "宰相モルモ", choices,
+    });
+  },
+
+  // UI.incident の「戻る」から待ち行列へ帰る。続きが無ければ元の流れへ。
+  resumePending() {
+    const resume = this.pendingResume;
+    if (!resume) return false;
+    this.pendingResume = null;
+    this.render();
+    this.presentPending(resume.done, resume.shown);
+    return true;
+  },
+
   report(expression, text, options = {}) {
     if (typeof MormoScene === "undefined") return;
     MormoScene.show({ expression, text, ...options });
@@ -209,11 +269,18 @@ const App = {
         if (typeof Sound !== "undefined") Sound.cue("mormo");
         return result ? UI.incident(result.id, result) : this.render();
       }
+      case "incidentlater":
+        // 「あとで」＝表示済み扱いで pending から外すだけ。offered には残る＝張り紙で読める。
+        Incidents.later(Game, data.id);
+        if (this.resumePending()) return;
+        return this.render();
       case "incidentdecline":
         Incidents.decline(Game, data.id);
+        if (this.resumePending()) return;
         if (UI.root?.dataset.scene === "castle") return UI.castle(UI.castleTab);
         // めくる前の画面へ戻る。通常のイベントのphaseは変えない。
       case "incidentback":
+        if (this.resumePending()) return;
         if (this.incidentFrom === "castle") { this.incidentFrom = null; return UI.castle(UI.castleTab); }
         return this.render();
       case "new":
@@ -507,27 +574,28 @@ const App = {
         this.render();
         return this.battleReport();
 
-      case "afterresult":
+      case "afterresult": {
         Game.afterResult();
         this.render();
-        if (Game.state.phase === "preparation") {
-          return this.report("report", "遠征隊が帰還しました。\nまだ今日の業務は終わっていません。配置を確認したら、日次決算へ進めましょう。",
-            { kicker: `${Game.state.day}日目・遠征帰還`, title: "宰相モルモ" });
-        }
+        // 事件が同じ決着に立っているときは事件が先。札は事件が片付いてから（§2-2）。
         if (Game.state.phase === "event") {
           const ev = Game.currentEvent();
           return this.report("angry", `魔王様、大変デス！\n${ev ? ev.title : "城内事件"}が起きました！`,
             { kicker: "魔王城・緊急報告", title: "宰相モルモ" });
         }
-        if (Game.state.phase === "clear" || Game.state.phase === "gameover") {
-          const won = Game.state.phase === "clear";
-          return this.report(won ? "joy" : "worried",
-            won ? "やりましたネ、魔王様！ 人間界制圧デス！ この軍団の歴史を刻みましょう！"
-              : "この魔王軍の歩みは、次の世代のために魔界史へ残しますネ。",
-            { kicker: "最終報告", title: "宰相モルモ" });
-        }
-        return this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
-          { kicker: "次期採用報告", title: "宰相モルモ" });
+        const returned = Game.state.phase === "preparation"
+          ? () => this.report("report", "遠征隊が帰還しました。\nまだ今日の業務は終わっていません。配置を確認したら、日次決算へ進めましょう。",
+            { kicker: `${Game.state.day}日目・遠征帰還`, title: "宰相モルモ" })
+          : (Game.state.phase === "clear" || Game.state.phase === "gameover")
+            ? () => this.report(Game.state.phase === "clear" ? "joy" : "worried",
+              Game.state.phase === "clear" ? "やりましたネ、魔王様！ 人間界制圧デス！ この軍団の歴史を刻みましょう！"
+                : "この魔王軍の歩みは、次の世代のために魔界史へ残しますネ。",
+              { kicker: "最終報告", title: "宰相モルモ" })
+            : () => this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
+              { kicker: "次期採用報告", title: "宰相モルモ" });
+        // 決着がついた以上、モルモは必ず一度は見せる。判断はプレイヤーに残す（§0）。
+        return this.presentPending(returned);
+      }
 
       case "eventpick":
         Game.chooseEvent(Number(data.index));
@@ -538,8 +606,10 @@ const App = {
       case "eventdone":
         Game.nextRecruit();
         this.render();
-        return this.report("welcome", "城内も落ち着きました。次の応募者を面接しましょう！" + this.bondNote(),
-          { kicker: "人事再開", title: "宰相モルモ" });
+        // 事件の選択が終わって面接へ移る前に、待たせていた札を出す（§2-2）。
+        return this.presentPending(() =>
+          this.report("welcome", "城内も落ち着きました。次の応募者を面接しましょう！" + this.bondNote(),
+            { kicker: "人事再開", title: "宰相モルモ" }));
 
       case "nextrecruit":
         Game.nextRecruit();

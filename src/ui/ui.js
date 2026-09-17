@@ -2053,14 +2053,18 @@ const UI = {
   incidentCards(door="A") {
     if(typeof Incidents==="undefined"||!Game.state)return "";
     const st=Game.state,s=Incidents.init(st);
-    const cards=Object.entries(s.offered).filter(([id,o])=>o.door===door&&o.expires>(st.turn||0));
+    // まだモルモが持ってきていない札は出さない。先に口頭で聞く順序を崩さないため
+    // （docs/SPEC_FORCED_OMEN_2026-09-16.md §3）。張り紙は「読み返す場所」になる。
+    const waiting=new Set((s.pending||[]).map(p=>p.id));
+    const cards=Object.entries(s.offered)
+      .filter(([id,o])=>o.door===door&&o.expires>(st.turn||0)&&!waiting.has(id));
     const html=cards.map(([id,o])=>{
       const card=Incidents.card(id); if(!card||!Incidents.alive(st,card,o))return "";
       return `<article class="mission-card rumor"><h3>📜 ${U.esc(card.title)}</h3><p>${U.esc(Incidents.text(st,card.rumor,Incidents.context(st,o)))}</p>
       <button data-action="incidentopen" data-id="${id}">${door==="B"?"話を聞く":"めくる"}</button>
       <button data-action="incidentdecline" data-id="${id}">${U.esc(card.choices[1])}</button></article>`;
     }).join("");
-    const tail=s.tail?.ready?`<article class="mission-card rumor"><h3>📜 噂の続き</h3><p>${U.esc(Incidents.card(s.tail.parent)?.title||"その後")}</p><button data-action="incidenttailview">その後を聞く</button></article>`:"";
+    const tail=(s.tail?.ready && !waiting.has(s.tail.id))?`<article class="mission-card rumor"><h3>📜 噂の続き</h3><p>${U.esc(Incidents.card(s.tail.parent)?.title||"その後")}</p><button data-action="incidenttailview">その後を聞く</button></article>`:"";
     return html+(door==="A"?tail:"");
   },
   // 札に出す一言。出来事で変わった一言（faceLine）があればそちらを出す

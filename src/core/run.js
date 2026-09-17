@@ -3782,12 +3782,34 @@ const Game = {
     }
     // 噂の札は城下町の有無に関わらず決着ごとに1回（城下町を読まない測定＝SIM_NO_TOWN でも
     // 札の判定は動かす。状態式が読めない札は Incidents.candidate が黙って見送る）。
-    if (dailyDay === undefined && typeof Incidents !== "undefined") Incidents.settle(this);
+    if (dailyDay === undefined && typeof Incidents !== "undefined") {
+      Incidents.settle(this);
+      this.noteArcOmens();
+    }
     // 旧施設の移行の報せ（ロード中には出す画面が無いので、次の決着の報告で一度だけ）。
     if (st.lastFacilityMigration && st.lastFacilityMigration.length) {
       for (const line of st.lastFacilityMigration) notes.push(line);
       delete st.lastFacilityMigration;
     }
+  },
+
+  // 大筋（arc）の予兆をモルモの待ち行列へ積む
+  // （docs/SPEC_FORCED_OMEN_2026-09-16.md §2-4）。
+  //
+  // 予兆そのものは **初回だけ** 言う。2回目以降は日誌と地図の小物だけにする
+  // （毎回言うと予兆ではなく警報になる）。同じ id を二度積まない保証は
+  // Incidents.pushOmen が持つので、ここは「いま予兆が立っているか」だけを見る。
+  //
+  // 大筋の状態（st.arc）はまだ入っていない。入れる側は
+  //   Game.arcOmens = () => [{ id:"swamp_moves", text:"魔王様、沼が動いているそうデス" }]
+  // の形でこの口に差し込めばよく、Incidents 側は運ぶだけで足りる。
+  ARC_OMENS: [],
+  noteArcOmens() {
+    if (typeof Incidents === "undefined") return 0;
+    const list = (typeof this.arcOmens === "function" ? this.arcOmens(this.state) : null) || this.ARC_OMENS;
+    let pushed = 0;
+    for (const omen of list) if (omen && omen.id && Incidents.pushOmen(this, omen)) pushed++;
+    return pushed;
   },
 
   awardMerit(contribution, notes) {

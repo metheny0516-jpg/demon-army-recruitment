@@ -47,6 +47,15 @@ function chooseIndex(apps, roster, strat){
   return apps.reduce((b,m,i)=> power(m) > power(apps[b]) ? i : b, 0);
 }
 
+// 張り紙を待たない（docs/SPEC_FORCED_OMEN_2026-09-16.md §5）。
+// 本体は決着の報告のあと presentPending() が走る＝**1戦ごと**に最大2件見せる。
+// 日の終わりにまとめて見せると、その間に失効した札が「見せられなかった札」になり、
+// 表示率が本体より低く出る。測定でも決着のたびに呼ぶ。
+function showPending(st){
+  for (let shown = 0; shown < 2 && (st.incidents?.pending || []).length; shown++)
+    Incidents.markPresented(st, st.incidents.pending[0].id);
+}
+
 function runOnce(strat, stats){
   Game.newRun();
   const st = Game.state;
@@ -223,6 +232,7 @@ function runOnce(strat, stats){
       if (st.roster.some(m => m.unpaid)) stats.unpaid++;
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
+      showPending(st);
     }
     // 拠点接収：条件を満たしたら必ず使う（1ランに1度の建材の追い風）
     // 城下町：建てられるものがあれば建てる（施設は城下町の1系統になった。2026-09-13）。
@@ -298,7 +308,8 @@ function runOnce(strat, stats){
   stats.splits = (stats.splits || 0) + (st.slimeSpawnCount || 0);   // 増殖の元（分裂した回数）
   stats.territory = (stats.territory || 0) + ((st.territory?.lands || []).length + (st.territory?.tribes || []).length);
   stats.patrols = (stats.patrols || 0) + (st.patrolCount || 0);
-  stats.cards ||= {settles:0,offered:0,opened:0,natural:0};
+  stats.cards ||= {settles:0,offered:0,opened:0,natural:0,shown:0};
+  stats.cards.shown ||= 0;
   for(const k of Object.keys(stats.cards)) stats.cards[k] += st.incidents?.stats?.[k] || 0;
   return rec;
 }
@@ -355,7 +366,9 @@ for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
   console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  領土 ${((stats.territory||0)/N).toFixed(2)}／ラン  巡回 ${((stats.patrols||0)/N).toFixed(2)}回/ラン  敵将 討${((stats.capSlain||0)/N).toFixed(2)}／雇${((stats.capHired||0)/N).toFixed(2)}／最終戦が混成 ${stats.capMixed||0}ラン  分裂 ${((stats.splits||0)/N).toFixed(2)}回/ラン`);
-  console.log(`  札: 提示 ${stats.cards.offered}／めくった ${stats.cards.opened}／自然発生 ${stats.cards.natural}／決着 ${stats.cards.settles}（波乱 ${(100*stats.cards.natural/Math.max(1,stats.cards.settles)).toFixed(2)}%）`);
+  // 表示された札／出た札（§5）。1.0 未満なら 2-2 の上限か順序に穴がある。
+  const shownRate = (stats.cards.shown/Math.max(1,stats.cards.offered)).toFixed(2);
+  console.log(`  札: 提示 ${stats.cards.offered}／めくった ${stats.cards.opened}／自然発生 ${stats.cards.natural}／決着 ${stats.cards.settles}（波乱 ${(100*stats.cards.natural/Math.max(1,stats.cards.settles)).toFixed(2)}%）　表示された札／出た札 ${shownRate}`);
   const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
   const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);
   const nameCount = new Map();

@@ -250,6 +250,16 @@ button.wide { width: 100%; }
 /* 「押していい」の合図は光らせて出す。位置は動かさない——
    指を置く先が常時動くのは押しにくく、自動テストのクリック待ちも永久に止まる */
 .mormo-scene-next.ready { color: var(--gold); animation: mormoNext .9s ease-in-out infinite alternate; }
+/* 噂の札をモルモが持ってくる場面の選択肢（張り紙を待たない §2-3）。
+   390px でも3つ縦に並ぶので、幅いっぱいの縦積みにする。 */
+.mormo-scene-choices { display: grid; gap: 8px; margin-top: 12px; clear: both; }
+.mormo-scene-choice {
+  width: 100%;
+  text-align: left;
+  border-color: rgba(240, 196, 106, .3);
+  background: rgba(15, 10, 25, .58);
+}
+.mormo-scene-choice.primary { color: var(--gold); border-color: rgba(240, 196, 106, .6); }
 .mormo-scene-panic .mormo-scene-backdrop,
 .mormo-scene-angry .mormo-scene-backdrop { filter: sepia(.15) saturate(1.35); }
 .mormo-scene-joy .mormo-scene-aura { box-shadow: 0 0 90px rgba(240, 196, 106, .36); }
