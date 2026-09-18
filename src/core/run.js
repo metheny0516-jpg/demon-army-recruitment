@@ -1188,9 +1188,12 @@ const Game = {
     // 周辺地の略奪と訓練だけを出す。予約済みの防衛が万一残る旧セーブでは防衛を優先する。
     if (st.act2Cleared) {
       const validKinds = pending ? ["defend", "train"] : ["raid", "trial", "train"];
+      // 力試しは登りきったら出ない札なので、「無いこと」を古さの理由にしない。
+      const requiredKinds = validKinds.filter(kind => kind !== "trial" || this.trialOpen());
       const stalePostAct2 = !Array.isArray(offers) || !offers.length
         || offers.some(m => !validKinds.includes(m.missionKind))
-        || validKinds.some(kind => !offers.some(m => m.missionKind === kind));
+        || requiredKinds.some(kind => !offers.some(m => m.missionKind === kind))
+        || (!this.trialOpen() && offers.some(m => m.missionKind === "trial"));
       if (!force && !stalePostAct2) {
         st.phase = "mission";
         return offers;
@@ -1200,7 +1203,8 @@ const Game = {
       // 力試し（§2）。略奪と訓練のあいだに1枚。予約済み防衛が残る旧セーブでは出さない。
       st.missionOffers = (pending
         ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
-        : [this.buildMission(MISSION_TYPES[0], previous.get("raid")), this.trialMission()])
+        : [this.buildMission(MISSION_TYPES[0], previous.get("raid"))]
+          .concat(this.trialOpen() ? [this.trialMission()] : []))
         .concat([this.buildMission(MISSION_TYPES.train, previous.get("train"))]);
       st.phase = "mission";
       this.save();
@@ -1340,7 +1344,7 @@ const Game = {
     const mvp = alive.slice().sort((a, b) => (b.damage || 0) - (a.damage || 0))[0];
     if (result.victory) {
       t.wins += 1;
-      t.level = level + 1;
+      t.level = Math.min(level + 1, this.TRIAL_MAX);
       t.best = Math.max(t.best || 0, t.level);
       const gold = Math.max(1, Number(stageData.trialReward) || 1);
       st.gold += gold;
@@ -1357,6 +1361,7 @@ const Game = {
           notes.push(`${monster.name}に「${monster.epithet}」の名がついた。`);
         }
       }
+      if (t.level >= this.TRIAL_MAX) notes.push(`第${this.TRIAL_MAX}段まで登りきった。挑む相手はもういない。`);
       t.last = { level, won: true, opponent: stageData.army || "" };
     } else {
       t.losses += 1;
@@ -1507,6 +1512,9 @@ const Game = {
   // 段3 が確実に狙いへ入る 1.25 / 1.22 を採る。段0 の詰めは試遊の判断に委ねる。
   TRIAL_BASE: 1.25,     // 段0 の倍率
   TRIAL_STEP: 1.22,     // 1段ごとの伸び
+  // 梯子は第9段で打ち切り（2026-09-18 オーナー決定）。登りきったら札は出さない。
+  // 内部の level は 0 始まりなので、level 9 ＝「第9段まで勝った」＝上がり。
+  TRIAL_MAX: 9,
   TRIAL_REWARD_BASE: 0.5, TRIAL_REWARD_STEP: 0.25,   // 金 = 最終段階の reward × (0.5 + 0.25×段)
 
   trials() {
@@ -1515,6 +1523,8 @@ const Game = {
     return st.trials;
   },
   trialMult(level) { return this.TRIAL_BASE * Math.pow(this.TRIAL_STEP, Math.max(0, level || 0)); },
+  // まだ登る段が残っているか（第9段を勝ったら、もう札は出ない）。
+  trialOpen() { return (this.trials().level || 0) < this.TRIAL_MAX; },
 
   // 顔ぶれの強さを揃えるための物差し。3つの顔ぶれは素の強さが桁違いで（敵将は HP が小さく、
   // 連合軍は終盤の正規兵）、そのままだと段が上がったのに楽になる回ができた（測ると
