@@ -8,10 +8,14 @@
 // - trait は既存の TRAITS から1つだけ。新しい戦闘の仕組みは作らない
 // - lines（登場・決着・雇用の台詞）は CodeX が埋める。空なら描画側は出さない
 // - 部族の首領は territories.js の chief.id と同じ id。ここに戦闘の値を持つ
+// - look：戦闘画面で使う既存の絵（docs/SPEC_CAPTAIN_ART_2026-09-18.md）。
+//   敵将は tplId を持たないので、BattleScene.artId が icon の対応表を引いて絵文字のまま出していた。
+//   race は同じ tplId の応募者（monsters.js）と同じ表記にする（履歴書・魔界史で揃う）。
 const ENEMY_CAPTAINS = {
   // ── 村の糸 ──
   polka: {
     name: "村おこし勇者団の団長ポルカ", short: "ポルカ", thread: "village", role: "fighter", icon: "🎺",
+    look: { tplId: "swordsman", race: "人間" },
     hp: 30, atk: 8, def: 3, spd: 7, traits: ["show_off"], offer: "spare", joinsHero: true,
     grows: 3,   // 負けても逃げて、次は少し強い装備で来る（3回まで。run.js が st.captains[id].seen で回数を持ち、stats に +15%/回）
     intro: "アレンの幼なじみ。威勢だけで村を守ろうとする。", lines: {
@@ -23,6 +27,7 @@ const ENEMY_CAPTAINS = {
   // ── 魔界の糸（部族の首領。territories.js の chief.id と一致） ──
   zagan: {
     name: "自称将軍ザガン", short: "ザガン", thread: "tribe", role: "commander", icon: "🎖️",
+    look: { tplId: "goblin", race: "ゴブリン" },
     hp: 60, atk: 12, def: 6, spd: 6, traits: ["pack"], offer: "hire", joinsHero: false, tribe: "t01",
     hire: { race: "goblin", loyalty: 30, trait: "show_off", job: "将軍候補" },   // 雇えば忠誠30の将軍候補。段階Bの run.js が名簿へ足す
     intro: "前魔王の元部下。「本当の魔王軍」を名乗り、解雇された者を拾って大きくなる。", lines: {
@@ -33,6 +38,7 @@ const ENEMY_CAPTAINS = {
   },
   gravekeeper: {
     name: "墓守", short: "墓守", thread: "tribe", role: "priest", icon: "🕯️",
+    look: { tplId: "skeleton", race: "骸骨兵" },
     hp: 45, atk: 9, def: 5, spd: 4, traits: ["gravekeeper"], offer: "hire", joinsHero: false, tribe: "t03",
     hire: { race: "skeleton", loyalty: 40, trait: "gravekeeper", job: "墓守" },
     intro: "骨の谷で死者を数える。誰の味方でもない。", lines: {
@@ -43,6 +49,7 @@ const ENEMY_CAPTAINS = {
   },
   blood_chief: {
     name: "血の族長", short: "族長", thread: "tribe", role: "brute", icon: "🩸",
+    look: { tplId: "orc", race: "オーク" },
     hp: 70, atk: 14, def: 5, spd: 5, traits: ["brute"], offer: "hire", joinsHero: false, tribe: "t05",
     hire: { race: "orc", loyalty: 35, trait: "brute", job: "突撃隊長" },
     intro: "オークの荒野の長。強い者にしか従わない。", lines: {
@@ -53,6 +60,7 @@ const ENEMY_CAPTAINS = {
   },
   elder: {
     name: "森の長老", short: "長老", thread: "tribe", role: "priest", icon: "🌳",
+    look: { tplId: "mandragora", race: "マンドラゴラ" },
     hp: 40, atk: 7, def: 6, spd: 3, traits: ["regen"], offer: "hire", joinsHero: false, tribe: "t07",
     hire: { race: "mandragora", loyalty: 50, trait: "regen", job: "薬師" },
     intro: "森の奥で眠っている。起こすと怒る。", lines: {
@@ -63,6 +71,7 @@ const ENEMY_CAPTAINS = {
   },
   tower_lord: {
     name: "塔の主", short: "塔の主", thread: "tribe", role: "caster", icon: "🗼",
+    look: { tplId: "necromancer", race: "死霊術師" },
     hp: 45, atk: 15, def: 4, spd: 7, traits: ["necromancy"], offer: "hire", joinsHero: false, tribe: "t08",
     hire: { race: "necromancer", loyalty: 25, trait: "necromancy", job: "研究員" },
     intro: "廃墟の塔で何かを研究している。給料次第で誰にでも仕える。", lines: {
@@ -73,6 +82,7 @@ const ENEMY_CAPTAINS = {
   },
   labyrinth_lord: {
     name: "迷宮の主", short: "迷宮の主", thread: "tribe", role: "brute", icon: "🐂",
+    look: { tplId: "minotaur", race: "ミノタウロス" },
     hp: 140, atk: 24, def: 12, spd: 6, traits: ["rampage"], offer: "hire", joinsHero: false, tribe: "t09",
     hire: { race: "minotaur", loyalty: 30, trait: "rampage", job: "門番" },
     intro: "第二幕。迷宮の奥で待つ。", lines: {
@@ -84,6 +94,7 @@ const ENEMY_CAPTAINS = {
   // ── 王国の糸 ──
   gareth: {
     name: "王国軍将軍ガレス", short: "ガレス", thread: "kingdom", role: "shield", icon: "🛡️",
+    look: { tplId: "shield", race: "人間" },
     hp: 110, atk: 16, def: 12, spd: 5, traits: ["guardian_prayer"], offer: "spare", joinsHero: true, gate: "h11",
     intro: "アレンの師匠。「一人も死なせない」が口癖。", lines: {
       enter: ["一人も死なせない。全員、私の盾の後ろへ！", "アレンにも教えた。守る者が先に立つのだ。", "通したければ私を倒せ。部下には手を出すな。"],
@@ -93,6 +104,7 @@ const ENEMY_CAPTAINS = {
   },
   bold: {
     name: "傭兵隊長ボルド", short: "ボルド", thread: "kingdom", role: "fighter", icon: "⚔️",
+    look: { tplId: "swordsman", race: "人間" },
     hp: 50, atk: 13, def: 6, spd: 6, traits: ["first_strike"], offer: "spare", joinsHero: true,
     intro: "国境の傭兵団を率いる。金で動くが、約束は守る。", lines: {
       enter: ["代金は受け取った。ここから先は通せん。", "傭兵隊長ボルドだ。雇い主との約束を果たす。", "命を安売りするなよ。俺も、そのつもりはない。"],
@@ -102,6 +114,7 @@ const ENEMY_CAPTAINS = {
   },
   serena: {
     name: "神殿の聖女セレナ", short: "セレナ", thread: "kingdom", role: "priest", icon: "✨",
+    look: { tplId: "cleric", race: "人間" },
     hp: 55, atk: 10, def: 7, spd: 6, traits: ["guardian_prayer"], offer: "spare", joinsHero: true,
     intro: "大神殿の祈り手。戦場で倒れた者を起こす。", lines: {
       enter: ["倒れた方は私が支えます。どうか、一歩ずつ。", "祈るだけでは届きません。私もここに立ちます。", "剣を収めてくださるなら、今からでも手当てを。"],
@@ -111,6 +124,7 @@ const ENEMY_CAPTAINS = {
   },
   dolph: {
     name: "王国軍の砲手ドルフ", short: "ドルフ", thread: "kingdom", role: "archer", icon: "🏹",
+    look: { tplId: "archer", race: "人間" },
     hp: 45, atk: 15, def: 4, spd: 8, traits: ["first_strike"], offer: "spare", joinsHero: true,
     intro: "後列を狙う。いまの勇者一行の「戦士ドルフ」はこの人物。", lines: {
       enter: ["前の鎧は狙わん。後ろの隙を見ている。", "ドルフ、射線についた。そこを動くな。", "守りの厚さより、守りの切れ目だ。"],
@@ -120,6 +134,7 @@ const ENEMY_CAPTAINS = {
   },
   zack: {
     name: "野盗の頭ザック", short: "ザック", thread: "kingdom", role: "rogue", icon: "🗡️",
+    look: { tplId: "swordsman", race: "人間" },
     hp: 40, atk: 12, def: 3, spd: 10, traits: ["pickpocket"], offer: "hire", joinsHero: true,
     hire: { race: "人間", loyalty: 20, trait: "pickpocket", job: "斥候" },
     intro: "王国にも魔王にも雇われる。どちらが高く買うかだけ。", lines: {
@@ -130,6 +145,7 @@ const ENEMY_CAPTAINS = {
   },
   inquisitor: {
     name: "審問官ヴァル", short: "ヴァル", thread: "kingdom", role: "caster", icon: "📜",
+    look: { tplId: "inquisitor", race: "人間" },
     hp: 50, atk: 16, def: 5, spd: 7, traits: ["fireball"], offer: null, joinsHero: true,
     intro: "聖教会の審問官。魔物と話す気はない（提案は出ない）。", lines: {
       enter: ["魔物の言い分を聞くために来たのではない。", "審問官ヴァルだ。弁明は認めぬ。", "情けを口にしても、その罪は消えぬ。"],

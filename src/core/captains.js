@@ -43,6 +43,9 @@ const Captains = {
     const stat = (v, min) => Math.max(min, Math.round(v * k));
     const unit = {
       name: c.name, role: c.role, icon: c.icon, hp: stat(c.hp, 1), atk: stat(c.atk, 1), def: stat(c.def, 0), spd: c.spd,
+      // 戦闘画面の絵（docs/SPEC_CAPTAIN_ART_2026-09-18.md）。tplId が無いと artId() が
+      // icon の対応表を引き、表に無い敵将は絵文字のまま出てしまう。
+      tplId: (c.look && c.look.tplId) || null, race: (c.look && c.look.race) || null,
       traits: (c.traits || []).slice(), introQuote: (c.lines && c.lines.enter && c.lines.enter[0]) || "",
       captain: { id, offer: c.offer || null }
     };
@@ -89,7 +92,9 @@ const Captains = {
     survivors.sort((a, b) => (this.state(st, a).status === "unseen" ? 1 : 0) - (this.state(st, b).status === "unseen" ? 1 : 0));
     const picked = survivors.slice(0, r.heroSlots).map(id => {
       const c = this.get(id); const k = scale || 1;
-      return { name: c.short || c.name, role: c.role, icon: c.icon, hp: Math.round(c.hp * k), atk: Math.round(c.atk * k), def: Math.round(c.def * k), spd: c.spd, traits: (c.traits || []).slice(), captain: { id, offer: null } };
+      return { name: c.short || c.name, role: c.role, icon: c.icon,
+        tplId: (c.look && c.look.tplId) || null, race: (c.look && c.look.race) || null,
+        hp: Math.round(c.hp * k), atk: Math.round(c.atk * k), def: Math.round(c.def * k), spd: c.spd, traits: (c.traits || []).slice(), captain: { id, offer: null } };
     });
     const fill = others.slice(0, Math.max(0, r.heroSlots - picked.length));
     return [hero].concat(picked, fill);
