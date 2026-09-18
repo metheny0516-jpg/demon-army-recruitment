@@ -2200,26 +2200,25 @@ const UI = {
     const saved = !!(st.story && st.story.flags.villageSaved);
     const lost = !!(st.story && st.story.flags.villageLost);
     const pts = [
-      { x: 60, y: 210, label: "魔王城", kind: "castle" },
-      { x: 150, y: 150, label: "ゴブリン村", kind: saved ? "saved" : lost ? "burned" : "fort" },
-      { x: 170, y: 60, label: "北の鉱山", kind: c >= 1 ? "freed" : "fort" },
-      { x: 260, y: 120, label: "東の森", kind: c >= 2 ? "freed" : "fort" },
-      { x: 330, y: 190, label: "関所", kind: c >= 3 ? "freed" : "fort" },
-      { x: 420, y: 90, label: "大神殿", kind: c >= 4 ? "freed" : "fort" },
-      { x: 470, y: 180, label: "城塞都市", kind: c >= 5 ? "freed" : "fort" },
-      { x: 560, y: 120, label: "王都", kind: "capital" }
+      // 座標は CodeX のロードマップの絵（assets/story/roadmap.webp）の建物に合わせてある
+      { x: 72, y: 180, label: "魔王城", kind: "castle" },
+      { x: 162, y: 128, label: "ゴブリン村", kind: saved ? "saved" : lost ? "burned" : "fort" },
+      { x: 178, y: 48, label: "北の鉱山", kind: c >= 1 ? "freed" : "fort" },
+      { x: 255, y: 112, label: "東の森", kind: c >= 2 ? "freed" : "fort" },
+      { x: 358, y: 160, label: "関所", kind: c >= 3 ? "freed" : "fort" },
+      { x: 442, y: 78, label: "大神殿", kind: c >= 4 ? "freed" : "fort" },
+      { x: 462, y: 170, label: "城塞都市", kind: c >= 5 ? "freed" : "fort" },
+      { x: 566, y: 112, label: "王都", kind: "capital" }
     ];
     const color = k => k === "castle" ? "#7b4bd6" : k === "saved" ? "#3aa655" : k === "burned" ? "#555"
       : k === "freed" ? "#3aa655" : k === "capital" ? "#c9a227" : "#c0392b";
     const mark = p => p.kind === "castle" ? "🏰" : p.kind === "capital" ? "👑" : p.kind === "saved" ? "🔥" : p.kind === "burned" ? "💀" : p.kind === "freed" ? "🏳" : "⚔";
     return `<div class="story-map"><img class="story-map-art" src="assets/story/roadmap.webp" alt="" onerror="this.remove()"><svg viewBox="0 0 620 260" role="img" aria-label="魔族領の地図">
       <rect x="0" y="0" width="620" height="260" rx="10" fill="#efe6d2" fill-opacity="0"/>
-      <path d="M0 240 Q 150 200 300 230 T 620 200" fill="none" stroke="#b9a77c" stroke-width="2" stroke-dasharray="6 5"/>
-      <text x="14" y="24" font-size="13" fill="#6b5b3e">魔族領</text><text x="540" y="250" font-size="13" fill="#6b5b3e">王国</text>
-      ${pts.slice(0, -1).map((p, i) => { const q = pts[i + 1]; return `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="#b9a77c" stroke-width="1.5"/>`; }).join("")}
-      ${pts.map(p => `<g><circle cx="${p.x}" cy="${p.y}" r="13" fill="${color(p.kind)}" opacity=".85"/>
+      ${pts.slice(0, -1).map((p, i) => { const q = pts[i + 1]; return `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="#f3e6c4" stroke-opacity=".55" stroke-width="1.5" stroke-dasharray="4 4"/>`; }).join("")}
+      ${pts.map(p => `<g><circle cx="${p.x}" cy="${p.y}" r="13" fill="${color(p.kind)}" stroke="#fff6e0" stroke-width="1.5" opacity=".92"/>
         <text x="${p.x}" y="${p.y + 5}" font-size="14" text-anchor="middle">${mark(p)}</text>
-        <text x="${p.x}" y="${p.y + 28}" font-size="11" text-anchor="middle" fill="#3b2f1e">${U.esc(p.label)}</text></g>`).join("")}
+        <text x="${p.x}" y="${p.y + 28}" font-size="11" font-weight="700" text-anchor="middle" fill="#fff6e0" stroke="#2a1f16" stroke-width="3" paint-order="stroke">${U.esc(p.label)}</text></g>`).join("")}
     </svg><div class="muted">⚔ 王国軍の砦　🏳 取り戻した　🔥 救った村　💀 焼かれた村</div></div>`;
   },
 
