@@ -1503,6 +1503,9 @@ const UI = {
         ? (m.missionPhase === "outpost"
           ? "王国攻略は進まない（勝てば本戦へ）"
           : `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`)
+        : m.missionKind === "trial"
+          // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §2）。攻略も警戒も動かない。
+          ? `誰も死なない。勝てば第${(m.trial?.level || 0) + 2}段へ・戦功 +2`
         : m.missionKind === "train"
           ? `誰も死なない。戦功 +${m.trainingMerit || 1}・忠誠 +1`
           : m.missionKind === "suppress"
@@ -1516,10 +1519,11 @@ const UI = {
       </div>
       <div class="muted training-note">${U.esc((Game.trainingOpponent(m.opponentId) || {}).note || "")}</div>` : "";
       return `<div class="mission-card mission-${U.esc(m.missionKind)}" data-route="${i + 1}">
-        <div class="mission-route-number"><span>${m.missionKind === "train" ? "訓練場" : "進軍路"}</span><b>${m.missionKind === "train" ? "🥊" : i + 1}</b></div>
-        <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : m.missionKind === "train" ? "🥊" : "🏰"}
+        <div class="mission-route-number"><span>${m.missionKind === "train" ? "訓練場" : m.missionKind === "trial" ? "闘技場" : "進軍路"}</span><b>${m.missionKind === "train" ? "🥊" : m.missionKind === "trial" ? "🏆" : i + 1}</b></div>
+        <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : m.missionKind === "train" ? "🥊" : m.missionKind === "trial" ? "🏆" : "🏰"}
           危険度 ${U.esc(m.difficulty)}</div>
-        <h3>${m.missionKind === "train" ? `<span class="mission-phase training">稽古</span>` : phase}${U.esc(m.missionTitle)}</h3>
+        <h3>${m.missionKind === "train" ? `<span class="mission-phase training">稽古</span>`
+          : m.missionKind === "trial" ? `<span class="mission-phase training">力試し</span>` : phase}${U.esc(m.missionTitle)}</h3>
         <div class="mission-purpose"><b>${U.esc(m.strategyLabel || "作戦")}</b><br>
           <span>${U.esc(m.strategyHint || "")}</span></div>
         <div class="mission-army">${U.esc(m.army)} <span class="muted">— ${U.esc(m.region)}</span></div>
@@ -1531,8 +1535,11 @@ const UI = {
         ${st.incidents?.intel && m.missionKind==="invade" ? `<p class="letter-intel">手紙の敵情：${m.units.map(u=>`${U.esc(u.name)}（攻${u.atk}・守${u.def}）`).join("、")}</p>` : ""}
         ${trainingPick}
         ${m.missionKind === "train" ? `<div class="training-terms">死なない。金は入らない。食料と<b>半分の給与</b>だけ払う。</div>` : ""}
+        ${m.missionKind === "trial" ? `<div class="training-terms">死なない。全滅しても軍団は続く。
+          <b>力試し 第${(m.trial?.level || 0) + 1}段</b>・相手 ×${(m.trial?.mult || 1).toFixed(2)}
+          ${Game.state.trials?.best ? `　これまでの最高 第${Game.state.trials.best}段` : ""}</div>` : ""}
         <dl class="mission-economy">
-          <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
+          <dt>勝利報酬</dt><dd class="gold">${m.missionKind === "trial" ? m.trialReward || 0 : m.reward}G</dd>
           <dt>食料</dt><dd class="food">+${m.foodReward || 0}</dd>
           <dt>建材</dt><dd class="materials">+${m.materialReward || 0}</dd>
           <dt>施設施工見込</dt><dd>${U.esc(buildText)}</dd>

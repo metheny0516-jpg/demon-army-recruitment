@@ -117,6 +117,33 @@ MISSION_TYPES.train = {
   difficulty: "稽古"
 };
 
+// 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md）。第二幕決着後の作戦会議にだけ出る。
+// 稽古と同じ経路（training: true）なので誰も死なず、全滅してもランは終わらない。
+// 相手は勝つたびに強くなる梯子で、顔ぶれと倍率は run.js の trialUnits / trialMult が決める。
+MISSION_TYPES.trial = {
+  id: "trial",
+  icon: "🏆",
+  title: "力試し",
+  strategyLabel: "強敵に挑む",
+  strategyHint: "誰も死なない。勝てば報酬と称号、負けても失うのは面目だけ。相手は勝つたびに強くなる。",
+  descriptions: [
+    "勝っても土地は増えない。負けても誰も死なない。ただ、どこまで行けるかが分かる。",
+    "モルモが審判。判定は甘くない。",
+    "相手はこちらの噂を聞いて、前より本気で来る。"
+  ],
+  enemyTierOffset: 0,
+  enemyMult: 1,
+  rewardMult: 0,
+  payrollCoverage: 0.5,
+  rewardJitter: [0, 0],
+  foodReward: 0,
+  materialReward: 0,
+  alertDelta: 0,
+  conquestDelta: 0,
+  loyaltyDelta: 0,
+  difficulty: "極"
+};
+
 // 防衛は反撃の予約時だけ run.js が明示的に選ぶ。通常の3択にはまだ混ぜない。
 MISSION_TYPES.defend = {
   id: "defend",

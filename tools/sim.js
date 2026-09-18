@@ -61,7 +61,11 @@ function runOnce(strat, stats){
   const st = Game.state;
   let guard = 0;
   // 従来比較は第二幕の決着で止める。ゲーム本体はその後も継続する。
-  while (st.phase !== 'gameover' && st.phase !== 'clear' && !st.act2Cleared && guard++ < 300) {
+  // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §6）の戦略だけ、第二幕の決着で止めずに続ける。
+  // 他の戦略の母集団は今までどおり「第二幕の決着まで」。
+  const stopAtAct2 = !strat.trial;
+  while (st.phase !== 'gameover' && st.phase !== 'clear'
+    && !(stopAtAct2 && st.act2Cleared) && guard++ < (strat.trial ? 400 : 300)) {
     if (strat.cards) {
       if (strat.cards === 'open') {
         if(st.incidents?.tail?.ready) Incidents.finishTail(Game, true);
@@ -164,6 +168,15 @@ function runOnce(strat, stats){
       } else if (kind !== 'train') {
         st.trainedBeforeThisInvade = false;
       }
+      // 力試し：第二幕決着後は、決めた回数まで力試しだけを選び続ける（§6）。
+      const trialIndex = st.missionOffers.findIndex(m => m.missionKind === 'trial');
+      if (strat.trial && trialIndex >= 0 && (st.simTrials || 0) < (strat.trial.rounds || 8)) {
+        st.simTrials = (st.simTrials || 0) + 1;
+        const level = st.trials ? st.trials.level : 0;
+        Game.selectMission(trialIndex);
+        st.simTrialLevels = st.simTrialLevels || [];
+        st.simTrialLevels.push(level);
+      } else {
       // 防衛戦（王国の反撃）は一択で来る。選ぶ余地は無いので、あればそれを受ける。
       const defendIndex = st.missionOffers.findIndex(m => m.missionKind === 'defend');
       // 地図の上の戦争（段階A）：候補3つからどれを落とすか。
@@ -189,6 +202,7 @@ function runOnce(strat, stats){
         const fallback = take >= 0 ? take
           : st.missionOffers.findIndex(m => !['patrol', 'tribute', 'train'].includes(m.missionKind));
         Game.selectMission(index >= 0 ? index : fallback >= 0 ? fallback : Math.min(2, st.missionOffers.length - 1));
+      }
       }
       if (st.selectedMission && st.selectedMission.missionKind === 'train') { stats.trainings = (stats.trainings || 0) + 1; st.simTrainings = (st.simTrainings || 0) + 1; }
     }
@@ -232,6 +246,13 @@ function runOnce(strat, stats){
       if (st.roster.some(m => m.unpaid)) stats.unpaid++;
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
+      // 力試し：段ごとの勝敗を数える（§6 の「段0 勝率／段3 勝率」）。
+      if (st.lastTrial) {
+        stats.trialByLevel = stats.trialByLevel || {};
+        const at = stats.trialByLevel[st.lastTrial.level] || (stats.trialByLevel[st.lastTrial.level] = { win: 0, lose: 0 });
+        st.lastTrial.won ? at.win++ : at.lose++;
+        delete st.lastTrial;
+      }
       showPending(st);
     }
     // 拠点接収：条件を満たしたら必ず使う（1ランに1度の建材の追い風）
@@ -308,13 +329,24 @@ function runOnce(strat, stats){
   stats.splits = (stats.splits || 0) + (st.slimeSpawnCount || 0);   // 増殖の元（分裂した回数）
   stats.territory = (stats.territory || 0) + ((st.territory?.lands || []).length + (st.territory?.tribes || []).length);
   stats.patrols = (stats.patrols || 0) + (st.patrolCount || 0);
+  if (st.trials && (st.trials.wins || st.trials.losses)) {
+    stats.trialBest = (stats.trialBest || 0) + (st.trials.best || 0);
+    stats.trialRuns = (stats.trialRuns || 0) + 1;
+  }
   stats.cards ||= {settles:0,offered:0,opened:0,natural:0,shown:0};
   stats.cards.shown ||= 0;
   for(const k of Object.keys(stats.cards)) stats.cards[k] += st.incidents?.stats?.[k] || 0;
   return rec;
 }
 
+// 力試しの梯子の強さは測って決める（§6）。測定のあいだだけ環境変数で振れるようにする
+// （本体の既定値は run.js の TRIAL_BASE / TRIAL_STEP が正本）。
+if (process.env.TRIAL_BASE) Game.TRIAL_BASE = Number(process.env.TRIAL_BASE);
+if (process.env.TRIAL_STEP) Game.TRIAL_STEP = Number(process.env.TRIAL_STEP);
+
 const strategies = [
+  // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §6）。第二幕の決着で止めず、梯子を8回登る。
+  {name:'第二幕後に力試しを続ける', kind:'greedy', trial: { rounds: 8 }},
   {name:'最強優先', kind:'greedy'},
   {name:'ゴブリン統一', kind:'race', race:'ゴブリン'},
   {name:'ゴブリン統一+求人', kind:'race', race:'ゴブリン', reroll:true, keepGold:6},
@@ -367,6 +399,16 @@ for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
   console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  領土 ${((stats.territory||0)/N).toFixed(2)}／ラン  巡回 ${((stats.patrols||0)/N).toFixed(2)}回/ラン  敵将 討${((stats.capSlain||0)/N).toFixed(2)}／雇${((stats.capHired||0)/N).toFixed(2)}／最終戦が混成 ${stats.capMixed||0}ラン  分裂 ${((stats.splits||0)/N).toFixed(2)}回/ラン`);
   // 表示された札／出た札（§5）。1.0 未満なら 2-2 の上限か順序に穴がある。
+  // 力試し（§6）：best の平均と、段0／段3 の勝率。狙いは 段0 60〜80%、段3 30% 未満。
+  if (stats.trialRuns) {
+    const rate = lv => {
+      const at = (stats.trialByLevel || {})[lv];
+      if (!at || !(at.win + at.lose)) return '—';
+      return `${(100 * at.win / (at.win + at.lose)).toFixed(0)}%（${at.win + at.lose}戦）`;
+    };
+    console.log(`  力試し: best 平均 ${(stats.trialBest / stats.trialRuns).toFixed(2)}段`
+      + `　段0 勝率 ${rate(0)}　段1 ${rate(1)}　段2 ${rate(2)}　段3 勝率 ${rate(3)}　段4 ${rate(4)}`);
+  }
   const shownRate = (stats.cards.shown/Math.max(1,stats.cards.offered)).toFixed(2);
   console.log(`  札: 提示 ${stats.cards.offered}／めくった ${stats.cards.opened}／自然発生 ${stats.cards.natural}／決着 ${stats.cards.settles}（波乱 ${(100*stats.cards.natural/Math.max(1,stats.cards.settles)).toFixed(2)}%）　表示された札／出た札 ${shownRate}`);
   const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
