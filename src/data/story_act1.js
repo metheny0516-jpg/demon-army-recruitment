@@ -14,11 +14,16 @@ const KINGDOM_CAST = {
     id: "brennan", name: "伍長ブレンダン", title: "開拓保護隊", icon: "🗡",
     profile: "王国軍の若い下士官。教本どおりに動くのが誇り。令状に書いてあることは全部本当だと思っている。",
     lines: {
-      intro: ["盗賊討伐の令状はここにある！ ……え、村？ ここは盗賊の村だろう？", "王国軍開拓保護隊、伍長ブレンダン！ 教本第三章に従い、包囲を継続する！"],
+      intro: ["我々は開拓民を守る命令を受けている。この村が襲撃の拠点でないという保証は、あるのか", "王国軍開拓保護隊、伍長ブレンダン。令状に従い、包囲を継続する"],
       win: ["訓練どおりだ！ 報告書にはそう書く！", "ふう……。教本は正しかった。たぶん"],
       lose: ["報告書には……なんと書けば……", "退却！ 教本第九章、退却！ 誰か九章持ってないか！？"],
       hesitate: ["……そこの、農具を持ったの。なぜ斬らない？"]
     }
+  },
+  private: {
+    id: "private", name: "兵卒ポル", title: "開拓保護隊", icon: "🪖",
+    profile: "ブレンダンの部下。伍長を尊敬しているが、目の前のものはちゃんと見える。",
+    lines: { aside: ["伍長、ここゴブリンしか住んでませんけど……", "伍長、令状の村の名前、ここじゃないです"] }
   },
   goldon: {
     id: "goldon", name: "鉱山監督ゴールドン", title: "王国鉱山局", icon: "💰",
@@ -108,9 +113,9 @@ const STORY_BEATS = [
       const staff = s.staffNames();
       return `玉座は埃をかぶっていた。前の魔王は、盟約の文書ごと消えた。\n`
         + `モルモ「おかえりなさいませ、魔王様。……いえ、初めまして、デス」\n`
-        + `モルモ「ご報告デス。現在、魔王軍の所属者は……${staff.length + 1}名デス。${staff.join("殿、")}殿。……私を入れて、デス」\n`
+        + `モルモ「ご報告デス。現在、魔王軍の所属者は……${staff.length + 1}名デス。${staff.join("殿、")}殿と、私デス。……戦える者は、いません」\n`
         + `モルモ「王国軍が魔族領に砦を建てている、という噂は聞いています。ですが、誰も確かめに行けません。人が、いないので」\n`
-        + `モルモ「まずは……面接、しましょうか。履歴書は私が集めておきましたデス」`;
+        + `モルモ「履歴書は集めておきましたデス。……この中から、魔王軍を作るんですか？」`;
     }
   },
   {
@@ -119,15 +124,17 @@ const STORY_BEATS = [
     check(st) { return !(st.story.flags.rescueResolved); },
     cast(st) {
       const villager = Story.helpers(st).villager();
-      return { mormo: "mormo", messenger: "n:messenger", brennan: "k:brennan", villager: villager ? villager.uid : undefined };
+      return { mormo: "mormo", messenger: "n:messenger", brennan: "k:brennan", private: "k:private", villager: villager ? villager.uid : undefined };
     },
     text(st, s) {
       const villager = s.villager();
       return `泥だらけのゴブリンが門をくぐってきた。膝が笑っている。\n`
         + `モルモ「ま、魔王様！ 救援要請デス！ ゴブリンの村が王国軍に包囲されています！ 三日は持たない、と……」\n`
         + (villager ? `使いは${villager.name}を見て目を丸くした。泥だらけの使い「お前……村を出たきりだったのに。戻ってきたのか」\n` : "")
-        + `包囲しているのは「開拓保護隊」。名目は盗賊討伐。\n`
-        + `伍長ブレンダン「盗賊討伐の令状はここにある！ ……え、村？ ここは盗賊の村だろう？」\n`
+        + `包囲しているのは「開拓保護隊」。名目は盗賊討伐。使いは、伍長の言葉を覚えていた。\n`
+        + `伍長ブレンダン「我々は開拓民を守る命令を受けている。この村が襲撃の拠点でないという保証は、あるのか」\n`
+        + `兵卒ポル「伍長、ここゴブリンしか住んでませんけど……」\n`
+        + `伍長ブレンダン「保証には、ならん」\n`
         + `モルモ「……行き先は、一つしかありませんネ。編成を、お願いしますデス」`;
     }
   },
@@ -249,18 +256,37 @@ const STORY_SCENES = [
     id: "road_coward_supply", slot: "road", title: "逃げ足が見つけたもの",
     check(st, party) { return party.find(m => (m.traits || []).includes("coward") || (m.traits || []).includes("timid")) || null; },
     cast(st, party) { return { actor: this.check(st, party).uid }; },
+    // 同じ「臆病」でも、状況・関係・過去で結果が変わる。
+    //   初陣           → 逃げる（偵察と言い張る）
+    //   仲間に負傷者   → 逃げずに残る（自分より弱い者がいる）
+    //   前に逃げた痕跡 → 今回だけ踏みとどまる（覚えている）
+    //   強欲を併せ持つ → 逃げた先で荷物を漁る（手柄になる）
+    // 結果の選び方は「接点が強い順」。同じ特性が毎回同じ場面にならないための最初の見本。
+    resolve(st, c, party) {
+      const me = c.actor;
+      const fledBefore = Story.count(st, "fled") > 0 && Traces.query(st.traces, { kind: "story", object: "fled", subject: me.uid }).length > 0;
+      const injuredMate = party.find(m => m.uid !== me.uid && (m.injured || 0) > 0);
+      const greedy = (me.traits || []).includes("greedy") || (me.traits || []).includes("pickpocket");
+      const firstSortie = !((me.record || {}).battles > 0);
+      if (fledBefore) return "stand_memory";
+      if (injuredMate) return { kind: "stand_mate", mate: injuredMate };
+      if (greedy) return U.chance(0.7) ? "loot" : "flee";
+      return firstSortie ? "flee" : (U.chance(0.5) ? "loot" : "flee");
+    },
     text(st, c) {
-      const found = !!c._found;
-      return `街道の先に王国軍の斥候。${c.actor.name}は誰より早く反応した——逆方向に。\n`
-        + (found
-          ? `${c.actor.name}「見つけました！ 敵じゃなくて、敵の荷車を！ 干し肉とパンっす！」\n藪の中に置き去りの補給の荷車。逃げた先で、手柄を拾った。`
-          : `${c.actor.name}「い、今のは偵察っす。戦術的後退っす」\n藪から戻ってくるまで、少し時間がかかった。`);
+      const r = c._r || "flee";
+      const n = c.actor.name;
+      if (r === "stand_memory") return `街道の先に王国軍の斥候。${n}の足が一瞬、後ろへ向いた。\n${n}「……前に逃げたとき、どうなったか覚えてる」\n足は、前に戻った。震えたままだったが、戻った。`;
+      if (r.kind === "stand_mate") return `街道の先に王国軍の斥候。${n}は逃げなかった。\n${n}「${r.mate.name}、まだ足引きずってるじゃないっすか。……先に行くっす」\n本人がいちばん驚いた顔をしていた。`;
+      if (r === "loot") return `街道の先に王国軍の斥候。${n}は誰より早く反応した——逆方向に。\n${n}「見つけました！ 敵じゃなくて、敵の荷車を！ 干し肉とパンっす！」\n藪の中に置き去りの補給の荷車。逃げた先で、手柄を拾った。`;
+      return `街道の先に王国軍の斥候。${n}は誰より早く反応した——逆方向に。\n${n}「い、今のは偵察っす。戦術的後退っす」\n藪から戻ってくるまで、少し時間がかかった。`;
     },
     effect(st, c, ctx) {
-      const found = U.chance(0.5);
-      c._found = found;
-      if (found) { st.food += 2; ctx.notes.push(`${c.actor.name}が逃げた先で補給の荷車を見つけた（食料が増えた）`); }
-      Story.mark(st, "found_supply", c.actor.uid, { found });
+      const r = this.resolve(st, c, ctx.party || []);
+      c._r = r;
+      if (r === "loot") { st.food += 2; ctx.notes.push(`${c.actor.name}が逃げた先で補給の荷車を見つけた（食料が増えた）`); Story.mark(st, "found_supply", c.actor.uid, {}); }
+      else if (r === "flee") { ctx.notes.push(`${c.actor.name}が道中で一度逃げた`); Story.mark(st, "fled", c.actor.uid, {}); }
+      else Story.mark(st, "stood_ground", c.actor.uid, { why: r.kind || r });
     }
   },
   {

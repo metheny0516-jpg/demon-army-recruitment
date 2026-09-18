@@ -12,13 +12,13 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   await page.waitForTimeout(150);
   ok(await page.locator('[data-action="storydone"]').count() === 1, '新規開始は即位の場面');
   const throne = await page.locator('.story-panel').innerText();
-  ok(/3名/.test(throne) && /モルモ/.test(throne), 'モルモが「所属者は3名」と報告する');
+  ok(/2名/.test(throne) && /戦える者は、いません/.test(throne), 'モルモが「所属者は2名、戦える者はいません」と報告する');
   await page.screenshot({ path: process.env.SP + '/story-throne.png' });
   await page.click('[data-action="storydone"]');
   await page.waitForTimeout(120);
   ok(await page.locator('[data-action="hire"]').count() > 0, '即位のあとは面接');
   const staff = await page.evaluate(() => Game.state.roster.map(m => m.name));
-  ok(staff.includes('ガンツ') && staff.includes('ぷに'), '城の住人（ガンツ・ぷに）が名簿にいる');
+  ok(staff.length === 1 && staff[0] === 'ガンツ', '城の住人は門番ガンツだけ（実働部隊は空）');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.waitForTimeout(100);
   await page.click('[data-action="skip"]');
@@ -35,11 +35,11 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   await page.click('[data-action="missionpick"]');
   await page.waitForTimeout(120);
   // 道中の枝は確率。臆病者（coward）を必ず連れて行き、道中を必ず引く。
-  await page.evaluate(() => { Story.ROAD_CHANCE = 1; Game.state.roster.forEach(m => { m.hp = 80; m.atk = 30; }); });
+  await page.evaluate(() => { Story.ROAD_CHANCE = 1; Game.state.roster.forEach(m => { m.hp = 80; m.atk = 30; if (!m.traits.includes('coward')) m.traits.push('coward'); }); });
   await page.click('[data-action="deploy"]');
   await page.waitForTimeout(200);
   const pre = await page.locator('[data-action="storybattle"]').count();
-  ok(pre === 1, '出撃すると道中の場面が先に出る（ゴブリンは卑怯者なので逃げ足の場面）');
+  ok(pre === 1, '出撃すると道中の場面が先に出る（臆病者を連れて行ったので逃げ足の場面）');
   if (pre) {
     await page.screenshot({ path: process.env.SP + '/story-road.png' });
     await page.click('[data-action="storybattle"]');

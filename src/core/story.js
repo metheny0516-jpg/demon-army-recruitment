@@ -200,12 +200,8 @@ const Story = {
       name: "ガンツ", job: "門番", prevJob: "魔王城の門番（前魔王の代から）", motive: "門があるので",
       flaw: "門から離れると落ち着かない", quote: "……通れ。魔王様だろ", salary: 2, loyalty: 92, department: "home"
     });
-    const puni = game.rollApplicant("slime");
-    Object.assign(puni, {
-      name: "ぷに", job: "掃除係", prevJob: "魔王城の床（ずっと）", motive: "床が広いので",
-      flaw: "掃除した床で滑る", quote: "……ぷに", salary: 0, loyalty: 88, department: "combat"
-    });
-    for (const m of [gantz, puni]) {
+    // 実働部隊は空のまま始める（「最初に誰が来るか」を採用に残す。レビュー 2026-09-18）。
+    for (const m of [gantz]) {
       st.roster.push(m);
       game.memberRecord(m);
       game.baseOf(m);
@@ -216,7 +212,6 @@ const Story = {
       if (!st.recruitedTplIds.includes(m.tplId)) st.recruitedTplIds.push(m.tplId);
       m.staff = true;
     }
-    st.activeUids.push(puni.uid);
     st.maxArmySize = Math.max(st.maxArmySize || 0, st.roster.length);
   }
 };
@@ -226,6 +221,8 @@ Story.TAG_LINES = {
   saved_village: "ゴブリン村を救った",
   abandoned_village: "ゴブリン村を救えなかった",
   found_supply: "{subject}が逃げた先で補給の荷車を見つけた",
+  fled: "{subject}が道中で逃げた",
+  stood_ground: "{subject}が踏みとどまった",
   charged_early: "{subject}が命令の前に突っ込んだ",
   drank_on_road: "{subject}が道中で飲んだ",
   night_route: "{subject}の案内で夜道を通った",
