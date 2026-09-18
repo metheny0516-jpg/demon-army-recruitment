@@ -13,6 +13,11 @@ const MormoScene = {
     this.close();
     if (typeof document === "undefined" || !document.body) return;
     const expression = this.EXPRESSIONS.includes(options.expression) ? options.expression : "report";
+    // 長い報告はページに割る（空行で区切る）。1ページ目を出し、送るたびに次のページ（オーナー試遊 2026-09-18）。
+    const pages = Array.isArray(options.pages) ? options.pages.slice()
+      : String(options.text || "").split(/\n\s*\n/).map(t => t.trim()).filter(Boolean);
+    this.pending = pages.length > 1 ? { ...options, pages: pages.slice(1) } : null;
+    if (pages.length) options = { ...options, text: pages[0], pages: undefined };
     this.text = String(options.text || "ご報告デス、魔王様。");
     this.index = 0;
     this.active = true;
@@ -136,6 +141,9 @@ const MormoScene = {
       // 全文が出る前に送った＝報告を読み切らなかった（第14節の「報告スキップ」）
       if (typeof KPI !== "undefined") KPI.reportSkipped();
       this.reveal();
+    } else if (this.pending && this.pending.pages && this.pending.pages.length) {
+      const next = this.pending;
+      this.show(next);
     } else this.close();
   },
 
