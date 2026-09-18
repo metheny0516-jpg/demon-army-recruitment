@@ -2102,7 +2102,12 @@ const UI = {
     const expr = this.eventExpressionFor(body);
     const emoji = who.icon || this.icon(who.race) || "🙂";
     let src = null, unit = true;
-    if (who.mormo) { src = `assets/mormo/${expr === "tears" ? "worried" : expr === "smirk" ? "joy" : expr === "surprise" ? "panic" : "report"}.webp`; unit = false; }
+    // モルモの表情。「？」だけでは驚かない（疑問文のたびに慌て顔になっていた。オーナー試遊 2026-09-18）。
+    if (who.mormo) {
+      const panic = /！？|!\?|うわ|ひえ|ひゃ|大変/.test(String(body || ""));
+      const face = panic ? "panic" : expr === "tears" ? "worried" : expr === "smirk" ? "joy" : "report";
+      src = `assets/mormo/${face}.webp`; unit = false;
+    }
     else if (who.kingdom) src = `assets/kingdom/${who.kingdom}.png`;
     else if (who.tplId && this.hasPortrait(who.tplId)) {
       src = expr && EVENT_EXPRESSIONS[who.tplId] && EVENT_EXPRESSIONS[who.tplId].includes(expr)
