@@ -2109,10 +2109,9 @@ const UI = {
       src = `assets/mormo/${face}.webp`; unit = false;
     }
     else if (who.kingdom) src = `assets/kingdom/${who.kingdom}.png`;
-    else if (who.tplId && this.hasPortrait(who.tplId)) {
-      src = expr && EVENT_EXPRESSIONS[who.tplId] && EVENT_EXPRESSIONS[who.tplId].includes(expr)
-        ? `assets/monsters/events/${who.tplId}/${expr}.webp` : `${this.PORTRAIT_DIR}${who.tplId}.png`;
-    }
+    // モルモ以外は表情差分を使わず、履歴書の絵（顔を上寄せで切り抜く）一枚に統一する。
+    // 表情差分は全身像で顔が小さくなる（オーナー試遊 2026-09-18）。感情は台詞で伝える。
+    else if (who.tplId && this.hasPortrait(who.tplId)) src = `${this.PORTRAIT_DIR}${who.tplId}.png`;
     if (!src) return `<span class="mormo-aside-face story-face-emoji">${U.esc(emoji)}</span>`;
     return `<span class="mormo-aside-face${unit ? " story-face-unit" : ""}"><img class="mormo-aside-portrait" src="${U.esc(src)}" alt=""
       data-emoji="${U.esc(emoji)}" onerror="UI.storyFaceError(this)"></span>`;
