@@ -250,6 +250,20 @@ const STORY_BEATS = [
 // text(st, c) の c は cast を解決したもの。effect(st, c, ctx) は実際の影響（敵の増減・資源・旗・痕跡）。
 // ctx: { mission, enemyUnits(道中・現地のみ), notes, won(戦後のみ), stageData }
 // 数値は本文に出さない。出すのは起きたことと台詞。
+// 「過去」を読む小道具。痕跡 story のタグを本人で引く。
+const STORY_PAST = {
+  has(st, uid, tag) { return typeof Traces !== "undefined" && Traces.query(st.traces, { kind: "story", object: tag, subject: uid }).length > 0; },
+  last(st, uid, tag) { return typeof Traces !== "undefined" ? Traces.last(st.traces, { kind: "story", object: tag, subject: uid }) : null; },
+  // その痕跡のあとに、仲間が倒れたか（自分のせいで、と本人は思っている）
+  mateDownedAfter(st, uid, tag) {
+    const t = this.last(st, uid, tag);
+    if (!t || typeof Traces === "undefined") return false;
+    return Traces.query(st.traces, { kinds: ["downed", "fallen", "carried"], since: t.seq }).some(x => x.subject !== uid);
+  },
+  // 人間の軍に倒された仲間がいるか（去った者の記録）
+  mateKilledByHumans(st) { return (st.departed || []).some(d => d.cause === "fallen" && d.army && !/反乱|魔界/.test(d.army)); }
+};
+
 const STORY_SCENES = [
   // ── 道中 ──
   {
@@ -293,26 +307,35 @@ const STORY_SCENES = [
     id: "road_brute_charge", slot: "road", title: "命令の前に",
     check(st, party) { return party.find(m => ["brute", "first_strike", "charge"].some(t => (m.traits || []).includes(t))) || null; },
     cast(st, party) { return { actor: this.check(st, party).uid }; },
+    // 前に突っ込んで仲間が倒れた → 今回は命令を待つ／見栄っ張りが見ている → 必ず突っ込む／
+    // 仲間に臆病者がいる → 一人で突っ込んで孤立（誰もついてこない）／それ以外 → 勝つか、気づかれるか
+    resolve(st, c, party) {
+      const me = c.actor;
+      if (STORY_PAST.mateDownedAfter(st, me.uid, "charged_early")) return "wait";
+      const watcher = party.find(m => m.uid !== me.uid && (m.traits || []).includes("show_off"));
+      const coward = party.find(m => m.uid !== me.uid && ((m.traits || []).includes("coward") || (m.traits || []).includes("timid")));
+      if (watcher) return { kind: "showoff", who: watcher, won: U.chance(0.75) };
+      if (coward) return { kind: "alone", who: coward };
+      return { kind: "plain", won: U.chance(0.6) };
+    },
     text(st, c) {
-      return `王国軍の斥候が一人、丘の上に立っていた。まだ誰も命令していない。\n`
-        + `${c.actor.name}「見えた！」\n`
-        + (c._won
-          ? `丘を駆け上がり、斥候が笛を吹く前に倒した。包囲に、穴が空いた。`
-          : `丘を駆け上がった。斥候は笛を吹いた。丘の向こうから、返事の笛が聞こえた。\n${c.actor.name}「……あ」`);
+      const r = c._r || { kind: "plain", won: true }; const n = c.actor.name;
+      const head = `王国軍の斥候が一人、丘の上に立っていた。まだ誰も命令していない。\n`;
+      if (r === "wait") return head + `${n}の足が一歩出て、止まった。\n${n}「……前に、先に行って。誰かが倒れた」\n${n}は命令を待った。斥候は笛を吹かなかった。`;
+      if (r.kind === "showoff") return head + `${r.who.name}が見ている。${n}は見られていることに気づいた。\n${n}「見てろ！」\n`
+        + (r.won ? `丘を駆け上がり、斥候が笛を吹く前に倒した。${r.who.name}「今の、私の方が上手くやれた」` : `丘を駆け上がった。斥候は笛を吹いた。${r.who.name}「……見なかったことにする」`);
+      if (r.kind === "alone") return head + `${n}「行くぞ！」\n誰もついてこなかった。${r.who.name}は藪の中にいた。\n${n}は一人で丘の上にいた。斥候も、その仲間も、${n}を見ていた。`;
+      return head + `${n}「見えた！」\n` + (r.won ? `丘を駆け上がり、斥候が笛を吹く前に倒した。包囲に、穴が空いた。` : `丘を駆け上がった。斥候は笛を吹いた。丘の向こうから、返事の笛が聞こえた。\n${n}「……あ」`);
     },
     effect(st, c, ctx) {
-      const won = U.chance(0.6);
-      c._won = won;
-      if (!Array.isArray(ctx.enemyUnits)) return;
-      if (won && ctx.enemyUnits.length > 1) {
-        ctx.enemyUnits.pop();
-        ctx.notes.push(`${c.actor.name}が斥候を倒し、敵が一人減った`);
-      } else if (!won) {
-        const base = ctx.enemyUnits[ctx.enemyUnits.length - 1];
-        ctx.enemyUnits.push({ ...base, name: `増援の${base.name.replace(/^.*?の/, "")}` });
-        ctx.notes.push(`${c.actor.name}の突撃で気づかれ、敵に増援が来た`);
-      }
-      Story.mark(st, "charged_early", c.actor.uid, { won });
+      const r = this.resolve(st, c, ctx.party || []); c._r = r;
+      const units = Array.isArray(ctx.enemyUnits) ? ctx.enemyUnits : null;
+      const won = r === "wait" ? null : r.kind === "alone" ? false : r.won;
+      if (units && won === true && units.length > 1) { units.pop(); ctx.notes.push(`${c.actor.name}が斥候を倒し、敵が一人減った`); }
+      else if (units && won === false && r.kind !== "alone") { const b = units[units.length - 1]; units.push({ ...b, name: `増援の${b.name.replace(/^.*?の/, "")}` }); ctx.notes.push(`${c.actor.name}の突撃で気づかれ、敵に増援が来た`); }
+      else if (units && r.kind === "alone") { for (const u of units) u.atk = u.atk + 1; ctx.notes.push(`${c.actor.name}が一人で突っ込み、敵が勢いづいた`); }
+      if (r === "wait") { ctx.notes.push(`${c.actor.name}は今回、命令を待った`); Story.mark(st, "waited", c.actor.uid, {}); }
+      else Story.mark(st, "charged_early", c.actor.uid, { won: !!won, how: r.kind });
     }
   },
   {
@@ -366,29 +389,56 @@ const STORY_SCENES = [
     id: "arrival_undead_fear", slot: "arrival", missions: ["goblin_rescue"], title: "門は開かない",
     check(st, party) { return party.find(m => (m.tags || []).includes("undead") || ["skeleton", "zombie", "necromancer", "lich"].includes(m.tplId)) || null; },
     cast(st, party) { return { actor: this.check(st, party).uid }; },
+    // 同族のゴブリンが同行 → 取りなす（門は半分開く）／料理人が同行 → 骸骨の前に鍋を置いて誤魔化す／それ以外 → 門は閉まる
+    resolve(st, c, party) {
+      const me = c.actor;
+      const gob = party.find(m => m.uid !== me.uid && m.tplId === "goblin");
+      const cook = party.find(m => m.uid !== me.uid && (m.traits || []).includes("demon_cook"));
+      if (gob) return { kind: "vouch", who: gob };
+      if (cook) return { kind: "pot", who: cook };
+      return "fear";
+    },
     text(st, c) {
-      return `柵の向こうで、村のゴブリンが${c.actor.name}を見た。見て、悲鳴を上げて、門を閉めた。\n`
-        + `${c.actor.name}「……救援に来たんだが」\n`
-        + `包囲している王国兵も${c.actor.name}を見た。見て、悲鳴を上げた。少なくとも、こちらは役に立った。`;
+      const r = c._r || "fear"; const n = c.actor.name;
+      const head = `柵の向こうで、村のゴブリンが${n}を見た。見て、悲鳴を上げた。\n`;
+      if (r.kind === "vouch") return head + `${r.who.name}「待て待て、うちの人！ 骨だけど、うちの人！」\n門は半分だけ開いた。${n}「……半分か」`;
+      if (r.kind === "pot") return head + `${r.who.name}が${n}の前に鍋を置いた。湯気で骨が見えなくなった。\n${r.who.name}「炊き出しです」\n村のゴブリンは鍋を見た。鍋しか見なかった。門が開いた。`;
+      return head + `門が閉まった。\n${n}「……救援に来たんだが」\n包囲している王国兵も${n}を見た。見て、悲鳴を上げた。少なくとも、こちらは役に立った。`;
     },
     effect(st, c, ctx) {
-      st.story.flags.villageFear = true;
-      Story.mark(st, "village_feared", c.actor.uid, {});
+      const r = this.resolve(st, c, ctx.party || []); c._r = r;
+      st.story.flags.villageFear = (r === "fear");
+      st.story.flags.villageHalfDoor = (r.kind === "vouch");
+      Story.mark(st, r === "fear" ? "village_feared" : "village_vouched", c.actor.uid, { how: r.kind || r });
     }
   },
   {
     id: "arrival_farm_raised", slot: "arrival", title: "農具を持った手",
     check(st, party) { return party.find(m => /人間の農家で育った/.test(m.prevJob || "")) || null; },
     cast(st, party) { return { actor: this.check(st, party).uid, brennan: "k:brennan" }; },
+    // 初めて人間と戦う → ためらう／前にためらって仲間が倒れた → 今回は斬る／
+    // 親しい仲間（一緒に戦った者）が人間に倒されている → 激昂／二度目以降 → もう迷わない
+    resolve(st, c, party) {
+      const me = c.actor;
+      if (STORY_PAST.mateKilledByHumans(st) && STORY_PAST.has(st, me.uid, "hesitated")) return "rage";
+      if (STORY_PAST.mateDownedAfter(st, me.uid, "hesitated")) return "strike";
+      if (STORY_PAST.has(st, me.uid, "hesitated")) return "steady";
+      return "hesitate";
+    },
     text(st, c) {
-      return `王国兵の列が見えたとき、${c.actor.name}の手が止まった。\n`
-        + `${c.actor.name}「……あの鎧。うちの村の駐屯兵と、同じだ」\n`
-        + `伍長ブレンダン「……そこの、農具を持ったの。なぜ斬らない？」\n`
-        + `${c.actor.name}は答えなかった。ただ、最初の一歩が遅れた。`;
+      const r = c._r || "hesitate"; const n = c.actor.name;
+      const head = `王国兵の列が見えたとき、`;
+      if (r === "rage") return head + `${n}の手は止まらなかった。\n${n}「……前は、止まった。それで誰かが死んだ」\n伍長ブレンダン「そこの、農具を持ったの——」\n${n}は答えなかった。最初の一歩が、誰より早かった。`;
+      if (r === "strike") return head + `${n}の手が一瞬止まり、動いた。\n${n}「前にためらって、仲間が倒れた。……もう、いい」\n最初の一歩は、遅れなかった。`;
+      if (r === "steady") return head + `${n}は息を吐いた。\n${n}「二度目だ。……慣れたくは、ないが」`;
+      return head + `${n}の手が止まった。\n${n}「……あの鎧。うちの村の駐屯兵と、同じだ」\n伍長ブレンダン「……そこの、農具を持ったの。なぜ斬らない？」\n${n}は答えなかった。ただ、最初の一歩が遅れた。`;
     },
     effect(st, c, ctx) {
-      Story.mark(st, "hesitated", c.actor.uid, {});
-      ctx.notes.push(`${c.actor.name}は人間の兵を前に、最初の一歩が遅れた`);
+      const r = this.resolve(st, c, ctx.party || []); c._r = r;
+      const units = Array.isArray(ctx.enemyUnits) ? ctx.enemyUnits : null;
+      if (r === "hesitate") { ctx.notes.push(`${c.actor.name}は人間の兵を前に、最初の一歩が遅れた`); Story.mark(st, "hesitated", c.actor.uid, {}); }
+      else if (r === "rage") { if (units && units[0]) units[0].def = Math.max(0, units[0].def - 2); ctx.notes.push(`${c.actor.name}が真っ先に踏み込み、敵の前衛が崩れた`); Story.mark(st, "raged", c.actor.uid, {}); }
+      else Story.mark(st, "struck", c.actor.uid, { how: r });
     }
   },
   // ── 戦後（勝ったとき） ──
@@ -412,11 +462,14 @@ const STORY_SCENES = [
       const g = c._grat || {};
       const lines = [`包囲が解けた。村の焚き火に、火が戻った。`];
       if (c.native) lines.push(`村長は${c.native.name}を見て、長く黙ってから言った。「……${c.native.name}。会計の帳簿、まだ合ってないぞ」\n${c.native.name}「数えるの苦手なんすよ、昔から」`);
-      if (c.cook) lines.push(`${c.cook.name}が勝手に鍋を出した。村の備蓄と敵の携行食で、炊き出し。村中が並んだ。`);
-      if (c.eater) lines.push(`${c.eater.name}は村の備蓄倉庫を見つけた。見つけて、入って、出てこなかった。\n翌朝、村長から請求書が届いた。`);
-      if (c.show) lines.push(g.showOk
-        ? `${c.show.name}が焚き火の前で演説を始めた。${c.show.name}「この村は、我が魔王軍が守った！」\n拍手が起きた。本人がいちばん驚いていた。`
-        : `${c.show.name}が焚き火の前で演説を始めた。三行目で子供に「長い」と言われた。`);
+      if (c._cook === "soup") lines.push(`${c.cook.name}が勝手に鍋を出した。村の備蓄と敵の携行食で、炊き出し。村中が並んだ。`);
+      if (c._cook === "fence") lines.push(`${c.cook.name}が鍋を出した。門は半分しか開かないので、柵の隙間から椀を渡した。村中が柵に並んだ。`);
+      if (c._cook === "eaten") lines.push(`${c.cook.name}が鍋を出した。${c.eater.name}が鍋の前に立った。村人が並ぶ前に、鍋は空になった。\n${c.cook.name}「……二杯目からは有料です」`);
+      if (c._eat === "bill") lines.push(`${c.eater.name}は村の備蓄倉庫を見つけた。見つけて、入って、出てこなかった。\n翌朝、村長から請求書が届いた。`);
+      if (c._eat === "hidden") lines.push(`${c.eater.name}は村の備蓄倉庫を見つけた。空だった。\n村長「噂は聞いている。先に隠した」 ${c.eater.name}「……噂って何すか」`);
+      if (c._show === "memorial") lines.push(`${c.show.name}が焚き火の前に立った。いつもの演説ではなかった。\n${c.show.name}「……ここまで来られなかった奴がいる。名前を言う」\n誰も「長い」とは言わなかった。`);
+      else if (c._show === "ok") lines.push(`${c.show.name}が焚き火の前で演説を始めた。${c.show.name}「この村は、我が魔王軍が守った！」\n拍手が起きた。本人がいちばん驚いていた。`);
+      else if (c._show === "flop") lines.push(`${c.show.name}が焚き火の前で演説を始めた。三行目で子供に「長い」と言われた。`);
       if (c.slime) lines.push(`${c.slime.name}に村の子供が群がった。村長「……あれは、何ですか」 モルモ「軍団員デス」`);
       if (st.story.flags.villageFear) lines.push(`門は最後まで半分しか開かなかった。感謝は、柵の隙間から渡された。`);
       lines.push(g.level === "high" ? `村長「魔王軍か。……本物だったんだな」 村の若いゴブリンが一人、後をついてきた。`
@@ -424,20 +477,47 @@ const STORY_SCENES = [
         : `村長「助かった。次に何か要るときは、言ってくれ」`);
       return lines.join("\n");
     },
+    // 葉ごとの決め方（特性 → 同行者 → 状況 → 過去）
+    //   大食漢：料理人が同行 → 鍋の方を食う（請求書なし）／前に敵の飯を漁った噂が先回り → 備蓄は隠されていた／それ以外 → 備蓄を食って請求書
+    //   見栄っ張り：戦死者が出ている → 追悼の演説（必ず届く）／前に演説が受けた → 調子に乗る（高確率で成功）／初めて → 五分
+    //   料理人：門が半分 → 柵越しに配る（届くが半分）／大食漢が同行 → 鍋は一人に食われる／それ以外 → 炊き出し
+    resolveEater(st, c) {
+      if (!c.eater) return null;
+      if (c.cook) return "pot";
+      if ((typeof Traces !== "undefined" && Traces.summary(st.traces, c.eater.uid).ate >= 2) || STORY_PAST.has(st, c.eater.uid, "looted_food")) return "hidden";
+      return "bill";
+    },
+    resolveShow(st, c) {
+      if (!c.show) return null;
+      if ((st.fallenTotal || 0) > 0) return "memorial";
+      const last = STORY_PAST.last(st, c.show.uid, "speech");
+      if (last && last.data && last.data.ok) return U.chance(0.8) ? "ok" : "flop";
+      return U.chance(0.5) ? "ok" : "flop";
+    },
+    resolveCook(st, c) {
+      if (!c.cook) return null;
+      if (st.story.flags.villageHalfDoor) return "fence";
+      if (c.eater) return "eaten";
+      return "soup";
+    },
     effect(st, c, ctx) {
       let score = 100;
+      const eat = this.resolveEater(st, c), show = this.resolveShow(st, c), cook = this.resolveCook(st, c);
+      c._eat = eat; c._show = show; c._cook = cook;
       if (c.native) score += 20;
-      if (c.cook) score += 25;
-      if (c.eater) score -= 25;
+      if (cook === "soup") score += 25; else if (cook === "fence") score += 12; else if (cook === "eaten") score += 5;
+      if (eat === "bill") score -= 25; else if (eat === "hidden") score -= 10;
       if (st.story.flags.villageFear) score -= 30;
-      const showOk = c.show ? U.chance(0.5) : false;
-      if (c.show) score += showOk ? 15 : -5;
+      if (st.story.flags.villageHalfDoor) score -= 10;
+      const showOk = show === "ok" || show === "memorial";
+      if (show) score += show === "memorial" ? 20 : showOk ? 15 : -5;
       if (c.slime) score += 5;
       const level = score >= 125 ? "high" : score < 90 ? "low" : "mid";
       c._grat = { score, level, showOk };
       const food = level === "high" ? 3 : level === "low" ? 0 : 2;
       st.food += food;
-      if (c.eater) { st.gold = Math.max(0, st.gold - 1); ctx.notes.push(`${c.eater.name}が村の備蓄を食い、村長から請求書が来た`); }
+      if (eat === "bill") { st.gold = Math.max(0, st.gold - 1); ctx.notes.push(`${c.eater.name}が村の備蓄を食い、村長から請求書が来た`); Story.mark(st, "village_bill", c.eater.uid, {}); }
+      if (show) Story.mark(st, "speech", c.show.uid, { ok: showOk, how: show });
       if (food) ctx.notes.push(`村から感謝の食料を受け取った`);
       if (level === "high") st.renownBonus = Math.max(st.renownBonus || 0, 1);
       const youth = { name: Story.villageYouthName(st), savedBy: (ctx.party || []).map(m => m.uid), day: st.day, level };

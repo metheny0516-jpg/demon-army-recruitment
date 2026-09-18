@@ -106,5 +106,43 @@ const list = [];
 for (let i = 0; i < 450; i++) Traces.record(list, { kind: i === 0 ? 'story' : 'hired', subject: 1, object: i === 0 ? 'saved_village' : null, data: {} });
 assert(list.some(t => t.kind === 'story'), '痕跡 story は上限で落とされない');
 
+// ── 6本の枝が「特性×仲間×状況×過去」で変わる ──
+const SC = id => vm.runInContext('STORY_SCENES', ctx).find(s => s.id === id);
+const fresh = (over) => { const m = mk(over); st.roster.push(m); return m; };
+// 命令前の突撃
+const br = fresh({ name: '怪力2', traits: ['brute'] });
+assert(SC('road_brute_charge').resolve(st, { actor: br }, [br, fresh({ name: '見栄', traits: ['show_off'] })]).kind === 'showoff', '見栄っ張りが見ていれば必ず突っ込む');
+assert(SC('road_brute_charge').resolve(st, { actor: br }, [br, fresh({ name: '臆病3', traits: ['coward'] })]).kind === 'alone', '仲間が臆病者なら一人で突っ込んで孤立');
+Story.mark(st, 'charged_early', br.uid, { won: false });
+Game.trace('downed', st.roster[0].uid, null, { round: 1 });
+assert(SC('road_brute_charge').resolve(st, { actor: br }, [br]) === 'wait', '前に突っ込んで仲間が倒れていれば命令を待つ');
+// 農具を持った手
+const fr = fresh({ name: '農家育ち', prevJob: '人間の農家で育った（番犬扱い）' });
+assert(SC('arrival_farm_raised').resolve(st, { actor: fr }, [fr]) === 'hesitate', '初めて人間と戦うならためらう');
+Story.mark(st, 'hesitated', fr.uid, {});
+assert(SC('arrival_farm_raised').resolve(st, { actor: fr }, [fr]) === 'steady', '二度目はもう迷わない');
+Game.trace('downed', st.roster[0].uid, null, { round: 2 });
+assert(SC('arrival_farm_raised').resolve(st, { actor: fr }, [fr]) === 'strike', '前にためらって仲間が倒れていれば今回は斬る');
+st.departed.push({ uid: 7777, name: '故人', cause: 'fallen', army: '開拓保護隊' });
+assert(SC('arrival_farm_raised').resolve(st, { actor: fr }, [fr]) === 'rage', '仲間が人間に倒されていれば激昂する');
+st.departed.pop();
+// 門が閉まる
+const sk = fresh({ name: '骨2', traits: ['bone'] }); sk.tplId = 'skeleton'; sk.tags = ['undead'];
+assert(SC('arrival_undead_fear').resolve(st, { actor: sk }, [sk]) === 'fear', '骸骨だけなら門は閉まる');
+assert(SC('arrival_undead_fear').resolve(st, { actor: sk }, [sk, fresh({ name: 'ゴブ', traits: [] })]).kind === 'vouch', '同族のゴブリンがいれば取りなして半分開く');
+const cookOrc = fresh({ name: '料理', traits: ['demon_cook'] }); cookOrc.tplId = 'orc';
+assert(SC('arrival_undead_fear').resolve(st, { actor: sk }, [sk, cookOrc]).kind === 'pot', '料理人（ゴブリン以外）がいれば鍋で誤魔化す');
+// 村の焚き火（大食漢・見栄っ張り・料理人）
+const th = SC('after_village_thanks');
+const eater = fresh({ name: '大食', traits: ['big_eater'] }), cook = fresh({ name: '料理2', traits: ['demon_cook'] }), show = fresh({ name: '見栄2', traits: ['show_off'] });
+assert(th.resolveEater(st, { eater }) === 'bill', '大食漢だけなら備蓄を食って請求書');
+assert(th.resolveEater(st, { eater, cook }) === 'pot', '料理人がいれば鍋の方を食う');
+Story.mark(st, 'looted_food', eater.uid, {});
+assert(th.resolveEater(st, { eater }) === 'hidden', '前に敵の飯を漁っていれば噂が先回りして備蓄は隠されている');
+assert(th.resolveCook(st, { cook, eater }) === 'eaten', '料理人と大食漢が同行なら鍋は食われる');
+st.fallenTotal = 1;
+assert(th.resolveShow(st, { show }) === 'memorial', '戦死者が出ていれば見栄っ張りは追悼の演説をする');
+st.fallenTotal = 0;
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
