@@ -894,9 +894,10 @@ button.wide { width: 100%; }
   color: #fff0c4;
   background: rgba(15, 10, 24, .92);
   text-align: center;
-  font-size: 12px;
+  /* 状況の説明は脇役。台詞は吹き出しが受け持つので、ここは一段小さく（2026-09-18） */
+  font-size: 11px;
   font-weight: bold;
-  opacity: 0;
+  opacity: .92;
   transform: translate(-50%, -50%) scale(.92);
   pointer-events: none;
 }
@@ -2282,12 +2283,14 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-battle .bu.summon-rise::after { animation: actingFocus .72s ease-out; }
 .game-scene-battle .action-caption {
   width: min(88%, 560px);
-  padding: 10px 18px;
+  /* 状況の説明は脇役。台詞は本人の吹き出しが受け持つ（2026-09-18 オーナー指摘）。
+     15px だと画面の主役を張ってしまうので一段下げる。 */
+  padding: 7px 16px;
   border-radius: 2px;
-  border-color: rgba(255,224,154,.72);
+  border-color: rgba(255,224,154,.6);
   font-family: "Yu Mincho", serif;
-  font-size: 15px;
-  letter-spacing: .08em;
+  font-size: 13px;
+  letter-spacing: .06em;
 }
 .game-scene-battle .cutin {
   left: 5%;
@@ -3951,19 +3954,27 @@ button.primary::first-letter { color: var(--gold); }
    繰り出す直前に本人の札の上へ。1行目が台詞、2行目が技名。1.4秒で消える */
 .bu-bubble {
   position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -6px);
-  z-index: 6; pointer-events: none; white-space: nowrap; text-align: center;
-  padding: 4px 8px; border: 1px solid rgba(232, 189, 104, .7); border-radius: 8px;
-  background: rgba(18, 13, 26, .92); color: #f6e6c2; line-height: 1.25;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .55);
+  z-index: 6; pointer-events: none; text-align: center;
+  /* 2026-09-18 オーナー指摘：技の台詞は一番読ませたい所なので大きく。
+     札より広くなるので、nowrap をやめて折り返し、幅は画面に合わせて頭打ちにする。 */
+  white-space: normal; width: max-content; max-width: min(74vw, 300px);
+  padding: 7px 12px; border: 1px solid rgba(232, 189, 104, .7); border-radius: 10px;
+  background: rgba(18, 13, 26, .95); color: #f6e6c2; line-height: 1.35;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .6);
   animation: bubbleIn .18s ease-out, bubbleOut .2s ease-in forwards;
   animation-delay: 0s, calc(var(--bubble-life, 1400ms) - 200ms);
 }
+/* 敵の台詞。向きは同じで、色だけ敵側に寄せる */
+.bu-bubble.enemy { border-color: rgba(214, 122, 108, .75); background: rgba(30, 14, 16, .95); color: #f7dcd4; }
+.bu-bubble.enemy::after { border-top-color: rgba(214, 122, 108, .75); }
+/* 技ではないただの台詞は、技名の行を持たない */
+.bu-bubble.talk .bu-quote { font-size: 15px; }
 .bu-bubble::after {
   content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
   border: 5px solid transparent; border-top-color: rgba(232, 189, 104, .7);
 }
-.bu-bubble .bu-quote { display: block; font-size: 11px; color: #e6dcc4; }
-.bu-bubble .bu-skill { display: block; font-size: 13px; color: #ffe6a8; }
+.bu-bubble .bu-quote { display: block; font-size: 15px; color: #f0e6d0; }
+.bu-bubble .bu-skill { display: block; margin-top: 2px; font-size: 17px; font-weight: 800; color: #ffe6a8; }
 @keyframes bubbleIn { from { opacity: 0; transform: translate(-50%, 2px); } to { opacity: 1; transform: translate(-50%, -6px); } }
 @keyframes bubbleOut { to { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .bu-bubble { animation: none; } }

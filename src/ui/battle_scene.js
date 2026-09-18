@@ -663,11 +663,25 @@ const BattleScene = {
       if (!head.aoe || !head.skillId) continue;
       const at = i;
       const group = [head];
-      while (i + 1 < events.length && events[i + 1].aoe && events[i + 1].skillId === head.skillId
-        && events[i + 1].fromId === head.fromId) group.push(events[++i]);
+      const members = [];
+      // 一撃のはずの全体技が「連続していること」だけで束ねられていたため、
+      // 途中に death / overkill が挟まるだけでグループが切れ、残りの敵へ**もう一度殴りに行く**
+      // 見え方になっていた（2026-09-18 オーナー指摘。実測で e0 の death が e1 を切っていた）。
+      // 打撃以外のイベントは読み飛ばして、同じ技・同じ使い手の着弾をすべて1拍に束ねる。
+      let j = i;
+      while (j + 1 < events.length) {
+        const next = events[j + 1];
+        if (next.aoe && next.skillId === head.skillId && next.fromId === head.fromId) {
+          group.push(next); members.push(j + 1); j++; continue;
+        }
+        // 別の打撃が始まったらそこまで。付随のイベント（死亡・撃破・気合・台詞）は跨いでよい。
+        if (next.type === "attack" || next.type === "splash" || next.type === "skill_call") break;
+        j++;
+      }
       if (group.length < 2) continue;
+      i = members[members.length - 1];
       items[at].duration = Math.round(items[at].duration * this.AOE_TOTAL_MULT);
-      for (let k = at + 1; k <= i; k++) items[k].duration = 0;
+      for (const k of members) items[k].duration = 0;
       this.aoeGroups.set(head, group);
       for (const member of group.slice(1)) this.aoeGroups.set(member, null);   // 描画済みの印
     }
@@ -783,7 +797,12 @@ const BattleScene = {
           const who = ev.name === "モルモ" ? null : { name: ev.name, src: this.unitPortraitSrc(speaker) };
           if (this.speakAside({ speaker: who, expression: "worried", text: ev.quote })) break;
         }
-        this.showAction(`${ev.name}「${ev.quote}」`, 1700);
+        // 敵も味方も、台詞は本人の吹き出しで（上の字幕は状況の説明だけに使う）。
+        // 吹き出しに入れてよいのは**その札の本人が、その場で**言った台詞だけ。
+        // 代弁（遅刻をモルモが告げる）と戦場の外からの声は、札に貼ると嘘になるので字幕へ。
+        const ownVoice = speaker && !ev.offstage && ev.name === speaker.name;
+        if (ownVoice) this.bubble(speaker, ev.quote, "", { talk: true, life: 1700 });
+        else this.showAction(`${ev.name}「${ev.quote}」`, 1700);
         break;
       }
       case "attack":
@@ -1077,10 +1096,12 @@ const BattleScene = {
             ev.debut ? "big" : sk && sk.kind === "charm" ? "heal" : "guard");
           if (ev.debut) u.el.classList.add("debut-flash");
         }
-        this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」　${ev.name}「${ev.quote}」`, ev.debut ? 2000 : 1600);
+        // 本人の台詞は繰り出す瞬間の吹き出しが大きく出す。字幕は魔王の号令だけにする
+        // （2026-09-18：字幕に台詞まで詰めると小さくて読めない）。
+        this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」`, ev.debut ? 2000 : 1600);
         this.flash(ev.debut ? 2 : 1);
         this.pulse("order");
-        if (ev.debut) this.cutin(ev.label || ev.skillName, `${ev.name}、お披露目`, ev.skillId);
+        if (ev.debut) this.cutin(ev.skillName || ev.label, `${ev.name}、お披露目`, ev.skillId);
         break;
       }
       // 技を繰り出す直前。本人の口元に吹き出し（台詞＋技名）。ロマサガ風に札の上へ浮かせる。
@@ -1098,7 +1119,7 @@ const BattleScene = {
         }
         this.pulse("order");
         // お披露目のカットインは**繰り出す瞬間**へ移した（指示の時点ではもう出さない）。
-        if (ev.debut) { this.flash(2); this.cutin(ev.label || ev.skillName, `${ev.name}、お披露目`, ev.skillId); }
+        if (ev.debut) { this.flash(2); this.cutin(ev.skillName || ev.label, `${ev.name}、お披露目`, ev.skillId); }
         break;
       }
       case "result":
@@ -1267,7 +1288,10 @@ const BattleScene = {
     // 「爆発力が上がった」を伝えるのに一番直接的な信号は、でかい数字。
     const tier = Math.min(3, Math.max(0, scale || 0));
     const cls = [emphasis >= 2 ? "big" : "", tier ? `surge s${tier}` : ""].filter(Boolean).join(" ");
-    this.float(u, (label ? label + " " : "") + dmg, cls);
+    // 数字に技名を足すと、札の幅（5体並ぶと 70px 台）を超えて左右へはみ出し、
+    // 端の札では画面の外へ出て読めなくなる（2026-09-18 オーナー指摘、スマホ縦）。
+    // 技の名は上の字幕と吹き出しが既に言っているので、ここは数字だけにする。
+    this.float(u, String(dmg), cls);
   },
 
   clearFocus() {
@@ -1287,7 +1311,9 @@ const BattleScene = {
     const action = ev.label ? ev.label
       : ev.type === "splash" ? "追撃"
       : ({ arrow: "射撃", stone: "投石", magic: "魔法攻撃" }[this.attackKind(from)] || "攻撃");
-    this.showAction(`${from.name}の${action}　→　${ev.aoe ? (to.side === "player" ? "魔王軍全体" : "敵全体") : to.name}`);
+    // 技の名は《》でくくる。「オーク将軍の魔王の力」だと「の」が続いて読みにくい。
+    const act = ev.label ? `《${action}》` : action;
+    this.showAction(`${from.name}の${act}　→　${ev.aoe ? (to.side === "player" ? "魔王軍全体" : "敵全体") : to.name}`);
   },
 
   // 生成画像は戦闘ルールを知らない表示素材。読込失敗時は既存CSS演出だけが残る。
@@ -2364,7 +2390,7 @@ const BattleScene = {
         // お披露目：覚えた直後の戦いの1回だけ、金の縁が脈打ち、気合なしで撃てる。
         const cost = sk.debut ? "お披露目・気合なし" : `気合${sk.cost}`;
         return `<button type="button" class="cmd-btn cmd-skill ${on ? "on" : ""}${sk.debut ? " cmd-debut" : ""}" data-cmd="skill" data-skill="${U.esc(sk.id)}"
-          ${sk.ready ? "" : "disabled"} title="${U.esc(sk.note || "")}">技「${U.esc(sk.label || sk.name)}」<small>${U.esc(sk.note || "")}　${cost}${sk.ready ? "" : "・" + U.esc(sk.why || "")}</small></button>`;
+          ${sk.ready ? "" : "disabled"} title="${U.esc(sk.note || "")}">技「${U.esc(sk.name || sk.label)}」<small>${U.esc(sk.note || "")}　${cost}${sk.ready ? "" : "・" + U.esc(sk.why || "")}</small></button>`;
       }).join("");
       const first = seq.idx === 0;
       // 食べる（2026-09-14）：「まもる」の2段目。携行食を1つ食べて HP を戻す（攻撃はしない）。
@@ -2682,17 +2708,20 @@ const BattleScene = {
   // 1行目に台詞、2行目に技名。札の上に 1.4 秒。**1体に1つ**で、次が来たら前を消す。
   // 低モーションでは動かさず、同じ長さだけ静止で出す。
   BUBBLE_MS: 1400,
-  bubble(u, quote, skillName) {
+  bubble(u, quote, skillName, options = {}) {
     if (!u || !u.el) return null;
     const old = u.el.querySelector(".bu-bubble");
     if (old) old.remove();
     const box = document.createElement("div");
-    box.className = "bu-bubble";
-    const life = this.visualDuration(this.BUBBLE_MS);
+    // 敵の台詞も同じ吹き出しで出す（2026-09-18 オーナー指摘。上の字幕に混ぜない）。
+    box.className = "bu-bubble" + (u.side === "enemy" ? " enemy" : "") + (options.talk ? " talk" : "");
+    const life = this.visualDuration(options.life || this.BUBBLE_MS);
     box.style.setProperty("--bubble-life", `${life}ms`);
     box.innerHTML = `${quote ? `<span class="bu-quote">「${U.esc(quote)}」</span>` : ""}
-      <b class="bu-skill">${U.esc(skillName || "")}</b>`;
+      ${skillName ? `<b class="bu-skill">${U.esc(skillName)}</b>` : ""}`;
     u.el.appendChild(box);
+    // 札より広い吹き出しは端で画面からはみ出す。はみ出した分だけ横へ寄せる。
+    this.keepOnScreen(box, 6);
     this.timers.push(setTimeout(() => box.remove(), life));
     return box;
   },
@@ -2705,7 +2734,31 @@ const BattleScene = {
     const life = this.visualDuration(this.FLOAT_MS);
     n.style.animationDuration = `${life}ms`;
     u.pop.appendChild(n);
+    this.keepOnScreen(n);
     this.timers.push(setTimeout(() => n.remove(), life));
+  },
+
+  // 札より広い文字（「倒れた！」など）が画面の外へ出ないよう、はみ出した分だけ横へ寄せる。
+  // 札の中央からずらすのは読めなくなる時だけ（2026-09-18、スマホ縦で端の札が切れていた）。
+  //
+  // ずらすのは margin で行う。transform は floatUp（浮き上がり）と吹き出しの出入りが
+  // 使っているので、ここで上書きすると動きが止まる。left も吹き出しの中央寄せに使われている。
+  keepOnScreen(node, margin = 4) {
+    const host = node && node.parentElement;
+    if (!host || typeof host.getBoundingClientRect !== "function") return;
+    const width = (typeof innerWidth === "number" && innerWidth) || 0;
+    const box = host.getBoundingClientRect();
+    // scrollWidth は transform の影響を受けない実寸。アニメ開始時の縮小に惑わされない。
+    const text = node.scrollWidth || 0;
+    if (!width || !box.width || !text) return;
+    const center = box.left + box.width / 2;
+    let shift = 0;
+    if (center - text / 2 < margin) shift = margin - (center - text / 2);
+    else if (center + text / 2 > width - margin) shift = (width - margin) - (center + text / 2);
+    if (!shift) return;
+    shift = Math.round(shift);
+    node.style.marginLeft = `${shift}px`;
+    node.style.marginRight = `${-shift}px`;
   },
 
   shake(big) {
