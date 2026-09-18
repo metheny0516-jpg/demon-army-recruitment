@@ -342,6 +342,11 @@ const Game = {
     delete st.seizeUsed;   // 拠点接収は撤去（同 §1-4。領土の「砦」が同じ役をする）
     delete st.orderCount;   // 号令は撤去（同 §1-5。指示はコマンドバトルの窓でする）
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
+    // 力試しの梯子。旧セーブは段0から始める（第二幕決着後の作戦会議で札が出る）。
+    if (!st.trials || typeof st.trials !== "object") st.trials = { level: 0, best: 0, wins: 0, losses: 0, last: null };
+    for (const [k, v] of Object.entries({ level: 0, best: 0, wins: 0, losses: 0 }))
+      if (typeof st.trials[k] !== "number") st.trials[k] = v;
+    if (st.trials.last === undefined) st.trials.last = null;
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
       const legacyStage = U.clamp(Number(st.stage) || 1, 1, this.actStages().length);
@@ -393,6 +398,8 @@ const Game = {
       retreatCount: 0, pendingBattle: null, wipeCount: 0, stageFights: {}, outpost: null,
       // 幕の進行（2026-09-11）。旧セーブは第一幕として読む。
       act: 1, actStartedTurn: 1, actHistory: [], act2Cleared: null,
+      // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md）。第二幕決着後の梯子。
+      trials: { level: 0, best: 0, wins: 0, losses: 0, last: null },
       // 王国の反撃（2026-09-10）
       counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
       ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false, castleFalls: 0,
@@ -1168,7 +1175,7 @@ const Game = {
     // 第二幕決着後は第三幕の実装を待つ自由活動。攻略札は再生成せず、
     // 周辺地の略奪と訓練だけを出す。予約済みの防衛が万一残る旧セーブでは防衛を優先する。
     if (st.act2Cleared) {
-      const validKinds = pending ? ["defend", "train"] : ["raid", "train"];
+      const validKinds = pending ? ["defend", "train"] : ["raid", "trial", "train"];
       const stalePostAct2 = !Array.isArray(offers) || !offers.length
         || offers.some(m => !validKinds.includes(m.missionKind))
         || validKinds.some(kind => !offers.some(m => m.missionKind === kind));
@@ -1178,9 +1185,10 @@ const Game = {
       }
       const previous = new Map((offers || []).map(m => [m.missionKind, m.formationId]));
       st.selectedMission = null;
+      // 力試し（§2）。略奪と訓練のあいだに1枚。予約済み防衛が残る旧セーブでは出さない。
       st.missionOffers = (pending
         ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
-        : [this.buildMission(MISSION_TYPES[0], previous.get("raid"))])
+        : [this.buildMission(MISSION_TYPES[0], previous.get("raid")), this.trialMission()])
         .concat([this.buildMission(MISSION_TYPES.train, previous.get("train"))]);
       st.phase = "mission";
       this.save();
@@ -1299,6 +1307,51 @@ const Game = {
     return contribution;
   },
   // 訓練の戦功は「生きて終えたら +1（猛者は +2）」だけ。撃破も最多も数えない。
+  // 力試しの決着（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §4）。稽古の経路の中で呼ぶので、
+  // 死者・警戒度・王国攻略・反撃予約・wipeCount・endRun はどれも動かない。
+  // 動かすのは梯子の段と、勝った時だけの金・戦功・称号。負けは面目だけ失う。
+  TRIAL_LOSS_LINES: [
+    "{mvp}が、稽古なのに本気で泣いた。",
+    "{foe}は帰り際に「次はもう少し粘れ」と言い残した。",
+    "訓練場の藁束が、今日だけは同情してくれた。"
+  ],
+  settleTrial(stageData, result, notes) {
+    const st = this.state, t = this.trials();
+    const level = Math.max(0, (stageData.trial && stageData.trial.level) || 0);
+    const alive = (result.contribution || []).filter(c => !c.mercenary && st.roster.some(m => m.uid === c.uid));
+    const mvp = alive.slice().sort((a, b) => (b.damage || 0) - (a.damage || 0))[0];
+    if (result.victory) {
+      t.wins += 1;
+      t.level = level + 1;
+      t.best = Math.max(t.best || 0, t.level);
+      const gold = Math.max(1, Number(stageData.trialReward) || 1);
+      st.gold += gold;
+      notes.push(`力試し 第${level + 1}段を突破。称賛として ${gold}G（所持金 ${st.gold}G）`);
+      for (const c of alive) {
+        const monster = st.roster.find(m => m.uid === c.uid);
+        if (monster) monster.merit = (monster.merit || 0) + 2;
+      }
+      // 称号は既存の器（epithet）に1本だけ足す。新しい仕組みは作らない。
+      if (mvp) {
+        const monster = st.roster.find(m => m.uid === mvp.uid);
+        if (monster && !monster.epithet) {
+          monster.epithet = `第${level + 1}段の壁を越えた者`;
+          notes.push(`${monster.name}に「${monster.epithet}」の名がついた。`);
+        }
+      }
+      t.last = { level, won: true, opponent: stageData.army || "" };
+    } else {
+      t.losses += 1;
+      const line = U.pick(this.TRIAL_LOSS_LINES)
+        .replace("{mvp}", (mvp && mvp.name) || "誰か")
+        .replace("{foe}", stageData.army || "相手");
+      notes.push(line);
+      t.last = { level, won: false, opponent: stageData.army || "" };
+    }
+    st.lastTrial = { level, won: !!result.victory, mult: (stageData.trial && stageData.trial.mult) || 1,
+      opponent: stageData.army || "", best: t.best };
+  },
+
   awardTrainingMerit(contribution, stageData, notes) {
     const st = this.state;
     st.lastPromotions = [];
@@ -1417,6 +1470,122 @@ const Game = {
     const rules = typeof Territory !== "undefined" ? Territory.rules() : { raid: { garrisonBonus: 1 } };
     const raided = ((this.state.raided || {})[place.id] || 0) * (rules.raid.garrisonBonus || 0);
     return Math.max(1, (place.garrison || 1) + raided);
+  },
+
+  // ── 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md）────────────────
+  // 第二幕決着後だけ出る梯子。勝つたびに段が上がり、相手が強くなる。
+  // 稽古と同じ経路（training: true）なので誰も死なず、全滅してもランは終わらない。
+  // 測って決めた（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §6、tools/sim.js の
+  // 戦略「第二幕後に力試しを続ける」）。狙いは 段0 勝率 60〜80%、段3 30% 未満。
+  //   base / step   ラン   段0   段3
+  //   1.25 / 1.12    10    67%   38%   ← 仕様書のまま。段3 が狙いに届かない
+  //   1.25 / 1.22    10    63%   24%
+  //   1.25 / 1.22    10    45%   26%   ← 同じ設定でも段0 はこれだけ振れる
+  //   1.20 / 1.22    15    54%   32%
+  //   1.15 / 1.22    15    79%   50%
+  // 伸びを 1.22 にすると段3 は 24〜32% で安定して狙いに入る。段0 は 45〜63% で、
+  // **同じ設定の再測でも 18 ポイント振れる**（1段あたり 20〜26 戦しか標本が取れない）。
+  // base を下げても段0 が上がるとは限らない（1.20 で 54%、1.25 で 63% の回がある）ので、
+  // 段3 が確実に狙いへ入る 1.25 / 1.22 を採る。段0 の詰めは試遊の判断に委ねる。
+  TRIAL_BASE: 1.25,     // 段0 の倍率
+  TRIAL_STEP: 1.22,     // 1段ごとの伸び
+  TRIAL_REWARD_BASE: 0.5, TRIAL_REWARD_STEP: 0.25,   // 金 = 最終段階の reward × (0.5 + 0.25×段)
+
+  trials() {
+    const st = this.state;
+    if (!st.trials || typeof st.trials !== "object") st.trials = { level: 0, best: 0, wins: 0, losses: 0, last: null };
+    return st.trials;
+  },
+  trialMult(level) { return this.TRIAL_BASE * Math.pow(this.TRIAL_STEP, Math.max(0, level || 0)); },
+
+  // 顔ぶれの強さを揃えるための物差し。3つの顔ぶれは素の強さが桁違いで（敵将は HP が小さく、
+  // 連合軍は終盤の正規兵）、そのままだと段が上がったのに楽になる回ができた（測ると
+  // 段2が29%、段3が46%と逆転した）。梯子の難しさは倍率だけで決めたいので、
+  // 顔ぶれごとの素の強さを基準（連合軍）へ寄せてから倍率を掛ける。
+  trialPower(units) {
+    return (units || []).reduce((sum, u) => sum + (u.hp || 0) + (u.atk || 0) * 6 + (u.def || 0) * 4, 0);
+  },
+
+  // 相手の顔ぶれ。段 %3 で3つを順繰り。素材は既存データだけ（新しい敵は作らない）。
+  //   0 討ち漏らした者たち（この周回で討たず雇わなかった敵将）
+  //   1 勇者アレン一行（最終段階の隊列。討たなかった敵将が隣に立つ）
+  //   2 連合軍総力戦（終盤2段階の隊列から強い順に5人）
+  // 段0 は敵将が2人未満なら成立しないので、そのときは段2の顔ぶれを使う。
+  // 倍率を掛ける前の顔ぶれ（勇者一行なら隣に立つ敵将も込み）。強さを測るのはこの姿。
+  trialRoster(level) {
+    const lineup = this.trialLineup(level);
+    if (!lineup.hero || typeof Captains === "undefined") return lineup.units;
+    return Captains.heroParty(this.state, lineup.units, 1);
+  },
+  trialLineup(level) {
+    const st = this.state, stages = this.actStages();
+    const last = stages[stages.length - 1], prev = stages.slice(-3, -1);
+    const byHp = list => list.slice().sort((a, b) => (b.hp || 0) - (a.hp || 0)).slice(0, 5);
+    const union = () => byHp(prev.flatMap(s => s.units || []).map(u => ({ ...u })));
+    const kind = Math.max(0, level || 0) % 3;
+    if (kind === 1) return { name: "勇者アレン一行（再々）", units: (last.units || []).map(u => ({ ...u })), hero: true };
+    if (kind === 2) return { name: "連合軍総力戦", units: union(), hero: false };
+    if (typeof Captains === "undefined") return { name: "連合軍総力戦", units: union(), hero: false };
+    Captains.init(st);
+    const left = Captains.ids().filter(id => {
+      const status = Captains.state(st, id).status;
+      return status !== "slain" && status !== "hired";
+    });
+    if (left.length < 2) return { name: "連合軍総力戦", units: union(), hero: false };
+    // growth（ポルカの「次は少し強い装備」）は掛けない。梯子の倍率だけで強くする。
+    const captains = byHp(left.map(id => Captains.attach([], id, { captains: {} }, 1)[0]).filter(Boolean));
+    // 敵将だけだと、討ち漏らした人数で相手の強さが桁違いに変わる（測ると段0の勝率が
+    // 0%〜100% まで振れた）。梯子の難しさは倍率で決めたいので、空いた枠は正規兵で埋める。
+    // 「討ち漏らした者たちが軍を率いてくる」ので、顔ぶれが変わる面白さは残る。
+    const filler = union().filter(u => !captains.some(c => c.name === u.name));
+    return { name: "討ち漏らした者たち", units: captains.concat(filler).slice(0, 5), hero: false };
+  },
+
+  // 力試しの札。buildMission の段階表ではなく、上の顔ぶれをそのまま相手にする。
+  trialMission() {
+    const type = MISSION_TYPES.trial;
+    const st = this.state, t = this.trials();
+    const level = Math.max(0, t.level || 0);
+    const lineup = this.trialLineup(level);
+    // 顔ぶれの素の強さを基準（連合軍）へ寄せてから、梯子の倍率を掛ける。
+    const reference = this.trialPower(this.trialRoster(2));
+    const own = this.trialPower(this.trialRoster(level));
+    const evenOut = own > 0 && reference > 0 ? U.clamp(reference / own, 0.6, 2.5) : 1;
+    const mult = this.trialMult(level) * evenOut;
+    const stat = (v, min) => Math.max(min, Math.round((v || 0) * mult));
+    let units = lineup.units.map(u => ({ ...u, hp: stat(u.hp, 1), atk: stat(u.atk, 1), def: stat(u.def, 0), spd: stat(u.spd, 1) }));
+    // 勇者一行には、討たなかった敵将が今までどおり隣に立つ（既存の heroParty）。
+    if (lineup.hero && typeof Captains !== "undefined") {
+      units = Captains.heroParty(st, units, mult).map(u => ({ ...u }));
+    }
+    const payrollSupport = Math.round(this.salaryTotal() * (type.payrollCoverage || 0));
+    return {
+      stage: st.turn,
+      missionKind: type.id,
+      missionTitle: `力試し 第${level + 1}段`,
+      strategyLabel: type.strategyLabel,
+      strategyHint: type.strategyHint,
+      description: U.pick(type.descriptions),
+      training: true,                 // 稽古と同じ経路。誰も死なない・ランは終わらない
+      trial: { level, mult: Math.round(this.trialMult(level) * 100) / 100, opponent: lineup.name },
+      opponentId: null, opponentName: lineup.name, opponentNote: null,
+      trainingMerit: 2,
+      missionPhase: "main",
+      twoStage: false,
+      difficulty: type.difficulty,
+      army: lineup.name,
+      region: "闘技場",
+      reward: 0,                      // 勝った決着でだけ直接入金する（4節）
+      trialReward: Math.max(1, Math.round((this.actStages().slice(-1)[0].reward || 0)
+        * (this.TRIAL_REWARD_BASE + this.TRIAL_REWARD_STEP * level))),
+      payrollSupport,
+      alertDelta: 0, conquestDelta: 0, loyaltyDelta: 0,
+      foodReward: 0, materialReward: 0,
+      armyPressure: 0, familiarity: 0,
+      baseStage: this.MAX_CONQUEST,
+      formationId: "trial", formationName: lineup.name, formationHint: type.strategyHint,
+      units
+    };
   },
 
   buildMission(type, previousFormationId, place) {
@@ -3028,6 +3197,7 @@ const Game = {
       // 稽古。金・建材・遺物・痕跡・税・警戒度はどれも動かない（勝ち負けも問わない）。
       // 動くのは戦闘数（上で済み）・小成長と技（trainSurvivors で済み）・戦功・忠誠・気合・食料・給与。
       this.awardTrainingMerit(result.contribution, stageData, notes);
+      if (stageData.trial) this.settleTrial(stageData, result, notes);
       st.turn += 1;
       st.missionOffers = [];
       st.phase = "result";
@@ -4435,6 +4605,10 @@ const Game = {
       // 旧魔界史にこの鍵は無い。無ければ表示しないのが正しく、推定生成してはいけない。
       memory: st.memory || null,
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
+      // 力試しはどこまで登ったか（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §4）。
+      // 挑んでいないランでは best 0（殿堂の一行は best>=1 のときだけ出す）。
+      trials: { best: (st.trials && st.trials.best) || 0, wins: (st.trials && st.trials.wins) || 0,
+        losses: (st.trials && st.trials.losses) || 0 },
       date: new Date().toISOString().slice(0, 10)
     };
     // 名前は record が出揃ってから付ける（材料は record の中だけ）

@@ -158,8 +158,9 @@ const drawTiers = (st, times) => {
   const clearMark = JSON.stringify(st.act2Cleared);
   Game.afterResult(); if (st.phase === 'recruit') Game.skipHire();
   assert(st.phase === 'mission', '戦果と面接の後は作戦会議へ戻る');
-  assert(st.missionOffers.map(m => m.missionKind).sort().join(',') === 'raid,train',
-    `決着後の札は略奪と訓練だけ（${st.missionOffers.map(m => m.missionKind).join(',')}）`);
+  // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md）が1枚増えた（2026-09-18）。
+  assert(st.missionOffers.map(m => m.missionKind).sort().join(',') === 'raid,train,trial',
+    `決着後の札は略奪・力試し・訓練（${st.missionOffers.map(m => m.missionKind).join(',')}）`);
   assert(Game.checkCounterattack() === null && st.counterattack === null, '第二幕決着後は勇者を再予約しない');
   // 略奪を1戦続けても決着印と征服度は変わらない。
   const conquest = st.conquest;
@@ -217,7 +218,7 @@ const drawTiers = (st, times) => {
   assert(Game.state.act2Cleared?.by === 'conquest' && Game.state.gold === 77
     && Game.state.roster.some(m => m.uid === uid), 'ロード後も決着・資源・既存軍団を保つ');
   Game.prepareMissions(true);
-  assert(Game.state.missionOffers.map(m => m.missionKind).sort().join(',') === 'raid,train',
+  assert(Game.state.missionOffers.map(m => m.missionKind).sort().join(',') === 'raid,train,trial',
     'ロード後も継続用の札へ戻る');
 }
 {
