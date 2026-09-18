@@ -2,6 +2,16 @@
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const { autoDismissMormo } = require('./helpers.js');
 const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m); };
+// 紙芝居を最後の一枚まで送る（最後の一枚にだけ「続ける」系のボタンが出る）
+async function tapThrough(page, lastAction) {
+  for (let i = 0; i < 40; i++) {
+    if (await page.locator(`[data-action="${lastAction}"]`).count()) return true;
+    if (!await page.locator('.story-stage[data-action="storynext"]').count()) break;
+    await page.locator('.story-stage[data-action="storynext"]').click({ position: { x: 40, y: 60 } });
+    await page.waitForTimeout(60);
+  }
+  return await page.locator(`[data-action="${lastAction}"]`).count() > 0;
+}
 (async () => {
   const b = await chromium.launch(process.env.CHROME ? { executablePath: process.env.CHROME } : {});
   const page = await b.newPage({ viewport:{width:1128,height:900} });
@@ -10,10 +20,13 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   await page.goto('file://' + process.env.GAME + '/index.html');
   await page.click('[data-action="new"]');
   await page.waitForTimeout(150);
-  ok(await page.locator('[data-action="storydone"]').count() === 1, '新規開始は即位の場面');
-  const throne = await page.locator('.story-panel').innerText();
+  ok(await page.locator('.story-stage').count() === 1, '新規開始は即位の紙芝居');
+  const throne = await page.evaluate(() => Story.currentBeat(Game.state).text);
   ok(/2名/.test(throne) && /戦える者は、いません/.test(throne), 'モルモが「所属者は2名、戦える者はいません」と報告する');
+  ok(await page.evaluate(() => Story.currentBeat(Game.state).mormoShown === true), '即位の前にモルモの自己紹介（全面画面）が出た');
+  ok(await page.locator('.story-stage .mormo-aside-face').count() >= 0, '帯は戦闘の大顔吹き出しと同じ部品');
   await page.screenshot({ path: process.env.SP + '/story-throne.png' });
+  ok(await tapThrough(page, 'storydone'), 'タップで一枚ずつ送ると最後に「続ける」が出る');
   await page.click('[data-action="storydone"]');
   await page.waitForTimeout(120);
   ok(await page.locator('[data-action="hire"]').count() > 0, '即位のあとは面接');
@@ -23,11 +36,18 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   await page.waitForTimeout(100);
   await page.click('[data-action="skip"]');
   await page.waitForTimeout(150);
-  ok(await page.locator('[data-action="storydone"]').count() === 1, '面接を終えると救援要請の場面');
-  const call = await page.locator('.story-panel').innerText();
+  ok(await page.locator('.story-stage').count() === 1, '面接を終えると救援要請の場面');
+  const call = await page.evaluate(() => Story.currentBeat(Game.state).text);
   ok(/伍長ブレンダン/.test(call), '王国側の人物（伍長ブレンダン）が台詞を持つ');
-  ok(await page.locator('.kingdom-face').count() > 0, '王国側の人物の顔枠が出る（絵が無ければ絵文字）');
+  // 伍長の一枚まで送って顔枠（絵が無ければ絵文字）を撮る
+  for (let i = 0; i < 12; i++) {
+    if (/伍長ブレンダン/.test(await page.locator('.story-band b').first().innerText().catch(() => ''))) break;
+    await page.locator('.story-stage[data-action="storynext"]').click({ position: { x: 40, y: 60 } });
+    await page.waitForTimeout(60);
+  }
+  ok(await page.locator('.story-band .mormo-aside-face').count() === 1, '王国側の人物の顔枠が出る（絵が無ければ絵文字）');
   await page.screenshot({ path: process.env.SP + '/story-rescue-call.png' });
+  ok(await tapThrough(page, 'storydone'), '救援要請も最後まで送れる');
   await page.click('[data-action="storydone"]');
   await page.waitForTimeout(120);
   ok(await page.locator('.mission-card').count() === 1, '第1章の作戦会議は救援一択');
@@ -38,10 +58,11 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   await page.evaluate(() => { Story.ROAD_CHANCE = 1; Game.state.roster.forEach(m => { m.hp = 80; m.atk = 30; if (!m.traits.includes('coward')) m.traits.push('coward'); }); });
   await page.click('[data-action="deploy"]');
   await page.waitForTimeout(200);
-  const pre = await page.locator('[data-action="storybattle"]').count();
+  const pre = await page.locator('.story-stage').count();
   ok(pre === 1, '出撃すると道中の場面が先に出る（臆病者を連れて行ったので逃げ足の場面）');
   if (pre) {
     await page.screenshot({ path: process.env.SP + '/story-road.png' });
+    ok(await tapThrough(page, 'storybattle'), '道中を送り切ると「戦場へ」');
     await page.click('[data-action="storybattle"]');
   }
   await page.waitForTimeout(200);
@@ -57,6 +78,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode=1; console.log((c?'  ✓ ':'  ✗ ')+m
   await page.screenshot({ path: process.env.SP + '/story-result.png' });
   await page.click('[data-action="afterresult"]');
   await page.waitForTimeout(150);
+  ok(await tapThrough(page, 'storydone'), '地図の場面を最後まで送る');
   ok(await page.locator('.story-map svg').count() === 1, '結果の次に地図が開く');
   await page.screenshot({ path: process.env.SP + '/story-map.png' });
   const storyTraces = await page.evaluate(() => Game.state.traces.filter(t => t.kind === 'story').length);

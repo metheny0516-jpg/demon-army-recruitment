@@ -232,6 +232,17 @@ const App = {
     this.report(mExpression, mText, { kicker: mKicker, title: "宰相モルモ" });
   },
 
+  // 物語の場面。説明・自己紹介はいつものモルモ全面画面で、その上で紙芝居へ（オーナー指示 2026-09-18）。
+  storyScreen() {
+    UI.story();
+    const beat = typeof Story !== "undefined" ? Story.currentBeat(Game.state) : null;
+    if (beat && beat.mormo && !beat.mormoShown) {
+      beat.mormoShown = true;
+      Game.save();
+      this.report(beat.mormo.expression || "report", beat.mormo.text, { kicker: beat.mormo.kicker || "宰相モルモ", title: "宰相モルモ" });
+    }
+  },
+
   render() {
     const st = Game.state;
     if (typeof KPI !== "undefined") KPI.screen(st);   // 最後にいた画面と攻略段階（＝止まった場所）
@@ -244,7 +255,7 @@ const App = {
       case "preparation": return UI.formation();
       case "result": return UI.result();
       case "event": return UI.event();
-      case "story": return UI.story();
+      case "story": return this.storyScreen();
       case "defeat": return UI.defeat();
       case "gameover":
       case "clear": return UI.gameover(st.record, Storage.loadHistory());
@@ -553,6 +564,11 @@ const App = {
         if (out.story && out.story.pre && out.story.pre.length) return UI.storyScenes(out);
         return UI.battleManual(out);
       }
+
+      case "storynext":
+        return UI.storyNext();
+      case "storynoop":
+        return;
 
       case "storybattle":
         if (!this.pendingBattle) return this.render();

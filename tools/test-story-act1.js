@@ -45,7 +45,7 @@ Game.skipHire();
 assert(st.phase === 'story' && Story.currentBeat(st).id === 'rescue_call', '面接を終えると救援要請');
 assert(Game.storyDone() === 'mission' && st.phase === 'mission', '要請を閉じると作戦会議');
 assert(st.missionOffers.length === 1 && st.missionOffers[0].story === 'goblin_rescue' && st.missionOffers[0].army === '開拓保護隊', '第1章の作戦は救援一択（開拓保護隊）');
-assert(st.missionOffers[0].units.every(u => /開拓保護隊/.test(u.name)), '敵の名前は開拓保護隊');
+assert(st.missionOffers[0].units.every(u => /開拓保護隊/.test(u.name) && !u.rebel && !u.tplId), '敵は人間の兵（名前は開拓保護隊。魔物の姿にならない）');
 Game.prepareMissions();
 assert(st.missionOffers.length === 1 && st.missionOffers[0].story === 'goblin_rescue', '作り直しても救援一択のまま');
 Game.selectMission(0);

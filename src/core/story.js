@@ -66,7 +66,8 @@ const Story = {
       try { text = beat.text(st, this.helpers(st)); } catch (e) { text = ""; }
       if (!text) continue;
       s.seen.push(beat.id);
-      s.queue.push({ id: beat.id, kicker: beat.kicker || "", title: beat.title || "", cast, text, html: beat.html || null, chapter: beat.chapter });
+      const bg = typeof beat.bg === "function" ? beat.bg(st) : (beat.bg || null);
+      s.queue.push({ id: beat.id, kicker: beat.kicker || "", title: beat.title || "", cast, text, html: beat.html || null, chapter: beat.chapter, bg, mormo: beat.mormo || null });
       queued++;
     }
     s.chapter = now;
@@ -89,22 +90,29 @@ const Story = {
   // 地図が無い環境では進軍の札を元にする。
   rescueMission(game) {
     const place = typeof Territory !== "undefined" ? Territory.byId("t01") : null;
-    const type = place ? MISSION_TYPES.find(m => m.id === "suppress") : MISSION_TYPES.find(m => m.id === "invade");
-    const mission = game.buildMission(type, null, place || undefined);
+    const invade = MISSION_TYPES.find(m => m.id === "invade");
+    const suppress = MISSION_TYPES.find(m => m.id === "suppress");
+    // 札の骨（場所・領土の印）は「従える」の型で、敵は**人間の段階表**から作る。
+    // 従えるの型の敵は反乱軍＝魔物の姿になる（rebelLook）ので、そのままだと王国軍がゾンビになる（オーナー試遊 2026-09-18）。
+    const shell = game.buildMission(place ? suppress : invade, null, place || undefined);
+    const humans = game.buildMission(invade);
     const names = ["開拓保護隊の兵テト", "開拓保護隊の兵ポル", "開拓保護隊の兵ネス", "開拓保護隊の兵ロイ"];
-    const units = (mission.units || []).filter(u => !u.captain);
+    const units = (humans.units || []).filter(u => !u.captain && !u.rebel)
+      .map((u, i) => ({ ...u, name: names[i % names.length] }));
     return {
-      ...mission,
+      ...shell,
+      story: "goblin_rescue",
       twoStage: false, missionPhase: "main",
       territoryLine: "救えば、村のゴブリンが応募に来る",
-      story: "goblin_rescue",
       missionTitle: "ゴブリン村を救援する",
       strategyLabel: "救援",
       strategyHint: "王国軍に囲まれたゴブリンの村を解放する。第一章の最初の出撃。",
       description: "包囲しているのは開拓保護隊。名目は盗賊討伐。伍長は令状を信じている。",
       army: "開拓保護隊",
       region: "ゴブリン村",
-      units: (units.length ? units : mission.units).map((u, i) => ({ ...u, name: names[i % names.length] }))
+      reward: humans.reward,
+      formationId: humans.formationId, formationName: humans.formationName, formationHint: humans.formationHint,
+      units
     };
   },
 
@@ -137,7 +145,7 @@ const Story = {
     if (!text) return [];
     const stored = {};
     for (const k of Object.keys(castIds)) if (castIds[k] !== undefined) stored[k] = castIds[k];
-    return [{ id: pick.id, slot, title: pick.title, cast: stored, text }];
+    return [{ id: pick.id, slot, title: pick.title, cast: stored, text, bg: pick.bg || null }];
   },
   ROAD_CHANCE: 0.7,
 

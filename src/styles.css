@@ -3994,3 +3994,49 @@ button.primary::first-letter { color: var(--gold); }
 .story-result .event-bubble { background: rgba(255, 252, 244, .92); color: #2b2230; }
 .story-result .event-say.mormo .event-bubble { background: rgba(240, 232, 255, .94); }
 .story-result .event-line { color: inherit; }
+
+/* ── 物語の紙芝居（2026-09-18）：背景＋戦闘と同じ大顔吹き出し ── */
+.story-stage {
+  position: relative; overflow: hidden; border-radius: 12px;
+  min-height: min(78vh, 640px); margin: 8px 0;
+  background-color: #2a1f33; background-size: cover; background-position: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55); cursor: pointer;
+}
+/* 絵が来るまでの場面ごとの色（assets/story/bg/{key}.webp があれば background-image が勝つ） */
+.story-bg-throne { background-color: #2a1f33; --story-grad: radial-gradient(ellipse at 50% 20%, #5a3d6e 0, #1b1322 70%); }
+.story-bg-village { background-color: #3d4a2a; --story-grad: linear-gradient(180deg, #6a7fa8 0 45%, #4a5a34 45% 100%); }
+.story-bg-road { background-color: #4c4436; --story-grad: linear-gradient(180deg, #8ea2c4 0 50%, #6b5f46 50% 100%); }
+.story-bg-ruins { background-color: #2b2420; --story-grad: linear-gradient(180deg, #3b2a24 0 55%, #1d1714 55% 100%); }
+.story-bg-mine { background-color: #3a3230; --story-grad: radial-gradient(ellipse at 50% 80%, #6b5245 0, #241c1a 70%); }
+.story-bg-checkpoint { background-color: #4a4a52; --story-grad: linear-gradient(180deg, #9ea7b8 0 45%, #5a5a62 45% 100%); }
+.story-bg-temple { background-color: #e7dcc4; --story-grad: linear-gradient(180deg, #f1e8d4 0 60%, #b9a77c 60% 100%); }
+.story-bg-gate { background-color: #1f1a26; --story-grad: radial-gradient(ellipse at 50% 100%, #7a4a2a 0, #1f1a26 65%); }
+.story-bg-camp { background-color: #3b3a2e; --story-grad: linear-gradient(180deg, #5c6a7a 0 50%, #4a4a36 50% 100%); }
+.story-bg-town { background-color: #6c5a4a; --story-grad: linear-gradient(180deg, #c9b9a0 0 50%, #7a6350 50% 100%); }
+.story-bg-capital { background-color: #2c2a3a; --story-grad: radial-gradient(ellipse at 50% 30%, #6f5a2a 0, #2c2a3a 70%); }
+.story-head {
+  position: absolute; left: 0; right: 0; top: 0; z-index: 2;
+  display: flex; align-items: baseline; gap: 10px; padding: 10px 14px;
+  background: linear-gradient(to bottom, rgba(10, 7, 16, .8), rgba(10, 7, 16, 0)); color: #f6e6c2;
+}
+.story-head b { font-size: 18px; }
+.story-chapter { font-size: 11px; letter-spacing: .12em; color: #f4ce80; }
+.story-kicker { font-size: 11px; color: #d9c7a3; }
+.story-count { margin-left: auto; font-size: 11px; color: #d9c7a3; }
+/* 帯は戦闘のもの（.mormo-aside）をそのまま使う。舞台の中では常時表示 */
+.story-stage .story-band { pointer-events: none; }
+.story-stage .story-band .mormo-aside-continue { pointer-events: auto; }
+.story-stage .story-band-caption { min-height: 34%; }
+.story-stage .story-caption { font-size: 20px; line-height: 1.8; color: #e9dcc4; border-style: dashed; }
+.story-face-emoji { display: flex; align-items: center; justify-content: center; font-size: 96px; line-height: 1; }
+.story-stage .story-band.mormo-aside-unit .mormo-aside-bubble b { color: #ffd9a0; }
+.story-map { position: relative; }
+.story-map-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 10px; }
+.story-map svg { position: relative; }
+@media (max-width: 560px) {
+  .story-stage { min-height: 70vh; }
+  .story-stage .story-band { gap: 10px; padding: 12px; }
+  .story-stage .mormo-aside-face { width: 120px; height: 120px; }
+  .story-stage .mormo-aside-bubble { font-size: 18px; line-height: 1.6; padding: 12px 14px; }
+  .story-face-emoji { font-size: 64px; }
+}

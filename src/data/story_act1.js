@@ -106,20 +106,32 @@ const STORY_CHAPTERS = [
 // options が無ければ「続ける」一つ。html(st) は本文の下に足す追加の見た目（地図など）。
 const STORY_BEATS = [
   {
-    id: "throne", chapter: 1, trigger: "run_start", kicker: "即位",
+    id: "throne", chapter: 1, trigger: "run_start", kicker: "即位", bg: "throne",
     title: "名ばかりの魔王",
+    // 自己紹介はいつものモルモ全面画面で（紙芝居の前に一度だけ）。
+    mormo: {
+      expression: "welcome", kicker: "はじめまして",
+      text: "おかえりなさいませ、魔王様。……いえ、初めまして、デス。\n私はモルモ。前の魔王様の宰相見習い……だった者デス。\n"
+        + "前の魔王様は、盟約の文書ごとお姿を消されました。皆、給料が止まると聞いて出ていきました。\n"
+        + "残ったのは、門番のガンツ殿と、書類と、私デス。書類は逃げませんので。\n"
+        + "魔王様が玉座に座られたので、今日から私は魔王様の宰相デス。……勝手に、そう決めましたデス。"
+    },
     cast(st) { return { mormo: "mormo" }; },
     text(st, s) {
       const staff = s.staffNames();
       return `玉座は埃をかぶっていた。前の魔王は、盟約の文書ごと消えた。\n`
-        + `モルモ「おかえりなさいませ、魔王様。……いえ、初めまして、デス」\n`
         + `モルモ「ご報告デス。現在、魔王軍の所属者は……${staff.length + 1}名デス。${staff.join("殿、")}殿と、私デス。……戦える者は、いません」\n`
         + `モルモ「王国軍が魔族領に砦を建てている、という噂は聞いています。ですが、誰も確かめに行けません。人が、いないので」\n`
         + `モルモ「履歴書は集めておきましたデス。……この中から、魔王軍を作るんですか？」`;
     }
   },
   {
-    id: "rescue_call", chapter: 1, trigger: "before_mission", kicker: "救援要請",
+    id: "rescue_call", chapter: 1, trigger: "before_mission", kicker: "救援要請", bg: "throne",
+    mormo: {
+      expression: "panic", kicker: "緊急",
+      text: "ま、魔王様！ 門の外に、泥だらけのゴブリンが……！\n救援要請デス。ゴブリンの村が王国軍に囲まれています。三日は持たない、と。\n"
+        + "……初めての出撃が、いきなり救援デス。編成は面接で採った者から選びます。全員連れて行っても構いませんヨ。"
+    },
     title: "ゴブリン村が囲まれている",
     check(st) { return !(st.story.flags.rescueResolved); },
     cast(st) {
@@ -140,6 +152,13 @@ const STORY_BEATS = [
   },
   {
     id: "map_opens", chapter: 1, trigger: "after_battle", kicker: "地図",
+    bg(st) { return st.story.flags.villageLost ? "ruins" : "village"; },
+    mormo: {
+      expression: "worried", kicker: "地図の見方",
+      text: "魔王様、古い地図を出しました。赤い印が王国軍の砦、旗が取り戻した場所デス。\n"
+        + "作戦会議では、魔王城に隣り合う場所から順に選べます。人間の土地は落とし、魔族の土地は従える。\n"
+        + "……思ったより、印が多いデスね。"
+    },
     title: "ここだけじゃない",
     check(st) { return !!st.story.flags.rescueResolved; },
     cast(st) { return { mormo: "mormo", youth: st.story.npcs.villageYouth ? "n:villageYouth" : undefined, survivor: st.story.flags.villageLost ? "n:survivor" : undefined }; },
@@ -158,7 +177,7 @@ const STORY_BEATS = [
     html: "map"
   },
   {
-    id: "ch2_open", chapter: 2, trigger: "after_battle", kicker: "第2章", title: "奪われた鉱山",
+    id: "ch2_open", chapter: 2, trigger: "after_battle", kicker: "第2章", title: "奪われた鉱山", bg: "mine",
     cast(st) { return { mormo: "mormo", goldon: "k:goldon" }; },
     text(st, s) {
       return `北の鉱山。オークたちが掘り、王国の文官が数える。給金は出ていない。\n`
@@ -168,7 +187,7 @@ const STORY_BEATS = [
     }
   },
   {
-    id: "ch3_open", chapter: 3, trigger: "after_battle", kicker: "第3章", title: "境界線",
+    id: "ch3_open", chapter: 3, trigger: "after_battle", kicker: "第3章", title: "境界線", bg: "checkpoint",
     cast(st) { return { mormo: "mormo", vissel: "k:vissel" }; },
     text(st, s) {
       return `関所の書庫から、古い羊皮紙の写しが出てきた。境界盟約。前魔王と先代国王、二つの署名。\n`
@@ -179,7 +198,7 @@ const STORY_BEATS = [
     }
   },
   {
-    id: "ch4_open", chapter: 4, trigger: "after_battle", kicker: "第4章", title: "勇者",
+    id: "ch4_open", chapter: 4, trigger: "after_battle", kicker: "第4章", title: "勇者", bg: "temple",
     cast(st) { return { mormo: "mormo", allen: "k:allen", el: "k:el" }; },
     text(st, s) {
       const raids = (st.missionCounts || {}).raid || 0;
@@ -193,7 +212,7 @@ const STORY_BEATS = [
     }
   },
   {
-    id: "ch5_open", chapter: 5, trigger: "after_battle", kicker: "第5章", title: "魔族の分裂",
+    id: "ch5_open", chapter: 5, trigger: "after_battle", kicker: "第5章", title: "魔族の分裂", bg: "gate",
     cast(st) { return { mormo: "mormo", radical: "n:radical" }; },
     text(st, s) {
       const lost = !!st.story.flags.villageLost;
@@ -205,7 +224,7 @@ const STORY_BEATS = [
     }
   },
   {
-    id: "ch6_open", chapter: 6, trigger: "after_battle", kicker: "第6章", title: "王国遠征軍",
+    id: "ch6_open", chapter: 6, trigger: "after_battle", kicker: "第6章", title: "王国遠征軍", bg: "camp",
     cast(st) { return { mormo: "mormo", graham: "k:graham" }; },
     text(st, s) {
       return `王都から本隊が動いた。旗は三列、荷馬車は数えきれない。\n`
@@ -215,7 +234,7 @@ const STORY_BEATS = [
     }
   },
   {
-    id: "ch7_open", chapter: 7, trigger: "after_battle", kicker: "第7章", title: "王都への道",
+    id: "ch7_open", chapter: 7, trigger: "after_battle", kicker: "第7章", title: "王都への道", bg: "town",
     cast(st) { return { mormo: "mormo" }; },
     text(st, s) {
       const raids = (st.missionCounts || {}).raid || 0;
@@ -227,7 +246,7 @@ const STORY_BEATS = [
     }
   },
   {
-    id: "finale", chapter: 8, trigger: "after_battle", kicker: "第一幕・終", title: "では、明日から",
+    id: "finale", chapter: 8, trigger: "after_battle", kicker: "第一幕・終", title: "では、明日から", bg: "capital",
     check(st) { return (st.act || 1) >= 2 || st.phase === "clear"; },
     cast(st) { return { mormo: "mormo", king: "k:king" }; },
     text(st, s) {
@@ -529,7 +548,7 @@ const STORY_SCENES = [
     }
   },
   {
-    id: "after_village_lost", slot: "aftermath", missions: ["goblin_rescue"], title: "焼け跡",
+    id: "after_village_lost", slot: "aftermath", missions: ["goblin_rescue"], title: "焼け跡", bg: "ruins",
     check(st, party, mission, ctx) { return ctx && !ctx.won ? (party[0] || { uid: null }) : null; },
     cast(st, party) { return party[0] ? { actor: party[0].uid } : {}; },
     text(st, c) {

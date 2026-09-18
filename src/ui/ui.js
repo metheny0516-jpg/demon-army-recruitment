@@ -2069,35 +2069,99 @@ const UI = {
     </div>`).join("")}</div>`;
   },
 
-  // ── 物語（第一幕） ────────────────────────
-  // 幹の場面。事件と同じ机の上に、章の見出しと王国側の人物を出す。
+  // ── 物語（第一幕）：紙芝居 ────────────────────────
+  // 背景（場面ごと）＋大きな立ち絵＋一言ずつ。タップで送る（サガ・スカーレットグレイス風、オーナー指示 2026-09-18）。
+  // 本文は事件と同じ「名前＋「」」の規則で台詞と地の文に割り、1ブロック＝1カット。
+  storyCut: 0,
+  storyKey: null,
+
+  storyCuts(st, text, cast) {
+    return this.eventScript(text, cast).map(b => ({ say: b.say, body: b.body }));
+  },
+
+  // 顔枠。戦闘の大顔吹き出し（.mormo-aside-face）と同じ切り抜き。モルモは表情つき全身像、
+  // 名簿の者は履歴書の絵、王国側は assets/kingdom。絵が無ければ大きな絵文字に置き換える。
+  storyFaceHtml(who, body) {
+    const expr = this.eventExpressionFor(body);
+    const emoji = who.icon || this.icon(who.race) || "🙂";
+    let src = null, unit = true;
+    if (who.mormo) { src = `assets/mormo/${expr === "tears" ? "worried" : expr === "smirk" ? "joy" : expr === "surprise" ? "panic" : "report"}.webp`; unit = false; }
+    else if (who.kingdom) src = `assets/kingdom/${who.kingdom}.png`;
+    else if (who.tplId && this.hasPortrait(who.tplId)) {
+      src = expr && EVENT_EXPRESSIONS[who.tplId] && EVENT_EXPRESSIONS[who.tplId].includes(expr)
+        ? `assets/monsters/events/${who.tplId}/${expr}.webp` : `${this.PORTRAIT_DIR}${who.tplId}.png`;
+    }
+    if (!src) return `<span class="mormo-aside-face story-face-emoji">${U.esc(emoji)}</span>`;
+    return `<span class="mormo-aside-face${unit ? " story-face-unit" : ""}"><img class="mormo-aside-portrait" src="${U.esc(src)}" alt=""
+      data-emoji="${U.esc(emoji)}" onerror="UI.storyFaceError(this)"></span>`;
+  },
+  storyFaceError(img) {
+    const face = img && img.parentElement;
+    if (!face) return;
+    face.classList.add("story-face-emoji");
+    face.textContent = img.dataset.emoji || "🙂";
+  },
+
+  // 一枚の絵。背景（場面ごと）の上に、戦闘と同じ大顔吹き出しの帯。地の文は顔なしの字幕。
+  storyStageHtml(opts) {
+    const { bg, kicker, title, cuts, index, lastLabel, lastAction, chapter } = opts;
+    const cut = cuts[Math.min(index, cuts.length - 1)] || { say: null, body: "" };
+    const last = index >= cuts.length - 1;
+    const band = cut.say
+      ? `<div class="mormo-aside show story-band${cut.say.mormo ? "" : " mormo-aside-unit"}">
+          ${this.storyFaceHtml(cut.say, cut.body)}
+          <div class="mormo-aside-bubble"><b>${U.esc(cut.say.name)}</b><p>「${U.esc(cut.body)}」</p>
+            ${last ? `<button type="button" class="mormo-aside-continue" data-action="${lastAction}">${U.esc(lastLabel)}</button>` : ""}</div></div>`
+      : `<div class="mormo-aside show story-band story-band-caption">
+          <div class="mormo-aside-bubble story-caption"><p>${U.esc(cut.body)}</p>
+            ${last ? `<button type="button" class="mormo-aside-continue" data-action="${lastAction}">${U.esc(lastLabel)}</button>` : ""}</div></div>`;
+    return `<div class="story-stage story-bg-${U.esc(bg || "throne")}" data-action="${last ? "storynoop" : "storynext"}"
+        style="background-image:url('assets/story/bg/${U.esc(bg || "throne")}.webp'), var(--story-grad, none)">
+      <div class="story-head"><span class="story-chapter">${chapter ? `第${chapter}章` : ""}</span><span class="story-kicker">${U.esc(kicker || "")}</span><b>${U.esc(title || "")}</b>
+        <span class="story-count">${Math.min(index + 1, cuts.length)} / ${cuts.length}${last ? "" : "　▶ タップで次へ"}</span></div>
+      ${band}
+    </div>`;
+  },
+
   story() {
     const st = Game.state;
     const beat = typeof Story !== "undefined" ? Story.currentBeat(st) : null;
     if (!beat) { Game.storyDone(); return App.render(); }
+    const key = `beat:${beat.id}`;
+    if (this.storyKey !== key) { this.storyKey = key; this.storyCut = 0; }
     const cast = Story.resolveCast(st, beat.cast || {});
+    const cuts = this.storyCuts(st, beat.text, cast);
     const remaining = (st.story.queue || []).length - 1;
+    const extra = beat.html === "map" ? this.storyMapHtml(st) : "";
     this.set(`${this.hud()}
-      <div class="event-desk story-desk"><div class="event-seal story-seal">第${beat.chapter}章</div>
-      <div class="panel event-panel story-panel">
-        <div class="event-kicker">${U.esc(beat.kicker || "魔王城")}</div><h2>📜 ${U.esc(beat.title)}</h2>
-        ${this.eventCastHtml(cast)}
-        <div class="event-text">${this.eventScriptHtml(beat.text, cast)}</div>
-        ${beat.html === "map" ? this.storyMapHtml(st) : ""}
-      </div>
-      <button class="primary wide" data-action="storydone">${remaining > 0 ? "続ける" : "……続ける"}</button></div>`, "story");
+      ${this.storyStageHtml({ bg: beat.bg, kicker: beat.kicker, title: beat.title, cuts, index: this.storyCut, chapter: beat.chapter,
+        lastLabel: remaining > 0 ? "続ける" : "……続ける", lastAction: "storydone" })}
+      ${this.storyCut >= cuts.length - 1 ? extra : ""}`, "story");
   },
 
-  // 出撃直後の道中・現地。戦場へ入る前に読む。
+  // 出撃直後の道中・現地。場面を続けて一枚ずつ。最後は「戦場へ」。
   storyScenes(out) {
     const st = Game.state;
     const scenes = (out.story && out.story.pre) || [];
+    const key = `pre:${st.turn}:${scenes.map(s => s.id).join(",")}`;
+    if (this.storyKey !== key) { this.storyKey = key; this.storyCut = 0; }
+    const cuts = [];
+    for (const sc of scenes) {
+      const cast = Story.resolveCast(st, sc.cast || {});
+      for (const c of this.storyCuts(st, sc.text, cast)) cuts.push({ ...c, bg: sc.bg || (sc.slot === "road" ? "road" : "village"), title: sc.title, kicker: sc.slot === "road" ? "道中" : "現地" });
+    }
+    const cut = cuts[Math.min(this.storyCut, cuts.length - 1)] || {};
     this.set(`${this.hud()}
-      <div class="event-desk story-desk"><div class="event-seal story-seal">道中</div>
-      ${scenes.map(sc => this.storySceneHtml(st, sc)).join("")}
-      <button class="primary wide" data-action="storybattle">⚔ 戦場へ</button></div>`, "story");
+      ${this.storyStageHtml({ bg: cut.bg, kicker: cut.kicker, title: cut.title, cuts, index: this.storyCut, lastLabel: "⚔ 戦場へ", lastAction: "storybattle" })}`, "story");
   },
 
+  storyNext() {
+    this.storyCut += 1;
+    if (this.storyKey && this.storyKey.startsWith("pre:")) return this.storyScenes(App.pendingBattle || { story: { pre: [] } });
+    return this.story();
+  },
+
+  // 結果画面などで場面を読み返す小さな形（紙芝居ではなく事件と同じ吹き出し）。
   storySceneHtml(st, sc) {
     const cast = Story.resolveCast(st, sc.cast || {});
     return `<div class="panel event-panel story-panel">
@@ -2131,8 +2195,8 @@ const UI = {
     const color = k => k === "castle" ? "#7b4bd6" : k === "saved" ? "#3aa655" : k === "burned" ? "#555"
       : k === "freed" ? "#3aa655" : k === "capital" ? "#c9a227" : "#c0392b";
     const mark = p => p.kind === "castle" ? "🏰" : p.kind === "capital" ? "👑" : p.kind === "saved" ? "🔥" : p.kind === "burned" ? "💀" : p.kind === "freed" ? "🏳" : "⚔";
-    return `<div class="story-map"><svg viewBox="0 0 620 260" role="img" aria-label="魔族領の地図">
-      <rect x="0" y="0" width="620" height="260" rx="10" fill="#efe6d2"/>
+    return `<div class="story-map"><img class="story-map-art" src="assets/story/roadmap.webp" alt="" onerror="this.remove()"><svg viewBox="0 0 620 260" role="img" aria-label="魔族領の地図">
+      <rect x="0" y="0" width="620" height="260" rx="10" fill="#efe6d2" fill-opacity="0"/>
       <path d="M0 240 Q 150 200 300 230 T 620 200" fill="none" stroke="#b9a77c" stroke-width="2" stroke-dasharray="6 5"/>
       <text x="14" y="24" font-size="13" fill="#6b5b3e">魔族領</text><text x="540" y="250" font-size="13" fill="#6b5b3e">王国</text>
       ${pts.slice(0, -1).map((p, i) => { const q = pts[i + 1]; return `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="#b9a77c" stroke-width="1.5"/>`; }).join("")}
