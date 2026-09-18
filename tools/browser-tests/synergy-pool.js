@@ -8,7 +8,7 @@ const { autoDismissMormo } = require('./helpers.js');
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await autoDismissMormo(page);
-    await page.goto('file://' + process.env.GAME + '/index.html');
+    await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     await page.click('[data-action="new"]');
     await page.evaluate(() => {
       window.mk = (id, uid) => {

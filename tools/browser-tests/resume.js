@@ -6,7 +6,7 @@ const { autoDismissMormo } = require('./helpers.js');
   // モルモ報告は自動で閉じない。覆われた画面を操作できるよう、報告は即送りにする
   await autoDismissMormo(page);
   const errs=[]; page.on('pageerror',e=>errs.push(e.message));
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   // 新規は必ずスロットを指定して始める（タイトルは3枚の札になった）

@@ -6,7 +6,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.evaluate(() => {
     Game.newRun();
     localStorage.setItem('maou_speed', '4');

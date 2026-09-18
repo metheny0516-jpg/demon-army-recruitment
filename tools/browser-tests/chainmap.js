@@ -34,7 +34,7 @@ const panelText = page => page.locator('.chain-map').innerText();
   await autoDismissMormo(page);
   page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE: ' + m.text()); });
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await enterMissionPhase(page);

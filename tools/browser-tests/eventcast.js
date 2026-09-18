@@ -11,7 +11,7 @@ const assert = require('node:assert/strict');
   await autoDismissMormo(page);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();

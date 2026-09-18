@@ -26,7 +26,7 @@ async function interview(page, takeRe) {
     page.on('pageerror', e => { throw e; });
 
     // 本編の設定がある状態から始め、試作が触らないことを見る
-    await page.goto('file://' + process.env.GAME + '/index.html');
+    await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     await page.evaluate(() => {
       localStorage.setItem('maou_save', '{"marker":"main-run"}');
       localStorage.setItem('maou_speed', '3');

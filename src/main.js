@@ -179,6 +179,7 @@ const App = {
       case "result": return UI.result();
       case "facility": return UI.facility();
       case "event": return UI.event();
+      case "story": return UI.story();
       case "defeat": return UI.defeat();
       case "gameover":
       case "clear": return UI.gameover(st.record, Storage.loadHistory());
@@ -196,6 +197,7 @@ const App = {
           && !confirm(`スロット ${data.slot} の魔王軍を消して、新しく始めますか？`)) return;
         Game.newRun(data.king, data.slot);
         this.render();
+        if (Game.state.phase === "story") return;
         {
           const returning = Game.state.applicants.find(m => m.legacy);
           const king = Game.demonKing();
@@ -395,8 +397,24 @@ const App = {
         const out = Game.deploy({ manual: true });
         if (!out) return;
         this.pendingBattle = out;
+        // 道中・現地の場面があれば、戦場へ入る前に読ませる（無ければそのまま戦場）。
+        if (out.story && out.story.pre && out.story.pre.length) return UI.storyScenes(out);
         return UI.battleManual(out);
       }
+
+      case "storybattle":
+        if (!this.pendingBattle) return this.render();
+        return UI.battleManual(this.pendingBattle);
+
+      case "storydone":
+        Game.storyDone();
+        this.render();
+        if (Game.state.phase === "event") {
+          const ev = Game.currentEvent();
+          return this.report("angry", `魔王様、大変デス！\n${ev ? ev.title : "城内事件"}が起きました！`,
+            { kicker: "魔王城・緊急報告", title: "宰相モルモ" });
+        }
+        return;
 
       case "skiplog":
         BattleScene.skip();
@@ -421,6 +439,7 @@ const App = {
       case "afterresult":
         Game.afterResult();
         this.render();
+        if (Game.state.phase === "story") return;
         if (Game.state.phase === "preparation") {
           return this.report("report", "遠征隊が帰還しました。\nまだ今日の業務は終わっていません。配置を確認したら、日次決算へ進めましょう。",
             { kicker: `${Game.state.day}日目・遠征帰還`, title: "宰相モルモ" });

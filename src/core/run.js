@@ -160,7 +160,16 @@ const Game = {
       this.state.alert = rules.threshold;
       this.state.counterattack = { pending: true, kind: "punitive", armyName: `${stage.army}討伐隊` };
     }
+    // 物語（第一幕）。城の住人を置き、即位の場面を積む。sim・既存テストでは Story.enabled が false で何も起きない。
+    if (typeof Story !== "undefined") {
+      Story.init(this.state);
+      Story.initialStaff(this);
+    }
     this.genApplicants();
+    if (typeof Story !== "undefined" && Story.queueBeats(this.state, "run_start")) {
+      this.state.story.next = "recruit";
+      this.state.phase = "story";
+    }
     this.saveCheckpoint();
     this.save();
     this.kpi("runStarted", this.state);
@@ -224,7 +233,7 @@ const Game = {
   // 日誌。作戦（turn）ごとにまとめ、同じ種類の出来事は一行に畳み、事実は素の文で、
   // モルモの一言は作戦ごとに一つだけ（いちばん重い出来事に付ける）。
   // 1行ごとに「デス」を付けると箇条書きが読めない（オーナー試遊 2026-09-11）。
-  JOURNAL_PRIORITY: ["fallen", "retreated", "ransacked", "defended", "deserted", "retired", "fired",
+  JOURNAL_PRIORITY: ["fallen", "retreated", "ransacked", "defended", "story", "deserted", "retired", "fired",
     "carried", "promoted", "ordered", "downed", "late", "ate", "fermented", "revived", "hired"],
   JOURNAL_COLLAPSE: { hired: "が採用された", downed: "が倒れて戻った", late: "が遅れて着いた",
     ate: "が敵の携行食を食べた", carried: "が担がれて帰った" },
@@ -238,7 +247,9 @@ const Game = {
       const departed = (st.departed || []).slice().reverse().find(m => m.uid === uid);
       return departed ? departed.name : "誰か";
     };
-    const plain = trace => Traces.describe(trace, nameOf).replace(/（[^）]*\d[^）]*）/g, "");
+    const plain = trace => (trace.kind === "story" && typeof Story !== "undefined"
+      ? Story.describe(trace, nameOf)
+      : Traces.describe(trace, nameOf)).replace(/（[^）]*\d[^）]*）/g, "");
     const groups = [];
     for (const trace of Traces.query(st.traces).slice(0, cap)) {
       const key = trace.turn ?? trace.day;
@@ -322,6 +333,7 @@ const Game = {
   migrateState() {
     const st = this.state;
     if (!st || typeof st !== "object") return;
+    if (typeof Story !== "undefined") Story.init(st);
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
       const legacyStage = U.clamp(Number(st.stage) || 1, 1, this.actStages().length);
@@ -1018,16 +1030,21 @@ const Game = {
     // 長さだけで判断していたので、予約が立った直後に3択のまま残ることがあった。
     const pending = !!(st.counterattack && st.counterattack.pending);
     const offers = st.missionOffers;
+    // 第1章の最初の出撃は救援一択（物語）。決着するまで作戦会議は救援だけを出す。
+    const rescue = typeof Story !== "undefined" && Story.rescuePending(st);
     const stale = !Array.isArray(offers) || !offers.length
-      || (pending ? offers.some(m => m.missionKind !== "defend") || offers.length !== 1
-        : offers.length !== MISSION_TYPES.length || offers.some(m => m.missionKind === "defend"));
+      || (rescue ? offers.length !== 1 || offers[0].story !== "goblin_rescue"
+        : pending ? offers.some(m => m.missionKind !== "defend") || offers.length !== 1
+        : offers.length !== MISSION_TYPES.length || offers.some(m => m.missionKind === "defend" || m.story));
     if (!force && !stale) {
       st.phase = "mission";
       return offers;
     }
     const previous = new Map((offers || []).map(m => [m.missionKind, m.formationId]));
     st.selectedMission = null;
-    st.missionOffers = pending
+    st.missionOffers = rescue
+      ? [Story.rescueMission(this.buildMission(MISSION_TYPES.find(m => m.id === "invade")))]
+      : pending
       ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
       : MISSION_TYPES.map(type => this.buildMission(type, previous.get(type.id)));
     st.phase = "mission";
@@ -1158,6 +1175,11 @@ const Game = {
     }
     st.missionOffers = [];
     this.prepareMissions(true);
+    if (typeof Story !== "undefined" && Story.queueBeats(st, "before_mission")) {
+      st.story.next = "mission";
+      st.phase = "story";
+      this.save();
+    }
   },
 
   // ── 前代の教訓（ロードマップ⑦：失敗を方向転換の材料に） ─────────
@@ -1262,6 +1284,7 @@ const Game = {
       legacySlot = slot;
     }
     this.addBondApplicant(legacySlot);
+    if (typeof Story !== "undefined") Story.villageApplicant(this);
   },
 
   // 離脱が起きた次の面接に、故人と縁のある者が1人混ざる。
@@ -2131,7 +2154,16 @@ const Game = {
     const stageData = this.stageData();
     // ビルド試行の判定は戦闘前に取る（戦死・合体で編成が変わる前の「何を試したか」を見るため）
     this.kpi("battleStarted", st, stageData);
-    const enemyUnits = stageData.units.map(e => Battle.makeUnit(e, "enemy"));
+    // 物語の枝（道中・現地）。出撃者の性格と前職で、敵の頭数や出足が変わることがある。
+    // 敵の元データは触らず、写しを変えて makeUnit に渡す。Story が無効なら写しはそのまま。
+    const storyUnits = JSON.parse(JSON.stringify(stageData.units));
+    let storyPre = [];
+    if (typeof Story !== "undefined" && Story.enabled && !openingBattle) {
+      const party = this.activeRoster();
+      const storyCtx = { mission: stageData, enemyUnits: storyUnits, notes, stageData };
+      storyPre = [...Story.rollScenes(st, "road", party, storyCtx), ...Story.rollScenes(st, "arrival", party, storyCtx)];
+    }
+    const enemyUnits = storyUnits.map(e => Battle.makeUnit(e, "enemy"));
 
     // 改造癖の者が留守番にいれば、糧食は樽で寝かされて発酵している。
     // ここでは印を付けるだけ。誰が酔って遅刻するかは battle.js が決める（本人は出撃していない）。
@@ -2188,7 +2220,7 @@ const Game = {
       const handle = Battle.start(playerUnits, enemyUnits, simOptions);
       const pending = {
         result: null, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView: null,
-        kingMerged, replay, manual: true,
+        kingMerged, replay, manual: true, story: { pre: storyPre, post: [] },
         highlightIds: playerUnits
           .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
           .map(u => u.id).filter(Boolean)
@@ -2197,13 +2229,13 @@ const Game = {
       st.phase = "battle";
       this.liveBattle = { handle, pending };
       this.save();
-      return { handle, notes, stageData, manual: true };
+      return { handle, notes, stageData, manual: true, story: pending.story };
     }
     const result = Battle.simulate(playerUnits, enemyUnits, simOptions);
 
     const pending = {
       result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView: null,
-      kingMerged, replay,
+      kingMerged, replay, story: { pre: storyPre, post: [] },
       // spotlight は「今回変えた人」の戦闘中IDを要る。playerUnits ごと持ち回ると
       // セーブが太るので、必要な対応だけをここで解いておく。
       highlightIds: playerUnits
@@ -2374,6 +2406,7 @@ const Game = {
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
     this.recordBattleTraces(result, result.contribution);
+    const storyPost = this.rollAftermath(pending, result.contribution, result.victory);
     this.recordStageFight(stageData);
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
@@ -2506,6 +2539,7 @@ const Game = {
     const earnedTraits = this.grantExperienceTraits(notes);
 
     st.lastBattle = {
+      story: { pre: (pending.story && pending.story.pre) || [], post: storyPost },
       victory: result.victory,
       // 経験で身についた共通特性（表示用）。身につかなかった決着・旧セーブには無い。
       earned: earnedTraits,
@@ -2629,6 +2663,7 @@ const Game = {
     // 個人カウンタは名簿が動く前に進める（引退・戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(contribution, false);
     this.recordBattleTraces(result, contribution);
+    const storyPost = this.rollAftermath(pending, contribution, false);
     if (!lostOnPoints) this.trace("retreated", null, null, { army: stageData.army, carried: carried.map(c => c.name).join("、") });
     for (const row of carried) this.trace("carried", row.uid, null, { army: stageData.army });
     this.recordStageFight(stageData);
@@ -2724,6 +2759,7 @@ const Game = {
     const earnedTraits = this.grantExperienceTraits(notes);
 
     st.lastBattle = {
+      story: { pre: (pending.story && pending.story.pre) || [], post: storyPost },
       victory: false,
       earned: earnedTraits,
       retreated: !lostOnPoints,
@@ -3841,10 +3877,40 @@ const Game = {
     return true;
   },
 
+  // 物語の枝（戦後）。名簿が動く前に呼ぶ（戦死者もまだ引ける）。Story が無ければ空。
+  rollAftermath(pending, contribution, won) {
+    const st = this.state;
+    if (typeof Story === "undefined" || !Story.enabled || !pending || pending.openingBattle) return [];
+    const uids = new Set((contribution || []).filter(c => !c.mercenary).map(c => c.uid));
+    const party = st.roster.filter(m => uids.has(m.uid));
+    return Story.rollScenes(st, "aftermath", party, { mission: pending.stageData, notes: pending.notes, won: !!won, stageData: pending.stageData });
+  },
+
+  // 幹の場面を一つ閉じる。全部閉じたら、積んだときに控えた行き先へ進む。
+  storyDone() {
+    const st = this.state;
+    if (!st || typeof Story === "undefined") return null;
+    Story.shiftBeat(st);
+    if (Story.currentBeat(st)) { this.save(); return "story"; }
+    const next = st.story.next;
+    st.story.next = null;
+    if (next === "afterResult") return this.afterResult();
+    st.phase = next || "recruit";
+    this.save();
+    return st.phase;
+  },
+
   // 勝利後「次へ」→ 採用フェーズへ
   // 結果画面の「次へ」。ハプニングが起きればそちらを先に見せる。
   afterResult() {
     const st = this.state;
+    // 物語の幹（章の節目）は事件より先に見せる。見終わればここへ戻ってくる（storyDone）。
+    if (typeof Story !== "undefined" && Story.queueBeats(st, "after_battle")) {
+      st.story.next = "afterResult";
+      st.phase = "story";
+      this.save();
+      return "story";
+    }
     if (st.openingPrototype && st.day < this.OPENING_DAYS) {
       st.phase = "preparation";
       st.selectedMission = null;

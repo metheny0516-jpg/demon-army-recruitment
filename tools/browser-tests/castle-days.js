@@ -9,7 +9,7 @@ const { silenceMormoFromNow } = require('./helpers');
   try {
     const page = await browser.newPage({ viewport: { width: 900, height: 1200 } });
     page.on('pageerror', e => { throw e; });
-    await page.goto('file://' + process.env.GAME + '/index.html');
+    await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     await page.evaluate(() => { localStorage.setItem('maou_save', '{"m":1}'); localStorage.setItem('maou_speed', '3'); });
     const before = await page.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return o; });
 

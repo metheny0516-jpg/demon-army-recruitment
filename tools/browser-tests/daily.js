@@ -5,7 +5,7 @@ const { dismissMormo } = require('./helpers.js');
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   await dismissMormo(page);
   await page.locator('[data-action="hire"]').first().click();

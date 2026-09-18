@@ -6,7 +6,7 @@ const path = require('node:path');
   try {
     for (const width of [390, 1280]) {
       const page = await browser.newPage({ viewport: { width, height: 900 } });
-      await page.goto('file://' + process.env.GAME + '/index.html');
+      await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
       await page.locator('[data-action="new"]').first().click();
       assert.match(await page.locator('.mormo-scene-text').evaluate(() => MormoScene.text), /いつ起きるか/);
       await page.evaluate(() => {

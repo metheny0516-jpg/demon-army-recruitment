@@ -3493,3 +3493,19 @@ button.primary::first-letter { color: var(--gold); }
   .cmd-foot { justify-content: stretch; }
   .cmd-foot .primary { flex: 1 1 100%; min-height: 46px; }
 }
+
+/* ── 物語（第一幕） ── */
+.story-desk .event-seal.story-seal { background: #4b2a7a; color: #f5e9ff; }
+.story-panel { border-left-color: #7b4bd6; }
+.story-panel h3 { margin: 4px 0 6px; font-size: 15px; }
+.story-result { margin-bottom: 10px; }
+.story-map { margin: 10px 0 2px; }
+.story-map svg { width: 100%; height: auto; display: block; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.story-map .muted { font-size: 11px; margin-top: 4px; }
+.avatar.kingdom-face img { object-fit: cover; object-position: top; }
+.avatar.kingdom-face.noimg { background: #e8dcc8; }
+/* 結果画面（暗い背景）に載る場面。紙の上の吹き出しをそのまま置くと文字が沈むので、色だけ暗い側へ寄せる。 */
+.story-result .story-panel { background: rgba(255, 252, 244, .06); }
+.story-result .event-bubble { background: rgba(255, 252, 244, .92); color: #2b2230; }
+.story-result .event-say.mormo .event-bubble { background: rgba(240, 232, 255, .94); }
+.story-result .event-line { color: inherit; }

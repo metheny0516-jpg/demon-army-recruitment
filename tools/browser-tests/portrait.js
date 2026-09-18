@@ -10,7 +10,7 @@ const ok=(c,m)=>{ if(!c) process.exitCode = 1; console.log((c?'  ✓ ':'  ✗ ')
   const errs=[], notFound=[];
   page.on('pageerror',e=>errs.push(e.message));
   page.on('requestfailed', r => { if (/assets\/monsters/.test(r.url())) notFound.push(r.url().split('/').pop()); });
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   // 「一覧に無い種族」は実在の種族を名指しすると、絵が増えた瞬間にテストが壊れる。
   // PORTRAITS に載っていないことが保証される架空のidを対照群として使う。

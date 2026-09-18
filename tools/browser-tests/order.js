@@ -20,7 +20,7 @@ const SETUP = (spirit) => {
   const page = await b.newPage({ viewport: { width: 1128, height: 1000 } });
   const errs = []; page.on('pageerror', e => errs.push(e.message));
   await autoDismissMormo(page);
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await enterMissionPhase(page);

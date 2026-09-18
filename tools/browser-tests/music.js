@@ -11,7 +11,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
 
   // BGMトグルは音量スライダーと同じく、パネルに触れたときだけ現れる
   // （常時出すと固定パネルが広がり、下の「解雇」ボタンへ近づく）。

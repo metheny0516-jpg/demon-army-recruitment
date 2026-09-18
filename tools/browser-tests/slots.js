@@ -15,7 +15,7 @@ const newInSlot = (page, slot) =>
   const page = await b.newPage({ viewport: { width: 390, height: 844 } });
   await autoDismissMormo(page);
   const errs = []; page.on('pageerror', e => errs.push(e.message));
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.evaluate(() => localStorage.clear());
   await page.reload();
 

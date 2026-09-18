@@ -9,7 +9,7 @@ const { autoDismissMormo } = require('./helpers.js');
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
 
   if (!await page.locator('#sound-control').count()) errors.push('音量コントロールが無い');
   if ((await page.locator('#sound-toggle').innerText()).includes('OFF')) errors.push('初期状態がミュート');

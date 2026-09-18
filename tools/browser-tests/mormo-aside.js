@@ -11,7 +11,7 @@ const shell = { stage: 3, baseStage: 3, missionKind: 'invade', region: '辺境',
   const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
 
   await page.evaluate(() => {
     Game.newRun();

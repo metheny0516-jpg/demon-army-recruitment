@@ -13,7 +13,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
   const check = (condition, message) => { if (!condition) errors.push(message); };
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   // 最初の一人を採用した直後の面接を作り、既存メンバーと次の応募者を必ず共存させる。
   await page.evaluate(() => {
     Game.newRun();

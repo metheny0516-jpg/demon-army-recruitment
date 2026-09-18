@@ -7,7 +7,7 @@ const { autoDismissMormo } = require('./helpers.js');
   try {
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     autoDismissMormo(page);
-    await page.goto('file://' + process.env.GAME + '/index.html');
+    await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     await page.click('[data-action="new"]');
 
     // 1) 序盤は解禁されていない（まず何が出るか見る段階を潰さない）

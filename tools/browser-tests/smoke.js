@@ -7,7 +7,7 @@ const { silenceMormoFromNow, enterMissionPhase } = require('./helpers.js');
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
 
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   const step = async (label, fn) => {
     await fn();
     await page.waitForTimeout(120);

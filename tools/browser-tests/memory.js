@@ -33,7 +33,7 @@ const baseRecord = (extra) => ({
   await autoDismissMormo(page);
   page.on('pageerror', e => errs.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errs.push('CONSOLE: ' + m.text()); });
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
 
   console.log('▼ 終了画面（廃業届）');

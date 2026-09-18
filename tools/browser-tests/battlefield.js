@@ -8,7 +8,7 @@ const path = require('node:path');
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
-    await page.goto('file://' + process.env.GAME + '/index.html');
+    await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     const setup = async (count = 1) => page.evaluate(count => {
       BattleScene.stop();
       Game.newRun();

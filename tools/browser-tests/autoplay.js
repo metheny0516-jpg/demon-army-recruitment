@@ -8,7 +8,7 @@ const { autoDismissMormo } = require('./helpers.js');
   const errors = [];
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   // file:// の保存領域を使う実Chromeでは別テストや手動プレイの魔界史が見えることがある。
   // このテストが作った3ランだけを数えるため、開始時に自分の検証領域を空にする。
   await page.evaluate(() => localStorage.clear());

@@ -9,7 +9,7 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
   page.on('pageerror', e => errors.push('PAGEERROR: ' + e.message));
   page.on('console', m => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()); });
   await autoDismissMormo(page);
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   for (let i = 0; i < 3; i++) {
     const btn = page.locator('[data-action="hire"]:not([disabled])').first();

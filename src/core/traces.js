@@ -16,13 +16,15 @@ const TRACE_KINDS = {
   ordered: { label: "号令", template: "{subject}に「{data.skill}」と命じた" },
   defended: { label: "防衛", template: "{data.army}から城を守った" },
   ransacked: { label: "荒らされた", template: "{data.army}に城を荒らされた" },
-  act: { label: "幕", template: "第{data.act}幕が始まった" }
+  act: { label: "幕", template: "第{data.act}幕が始まった" },
+  // 物語の出来事。object がタグ（saved_village / charged_early …）。kind を増やさずに種類を持つ。
+  story: { label: "出来事", template: "{subject}が{object}に関わった" }
 };
 
 const Traces = {
   MAX: 400,
-  MAX_KINDS: 17,
-  protectedKinds: new Set(["fallen", "retreated"]),
+  MAX_KINDS: 18,
+  protectedKinds: new Set(["fallen", "retreated", "story"]),
 
   record(list, trace) {
     if (!Array.isArray(list) || !this.validate(trace).ok) return null;

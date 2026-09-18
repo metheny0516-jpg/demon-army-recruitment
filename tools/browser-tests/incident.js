@@ -21,7 +21,7 @@ async function toIncident(page) {
     const page = await browser.newPage({ viewport: { width: 900, height: 1200 } });
     page.on('pageerror', e => { throw e; });
 
-    await page.goto('file://' + process.env.GAME + '/index.html');
+    await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     await page.evaluate(() => {
       localStorage.setItem('maou_save', '{"marker":"main-run"}');
       localStorage.setItem('maou_speed', '3');

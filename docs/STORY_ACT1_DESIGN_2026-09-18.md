@@ -315,9 +315,37 @@ BEAT 5本（即位・採用・要請・証言・帰還）、SCENE 6〜8本（道
 
 ---
 
-## 8. 契約案（実装するときに分ける仕様）
+## 8. 実装状況（2026-09-18・第1章を組み立てた）
 
-**この文書では実装しない。** 分けるなら以下の順。各1コミット。
+**組み立て済み**（試遊待ち）。ファイルと契約：
+
+- `src/data/story_act1.js` … `KINGDOM_CAST`（王国側の人物と台詞）、`STORY_NPCS`（村長・使いなどの脇役）、`STORY_CHAPTERS`、
+  `STORY_BEATS`（幹：即位／救援要請／地図／第2〜7章の開き／第一幕の終）、`STORY_SCENES`（枝：道中4・現地3・戦後4）。
+- `src/core/story.js` … `Story.enabled`（ブラウザで有効、`index.html?nostory=1` で無効。node は既定で無効）、
+  `queueBeats / rollScenes / resolveCast / mark / villageApplicant / initialStaff`。
+- `run.js` … `st.story = { chapter, seen, flags, npcs, queue, next }`。`newRun` で城の住人（門番ガンツ＝留守番、掃除係ぷに）を置き
+  即位の場面を積む。`finishRecruitment` → 救援要請。`prepareMissions` は第1章の決着まで救援一択（`mission.story === "goblin_rescue"`）。
+  `deploy` で道中・現地の枝（敵の写しを変える）、決着で戦後の枝（`rollAftermath`）。`afterResult` は幹を事件より先に見せ、
+  `storyDone()` で戻る。痕跡 `story`（object＝タグ、保護対象、日誌は `Story.describe`）。
+- UI … phase `story`（`UI.story()`）、出撃直後の `UI.storyScenes()`（→ `storybattle`）、結果画面の `storyResultPanel`、地図 `storyMapHtml`。
+  王国側の顔は `assets/kingdom/{id}.png`（無ければ絵文字）。
+- テスト … `tools/test-story-act1.js`（25件）、`tools/browser-tests/story.js`（run-all に登録。既存テストは `?nostory=1`）。
+
+### 立ち絵の発注（CodeX）
+
+`assets/kingdom/{id}.png`。id は `KINGDOM_CAST` のキー：`brennan`（伍長・若い・教本を抱えている）、`goldon`（鉱山監督・帳簿と算盤）、
+`vissel`（法務官・老眼鏡と羊皮紙）、`el`（聖女・寝不足・包帯）、`graham`（将軍・書類を破っている）、`king`（国王・帳簿を閉じる手）、
+`allen`（既存の勇者）、`mira`（賢者・経費精算書）。仕様は `assets/monsters` と同じ 768×1024・顔は上55%以内・80KB以下。
+証明写真の不完全さ（伍長は敬礼が少しずれている、監督は算盤が枠に入りきらない）を守る。
+
+### 残り
+
+- 第2章以降の枝（鉱山・関所・神殿）は未作成。幹（章の開き）だけがある。
+- 「辺境を略奪する」の村を襲わない分岐、第7章の食わせる／搾る、モルモの周回記憶は未着手（§9 の未決のまま）。
+
+## 8b. 元の契約案（参考）
+
+分けるなら以下の順。各1コミット。
 
 1. **`src/data/story_act1.js`（CodeX）**：`STORY_BEATS`（幹）と `STORY_SCENES`（枝）。契約は `EVENTS` と同じ＋`slot`。
    REACTION は SCENE の `text` の中で `TRAITS` キーを見て分岐する（新しい仕組みを足さない）。

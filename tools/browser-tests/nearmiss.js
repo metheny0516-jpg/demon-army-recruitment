@@ -7,7 +7,7 @@ const ok = (condition, message) => { if (!condition) process.exitCode = 1; conso
   // モルモ報告は自動で閉じない。覆われた画面を操作できるよう、報告は即送りにする
   await autoDismissMormo(page);
   const errors = []; page.on('pageerror', error => errors.push(error.message));
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();

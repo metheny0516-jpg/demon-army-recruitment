@@ -1784,6 +1784,7 @@ const UI = {
         <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
       </div>`;
     this.set(`${this.hud()}
+      ${this.storyResultPanel(b)}
       ${banner}
       ${/* 敗因メモ（ニアミス）は「どこまで届いたか」を残す。全滅と敗走のときだけ出す。
            再起画面がほぼ出なくなった（再建の仕様）ので、ここに無いと二度と読まれない。 */
@@ -1925,6 +1926,8 @@ const UI = {
 
   eventFaceHtml(who, expression) {
     if (who.mormo) return `<span class="avatar mormo-face"><img src="assets/mormo/report.webp" alt=""></span>`;
+    if (who.kingdom) return this.kingdomFaceHtml(who);
+    if (who.npc && !this.hasPortrait(who.tplId)) return `<span class="avatar noimg" data-fallback="${U.esc(who.icon || "🙂")}"></span>`;
     const id = who.tplId;
     if (expression && EVENT_EXPRESSIONS[id] && EVENT_EXPRESSIONS[id].includes(expression)) {
       const fallback = this.avatarHtml(who);
@@ -1933,6 +1936,13 @@ const UI = {
         onerror="UI.eventExpressionError(this)"></span>`;
     }
     return this.avatarHtml(who);
+  },
+
+  // 王国側の人物。assets/kingdom/{id}.png があれば立ち絵、無ければ絵文字。
+  kingdomFaceHtml(who) {
+    const fallback = `<span class="avatar noimg kingdom-face" data-fallback="${U.esc(who.icon || "🛡")}"></span>`;
+    return `<span class="avatar kingdom-face" data-fallback-html="${U.esc(fallback)}"><img
+      src="assets/kingdom/${U.esc(who.kingdom)}.png" alt="" onerror="UI.eventExpressionError(this)"></span>`;
   },
 
   eventExpressionError(img) {
@@ -1953,9 +1963,82 @@ const UI = {
     const list = this.eventCastList(cast);
     if (!list.length) return "";
     return `<div class="event-cast">${list.map(m => `<div class="event-cast-card">
-      ${this.avatarHtml(m)}
-      <div><b>${U.esc(m.name)}</b><small>${U.esc(m.race)}・忠誠${Math.round(m.loyalty)}</small></div>
+      ${(m.mormo || m.kingdom || m.npc) ? this.eventFaceHtml(m) : this.avatarHtml(m)}
+      <div><b>${U.esc(m.name)}</b><small>${m.mormo ? "宰相" : (m.kingdom || m.npc) ? U.esc(m.race || "王国") : `${U.esc(m.race)}・忠誠${Math.round(m.loyalty)}`}</small></div>
     </div>`).join("")}</div>`;
+  },
+
+  // ── 物語（第一幕） ────────────────────────
+  // 幹の場面。事件と同じ机の上に、章の見出しと王国側の人物を出す。
+  story() {
+    const st = Game.state;
+    const beat = typeof Story !== "undefined" ? Story.currentBeat(st) : null;
+    if (!beat) { Game.storyDone(); return App.render(); }
+    const cast = Story.resolveCast(st, beat.cast || {});
+    const remaining = (st.story.queue || []).length - 1;
+    this.set(`${this.hud()}
+      <div class="event-desk story-desk"><div class="event-seal story-seal">第${beat.chapter}章</div>
+      <div class="panel event-panel story-panel">
+        <div class="event-kicker">${U.esc(beat.kicker || "魔王城")}</div><h2>📜 ${U.esc(beat.title)}</h2>
+        ${this.eventCastHtml(cast)}
+        <div class="event-text">${this.eventScriptHtml(beat.text, cast)}</div>
+        ${beat.html === "map" ? this.storyMapHtml(st) : ""}
+      </div>
+      <button class="primary wide" data-action="storydone">${remaining > 0 ? "続ける" : "……続ける"}</button></div>`, "story");
+  },
+
+  // 出撃直後の道中・現地。戦場へ入る前に読む。
+  storyScenes(out) {
+    const st = Game.state;
+    const scenes = (out.story && out.story.pre) || [];
+    this.set(`${this.hud()}
+      <div class="event-desk story-desk"><div class="event-seal story-seal">道中</div>
+      ${scenes.map(sc => this.storySceneHtml(st, sc)).join("")}
+      <button class="primary wide" data-action="storybattle">⚔ 戦場へ</button></div>`, "story");
+  },
+
+  storySceneHtml(st, sc) {
+    const cast = Story.resolveCast(st, sc.cast || {});
+    return `<div class="panel event-panel story-panel">
+      <div class="event-kicker">${sc.slot === "road" ? "道中" : sc.slot === "arrival" ? "現地" : "戦後"}</div><h3>${U.esc(sc.title)}</h3>
+      <div class="event-text">${this.eventScriptHtml(sc.text, cast)}</div></div>`;
+  },
+
+  // 結果画面の「道中と現地」。旧セーブ・場面が無い戦いでは何も出さない。
+  storyResultPanel(b) {
+    const st = Game.state;
+    const list = b && b.story ? [...(b.story.pre || []), ...(b.story.post || [])] : [];
+    if (!list.length) return "";
+    return `<div class="story-result">${list.map(sc => this.storySceneHtml(st, sc)).join("")}</div>`;
+  },
+
+  // 魔族領の地図。王国軍の砦の印が点々と落ちている。落とした段階は消え、救った村は灯る。
+  storyMapHtml(st) {
+    const c = st.conquest || 0;
+    const saved = !!(st.story && st.story.flags.villageSaved);
+    const lost = !!(st.story && st.story.flags.villageLost);
+    const pts = [
+      { x: 60, y: 210, label: "魔王城", kind: "castle" },
+      { x: 150, y: 150, label: "ゴブリン村", kind: saved ? "saved" : lost ? "burned" : "fort" },
+      { x: 170, y: 60, label: "北の鉱山", kind: c >= 1 ? "freed" : "fort" },
+      { x: 260, y: 120, label: "東の森", kind: c >= 2 ? "freed" : "fort" },
+      { x: 330, y: 190, label: "関所", kind: c >= 3 ? "freed" : "fort" },
+      { x: 420, y: 90, label: "大神殿", kind: c >= 4 ? "freed" : "fort" },
+      { x: 470, y: 180, label: "城塞都市", kind: c >= 5 ? "freed" : "fort" },
+      { x: 560, y: 120, label: "王都", kind: "capital" }
+    ];
+    const color = k => k === "castle" ? "#7b4bd6" : k === "saved" ? "#3aa655" : k === "burned" ? "#555"
+      : k === "freed" ? "#3aa655" : k === "capital" ? "#c9a227" : "#c0392b";
+    const mark = p => p.kind === "castle" ? "🏰" : p.kind === "capital" ? "👑" : p.kind === "saved" ? "🔥" : p.kind === "burned" ? "💀" : p.kind === "freed" ? "🏳" : "⚔";
+    return `<div class="story-map"><svg viewBox="0 0 620 260" role="img" aria-label="魔族領の地図">
+      <rect x="0" y="0" width="620" height="260" rx="10" fill="#efe6d2"/>
+      <path d="M0 240 Q 150 200 300 230 T 620 200" fill="none" stroke="#b9a77c" stroke-width="2" stroke-dasharray="6 5"/>
+      <text x="14" y="24" font-size="13" fill="#6b5b3e">魔族領</text><text x="540" y="250" font-size="13" fill="#6b5b3e">王国</text>
+      ${pts.slice(0, -1).map((p, i) => { const q = pts[i + 1]; return `<line x1="${p.x}" y1="${p.y}" x2="${q.x}" y2="${q.y}" stroke="#b9a77c" stroke-width="1.5"/>`; }).join("")}
+      ${pts.map(p => `<g><circle cx="${p.x}" cy="${p.y}" r="13" fill="${color(p.kind)}" opacity=".85"/>
+        <text x="${p.x}" y="${p.y + 5}" font-size="14" text-anchor="middle">${mark(p)}</text>
+        <text x="${p.x}" y="${p.y + 28}" font-size="11" text-anchor="middle" fill="#3b2f1e">${U.esc(p.label)}</text></g>`).join("")}
+    </svg><div class="muted">⚔ 王国軍の砦　🏳 取り戻した　🔥 救った村　💀 焼かれた村</div></div>`;
   },
 
   event() {

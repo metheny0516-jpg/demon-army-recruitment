@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
     const page = await browser.newPage();
     const errors = [];
     page.on('pageerror', e => errors.push(e.message));
-    await page.goto('file://' + process.env.GAME + '/index.html');
+    await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     await page.evaluate(() => {
       Game.newRun();
       UI.set(BattleScene.shell({ stage: 1, region: '試験', army: '試験隊' }));

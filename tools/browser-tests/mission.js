@@ -9,7 +9,7 @@ const ok = (condition, message) => console.log((condition ? '  ✓ ' : '  ✗ ')
   await autoDismissMormo(page);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();

@@ -46,7 +46,7 @@ async function peakSince(page, t0, seconds) {
 
 async function toBattle(page) {
   await autoDismissMormo(page);
-  await page.goto('file://' + process.env.GAME + '/index.html');
+  await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.click('[data-action="new"]');
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
   await page.locator('[data-action="hire"]:not([disabled])').first().click();
@@ -125,7 +125,7 @@ async function toBattle(page) {
     page = await browser.newPage({ viewport: { width: 390, height: 844 } });
     await page.route('**/assets/sfx/recorded/fanfare-win.wav', route => route.abort());
     await autoDismissMormo(page);
-    await page.goto('file://' + process.env.GAME + '/index.html');
+    await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     await page.click('[data-action="new"]');
     await tapMaster(page);
     const t0 = await page.evaluate(() => { const at = Sound.ctx.currentTime; Sound.cue('win'); return at; });
