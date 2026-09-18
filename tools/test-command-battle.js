@@ -1,7 +1,7 @@
 // コマンドバトル（2026-09-11）・battle.js 側：ラウンドごとに止まり、指示（たたかう／まもる／技／おまかせ／退く）で解決する。
 //   node tools/test-command-battle.js
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js',
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/promotions.js',
   'src/data/synergies.js','src/data/enemies.js','src/core/util.js','src/core/synergy.js','src/core/battle.js'];
 const ctx = { console, Math: Object.create(Math) };
 vm.createContext(ctx);
@@ -13,7 +13,8 @@ const mk = (name, traits, side, x) => Battle.makeUnit(Object.assign({
   uid: name, name, race: 'オーク', hp: 80, atk: 10, def: 3, spd: 5, traits, tags: [], loyalty: 80 }, x || {}), side);
 const rations = () => ({ consumed: 3, need: 3, shortage: 0, emptied: false, bigEaterUids: [], cookUid: null, hungerUid: null, feastUid: null });
 const scene = () => ({
-  p: [mk('ガロ', ['brute'], 'player', { hp: 300, atk: 12, def: 6, spd: 4, spirit: 2 }), mk('ミラ', ['fireball'], 'player', { race: '魔族', hp: 120, atk: 9, def: 2, spd: 6, spirit: 0 })],
+  // 2026-09-12：癖（怪力・火球）は技へ移った。指示窓の技は skills（種族技）で持たせる
+  p: [mk('ガロ', [], 'player', { hp: 300, atk: 12, def: 6, spd: 4, spirit: 2, skills: ['orc_cleave'] }), mk('ミラ', [], 'player', { race: '魔族', hp: 120, atk: 9, def: 2, spd: 6, spirit: 0, skills: ['mage_fireball'] })],
   e: [mk('兵A', [], 'enemy', { race: '人間', hp: 200, atk: 12, def: 2, spd: 7 }), mk('兵B', [], 'enemy', { race: '人間', hp: 200, atk: 8, def: 2, spd: 3 })]
 });
 
@@ -27,7 +28,7 @@ const scene = () => ({
   assert(step.type === 'commands' && step.round === 1, `最初はラウンド1の指示待ち（${step.type}）`);
   assert(step.allies.length === 2 && step.enemies.length === 2, '戦場の味方と敵が列挙される');
   const garo = step.allies.find(a => a.name === 'ガロ'), mira = step.allies.find(a => a.name === 'ミラ');
-  assert(garo.skill && garo.skill.id === 'brute' && garo.skill.cost === 1 && garo.skill.ready === true, 'ガロの技（怪力・気合1）は使える');
+  assert(garo.skill && garo.skill.id === 'orc_cleave' && garo.skill.cost === 1 && garo.skill.ready === true, 'ガロの技（薙ぎ払い・気合1）は使える');
   assert(mira.skill && mira.skill.ready === false && mira.spirit === 0, 'ミラは気合0なので技は使えない');
   assert(step.enemies.every(e => e.intent === 'attack'), 'ラウンド1の敵の構えは通常');
   assert(step.canRetreat === false, '誰も倒れていないので退けない');
@@ -65,7 +66,7 @@ const scene = () => ({
   const exec = ev.find(e => e.type === 'order_exec' && e.unitId === 'p0');
   assert(exec && exec.manual === true && exec.cost === 1, '技の実行イベント（manual、気合1）');
   const atk = ev.find(e => e.type === 'attack' && e.fromId === 'p0');
-  assert(atk && atk.traits.includes('怪力') && !atk.traits.includes('号令'), '怪力が必ず出て、号令の+50%は付かない');
+  assert(atk && atk.label === '薙ぎ払い' && !atk.traits.includes('号令'), '薙ぎ払いが必ず出て、号令の+50%は付かない');
   assert(s.p[0].spirit === 1, `気合が1減る（${s.p[0].spirit}）`);
   const step = b.next({});
   const ev2 = b.timeline.slice(before + ev.length);

@@ -23,7 +23,7 @@ const result = Battle.simulate([attacker], [target]);
 const hit = result.timeline.find(e => e.type === 'attack');
 const overkill = result.timeline.find(e => e.type === 'overkill');
 assert(overkill && overkill.excess === 400 && overkill.percent === 400, '残HP100へ500ダメージで余剰400・400%を記録する');
-assert(overkill.rank === '粉砕' && overkill.rankId === 'pulverize', '300%以上を粉砕ランクにする');
+assert(overkill.rank === 'OVERKILL' && overkill.rankId === 'overkill', '余剰の割合では段を分けない（大技でなければ OVERKILL のまま）');
 assert(overkill.parentEventId === hit.eventId && overkill.chainId === hit.chainId,
   'OVERKILLを致死攻撃の子イベントとして同じCHAINへ接続する');
 assert(result.overkillSummary.count === 1 && result.overkillSummary.maxPercent === 400
@@ -50,9 +50,10 @@ assert(atThreshold.rank === 'OVERKILL' && atThreshold.rankId === 'overkill',
   '下限〜100%未満は基本ランクのまま');
 assert(exact.overkillSummary.count === 0 && exact.overkillSummary.maxPercent === 0, '未発生時は0で安全に集計する');
 
-assert(Battle.overkillRank(100).name === '蹂躙'
-  && Battle.overkillRank(500).name === '消滅'
-  && Battle.overkillRank(1000).name === '魔王級殲滅', '各OVERKILL閾値を固定する');
+assert(Battle.overkillRank(100).name === 'OVERKILL' && Battle.overkillRank(1000).name === 'OVERKILL',
+  '段は2つ：余剰がいくら大きくても大技でなければ OVERKILL');
+assert(Battle.overkillRank(40, true).name === '殲滅' && Battle.overkillRank(40, true).id === 'annihilation'
+  && Battle.overkillRank(40, true).emphasis === 3, '大技の直撃で倒せば余剰40%でも殲滅（強調度3）');
 
 const butcher = make('連鎖砲', 100, 1000, 'player');
 butcher.traits.push('chain_massacre');

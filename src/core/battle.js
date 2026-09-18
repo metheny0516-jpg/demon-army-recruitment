@@ -29,13 +29,22 @@
 //   resource_forfeit { sourceId,resource,amount,label }  条件喪失による予約没収
 //   note         { }                                特性の発動などテキストのみ
 //   incident     { id,name,unitId,targetId? }        戦闘中ハプニング
-//   order_offer  { round, candidates:[{unitId,name,skillId,skillName,label,note,cost,spirit}], unready:[...], answered? }
-//                                                  号令の節目。options.offerOrder のときだけ、1戦闘1回
-//   order_exec   { unitId, name, skillId, skillName, label, quote }  号令の実行（次ラウンド冒頭、本人が真っ先に動く）
+//   order_exec   { unitId, name, skillId, skillName, label, quote }  指示で技を出した記録（コマンドバトル。旧号令の名残）
 //   result       { victory, reversal }              reversal=総HP3割以下から勝った
 // ───────────────────────────────────────────────────────
 // 敵の大技：2ラウンド目以降、この確率で1ラウンド構え（攻撃しない）、次のラウンドに×1.8。まもるで受ける相手。
 const ENEMY_BIG_MOVE = { chance: 0.15, mult: 1.8 };
+// 火の粉（2026-09-14）：味方の全体技（aoe）を撃つと、前列の味方1体に火の粉が飛ぶことがある。HP は 1 減るだけ。
+// 「痕跡になる事故は画面で一度見えたことだけ」の規則のための、見える小さな事故。run.js が result.sparked を痕跡にする。
+const SPARK = { chance: 0.3, damage: 1 };
+// 増殖の元（2026-09-16、docs/DESIGN_ARC_SLIME_2026-09-15.md ②）：options.slimeSplit.enabled のとき、
+// 火の火の粉を浴びて生き残ったスライムは、以後のラウンドの頭に分身を1体ずつ出す（1戦に cap まで）。
+// 分身は攻撃 1・HP 小の戦闘専用ユニット。run.js が result.slimeSplit を見て、1体だけ名簿へ残す。
+// 条件（札の痕跡）は run.js が判定してから options で渡す。battle.js は乱数も条件も持たない。
+const SLIME_SPLIT = { cap: 3, hpRatio: 0.3, atk: 1 };
+// 食べる（2026-09-14、docs/DESIGN_BATTLE_DEPTH_2026-09-14.md A）：戦闘中に携行食を1つ食べて HP を戻す。
+// 隊で1戦に limit 回まで（巨大厨房 Lv2 で +1）。options.rations.spare（備蓄の残り）が無ければ出ない。run.js が result.rationsEaten を食料から引く。
+const EAT = { heal: 0.3, healKitchen3: 0.4, limit: 2, limitKitchen2: 3 };
 
 const Battle = {
   MAX_ROUNDS: 30,
@@ -47,11 +56,11 @@ const Battle = {
   // ここは演出の都合ではなくゲーム語彙の線引きなので core 側に置く。
   OVERKILL_MIN_PERCENT: 40,
 
-  overkillRank(percent) {
-    if (percent >= 1000) return { id: "demon_king", name: "魔王級殲滅", emphasis: 3 };
-    if (percent >= 500) return { id: "annihilation", name: "消滅", emphasis: 3 };
-    if (percent >= 300) return { id: "pulverize", name: "粉砕", emphasis: 2 };
-    if (percent >= 100) return { id: "trample", name: "蹂躙", emphasis: 2 };
+  // 段は2つだけ（2026-09-16、AUDIT_DEAD_ELEMENTS §1）。余剰の割合で4段に分けていたが、
+  // 蹂躙（100%）以上は実測 0% で一度も出なかった。上の段は「大技の直撃で倒した」＝殲滅に付け替える。
+  // プレイヤーが狙って起こせる見せ場（大技を当てて仕留める）だけに名前を与える。
+  overkillRank(percent, big) {
+    if (big) return { id: "annihilation", name: "殲滅", emphasis: 3 };
     return { id: "overkill", name: "OVERKILL", emphasis: 1 };
   },
 
@@ -77,21 +86,28 @@ const Battle = {
       unpaid: !!m.unpaid,
       // F: 戦闘中ハプニングの読み取り用状態。ロスターへは保存しない。
       starved: !!m.starved || (m.traits || []).includes("starved"),
-      feast: false,
       chainDepth: 1,
       traits: m.traits ? m.traits.slice() : [],
       tags: m.tags ? m.tags.slice() : [],
       introQuote: m.introQuote || "",
+      // 敵将（docs/SPEC_CAPTAINS_BD_2026-09-15.md）。{ id, offer: "spare" | "hire" }。敵側だけ。見逃す／雇うの提案の材料
+      captain: m.captain ? Object.assign({}, m.captain) : null,
+      awakenAt: (m.awakenAt === undefined || m.awakenAt === null) ? null : Number(m.awakenAt),   // 覚醒の閾値の上書き（勇者）
       // 気合（号令の限定）。名簿の値を写す。無ければ null＝制限なし（傭兵・テストの直作り）。
       spirit: (m.spirit === undefined || m.spirit === null) ? null : Number(m.spirit),
       // 上位技のお披露目。覚えた直後の戦いでだけ autoLimit 回まで勝手に出る。名簿の値が無い（テストの直作り・sim の敵）なら
       // "any"＝どの技もお披露目扱い（既存テストと種族技の測定が今までどおり動く）。null なら号令でだけ出る。
       debut: m.debutSkill === undefined ? "any" : (m.debutSkill || null),
       mods: {
-        dmgMult: m.battleDmgMult || 1,
+        // 忠義（堕騎士、docs/DESIGN_HUMAN_SWORDSMAN）：忠誠 60 未満は本気を出さない（0.8）、80 以上で主と認める（1.1）
+        dmgMult: (m.battleDmgMult || 1) * ((m.traits || []).includes("fealty") ? ((m.loyalty ?? 50) < 60 ? 0.8 : (m.loyalty ?? 50) >= 80 ? 1.1 : 1) : 1),
         takenMult: m.battleTakenMult || 1,
         fireballAll: false, necroFull: false
       },
+      // 技（気合を払って選ぶ行動。SKILLS の id 列）と、敵の役割（fighter/brute/shield/priest/caster/archer/rogue/commander）。
+      skills: Array.isArray(m.skills) ? m.skills.slice() : [],
+      spiritMaxBonus: Number(m.spiritMaxBonus) || 0,   // 将軍の転身で +1（2026-09-13）。上限は SPIRIT_MAX に足す
+      role: m.role || "fighter",
       flags: {},
       alive: true
     };
@@ -144,31 +160,6 @@ const Battle = {
     const first = gen.next();
     handle.timeline = first.value && first.value.__timeline ? first.value.__timeline : null;
     return handle;
-  },
-
-  // 号令の候補：戦場にいる軍団員（傭兵・召喚物を除く）で、号令できる特性（order）を持つ者。
-  // 一人に複数あれば最初の一つ。最大3人（選択肢を読める数に絞る）。
-  // 気合（unit.spirit）が技の cost に足りない者は候補に出ない（unready に回す）。null は制限なし。
-  orderCandidates(playerUnits) {
-    return this.orderRoster(playerUnits).ready;
-  },
-  orderRoster(playerUnits) {
-    const ready = [], unready = [];
-    for (const u of playerUnits) {
-      if (!u.alive || u.flags.absent || u.flags.summoned || u.flags.mercenary || u.flags.winded) continue;   // 息切れ中は命じられない
-      const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
-      if (!skillId) continue;
-      const tr = TRAITS[skillId];
-      const cost = Math.max(0, Number(tr.order.cost) || 0);
-      const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
-      if (spirit !== null && spirit < cost) {
-        unready.push({ unitId: u.id, name: u.name, skillId, skillName: tr.name, spirit, cost });
-        continue;
-      }
-      if (ready.length >= 3) continue;
-      ready.push({ unitId: u.id, name: u.name, skillId, skillName: tr.name, label: tr.order.label, note: tr.order.note || "", cost, spirit });
-    }
-    return { ready, unready };
   },
 
   *_battle(playerUnits, enemyUnits, options) {
@@ -240,14 +231,20 @@ const Battle = {
     const note = (text, cls) => emit("note", { text, cls: cls || "info", emphasis: cls === "revive" ? 2 : 0 });
     const soulState = { player: { amount: 0 }, enemy: { amount: 0 } };
     // 施設Lv.＝Jokerが働ける回数。0/未指定なら従来どおり1回だけ働く。
-    const facilityWorks = Math.max(1, Number(options.facilityWorks) || 1);
+    // 施設Lv.＝Jokerが働ける回数。数値なら全施設共通（旧）、オブジェクトなら施設別（城下町統合 2026-09-13、
+    // docs/SPEC_TOWN_MERGE_2026-09-13.md 1節）。0/未指定なら従来どおり1回だけ働く。
+    const worksOf = (id) => {
+      const fw = options.facilityWorks;
+      const n = (fw && typeof fw === "object") ? fw[id] : fw;
+      return Math.max(1, Number(n) || 1);
+    };
     const graveyardQueue = [];
     let graveyardUsed = 0;
     let nextSummonId = 1;
 
     const reactToDeath = (target, deathEvent) => {
       if (target.flags.summoned) return;
-      if (options.graveyard && target.side === "player" && graveyardQueue.length < facilityWorks) {
+      if (options.graveyard && target.side === "player" && graveyardQueue.length < worksOf("graveyard")) {
         graveyardQueue.push({ target, deathEvent });
       }
       if (target.flags.soulCounted) return;
@@ -299,7 +296,8 @@ const Battle = {
     const autoExhausted = (unit, traitId) => {
       const tr = TRAITS[traitId];
       if (!tr || !tr.autoLimit || unit.flags.ordered) return false;
-      const allowed = (unit.debut === "any" || unit.debut === traitId) ? tr.autoLimit : 0;
+      // お披露目（2026-09-12）：手動戦闘では勝手に出さず、窓で光らせて気合なしで1回撃てる（"any" は制限なしの印なので今までどおり）
+      const allowed = unit.debut === "any" ? tr.autoLimit : (unit.debut === traitId && !options.manual) ? tr.autoLimit : 0;
       return ((unit.flags.skillUses || {})[traitId] || 0) >= allowed;
     };
     const skillTrigger = (unit, traitId, parent) => {
@@ -310,10 +308,11 @@ const Battle = {
       }
       const lines = trait.lines && trait.lines.use;
       const quote = lines && lines.length ? U.pick(lines) : "";
-      return emitCausal("trait_trigger", {
-        sourceId: unit.id, traitId, name: trait.name || traitId, quote, emphasis: 2,
+      const upper = UPPER_BY_TRAIT[traitId] || null;
+      return emitCausal("trait_trigger", Object.assign({
+        sourceId: unit.id, traitId, name: trait.name || traitId, quote, emphasis: upper ? 3 : 2,
         text: `　${unit.name}の【${trait.name || traitId}】${quote ? `「${quote}」` : ""}`, cls: "trait"
-      }, parent || null);
+      }, upper ? { big: true, fx: fxOf(upper), skillId: upper.id } : {}), parent || null);
     };
 
     const summonUnit = (source, spec, parent) => {
@@ -348,28 +347,6 @@ const Battle = {
     const overloadStacks = activeSyn.some(s => s.id === "overload")
       ? Math.min(4, activeSyn.filter(s => !s.meta).length) : 0;
 
-    // 戦意：OVERKILLの見返り。これまでOVERKILLは伝播の入口になるだけで、
-    // それ自体には何の得も無かった（だから「明示」しようにも中身が無かった）。
-    // 余剰を出すほど味方全員の与ダメージが上がり、その倍率を画面に出し続ける。
-    // 連鎖が進むほど数字そのものが大きくなるので、「爆発力が上がった」が見える。
-    let momentum = 0;
-    const MOMENTUM_CAP = 1.2;   // 与ダメージ+120%まで。青天井にすると1戦目から壊れる
-    const gainMomentum = (percent, parent, depth) => {
-      if (momentum >= MOMENTUM_CAP) return;
-      // 余剰が大きいほど、そして連鎖が深いほど戦意が乗る
-      const gain = Math.min(.25, .04 + percent / 100 * .05 + Math.max(0, (depth || 1) - 1) * .035);
-      const before = momentum;
-      momentum = Math.min(MOMENTUM_CAP, momentum + gain);
-      if (momentum <= before) return;
-      emitCausal("momentum", {
-        gain: Math.round((momentum - before) * 100),
-        total: Math.round(momentum * 100),
-        mult: Number((1 + momentum).toFixed(2)),
-        emphasis: momentum >= .8 ? 3 : 2,
-        text: `　魔王軍の戦意が上がった！ 与ダメージ ×${(1 + momentum).toFixed(2)}`,
-        cls: "momentum"
-      }, parent);
-    };
     const goblinRaid = activeSyn.some(s => s.id === "goblin_horde");
     const goblinPair = activeSyn.some(s => s.id === "goblin_pair");
     const martyrAllowance = activeSyn.some(s => s.id === "martyr_allowance");
@@ -377,6 +354,76 @@ const Battle = {
     let ledgerFires = 0;
     let ledgerBoost = null;
     let lootPairBoost = null;
+    // ── 技（SKILLS）と敵の役割。仕様 docs/SPEC_SKILLS_2026-09-12.md ──
+    const SK = Object.assign({}, typeof SKILL_CATALOG !== "undefined" ? SKILL_CATALOG : {}, typeof SKILLS !== "undefined" ? SKILLS : {});
+    const SPIRIT_MAX = Number(options.spiritMax) || (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit && MONSTER_RULES.spirit.max) || 3;   // 鍛冶場で上がる
+    // 演出プリセット（fx）。技のイベントに載せる。描画側が読む（無ければ通常攻撃の見た目）。
+    const FXK = typeof FX_BY_KIND !== "undefined" ? FX_BY_KIND : {};
+    const fxOf = sk => (sk && (sk.fx || FXK[sk.kind])) || null;
+    // 大技（upper: true の技）の索引：癖 id → 技。大技の一撃と余波には big: true と技の fx を乗せ、
+    // 描画側が「大技は大きく・揺れて・ドカーン」を fx の種類によらず一律に出せるようにする（2026-09-15）。
+    const UPPER_BY_TRAIT = {};
+    for (const id in SK) { const sk = SK[id]; if (sk && sk.upper && sk.trait) UPPER_BY_TRAIT[sk.trait] = Object.assign({ id }, sk); }
+    const spiritGained = {};            // uid → 戦闘中に増えた気合（run.js が名簿へ反映）
+    const debutShown = [];              // お披露目を実際に使った者の uid
+    const sparked = [];                 // 火の粉を浴びた味方 { uid, byUid, skillId }（run.js が痕跡に）
+    const slimeSplit = [];              // 増殖の元 { uid, byUid, skillId, count }（run.js が名簿と痕跡に）
+    const slimeSplitOn = !!(options.slimeSplit && options.slimeSplit.enabled);
+    const slimeSplitCap = Math.max(0, Number(options.slimeSplit && options.slimeSplit.cap) || SLIME_SPLIT.cap);
+    const eatRules = (() => {
+      const r = options.rations || {};
+      const lv = Number(r.kitchenLv) || 0;
+      return { spare: Math.max(0, Number(r.spare) || 0), limit: lv >= 2 ? EAT.limitKitchen2 : EAT.limit, heal: lv >= 3 ? EAT.healKitchen3 : EAT.heal };
+    })();
+    let rationsEaten = 0;               // 食べた携行食の数（run.js が食料から引く）
+    const actions = {};                 // uid → { attack, guard, skill, eat, cover } 手番で何をしたか（成長の偏り、docs/SPEC_GROWTH_BY_ACTION）
+    const countAction = (u, key) => { if (u.side !== "player" || u.uid === null || u.uid === undefined) return; const a = actions[u.uid] || (actions[u.uid] = { attack: 0, guard: 0, skill: 0, eat: 0, cover: 0 }); a[key] += 1; };
+    const canEat = () => eatRules.spare - rationsEaten > 0 && rationsEaten < eatRules.limit;
+    let scatterUntil = 0;               // かく乱：このラウンドまで敵の狙いが散る
+    const gainSpirit = (u, amount, reason) => {
+      if (u.side !== "player" || u.flags.summoned || u.spirit === null || u.spirit === undefined) return;
+      const before = u.spirit;
+      u.spirit = Math.min(SPIRIT_MAX + (u.spiritMaxBonus || 0), before + amount);
+      const got = u.spirit - before;
+      if (got <= 0) return;
+      spiritGained[u.uid] = (spiritGained[u.uid] || 0) + got;
+      emit("note", { unitId: u.id, spiritGain: got, reason, emphasis: 1, text: `　${u.name}の気合が高まる（${reason}）`, cls: "trait" });
+    };
+    // 狙いの選び方。先頭（配置順）が60%。敵は かく乱 で散り、囮を狙い、弓は最も弱った者を狙う。
+    const pickTarget = (unit, living, round) => {
+      if (unit.side === "enemy") {
+        const decoy = living.find(u => (u.flags.decoyUntil || 0) >= round);
+        if (decoy && U.chance(0.5)) return decoy;
+        if (scatterUntil >= round) return U.pick(living);
+        if (unit.role === "archer" && U.chance(0.6)) return living.slice().sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+      }
+      return U.chance(0.6) ? living[0] : U.pick(living);
+    };
+    const moveBack = (list, target) => {
+      const i = list.indexOf(target);
+      const next = i >= 0 ? list.findIndex((u, n) => n > i && onField(u)) : -1;
+      if (i >= 0 && next >= 0) [list[i], list[next]] = [list[next], list[i]];
+      return next >= 0;
+    };
+    const lowestAlly = (allies, except) => allies.filter(u => onField(u) && u !== except).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] || null;
+    // その者が窓に並べる技の id：種族技（skills）のあとに、持っている癖の上位技（kind "trait"）
+    const unitSkillIds = (u) => {
+      const ids = (u.skills || []).filter(id => SK[id] && !SK[id].upper);
+      // 上位技：癖（tier2 の trait）を持つ者に紐づく指示。kind が trait なら号令、それ以外（heal/cleanse…）は通常の技として解決する
+      for (const [id, sk] of Object.entries(SK)) if (sk.trait && u.traits.includes(sk.trait) && !ids.includes(id)) ids.push(id);
+      return ids;
+    };
+    // 技が今選べない理由。null なら選べる。
+    const isDebut = (u, sk) => !!(sk && sk.kind === "trait" && u.debut && u.debut !== "any" && u.debut === sk.trait && !u.flags.debutUsed);
+    const skillWhy = (u, sk, spirit) => {
+      if (u.flags.winded) return "息切れ";
+      if (spirit !== null && spirit < (isDebut(u, sk) ? 0 : (sk.cost || 0))) return "気合不足";
+      if (sk.condition === "hp50" && u.hp < u.maxHp * 0.5) return "条件外";
+      if (sk.condition === "loyalty60" && (u.loyalty ?? 50) < 60) return "まだ主と認めていない";
+      if (sk.kind === "revive" && !playerUnits.some(a => !a.alive && !a.flags.summoned)) return "条件外";
+      if (sk.kind === "cover" && !playerUnits.some(a => onField(a) && a !== u)) return "条件外";
+      return null;
+    };
     const gainBattleResource = (unit, resource, value, label, parent) => {
       const resourceName = resource === "gold" ? "G" : resource;
       const verb = label === "殉職手当" ? "支給予約" : "略奪予約";
@@ -394,7 +441,7 @@ const Battle = {
           }, event);
         }
         const nextLedgerMark = (ledgerFires + 1) * 3;
-        if (options.extortionLedger && ledgerFires < facilityWorks
+        if (options.extortionLedger && ledgerFires < worksOf("extortion_ledger")
           && before < nextLedgerMark && reservedGold >= nextLedgerMark) {
           ledgerFires += 1;
           ledgerBoost = emitCausal("facility_trigger", {
@@ -410,7 +457,6 @@ const Battle = {
     emit("battle_start", { absent: playerUnits.filter(u => u.flags.absent).map(snap), player: playerUnits.filter(onField).map(snap),
       enemy: enemyUnits.map(snap)
     });
-    let feastTrigger = null;
     const rations = options.rations;
     // V2a の伝票（run.js の Game.mealPlan）。ここでは**倍率を計算し直さない**。
     // 起点・対象・効果量を既存イベントへ書き添えるためだけに読む。
@@ -420,7 +466,6 @@ const Battle = {
     let mealFirstHitSeen = false;   // 対象者の「最初の有効打」を1回だけ印にする
     for (const u of playerUnits) {
       u.starved = u.starved || !!(rations && rations.shortage > 0 && !u.tags.includes("undead"));
-      u.feast = !!(rations && rations.feastUid != null && rations.consumed >= 4);
     }
     if (rations) {
       const rationEvent = emitCausal("resource_consume", {
@@ -468,11 +513,6 @@ const Battle = {
       if (hunger && rations.emptied) {
         emitCausal("trait_trigger", { sourceId: hunger.id, traitId: "hunger_demon", name: "飢餓の悪魔", emphasis: 3,
           text: `　${hunger.name}の【飢餓の悪魔】 備蓄が尽き、全軍が飢えて暴走！`, cls: "trait" }, rationEvent);
-      }
-      const feast = byUid(rations.feastUid);
-      if (feast && rations.consumed >= 4 && !feast.flags.absent) {  // 酔って離席中なら宴は無い
-        feastTrigger = emitCausal("trait_trigger", { sourceId: feast.id, traitId: "glutton_feast", name: "暴食の宴", emphasis: 2,
-          text: `　【暴食の宴】 ${feast.name}が食後の追加行動を狙う`, cls: "trait" }, rationEvent);
       }
     }
     for (const u of [...enemyUnits, ...playerUnits]) {
@@ -531,6 +571,22 @@ const Battle = {
       if (target.flags.guarding && !opts.incident && attacker.side !== target.side) {
         dmg = Math.max(1, Math.ceil(dmg * 0.5));
         opts.traits = [...(opts.traits || []), "まもる"];
+        // 大技をまもるで受け切った：読み勝ちの報酬に気合+1
+        if (attacker.flags.bigMove) gainSpirit(target, 1, "大技を受け切った");
+      }
+      // かばう（技 cover／敵の盾役）。まもる中の者はかばえない（一つの手番で一つ）。
+      if (!opts.incident && attacker.side !== target.side) {
+        const side = target.side === "player" ? playerUnits : enemyUnits;
+        const coverer = side.find(u => onField(u) && u !== target && u.flags.covering === target.id && !u.flags.guarding);
+        if (coverer) {
+          const ratio = coverer.flags.coverRatio || 0.6;
+          // 構造化して出す（描画側が字幕にする。狙った敵と違う者に当たる理由を見せないと「バグ」に見える）
+          emit("cover", { unitId: coverer.id, forId: target.id, name: coverer.name, forName: target.name, fx: "shield", emphasis: 2,
+            text: `　${coverer.name}が${target.name}をかばった！`, cls: "trait" });
+          target = coverer;
+          dmg = Math.max(1, Math.round(amount * ratio * target.mods.takenMult));
+          opts.traits = [...(opts.traits || []), "かばう"];
+        }
       }
       // 味方が受ける直前の肩代わり。敵対攻撃だけに限り、最初に数値を返した者へ当たり先を替える。
       if (!opts.incident && attacker.side !== target.side) {
@@ -581,12 +637,20 @@ const Battle = {
       if (dead) emphasis = 3;
       else if (dmg >= target.maxHp * 0.25) emphasis = 2;
       else if (opts.traits && opts.traits.length) emphasis = 1;
+      // 大技の一撃・余波（親が大技の発火印）は big。強調度は最低 2（描画側は big で揺れ・大弾・爆発音）
+      const parentBig = !!(opts.parentEvent && opts.parentEvent.big);
+      const big = opts.big !== undefined ? !!opts.big : parentBig;   // big: false を明示すれば継承しない（燃焼など）
+      const bigFx = opts.fx || (parentBig ? opts.parentEvent.fx : null) || null;
+      if (big) emphasis = Math.max(emphasis, 2);
 
       const label = opts.label ? `【${opts.label}】` : "";
       const damageEvent = emitCausal(kind, {
         fromId: attacker.id, toId: target.id, dmg,
         hp: target.hp, maxHp: target.maxHp, dead,
         traits: opts.traits || [], label: opts.label || null, emphasis,
+        skillId: opts.skillId || null, fx: bigFx || (attacker.flags.bigMove && attacker.side !== target.side && !opts.incident ? "heavy" : null),
+        aoe: !!opts.aoe, big,
+        toCaptain: target.captain ? target.captain.id : null,   // 敵将への一撃（Captains.settle が「討った」を読む）
         text: `　${attacker.name}${label} → ${target.name} に ${dmg} ダメージ (残HP ${target.hp})`,
         cls: "dmg"
       }, opts.parentEvent || null);
@@ -621,16 +685,12 @@ const Battle = {
       if (excessPercent >= Battle.OVERKILL_MIN_PERCENT) {
         const excess = excessDamage;
         const percent = excessPercent;
-        const rank = Battle.overkillRank(percent);
+        const rank = Battle.overkillRank(percent, big);
         overkillEvent = emitCausal("overkill", {
           fromId: attacker.id, toId: target.id, excess, percent,
           rankId: rank.id, rank: rank.name, emphasis: rank.emphasis,
           text: `　${rank.name}！ 余剰${excess}ダメージ（${percent}% OVERKILL）`, cls: "overkill"
         }, damageEvent);
-        // 余剰は捨て値にしない。魔王軍の戦意へ変える。
-        if (attacker.side === "player") {
-          gainMomentum(percent, overkillEvent, (opts.propagationDepth || 0) + 1);
-        }
       }
       if (survived) {
         emitCausal("survive", { unitId: target.id, hp: target.hp, maxHp: target.maxHp, emphasis: 2 }, damageEvent);
@@ -643,6 +703,10 @@ const Battle = {
           text: `　${target.name} は倒れた！`, cls: "death"
         }, damageEvent);
         reactToDeath(target, deathEvent);
+        // 味方（軍団員）が倒れた：立っている者の気合が高まる（波乱が反撃の燃料になる）
+        if (target.side === "player" && !target.flags.summoned) {
+          for (const u of playerUnits) if (onField(u) && u !== target) gainSpirit(u, 1, `${target.name}が倒れた`);
+        }
         const propagationDepth = opts.propagationDepth || 0;
         // 伝播の入口は2つ。特性《連鎖虐殺》と、シナジーを積んだ《魔王軍完成》。
         // 後者は魔王軍の編成が起こすものなので味方側だけ。深さは積んだ枚数で伸びる。
@@ -716,7 +780,7 @@ const Battle = {
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = actionOpts.target && living.includes(actionOpts.target)
         ? actionOpts.target
-        : (U.chance(0.6) ? living[0] : U.pick(living));
+        : pickTarget(unit, living, round);
 
       // 号令を受けた一撃。技の条件を飛ばし（特性側が ctx.ordered を読む）、与ダメ+50%。
       // 追加行動（血の雄叫び・宴）には乗せない。代償は act() の最後で払う（次の手番は息切れ）。
@@ -732,7 +796,9 @@ const Battle = {
       // 号令（自動戦闘の節目）は+50%と息切れ。コマンドの「技」は気合を払うだけ（倍率も息切れも無し）。
       if (ordered && !unit.flags.orderedManual) { ctx.mult *= 1.5; ctx.notes.push("号令"); }
       // 敵の大技（構えの次のラウンド）。
-      if (unit.flags.bigMove) { ctx.mult *= ENEMY_BIG_MOVE.mult; ctx.notes.push("大技"); }
+      if (unit.flags.bigMove) { ctx.mult *= unit.role === "brute" ? 2.0 : ENEMY_BIG_MOVE.mult; ctx.notes.push("大技"); }
+      // 鬨の声・敵隊長の号令（このラウンド／指定ラウンドまで）
+      if (unit.flags.buff && unit.flags.buff.until >= round) { ctx.mult *= unit.flags.buff.mult; ctx.notes.push(unit.flags.buff.name || "鼓舞"); }
       const ledgerParent = unit.side === "player" ? ledgerBoost : null;
       if (ledgerParent) {
         ctx.mult *= 1.4;
@@ -744,17 +810,19 @@ const Battle = {
         ctx.notes.push("追い剥ぎコンビ");
         lootPairBoost = null;
       }
-      // 戦意は魔王軍のもの。積み上がった倍率がそのまま数字に出る。
-      if (unit.side === "player" && momentum > 0) ctx.mult *= 1 + momentum;
       const variance = 0.9 + U.rand() * 0.2;
       const raw = unit.atk * ctx.mult * variance * (actionOpts.mult || 1);
       const amount = Math.max(1, Math.round(raw) - Math.floor(target.def / 2));
       if (ctx.notes.length) {
         note(`　${unit.name}の特性（${ctx.notes.join("・")}！）`, "trait");
       }
+      // 号令・指示で大技を放つ本人の一撃：技の fx と big を乗せる（余波は skillTrigger の親から継承）
+      const bigSkill = ordered ? (unit.traits || []).map(t => UPPER_BY_TRAIT[t]).find(Boolean) || null : null;
       const applied = applyDamage(unit, target, amount, "attack", {
         traits: ctx.notes,
         label: actionOpts.label || null,
+        skillId: actionOpts.skillId || (bigSkill && bigSkill.id) || null, fx: actionOpts.fx || (bigSkill ? fxOf(bigSkill) : null),
+        big: !!bigSkill,
         parentEvent: actionOpts.parentEvent || ledgerParent || null
       });
       const dmg = applied.dmg;
@@ -789,7 +857,7 @@ const Battle = {
         }
       }
       const post = {
-        attacker: unit, target, dmg, enemies, allies, round, onField, log: note, pick: U.pick, ordered,
+        attacker: unit, target, dmg, enemies, allies, round, onField, log: note, pick: U.pick, chance: U.chance, ordered,
         trigger: traitId => skillTrigger(unit, traitId, applied.event),
         dealRaw: (a, t, d, label, parentEvent) => applyDamage(a, t, d, "splash", { label, parentEvent: parentEvent || applied.event }).dmg,
         extraAction: (parentEvent, label) => act(unit, allies, enemies, round, { parentEvent, label, isExtra: true }),
@@ -828,12 +896,222 @@ const Battle = {
       // 号令の代償。全力を出した次の手番は息が上がって動けない（大食漢の stuffed と同じ形）。
       if (ordered) { const manual = !!unit.flags.orderedManual; unit.flags.ordered = false; unit.flags.orderedManual = false; if (!manual) unit.flags.winded = true; }
       if (unit.flags.bigMove) unit.flags.bigMove = false;
+      // 斥候（敵 rogue）：殴った相手の気合を奪う
+      if (unit.side === "enemy" && unit.role === "rogue" && target.side === "player" && typeof target.spirit === "number" && target.spirit > 0 && U.chance(0.3)) {
+        target.spirit -= 1;
+        spiritSpent[target.uid] = (spiritSpent[target.uid] || 0) + 1;
+        note(`　${unit.name}が${target.name}の気合を奪った`, "trait");
+      }
+      return dmg;
     };
 
-    const wiped = us => us.every(u => !u.alive);
+    // ── 技の解決（指示窓で選んだ技）。cover/buff/scatter は指示の直後に効き、ほかは本人の手番で ──
+    // 技・敵の役割の差し込み口（2026-09-12）。src/core/skill_effects.js の SKILL_EFFECTS / ENEMY_ROLES が
+    // 新しい kind / role を登録できる。battle.js を触らずに技と行動パターンを増やすための口。
+    const FX = typeof SKILL_EFFECTS !== "undefined" ? SKILL_EFFECTS : {};
+    const ROLES = typeof ENEMY_ROLES !== "undefined" ? ENEMY_ROLES : {};
+    const hookCtx = (unit, sk, cmd, allies, enemies, round) => ({
+      unit, skill: sk, cmd: cmd || {}, allies, enemies, round, options,
+      living: enemies.filter(onField), onField, timeline, U, rand: U.rand, chance: U.chance, pick: U.pick,
+      playerUnits, enemyUnits,
+      applyDamage, act, note, emit, emitCausal, pickTarget, lowestAlly, moveBack, gainBattleResource, gainSpirit,
+      summon: (spec, parent) => summonUnit(unit, spec, parent || null),
+      pickEnemy: () => (cmd && cmd.targetId && enemies.find(e => e.id === cmd.targetId && onField(e))) || (enemies.some(onField) ? pickTarget(unit, enemies.filter(onField), round) : null),
+      heal: (t, ratio, label) => {
+        const amount = Math.min(t.maxHp - t.hp, Math.ceil(t.maxHp * ratio));
+        if (amount <= 0) return 0;
+        t.hp += amount;
+        emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: label || (sk && sk.name) || null, skillId: cmd && cmd.id || null, fx: fxOf(sk), emphasis: 1 }, null);
+        return amount;
+      },
+      damage: (target, mult, label, extra) => {
+        const raw = unit.atk * mult * (0.9 + U.rand() * 0.2) * (unit.mods.dmgMult || 1);
+        return applyDamage(unit, target, Math.max(1, Math.round(raw) - Math.floor(target.def / 2)), "attack", Object.assign({ label, traits: label ? [label] : [], skillId: cmd && cmd.id || null, fx: fxOf(sk) }, extra || {})).dmg;
+      }
+    });
+    const resolveSkill = (unit, sk, cmd, allies, enemies, round) => {
+      if (!sk) return;
+      const living = enemies.filter(onField);
+      if (sk.hit !== undefined && !U.chance(sk.hit)) {
+        const miss = U.pick((sk.lines && sk.lines.miss) || ["外れた"]);
+        emit("note", { unitId: unit.id, skillMiss: true, skillId: cmd.id, emphasis: 1, text: `　${unit.name}の【${sk.name}】は外れた「${miss}」`, cls: "trait" });
+        return;
+      }
+      const pickEnemy = () => (cmd.targetId && living.find(e => e.id === cmd.targetId)) || (living.length ? pickTarget(unit, living, round) : null);
+      const fx = fxOf(sk), skillId = cmd.id || null;
+      const heal = (t, ratio) => {
+        const amount = Math.min(t.maxHp - t.hp, Math.ceil(t.maxHp * ratio));
+        if (amount <= 0) return;
+        t.hp += amount;
+        emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: sk.name, skillId, fx, emphasis: 1 }, null);
+      };
+      switch (sk.kind) {
+        case "strike": case "debuff": case "steal": {
+          const target = pickEnemy();
+          let dmg = 0;
+          if (target && sk.power) dmg = act(unit, allies, enemies, round, { target, mult: sk.power, label: sk.name, skillId, fx }) || 0;
+          if (sk.splash && target) {
+            const other = living.find(e => e !== target && onField(e));
+            if (other) applyDamage(unit, other, Math.max(1, Math.round(unit.atk * sk.power * sk.splash) - Math.floor(other.def / 2)), "splash", { label: sk.name, skillId, fx });
+          }
+          if (sk.atkDown && target && target.alive) { target.atk = Math.max(1, target.atk - sk.atkDown); note(`　${target.name}の攻撃力が${sk.atkDown}下がった（残${target.atk}）`, "trait"); }
+          if (sk.push && target && target.alive) moveBack(enemies, target);
+          if (sk.gold) gainBattleResource(unit, "gold", sk.gold, sk.name, null);
+          if (sk.recoil && dmg > 0 && unit.alive) applyDamage(unit, unit, Math.max(1, Math.round(dmg * sk.recoil)), "splash", { label: "反動", incident: true });
+          break;
+        }
+        case "aoe": {
+          for (const e of living) {
+            if (!onField(e)) continue;
+            const raw = unit.atk * sk.power * (0.9 + U.rand() * 0.2) * (unit.mods.dmgMult || 1);
+            applyDamage(unit, e, Math.max(1, Math.round(raw) - Math.floor(e.def / 2)), "attack", { label: sk.name, traits: [sk.name], skillId, fx, aoe: true });
+            if (sk.burn && e.alive) e.flags.burn = { at: round + 1, source: unit, parentEvent: null };
+          }
+          // 火の粉：味方側の全体技は、前列（配置順で先頭）の味方1体を巻き込むことがある
+          if (unit.side === "player" && SPARK.chance > 0 && U.chance(SPARK.chance)) {
+            const front = allies.find(a => a !== unit && onField(a) && !a.flags.summoned);
+            if (front && front.hp > SPARK.damage) {
+              applyDamage(unit, front, SPARK.damage, "splash", { label: "火の粉", traits: ["火の粉"], skillId, fx, incident: true, spark: true });
+              emit("note", { unitId: front.id, spark: true, skillId, emphasis: 1, text: `　${unit.name}の【${sk.name}】の火の粉が${front.name}に飛んだ`, cls: "trait" });
+              if (front.uid !== null && front.uid !== undefined) sparked.push({ uid: front.uid, byUid: unit.uid, skillId });
+              // 増殖の元：火の火の粉を浴びたスライムは、次のラウンドから分身を出す（生き残っていれば）
+              if (slimeSplitOn && fx === "fire" && front.race === "スライム" && front.alive && !front.flags.split) {
+                front.flags.split = { count: 0, byUid: unit.uid, skillId, parent: timeline[timeline.length - 1] || null };
+                emit("note", { unitId: front.id, split: true, emphasis: 2, text: `　${front.name}の体が、火を浴びてぶるぶると震えている……`, cls: "trait" });
+              }
+            }
+          }
+          if (sk.winded) unit.flags.winded = true;
+          break;
+        }
+        case "heal": {
+          if (sk.target === "all_allies") for (const a of allies.filter(onField)) heal(a, sk.power);
+          else { const t = (cmd.targetId && allies.find(a => a.id === cmd.targetId && onField(a))) || lowestAlly(allies, null); if (t) heal(t, sk.power); }
+          break;
+        }
+        case "rest": heal(unit, sk.power); break;
+        case "stun": {
+          const target = pickEnemy(); if (!target) break;
+          if (U.chance(sk.chance || 0.5)) { target.flags.stunned = true; note(`　${target.name}は${sk.name}で動けない`, "trait"); }
+          else {
+            note(`　${target.name}は${sk.name}を振り払った`, "trait");
+            if (sk.retaliate && onField(target)) act(target, enemies, allies, round, { target: unit, label: "反撃", isExtra: true });
+          }
+          break;
+        }
+        case "charm": {
+          const target = pickEnemy(); if (!target) break;
+          if (U.chance(sk.chance || 0.5)) { target.flags.charmed = true; note(`　${target.name}は${unit.name}に魅入られた`, "trait"); }
+          else emit("note", { unitId: unit.id, skillMiss: true, emphasis: 1, text: `　${unit.name}の【${sk.name}】は効かなかった「${U.pick((sk.lines && sk.lines.miss) || ["……"])}」`, cls: "trait" });
+          break;
+        }
+        case "revive": {
+          const fallen = allies.filter(a => !a.alive && !a.flags.summoned);
+          const t = (cmd.targetId && fallen.find(a => a.id === cmd.targetId)) || fallen[0];
+          if (!t) { note(`　${unit.name}の【${sk.name}】……起こす者がいない`, "trait"); break; }
+          const death = [...timeline].reverse().find(e => e.type === "death" && e.unitId === t.id) || null;
+          t.alive = true; t.hp = Math.max(1, Math.round(t.maxHp * sk.power));
+          t.flags.wasRevived = true;
+          emitCausal("revive", { unitId: t.id, sourceId: unit.id, skillId: cmd.id, fx, hp: t.hp, maxHp: t.maxHp, emphasis: 3 }, death);
+          if (sk.selfHp) { unit.hp = Math.max(1, unit.hp - Math.round(unit.maxHp * sk.selfHp)); note(`　${unit.name}は代償に身を削った（残HP ${unit.hp}）`, "trait"); }
+          break;
+        }
+        case "random": {
+          const pick = U.pick(sk.table || []); if (!pick) break;
+          note(`　${unit.name}の【${sk.name}】……${pick.name || "何か"}が出た！`, "trait");
+          resolveSkill(unit, Object.assign({ name: sk.name, lines: {} }, pick), cmd, allies, enemies, round);
+          break;
+        }
+        default: {
+          const fx = FX[sk.kind];
+          if (fx && typeof (fx.resolve || fx) === "function") (fx.resolve || fx)(hookCtx(unit, sk, cmd, allies, enemies, round));
+          break;
+        }
+      }
+    };
+    // 指示の直後に効く技（かばう・鬨の声・かく乱）。本人の手番では身構えるだけ。
+    const applyImmediateSkill = (unit, sk, cmd, round) => {
+      const fx = FX[sk.kind];
+      if (fx && fx.immediate) { fx.immediate(hookCtx(unit, sk, cmd, playerUnits, enemyUnits, round)); return true; }
+      if (sk.kind === "cover") {
+        const t = (cmd.targetId && playerUnits.find(a => a.id === cmd.targetId && onField(a) && a !== unit)) || lowestAlly(playerUnits, unit);
+        if (t) { unit.flags.covering = t.id; unit.flags.coverRatio = sk.power || 0.6; emit("note", { unitId: unit.id, forId: t.id, fx: "shield", covering: true, emphasis: 1, text: `　${unit.name}が${t.name}の前に立つ`, cls: "trait" }); }
+        return true;
+      }
+      if (sk.kind === "buff") {
+        for (const a of playerUnits.filter(onField)) a.flags.buff = { mult: sk.power || 1.3, until: round, name: sk.name };
+        emit("note", { unitId: unit.id, fx: fxOf(sk) || "aura", buff: true, targets: playerUnits.filter(onField).map(a => a.id), emphasis: 1, text: `　${unit.name}の${sk.name}で味方が奮い立つ`, cls: "trait" });
+        return true;
+      }
+      if (sk.kind === "scatter") { scatterUntil = round + 1; unit.flags.decoyUntil = round + 1; return true; }
+      return false;
+    };
+    // 敵の役割：次のラウンドの行動を決める（構えは prompt の intent に出る）。乱数は指示のあとで消費する。
+    const planEnemy = (e, nextRound) => {
+      const custom = ROLES[e.role];
+      if (custom && typeof custom.plan === "function") {
+        const plan = custom.plan(hookCtx(e, null, null, enemyUnits, playerUnits, nextRound), nextRound);
+        if (plan !== undefined) return plan;      // undefined＝既定の規則に任せる
+      }
+      const mates = enemyUnits.filter(onField);
+      if (e.role === "priest") {
+        const hurt = mates.filter(m => m.hp < m.maxHp * 0.6).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+        if (hurt) return { kind: "heal", targetId: hurt.id, intent: "heal" };
+      }
+      if (e.role === "caster" && nextRound % 2 === 0) return { kind: "aoe", intent: "aoe" };
+      if (e.role === "shield") {
+        const weak = mates.filter(m => m !== e && m.hp <= m.maxHp * 0.5).sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0];
+        if (weak) return { kind: "cover", targetId: weak.id, intent: "guard" };
+        if (U.chance(0.4)) return { kind: "guard", intent: "guard" };
+      }
+      if (e.role === "commander" && nextRound === 1) return { kind: "buff", intent: null };
+      return null;
+    };
+    const planEnemies = (nextRound) => {
+      for (const e of enemyUnits.filter(onField)) {
+        e.flags.plan = planEnemy(e, nextRound);
+        if (e.flags.plan && e.flags.plan.intent) {
+          const word = e.flags.plan.text || { heal: "仲間を癒やそうとしている", aoe: "全体への術を練っている", guard: "盾を構えた" }[e.flags.plan.intent] || "何かを企んでいる";
+          emit("intent", { unitId: e.id, name: e.name, intent: e.flags.plan.intent, emphasis: 1, text: `　${e.name}が${word}`, cls: "trait" });
+        }
+      }
+    };
+    // 敵の計画の実行。true を返したら通常攻撃はしない。
+    const runEnemyPlan = (unit, plan, allies, enemies, round) => {
+      const custom = ROLES[unit.role];
+      if (custom && typeof custom.run === "function") {
+        const handled = custom.run(hookCtx(unit, null, null, allies, enemies, round), plan);
+        if (handled !== undefined) return !!handled;
+      }
+      if (plan.kind === "heal") {
+        const t = allies.find(a => a.id === plan.targetId && onField(a)) || lowestAlly(allies, null);
+        if (!t) return false;
+        const amount = Math.min(t.maxHp - t.hp, Math.ceil(t.maxHp * 0.25));
+        if (amount > 0) { t.hp += amount; emitCausal("heal", { unitId: t.id, amount, hp: t.hp, maxHp: t.maxHp, sourceId: unit.id, label: "癒やし", fx: "holy", emphasis: 1 }, null); }
+        note(`　${unit.name}が${t.name}を癒やした`, "trait");
+        return true;
+      }
+      if (plan.kind === "aoe") {
+        for (const p of enemies.filter(onField)) {
+          const raw = unit.atk * 0.6 * (0.9 + U.rand() * 0.2);
+          applyDamage(unit, p, Math.max(1, Math.round(raw) - Math.floor(p.def / 2)), "attack", { label: "全体攻撃", traits: ["術"], fx: "fire", aoe: true });
+        }
+        return true;
+      }
+      // guard / cover は指示の直後に立てている。手番は身構えるだけ。
+      if (plan.kind === "guard" || plan.kind === "cover") { emit("note", { unitId: unit.id, guarding: true, emphasis: 1, text: `　${unit.name}は守りに入っている`, cls: "trait" }); return true; }
+      if (plan.kind === "buff") {
+        for (const a of allies.filter(onField)) a.flags.buff = { mult: 1.2, until: round + 1, name: "隊長の号令" };
+        emit("note", { unitId: unit.id, fx: "aura", buff: true, emphasis: 1, text: `　${unit.name}「全軍、押せ！」 敵の攻撃が高まった（2ラウンド）`, cls: "trait" });
+        return true;
+      }
+      return false;
+    };
+
+    const wiped = us => us.every(u => !u.alive || u.flags.spared);   // 見逃した／雇った敵将は数に入れない（生きたまま去った）
     const all = () => [...playerUnits, ...enemyUnits];
     const tryGraveyardSummon = () => {
-      if (!options.graveyard || graveyardUsed >= facilityWorks) return null;
+      if (!options.graveyard || graveyardUsed >= worksOf("graveyard")) return null;
       const pending = graveyardQueue[graveyardUsed];
       if (!pending) return null;
       graveyardUsed += 1;
@@ -911,21 +1189,27 @@ const Battle = {
     // 戦闘計算・乱数には一切関与しない（permanent / reversal と同じ性格）。
     // simulate() はここで止まらず最後まで計算する＝「続けた場合の結末」を返す。
     // 止めるかどうかは run.js（settleBattle）と描画側の判断。
-    let retreatOffer = null;
-    // 号令の節目。options.offerOrder のときだけ、1戦闘1回。提案の位置と候補を印として置く。
-    // 答え（options.orders[round] = unitId）があれば次ラウンド冒頭で実行する。
-    // 提案イベントは答えの有無に関わらず同じ位置に出す（同じ種で計算し直したとき、前半が一致するため）。
-    // 節目は戦況が動くたびに来る（1ラウンドに1回、回数の上限なし。気合と息切れが連打を抑える）。
-    const orderOffers = [];
-    const orders = options.orders || {};
+    let retreatOffer = null;             // 退く道（自動戦闘の提案）か、コマンドで退いたときの戦果
     let retreatedManual = false;        // コマンドで退いた（result.retreated）
+    const spared = [];                  // 見逃した／雇った敵将 [{ id, name, kind }]（result.spared。run.js が st.captains へ）
     const spiritSpent = {};             // uid → 技で払った気合（run.js が名簿へ反映）
-    const offerAtRound = r => orderOffers.find(o => o.round === r) || null;
 
     outer:
     for (round = 1; round <= this.MAX_ROUNDS; round++) {
       emit("round_start", { round, emphasis: 1, text: `── ラウンド ${round} ──`, cls: "round" });
       const deadAtRoundStart = all().filter(u => !u.alive).length;
+
+      // 増殖の元：火の粉を浴びたスライムが、ラウンドの頭に分身を1体出す（1戦に cap まで）
+      for (const u of playerUnits.filter(x => x.flags.split && onField(x))) {
+        const sp = u.flags.split;
+        if (sp.count >= slimeSplitCap) continue;
+        sp.count += 1;
+        summonUnit(u, { name: `${u.name}の分身`, race: u.race, tplId: u.tplId, job: "分身",
+          maxHp: Math.max(1, Math.round(u.maxHp * SLIME_SPLIT.hpRatio)), atk: SLIME_SPLIT.atk, def: 0, spd: u.spd }, sp.parent);
+        let rec = slimeSplit.find(r => r.uid === u.uid);
+        if (!rec) { rec = { uid: u.uid, byUid: sp.byUid, skillId: sp.skillId, count: 0 }; slimeSplit.push(rec); }
+        rec.count = sp.count;
+      }
 
       // 遅刻者の到着。その場にいなかった者が、途中から戦場に立つ。
       // 味方が全員倒れたあとに一人で着くこともある。それはそれで、そういう戦いだったということ。
@@ -947,57 +1231,72 @@ const Battle = {
         const burn = target.flags.burn;
         delete target.flags.burn;
         applyDamage(burn.source, target, Math.ceil(target.maxHp * 0.08), "splash", {
-          label: "燃焼", parentEvent: burn.parentEvent || null
+          label: "燃焼", parentEvent: burn.parentEvent || null, big: false   // 燃焼は毎ラウンドの削り。大技の演出は継承しない
         });
       }
 
-      // 号令の実行。前ラウンド末の提案に答えがあれば、本人を真っ先に動かす。
-      // 倒れていれば号令は空振り（何も起きない）。乱数はここでは消費しない（台詞は pick で1回だけ消費）。
-      let orderedUnit = null;
-      const prevOffer = offerAtRound(round - 1);
-      if (prevOffer && orders[prevOffer.round]) {
-        const cand = prevOffer.candidates.find(c => c.unitId === orders[prevOffer.round]);
-        const unit = cand ? playerUnits.find(u => u.id === cand.unitId) : null;
-        if (cand && unit && onField(unit)) {
-          unit.flags.ordered = true;
-          orderedUnit = unit;
-          const tr = TRAITS[cand.skillId] || {};
-          const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
-          emit("order_exec", {
-            unitId: unit.id, name: unit.name, skillId: cand.skillId, skillName: cand.skillName, label: cand.label, quote, emphasis: 3,
-            text: `　魔王「${unit.name}、${cand.label}！」 ${unit.name}「${quote}」`, cls: "order"
-          });
-        }
-      }
       // ── コマンド（手動）。ラウンドの頭で止まり、味方それぞれの指示を受ける ──
       // 乱数はここでは消費しない。指示：attack（target 任意）／guard／skill／auto。retreat: true で退く。
-      for (const u of playerUnits) u.flags.guarding = false;
+      for (const u of all()) { u.flags.guarding = false; u.flags.eating = false; u.flags.covering = null; u.flags.skillCmd = null; u.flags.orderCall = null; }
+      if (round === 1) planEnemies(1);
+      // 敵の守り（盾役の計画）はラウンドの頭から効く
+      for (const e of enemyUnits.filter(onField)) {
+        const plan = e.flags.plan;
+        if (plan && plan.kind === "guard") e.flags.guarding = true;
+        if (plan && plan.kind === "cover") { e.flags.covering = plan.targetId; e.flags.coverRatio = 0.6; }
+      }
       let commands = {};
       if (options.manual) {
         const corps = playerUnits.filter(u => !u.flags.summoned);
         const downed = corps.filter(u => !u.alive);
         const standing = corps.filter(onField);
         const canRetreat = !options.noRetreatOffer && downed.length > 0 && standing.length > 0 && !wiped(enemyUnits);
+        // 見逃す／雇う（敵将、docs/SPEC_CAPTAINS_BD_2026-09-15.md）：敵将が立っていて HP 30% 以下なら一度だけ出る。
+        const spareTarget = enemyUnits.find(u => onField(u) && u.captain && !u.flags.spareOffered && u.hp <= u.maxHp * 0.3) || null;
+        const canSpare = spareTarget ? { id: spareTarget.id, captainId: spareTarget.captain.id, name: spareTarget.name, kind: spareTarget.captain.offer || "spare" } : null;
         const prompt = {
           type: "commands", round,
           allies: playerUnits.filter(onField).map(u => {
-            const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
-            const tr = skillId ? TRAITS[skillId] : null;
-            const cost = tr ? Math.max(0, Number(tr.order.cost) || 0) : 0;
             const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
+            // 技の一覧：種族技（SKILLS）→ 上位技（TRAITS.order）。skill は先頭（互換）。
+            // 技の一覧は SKILLS が正本：種族技（u.skills）→ 上位技（kind "trait"：その癖を持っていれば並ぶ）
+            const skills = [];
+            for (const sid of unitSkillIds(u)) {
+              const sk = SK[sid]; if (!sk) continue;
+              const why = skillWhy(u, sk, spirit);
+              const debut = isDebut(u, sk);
+              skills.push({ id: sid, name: sk.name, label: sk.label || sk.name, note: sk.note || "", cost: debut ? 0 : (sk.cost || 0), kind: sk.kind, target: sk.target, ready: !why, why, debut });
+            }
             return {
-              id: u.id, uid: u.uid, name: u.name, hp: u.hp, maxHp: u.maxHp, spirit,
-              winded: !!u.flags.winded, stuffed: !!u.flags.stuffed, mercenary: !!u.flags.mercenary, summoned: !!u.flags.summoned,
-              skill: tr ? { id: skillId, name: tr.name, label: tr.order.label, note: tr.order.note || "", cost,
-                ready: !u.flags.winded && !u.flags.mercenary && (spirit === null || spirit >= cost) } : null
+              id: u.id, uid: u.uid, name: u.name, hp: u.hp, maxHp: u.maxHp, spirit, spiritMax: SPIRIT_MAX + (u.spiritMaxBonus || 0),
+              winded: !!u.flags.winded, stuffed: !!u.flags.stuffed, summoned: !!u.flags.summoned,
+              skills, skill: skills[0] || null,
+              eat: { ready: canEat() && !u.flags.summoned, left: Math.max(0, Math.min(eatRules.spare, eatRules.limit) - rationsEaten), heal: eatRules.heal }
             };
           }),
+          fallen: playerUnits.filter(u => !u.alive && !u.flags.summoned).map(u => ({ id: u.id, name: u.name })),
           enemies: enemyUnits.filter(onField).map(u => ({
-            id: u.id, name: u.name, hp: u.hp, maxHp: u.maxHp, intent: u.flags.charging ? "big" : "attack"
+            id: u.id, name: u.name, hp: u.hp, maxHp: u.maxHp, role: u.role, captain: u.captain ? u.captain.id : null,
+            intent: u.flags.charging ? "big" : (u.flags.plan && u.flags.plan.intent) || "attack",
+            // 盾役に守られている敵。狙っても盾役が受ける（狙い選びで見せる）
+            coveredBy: (enemyUnits.find(c => onField(c) && c !== u && c.flags.covering === u.id && !c.flags.guarding) || {}).id || null
           })),
-          canRetreat, downed: downed.map(u => u.name), timelineLength: timeline.length
+          canRetreat, downed: downed.map(u => u.name), canSpare, timelineLength: timeline.length
         };
         commands = (yield prompt) || {};
+        if (commands.spare && canSpare) {
+          // 見逃す／雇う。敵将は戦場を去る（討ったことにはならない）。残りの敵との戦いは続く。一度断れば同じ戦闘では二度と出ない
+          spareTarget.flags.spareOffered = true;
+          spareTarget.flags.absent = true;
+          spareTarget.flags.spared = canSpare.kind;
+          spared.push({ id: canSpare.captainId, unitId: spareTarget.id, name: spareTarget.name, kind: canSpare.kind });
+          emit("spare", {
+            unitId: spareTarget.id, captainId: canSpare.captainId, name: spareTarget.name, kind: canSpare.kind, emphasis: 3,
+            text: canSpare.kind === "hire" ? `　${spareTarget.name}は膝をついた。魔王軍に加わる` : `　${spareTarget.name}は退いた。魔王は見逃した`, cls: "mormo"
+          });
+        } else if (spareTarget) {
+          spareTarget.flags.spareOffered = true;   // 断った（討つ）。同じ戦闘では二度と聞かない
+        }
         if (commands.retreat && canRetreat) {
           // 退く。倒れていた者は担いで帰る（撤退の提案と同じ導出）。
           const enemiesLeft = enemyUnits.filter(onField);
@@ -1005,8 +1304,8 @@ const Battle = {
             round, emphasis: 3, downed: downed.map(snap), standing: standing.map(snap), enemies: enemiesLeft.map(snap),
             manual: true, text: `　魔王軍、退く。${downed.map(u => u.name).join("、")}を担いで城へ戻った`, cls: "mormo"
           });
-          const contribution = this.summarizeContribution(timeline, playerUnits).map(row => {
-            if (row.mercenary || row.survived) return row;
+          const contribution = this.summarizeContribution(timeline, playerUnits, actions).map(row => {   // 手番の記録（actions）も渡す。退いた戦いでも成長の偏りが効く（2026-09-15）
+            if (row.survived) return row;
             return { ...row, survived: true, injured: true };
           });
           retreatOffer = { index: timeline.indexOf(event), round, contribution };
@@ -1019,20 +1318,52 @@ const Battle = {
           if (!c || !onField(u)) continue;
           if (c.cmd === "guard") {
             u.flags.guarding = true;
+          } else if (c.cmd === "eat") {
+            // 食べる：手番で携行食を1つ食べる。隊の上限と備蓄を見て、無理なら「たたかう」に落とす
+            if (canEat() && !u.flags.summoned) { u.flags.eating = true; rationsEaten += 1; }
           } else if (c.cmd === "skill") {
-            const skillId = u.traits.find(tid => TRAITS[tid] && TRAITS[tid].order);
-            const tr = skillId ? TRAITS[skillId] : null;
-            const cost = tr ? Math.max(0, Number(tr.order.cost) || 0) : 0;
             const spirit = (u.spirit === undefined || u.spirit === null) ? null : u.spirit;
-            if (tr && !u.flags.winded && !u.flags.mercenary && (spirit === null || spirit >= cost)) {
-              if (spirit !== null) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
-              u.flags.ordered = true;
-              u.flags.orderedManual = true;
-              const quote = U.pick((tr.lines && tr.lines.order) || ["……はっ！"]);
-              emit("order_exec", {
-                unitId: u.id, name: u.name, skillId, skillName: tr.name, label: tr.order.label, quote, cost, manual: true, emphasis: 3,
-                text: `　魔王「${u.name}、${tr.order.label}！」 ${u.name}「${quote}」`, cls: "order"
-              });
+            const ids = unitSkillIds(u);
+            const sid = c.skill || ids[0];
+            const sk = ids.includes(sid) ? SK[sid] : null;
+            if (sk && sk.kind === "trait") {
+              // 上位技：気合を払い、次の一撃で癖の条件を飛ばす（号令の manual 版。+50% も息切れも無い）
+              if (!skillWhy(u, sk, spirit)) {
+                const tr = TRAITS[sk.trait] || {};
+                const debut = isDebut(u, sk);
+                const cost = debut ? 0 : (sk.cost || 0);
+                if (spirit !== null && cost > 0) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
+                if (debut) { u.flags.debutUsed = true; debutShown.push(u.uid); }
+                u.flags.ordered = true;
+                u.flags.orderedManual = true;
+                const quote = U.pick(debut ? ((tr.lines && (tr.lines.unlock || tr.lines.order)) || ["……体が、覚えている"]) : ((tr.lines && tr.lines.order) || ["……はっ！"]));
+                // 台詞と技名は本人の手番（skill_call）で出す。order_exec は指示の記録として残す（quiet）
+                u.flags.orderCall = { skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, fx: fxOf(sk), target: "enemy", debut, cost };
+                emit("order_exec", {
+                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, cost, manual: true, debut, fx: fxOf(sk), target: "enemy", emphasis: 3, quiet: true,
+                  text: `　魔王「${u.name}、${sk.label || sk.name}！」 ${u.name}「${quote}」`, cls: "order"
+                });
+              }
+              continue;
+            }
+            if (sk) {
+              // 種族技。理由があれば「たたかう」に落ちる。
+              if (!skillWhy(u, sk, spirit)) {
+                const cost = sk.cost || 0;
+                if (spirit !== null) { u.spirit = spirit - cost; spiritSpent[u.uid] = (spiritSpent[u.uid] || 0) + cost; }
+                const quote = U.pick((sk.lines && sk.lines.use) || ["……はっ！"]);
+                const cmd = { id: sid, targetId: c.target || null };
+                const call = { skillId: sid, skillName: sk.name, label: sk.label || sk.name, quote, fx: fxOf(sk), target: sk.target, debut: false, cost };
+                emit("order_exec", {
+                  unitId: u.id, name: u.name, skillId: sid, skillName: sk.name, label: sk.name, quote, cost, manual: true, species: true, fx: fxOf(sk), target: sk.target, emphasis: 3, quiet: true,
+                  text: `　魔王「${u.name}、${sk.name}！」 ${u.name}「${quote}」`, cls: "order"
+                });
+                // 指示の直後に効く技（かばう・鬨の声・かく乱）は今ここで台詞。それ以外は本人の手番で
+                if (applyImmediateSkill(u, sk, cmd, round)) { cmd.done = true; emit("skill_call", Object.assign({ unitId: u.id, name: u.name, emphasis: 3, text: `　${u.name}「${quote}」【${sk.name}】`, cls: "order" }, call)); }
+                else u.flags.orderCall = call;
+                u.flags.skillCmd = cmd;
+              }
+              continue;
             }
           }
         }
@@ -1045,7 +1376,10 @@ const Battle = {
         const gale = order.find(unit => unit.traits.includes("gale"));
         if (gale) { order.splice(order.indexOf(gale), 1); order.unshift(gale); }
       }
-      if (orderedUnit) { order.splice(order.indexOf(orderedUnit), 1); order.unshift(orderedUnit); }
+      // 技の順番の制限：last は列の最後へ、first は最初へ（号令の先頭固定より後）
+      const skOrder = u => (u.flags.skillCmd && SK[u.flags.skillCmd.id] || {}).order;
+      for (const u of order.filter(u => skOrder(u) === "last")) { order.splice(order.indexOf(u), 1); order.push(u); }
+      for (const u of order.filter(u => skOrder(u) === "first").reverse()) { order.splice(order.indexOf(u), 1); order.unshift(u); }
       let rescuedThisRound = false;
       for (const unit of order) {
         if (!unit.alive) continue;
@@ -1070,16 +1404,52 @@ const Battle = {
         const enemies = unit.side === "player" ? enemyUnits : playerUnits;
         // まもる：この手番は攻撃しない（被ダメ半減は applyDamage）。
         if (unit.side === "player" && unit.flags.guarding) {
+          countAction(unit, "guard");
           emit("note", { unitId: unit.id, guarding: true, emphasis: 1, text: `　${unit.name}は身を守っている`, cls: "trait" });
           continue;
         }
-        // 敵の大技：構えた次のラウンドに放つ（act の bigMove）。構えるのは2ラウンド目以降、たまに。
+        // 食べる：この手番は携行食を食べて HP を戻す（攻撃しない）
+        if (unit.side === "player" && unit.flags.eating) {
+          unit.flags.eating = false;
+          countAction(unit, "eat");
+          const amount = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * eatRules.heal));
+          if (amount > 0) unit.hp += amount;
+          emitCausal("heal", { unitId: unit.id, amount, hp: unit.hp, maxHp: unit.maxHp, sourceId: unit.id, label: "携行食", eat: true, fx: "holy", emphasis: 2 }, null);
+          emit("note", { unitId: unit.id, eat: true, emphasis: 1, text: `　${unit.name}は携行食を食べた（+${amount}）`, cls: "food" });
+          continue;
+        }
+        // 動けない（粘りつく）／魅入られた（同僚を殴る）
+        if (unit.flags.stunned) {
+          unit.flags.stunned = false;
+          emit("note", { unitId: unit.id, stunned: true, emphasis: 1, text: `　${unit.name}は動けない`, cls: "trait" });
+          continue;
+        }
+        if (unit.flags.charmed) {
+          unit.flags.charmed = false;
+          const mates = allies.filter(u => onField(u) && u !== unit);
+          if (mates.length) {
+            const mate = U.pick(mates);
+            note(`　${unit.name}は魅入られたまま${mate.name}に斬りかかった`, "trait");
+            applyDamage(unit, mate, Math.max(1, Math.round(unit.atk * 0.7)), "splash", { label: "魅惑", incident: true });
+            continue;
+          }
+        }
+        // 敵の大技：構えた次のラウンドに放つ（act の bigMove）。構えるのは2ラウンド目以降、たまに（brute は多め）。
         // 構えは1ラウンド攻撃を捨てるので、まもるで受ければ得、放置すれば痛い。自動戦闘でも同じ規則。
+        // 役割の計画（癒やし・全体・守り・号令）は前ラウンド末に決めてある。
         if (unit.side === "enemy") {
           if (unit.flags.charging) {
             unit.flags.charging = false;
             unit.flags.bigMove = true;
-          } else if (round >= 2 && !unit.flags.summoned && ENEMY_BIG_MOVE.chance > 0 && U.chance(ENEMY_BIG_MOVE.chance)) {
+          } else if (unit.flags.plan) {
+            const plan = unit.flags.plan;
+            unit.flags.plan = null;
+            if (runEnemyPlan(unit, plan, allies, enemies, round)) {
+              if (wiped(playerUnits)) { if (!resolveRecoveryHooks(true, "player")) break outer; rescuedThisRound = true; break; }
+              continue;
+            }
+          } else if (round >= 2 && !unit.flags.summoned && ENEMY_BIG_MOVE.chance > 0
+            && U.chance(unit.role === "brute" ? Math.max(ENEMY_BIG_MOVE.chance, 0.3) : ENEMY_BIG_MOVE.chance)) {
             unit.flags.charging = true;
             emit("intent", { unitId: unit.id, name: unit.name, intent: "big", emphasis: 2,
               text: `　${unit.name}が大技の構えを見せた`, cls: "trait" });
@@ -1087,8 +1457,22 @@ const Battle = {
           }
         }
         const manualCmd = options.manual ? commands[unit.id] : null;
-        act(unit, allies, enemies, round, manualCmd && manualCmd.target
-          ? { target: enemies.find(e => e.id === manualCmd.target) || null } : undefined);
+        // 技の台詞と技名は、本人が実際に繰り出す瞬間に出す（ラウンド頭に言って、出す前に倒れる、を防ぐ）
+        if (unit.flags.orderCall && unit.alive) {
+          const call = unit.flags.orderCall; unit.flags.orderCall = null;
+          emit("skill_call", Object.assign({ unitId: unit.id, name: unit.name, emphasis: 3, text: `　${unit.name}「${call.quote}」【${call.skillName}】`, cls: "order" }, call));
+        }
+        if (unit.flags.skillCmd) {
+          const cmd = unit.flags.skillCmd;
+          unit.flags.skillCmd = null;
+          countAction(unit, unit.flags.covering ? "cover" : "skill");
+          if (cmd.done) { emit("note", { unitId: unit.id, guarding: true, emphasis: 1, text: `　${unit.name}は身構えている`, cls: "trait" }); }
+          else resolveSkill(unit, SK[cmd.id], cmd, allies, enemies, round);
+        } else {
+          countAction(unit, "attack");
+          act(unit, allies, enemies, round, manualCmd && manualCmd.target
+            ? { target: enemies.find(e => e.id === manualCmd.target) || null } : undefined);
+        }
         if (wiped(enemyUnits)) {
           if (!resolveRecoveryHooks(true, "enemy")) break outer;
           rescuedThisRound = true;
@@ -1107,17 +1491,13 @@ const Battle = {
       // 構造化イベントへ変換する。新しい特性を足しても描画側の変更は要らない。
       resolveRecoveryHooks(false, null);
 
-      if (round === 1 && feastTrigger) {
-        // 離席中（遅刻・発酵で酔った）の者は宴にも出ない。alive だけ見ると透明のまま殴りに行く（オーナー試遊で発覚）
-        const feastUnit = playerUnits.find(u => u.id === feastTrigger.sourceId && onField(u));
-        if (feastUnit && !wiped(enemyUnits)) {
-          act(feastUnit, playerUnits, enemyUnits, round, {
-            mult: 1, parentEvent: feastTrigger, label: "暴食の宴", isExtra: true
-          });
-        }
-      }
+      // 鼓舞の期限切れ。次のラウンドの敵の計画（構えは次の指示窓に出る）。
+      for (const u of all()) if (u.flags.buff && u.flags.buff.until <= round) delete u.flags.buff;
+      if (!wiped(enemyUnits) && !wiped(playerUnits) && round < this.MAX_ROUNDS) planEnemies(round + 1);
 
-      // 撤退の提案（1戦闘1回）。ラウンドの終わり、勝敗判定の前。
+      // 撤退の提案（自動戦闘だけ・1戦闘1回）。UI（コマンドバトル）からは呼ばれない。
+      // sim と run.js のテスト（担がれた者の継承・経験・反撃）が settleBattle("retreat") の入口として使うので残す（2026-09-16）。
+      // 消すなら、それらのテストを手動戦闘の retreat: true に書き換えてから。
       // 条件：軍団員が倒れたまま立ち上がらなかった／敵が全滅していない／
       // 立っている軍団員が1人以上（不在＝遅刻は「立っている」に数えない）。
       if (!retreatOffer && !options.noRetreatOffer && !options.manual) {   // コマンドバトルでは退くのは指示パネル（提案は出さない）
@@ -1137,33 +1517,11 @@ const Battle = {
           });
           // 提案時点の戦果。終了時と同じ導出関数を使い、二か所で別々に組まない。
           // 倒れていた軍団員は「担いで帰る」＝生存（負傷）。傭兵・召喚物は今までどおり。
-          const contribution = this.summarizeContribution(timeline, playerUnits).map(row => {
-            if (row.mercenary || row.survived) return row;
+          const contribution = this.summarizeContribution(timeline, playerUnits, actions).map(row => {   // 手番の記録（actions）も渡す。退いた戦いでも成長の偏りが効く（2026-09-15）
+            if (row.survived) return row;
             return { ...row, survived: true, injured: true };
           });
           retreatOffer = { index: timeline.indexOf(event), round, contribution };
-        }
-      }
-
-      // 号令の節目（1戦闘1回）。ラウンドの終わり、撤退の提案のあと、勝敗判定の前。
-      // 条件：戦況が動いた（このラウンドに誰かが倒れた／味方の誰かが半分を切っている）、
-      // 敵が残っている、候補がいる、同じラウンドに撤退の提案を出していない（二つ続けて聞かない）。
-      if (options.offerOrder && !wiped(enemyUnits) && !wiped(playerUnits)
-        && !(retreatOffer && retreatOffer.round === round)) {
-        const turned = all().filter(u => !u.alive).length > deadAtRoundStart
-          || playerUnits.some(u => onField(u) && !u.flags.summoned && u.hp <= u.maxHp * 0.5);
-        const roster = turned ? this.orderRoster(playerUnits) : { ready: [], unready: [] };
-        const candidates = roster.ready;
-        if (candidates.length) {
-          const answered = orders[round] || null;
-          // 言い方は「号令で何が変わるか」（1段目の技は勝手に出続けるので「出せます」だと命じないと出ないように読める）。
-          const names = candidates.map(c => `${c.name}に「${c.label}」`).join("、");
-          const event = emit("order_offer", {
-            round, candidates, unready: roster.unready, answered, emphasis: 3,
-            enemies: enemyUnits.filter(onField).map(snap),
-            text: `　モルモ「魔王様、号令を。${names}と命じられます」`, cls: "mormo"
-          });
-          orderOffers.push({ index: timeline.indexOf(event), round, candidates, answered });
         }
       }
 
@@ -1215,15 +1573,17 @@ const Battle = {
     return {
       victory,
       timeline,
-      // 続けずに退く道があったか。無ければ null。勝敗・報酬・contribution には影響しない。
+      // 続けずに退く道があったか（自動戦闘の提案）／コマンドで退いた戦果。無ければ null。
       retreatOffer,
-      // コマンドで退いた（retreatOffer.contribution が担いで帰った戦果）。
       retreated: retreatedManual,
+      // 見逃した／雇った敵将（コマンドバトルだけ）。run.js が st.captains を "spared" | "hired" にする
+      spared,
       spiritSpent,
-      // 号令の節目（options.offerOrder のときだけ）。answered は答えの unitId か null。
-      // orderOffer は最初の節目（互換）。節目は戦況が動くたびに来るので orderOffers を見る。
-      orderOffer: orderOffers[0] || null,
-      orderOffers,
+      spiritGained,
+      debutShown,
+      sparked,
+      slimeSplit,
+      rationsEaten,
       // 旧来のテキストログ（タイムラインから導出）
       log: timeline.filter(e => e.text).map(e => ({ t: e.text, c: e.cls })),
       rounds: Math.min(round, this.MAX_ROUNDS),
@@ -1232,7 +1592,7 @@ const Battle = {
       incidents: timeline.filter(e => e.type === "incident").map(e => ({ id: e.id, name: e.name, text: e.text })),
       // 誰がどれだけ働いたか（結果画面のMVP表示用）。新しい状態を戦闘中に
       // 持ち回る必要はなく、既に確定したタイムラインから導出するだけでよい。
-      contribution: this.summarizeContribution(timeline, playerUnits),
+      contribution: this.summarizeContribution(timeline, playerUnits, actions),
       nearMiss: this.summarizeNearMiss(timeline),
       chainSummary: this.summarizeChains(timeline),
       overkillSummary: this.summarizeOverkill(timeline),
@@ -1495,7 +1855,7 @@ const Battle = {
     };
   },
 
-  summarizeContribution(timeline, playerUnits) {
+  summarizeContribution(timeline, playerUnits, actions = {}) {
     const hits = timeline.filter(e => (e.type === "attack" || e.type === "splash") && e.label !== "仲間割れ");
     return playerUnits.filter(u => !u.flags.summoned).map(u => {
       // 反動のような自傷は「受けたダメージ」には残すが、与ダメージ／撃破には足さない。
@@ -1517,10 +1877,10 @@ const Battle = {
       const revives = timeline.filter(e => e.type === "revive");
       return {
         id: u.id, uid: u.uid, name: u.name, race: u.race, tplId: u.tplId, icon: u.icon,
-        mercenary: !!u.flags.mercenary,   // 金で雇った一時要員。戦功・欠員・戦没者に数えない
         late: u.flags.late || 0,          // 遅刻したラウンド数。0なら開戦から居た
         lateCause: u.flags.lateCause || (u.flags.late ? u.flags.lateTrait : null),  // 何で遅れたか（酒好き／発酵糧食）
         unpaid: !!u.unpaid, dealt, taken, kills,
+        actions: actions[u.uid] || { attack: 0, guard: 0, skill: 0, eat: 0, cover: 0 },
         overkillCount: overkills.length,
         maxOverkill: overkills.reduce((max, event) => Math.max(max, event.percent || 0), 0),
         traitTriggers: timeline.filter(e => e.type === "trait_trigger" && e.sourceId === u.id).length,

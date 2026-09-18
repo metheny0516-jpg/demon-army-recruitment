@@ -16,7 +16,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     const roster = st.roster.slice(0, 2);
     st.lastBattle = {
       victory: win, army: '王国騎士団', region: '辺境', notes: ['勝利報酬 10G を獲得'],
-      synergies: ['魔王軍完成', 'ゴブリンの群れ'], momentumPeak: 1.8,
+      synergies: ['魔王軍完成', 'ゴブリンの群れ'],
       incidents: [], summonCount: 1,
       chainSummary: {
         maxChain: 4, chainCount: 2, eventCount: 6, chains: [],
@@ -27,8 +27,9 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
           { eventId: 'a2', type: 'attack', depth: 4, label: '追加攻撃' }
         ] }
       },
-      overkillSummary: { count: 2, totalExcess: 40, maxExcess: 30, maxPercent: 180, rank: '蹂躙' },
-      facility: { level: 3, name: '魔王城作業区', works: 3, activeId: 'graveyard', activeName: '墓地' },
+      overkillSummary: { count: 2, totalExcess: 40, maxExcess: 30, maxPercent: 180, rank: 'OVERKILL' },
+      // 施設は城下町の軍施設ごとの Lv になった（2026-09-13）
+      facility: { level: 3, facilities: [{ id: 'graveyard', name: '墓地', icon: '🪦', lv: 3, ready: true }] },
       facilitySummary: { rescuedFromWipe: true, facilities: [
         { facilityId: 'graveyard', name: '墓地', count: 1, summons: 1, amount: 0, rescued: true }
       ] },
@@ -57,9 +58,9 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!winText.includes('最大OVERKILL') || !winText.includes('180%')) errors.push('最大OVERKILLが読めない');
   if (!winText.includes('今回の大暴れ')) errors.push('パネル見出しが読めない');
   if (!winText.includes('いちばん長くつながった連鎖')) errors.push('CHAINと経路の関係を説明する行が無い');
-  // 作業表 B: その戦闘の達成感（CHAIN・揃えたシナジー・戦意倍率）が1行に畳まれていること
+  // 作業表 B: その戦闘の達成感（CHAIN・揃えたシナジー）が1行に畳まれていること
   const headline = (await page.locator('.breakthrough-headline').allInnerTexts())[0] || '';
-  for (const want of ['CHAIN 4', '《魔王軍完成》', '《ゴブリンの群れ》', '戦意 ×1.80']) {
+  for (const want of ['CHAIN 4', '《魔王軍完成》', '《ゴブリンの群れ》']) {
     if (!headline.includes(want)) errors.push('戦果の1行サマリに含まれない: ' + want + ' / ' + headline);
   }
   if ((await page.locator('.breakthrough-headline').count()) !== 1) errors.push('1行サマリが1つでない');
@@ -69,7 +70,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   }
   // 2倍速で見えなかった「誰が戻したか」が、戦果で一目で読めること
   if (!await page.locator('.facility-panel').count()) errors.push('勝利画面に「施設と死者の働き」パネルが無い');
-  for (const want of ['施設Lv.3', '3 回まで働く', '墓地', '骸骨従者1体', '全滅回避']) {
+  for (const want of ['墓地', '骸骨従者1体', '全滅回避']) {
     if (!winText.includes(want)) errors.push('施設の働きが読めない: ' + want);
   }
   const deathSteps = await page.locator('.facility-panel .death-chain .chain-step').allInnerTexts();
@@ -137,17 +138,75 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     const b = Game.state.lastBattle;
     b.chainSummary = { maxChain: 1, chainCount: 1, eventCount: 1, chains: [] };
     delete b.facility; delete b.facilitySummary; delete b.deathChains;
-    delete b.momentumPeak; b.synergies = [];
+    b.synergies = [];
     UI.result();
     return document.body.innerText;
   });
   if (!oldText.includes('最大CHAIN')) errors.push('旧データで大暴れパネルが消えてしまう');
   if (await page.locator(".breakthrough-panel .chain-step").count()) errors.push("旧データなのに経路が出ている");
   if (await page.locator('.facility-panel').count()) errors.push('施設要約の無い旧データなのに施設パネルが出ている');
-  // 戦意倍率もシナジーも無い旧セーブでは、1行サマリはCHAINだけ出して壊れない
+  // シナジーの無い旧セーブでは、1行サマリはCHAINだけ出して壊れない
   const oldHeadline = (await page.locator('.breakthrough-headline').allInnerTexts())[0] || '';
   if (!oldHeadline.includes('CHAIN 1')) errors.push('旧データで1行サマリのCHAINが消えた: ' + oldHeadline);
-  if (oldHeadline.includes('戦意')) errors.push('旧データなのに戦意倍率が出ている: ' + oldHeadline);
+
+  // ── 成長の読み上げ（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 2節）──
+  // 0.5 秒ごとに一行ずつ／タップで残り全部／8行を超えたら「ほか ○ 件」。
+  const growth = await page.evaluate(async () => {
+    const st = Game.state;
+    st.lastGrowth = [
+      { uid: 1, name: 'ゴルド', key: 'atk', delta: 1 }, { uid: 1, name: 'ゴルド', key: 'spd', delta: 1 },
+      { uid: 2, name: 'プル', key: 'hp', delta: 2 }, { uid: 3, name: 'サン', key: 'def', delta: 1 },
+      { uid: 4, name: 'ヨン', key: 'hp', delta: 1 }, { uid: 5, name: 'ゴ', key: 'hp', delta: 1 },
+      { uid: 6, name: 'ロク', key: 'hp', delta: 1 }, { uid: 7, name: 'ナナ', key: 'hp', delta: 1 },
+      { uid: 8, name: 'ハチ', key: 'hp', delta: 1 }, { uid: 9, name: 'キュウ', key: 'hp', delta: 1 }
+    ];
+    UI.result();
+    const shown = () => [...document.querySelectorAll('.growth-line')].filter(l => !l.hidden).length;
+    const first = shown();
+    await new Promise(r => setTimeout(r, 620));
+    const second = shown();
+    document.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 80));
+    const rest = document.querySelector('.growth-rest');
+    return { rows: document.querySelectorAll('.growth-line').length, first, second, all: shown(),
+      rest: rest ? rest.textContent.trim() : '', restHidden: rest ? rest.hidden : null,
+      head: (document.querySelector('.growth-line') || {}).textContent.replace(/\s+/g, ' ').trim() };
+  });
+  if (growth.rows !== 8) errors.push(`8行までに畳んでいない（${growth.rows}行）`);
+  if (growth.first !== 1) errors.push(`最初は1行だけのはず（${growth.first}行）`);
+  if (growth.second <= growth.first) errors.push(`0.5秒で次の行が出ない（${growth.first}→${growth.second}）`);
+  if (growth.all !== 8) errors.push(`タップで全部出ない（${growth.all}／8）`);
+  if (!/ほか 2 件/.test(growth.rest) || growth.restHidden) errors.push(`「ほか 2 件」が出ない（${growth.rest}）`);
+  if (!/ゴルドの攻撃が 1 上がった！/.test(growth.head)) errors.push(`読み上げの文が違う（${growth.head}）`);
+  if (!/⚔/.test(growth.head)) errors.push(`伸びた数値の印が無い（${growth.head}）`);
+
+  // ── 増殖の元の「なぜ」欄（docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-2）──
+  // 即加入・面接待ち・複数の親、の3つが書き分けられているかを画面で見る。
+  const split = await page.evaluate(() => {
+    Game.state.lastSlimeSplit = { rows: [
+      { name: 'ぷに', count: 3, joined: true, why: '池の噂 ＋ 火の粉を浴びたぷに → 分裂して3体、1体が名簿に加わった' },
+      { name: 'もち', count: 2, joined: false, why: '池の噂 ＋ 火の粉を浴びたもち → 分裂して2体、名簿が満員だったので1体が次の面接に並んだ' }
+    ] };
+    UI.result();
+    const box = document.querySelector('.slime-split-lines');
+    const lines = [...document.querySelectorAll('.slime-split-line')];
+    return {
+      shown: !!box,
+      count: lines.length,
+      joined: lines.filter(l => l.classList.contains('joined')).map(l => l.innerText.replace(/\s+/g, ' ')),
+      waiting: lines.filter(l => l.classList.contains('waiting')).map(l => l.innerText.replace(/\s+/g, ' ')),
+      why: (document.querySelector('.slime-split-lines') || {}).closest
+        ? (document.querySelector('.slime-split-lines').closest('section').innerText || '').replace(/\s+/g, ' ') : ''
+    };
+  });
+  if (!split.shown) errors.push('分裂の「なぜ」欄が出ない');
+  if (split.count !== 2) errors.push(`親ごとに1行にならない（${split.count}行）`);
+  if (!split.joined.some(t => /ぷに/.test(t) && /名簿に加わった/.test(t))) errors.push(`即加入の書き方が違う（${split.joined.join(' / ')}）`);
+  if (!split.waiting.some(t => /もち/.test(t) && /面接/.test(t))) errors.push(`面接待ちの書き方が違う（${split.waiting.join(' / ')}）`);
+  if (/1体が名簿に残った/.test(split.why)) errors.push('満員でも「名簿に残った」と言ってしまっている');
+  // 何も起きていない決着では出さない
+  const quiet = await page.evaluate(() => { Game.state.lastSlimeSplit = null; UI.result(); return !!document.querySelector('.slime-split-lines'); });
+  if (quiet) errors.push('分裂が無い決着でも「なぜ」欄が残る');
 
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/report-panel.png', fullPage: true });
   console.log(errors.length ? '✗ ' + errors.join('\n✗ ') : '✓ 主要記録2つ・代表CHAIN経路・1行サマリ・非ダメージバッジ');

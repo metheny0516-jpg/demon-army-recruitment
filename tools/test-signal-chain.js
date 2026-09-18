@@ -14,7 +14,10 @@ const ctx = { console, Math: Object.create(Math), Date, JSON };
 vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 const Synergy = vm.runInContext('Synergy', ctx);
-const FACILITIES = vm.runInContext('FACILITIES', ctx);
+// 旧 FACILITIES は撤去した（2026-09-13、城下町へ統合）。ここで見たいのは
+// Synergy.signalChain の「施設ノード」の扱いそのものなので、素材はテストが持つ。
+const LEDGER_FIXTURE = { id: 'extortion_ledger', icon: '📒', name: '恐喝帳簿',
+  links: { reacts: ['金貨獲得'], emits: ['攻撃強化'], on: '予約金貨が3Gに届くたび' } };
 const GOLD = '金貨獲得';
 const assert = (c, m) => { if (!c) throw new Error('✗ ' + m); console.log(`✓ ${m}`); };
 const has = (list, id) => list.some(n => n.id === id);
@@ -87,7 +90,7 @@ console.log('▼ 欠けを埋める案は手持ちからしか出ない');
 
 console.log('▼ 施設は実際に働けるときだけ並ぶ');
 {
-  const ledger = FACILITIES.find(f => f.id === 'extortion_ledger');
+  const ledger = LEDGER_FIXTURE;
   const squad = [thief(1)];
   const off = Synergy.signalChain(GOLD, squad, { pool: squad, slots: 5, facility: ledger, facilityReady: false });
   assert(!has(off.reactors, 'extortion_ledger'), '会計職が居ない＝働けない施設は反応に並ばない');

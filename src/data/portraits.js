@@ -24,11 +24,17 @@ const PORTRAITS = [
   "succubus",
   "minotaur",
   "lich",
+  "harpy",
+  "troll",
+  "mimic",
+  "mandragora",
+  "fallen_knight",
 ];
 
 // イベント吹き出し専用の全身表情差分。存在する差分だけを宣言し、
 // 未制作・読込失敗時は通常の履歴書絵（さらに失敗すれば絵文字）へ戻す。
 const EVENT_EXPRESSIONS = {
+  fallen_knight: ["surprise", "smirk", "tears"],   // 堕騎士（2026-09-15）
   goblin: ["surprise", "smirk", "tears"],
   slime: ["surprise", "smirk", "tears"],
   king_slime: ["surprise", "smirk", "tears"],

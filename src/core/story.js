@@ -84,11 +84,19 @@ const Story = {
       && !(st.counterattack && st.counterattack.pending);
   },
 
-  // 救援作戦の札。進軍の札を元に名前と敵名だけ差し替える（数値は段階1のまま）。
-  rescueMission(mission) {
+  // 救援作戦の札。地図の「ゴブリンの丘」（魔王城の隣）を舞台にし、勝てばそこが領土になる
+  // （従えた部族と同じ扱い＝ゴブリンが応募に来る）。敵は開拓保護隊（数値は場所の守備段階のまま）。
+  // 地図が無い環境では進軍の札を元にする。
+  rescueMission(game) {
+    const place = typeof Territory !== "undefined" ? Territory.byId("t01") : null;
+    const type = place ? MISSION_TYPES.find(m => m.id === "suppress") : MISSION_TYPES.find(m => m.id === "invade");
+    const mission = game.buildMission(type, null, place || undefined);
     const names = ["開拓保護隊の兵テト", "開拓保護隊の兵ポル", "開拓保護隊の兵ネス", "開拓保護隊の兵ロイ"];
+    const units = (mission.units || []).filter(u => !u.captain);
     return {
       ...mission,
+      twoStage: false, missionPhase: "main",
+      territoryLine: "救えば、村のゴブリンが応募に来る",
       story: "goblin_rescue",
       missionTitle: "ゴブリン村を救援する",
       strategyLabel: "救援",
@@ -96,7 +104,7 @@ const Story = {
       description: "包囲しているのは開拓保護隊。名目は盗賊討伐。伍長は令状を信じている。",
       army: "開拓保護隊",
       region: "ゴブリン村",
-      units: mission.units.map((u, i) => ({ ...u, name: names[i % names.length] }))
+      units: (units.length ? units : mission.units).map((u, i) => ({ ...u, name: names[i % names.length] }))
     };
   },
 

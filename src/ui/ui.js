@@ -9,7 +9,10 @@ const UI = {
   RACE_ICON: {
     "ゴブリン": "👺", "オーク": "🐗", "スライム": "🟢", "コボルト": "🐕",
     "骸骨兵": "💀", "ゾンビ": "🧟", "魔法使い": "🔥", "死霊術師": "🪄",
-    "インプ": "😈", "オーガ": "👹", "キングスライム": "👑"
+    "インプ": "😈", "オーガ": "👹", "キングスライム": "👑",
+    "サキュバス": "💋", "ミノタウロス": "🐂", "リッチ": "☠️",
+    "ハーピー": "🪶", "ミミック": "📦", "トロル": "🪨",
+    "マンドラゴラ": "🌱", "堕騎士": "🗡"
   },
   icon(race) { return this.RACE_ICON[race] || "❓"; },
 
@@ -81,7 +84,7 @@ const UI = {
     const opening = st.openingPrototype;
     const fb = Game.foodBalance();
     const recordsButton = ["recruit", "mission", "formation", "preparation", "result", "facility", "event"].includes(st.phase)
-      ? `<button class="small hud-records" data-action="castle" data-tab="${U.esc(this.castleTab || "army")}">🏰 城</button>` : "";
+      ? `<button class="small hud-records" data-action="castle" data-tab="${U.esc(this.castleTab || "army")}">🏰 城のメニュー <small>軍団・城下町・記録・参謀</small></button>` : "";
     return `<div class="hud">
       <div class="hud-row hud-resources">
         <span class="gold">所持金 <b>${st.gold}G</b></span>
@@ -90,17 +93,18 @@ const UI = {
       </div>
       <div class="hud-row hud-progress">
         <span class="army-level">魔王軍 <b>Lv.${Game.armyLevel()}</b></span>
-        <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b></span>
+        <span>王国攻略 <b>${st.conquest} / ${Game.MAX_CONQUEST}</b>${Game.outpostCleared && Game.outpostCleared() ? `<small class="outpost-done"> ▸前哨済</small>` : ""}</span>
         <span>警戒度 <b>${st.alert}</b>${this.counterattackGauge()}</span>
-        ${recordsButton}
       </div>
+      ${recordsButton ? `<div class="hud-row hud-menu-row">${recordsButton}</div>` : ""}
       <div class="hud-extra">
         <span>第 <b>${st.generation}</b> 代魔王軍</span>
         ${opening ? `<span>冒頭日程 <b>${st.day}日目 / 3日</b></span>` : ""}
         <span>作戦 <b>${st.turn}</b></span>
-        <span>施設 <b>Lv.${st.facilityLevel}${Game.activeFacility() ? ` ${U.esc(Game.activeFacility().name)}` : ""}</b></span>
+        <span>城下町 <b>Lv計 ${Game.townLevelTotal()}</b></span>
         <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
-        <span>軍団 <b>${st.roster.length}/${Game.MAX_ARMY}</b></span>
+        <span>軍団 <b>${st.roster.length}/${Game.maxArmy()}</b></span>
+        ${typeof Town !== "undefined" ? `<span>税 <b>${Town.taxPerSettle(st)}G</b>/戦${Town.init(st).debt ? `　借金 <b>${Town.init(st).debt}G</b>` : ""}</span>` : ""}
         <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
         <span class="muted">${U.esc(sd.region)}</span>
         <span class="muted hud-slot">保存中：スロット ${Storage.activeSlot()}</span>
@@ -182,9 +186,29 @@ const UI = {
         }
       }
     }
-    if (!skill) return "";
-    const battles = (typeof SKILL_RULES !== "undefined" && SKILL_RULES.unlockBattles) || 6;
-    return `<div class="skill-hint">🗡 ${battles}戦で【${U.esc(skill.name)}】</div>`;
+    // 種族技（誰でも3戦で覚える）と、上位技（8戦。裏方は倍かかる）を1行ずつ。
+    // 戦闘数は Game に聞く（遅咲きの倍率もそこで決まる。二か所で数えない）。
+    const rules = typeof Game !== "undefined" && Game.skillRules ? Game.skillRules()
+      : { speciesUnlockBattles: 3, unlockBattles: 8 };
+    const need = key => (typeof Game !== "undefined" && Game.unlockBattlesFor)
+      ? Game.unlockBattlesFor(m, key)
+      : (key === "species" ? rules.speciesUnlockBattles : rules.unlockBattles);
+    const species = typeof Game !== "undefined" && Game.speciesSkillFor ? Game.speciesSkillFor(m) : null;
+    const lines = [];
+    // 覚えている技（種族技は m.skills、上位技は癖に紐づく）。覚えた後に何も出ないのは不親切（2026-09-14 オーナー指摘）
+    if (typeof SKILLS !== "undefined") {
+      const learned = [];
+      for (const id of (m.skills || [])) if (SKILLS[id] && !SKILLS[id].upper) learned.push(SKILLS[id]);
+      for (const sk of Object.values(SKILLS)) if (sk.trait && (m.traits || []).includes(sk.trait) && !learned.includes(sk)) learned.push(sk);
+      for (const sk of learned) lines.push(`<div class="skill-hint learned">${sk.upper ? "🗡" : "✨"} 技【${U.esc(sk.name)}】${sk.cost ? `（気合${sk.cost}）` : ""}${sk.note ? `：${U.esc(sk.note)}` : ""}</div>`);
+    }
+    if (species) lines.push(`<div class="skill-hint">✨ ${need("species")}戦で技【${U.esc(species.name)}】</div>`);
+    if (skill) lines.push(`<div class="skill-hint">🗡 ${need("order")}戦で【${U.esc(skill.name)}】</div>`);
+    // 遅咲き（裏方の職）。何が起きるかは言わない。「隠している」ことだけ伝える。
+    if (typeof Game !== "undefined" && Game.isLateBloomer && Game.isLateBloomer(m)) {
+      lines.push(`<div class="skill-hint late-bloomer">？？？（この者は何かを隠している）</div>`);
+    }
+    return lines.join("");
   },
 
   // 名簿の戦歴。0戦の者（応募直後）には出さない。伸び幅は出さない（伸びた後の値だけ）。
@@ -227,7 +251,9 @@ const UI = {
   },
 
   applicantConnections(m) {
-    const facility = Game.activeFacility();
+    // 城下町の「軍」施設のうち、建っているものを接続の材料にする（2026-09-13）。
+    // 旧 FACILITIES は links を持っていたが、TOWN_FACILITIES には無いので接続図には出ない。
+    const kitchenLv = Game.facilityLv("grand_kitchen");
     const active = Game.activeRoster();
     const builders = Game.departmentRoster("home");
     const appetiteByUid = {};
@@ -236,20 +262,19 @@ const UI = {
     const candidateAccountant = (m.job || "").includes("会計");
     const graveyardWorker = builders.some(unit => unit.tplId === "necromancer");
     const candidateNecromancer = m.tplId === "necromancer";
-    const rows = Synergy.connections(m, Game.state.roster, facility ? [facility] : [], {
+    const rows = Synergy.connections(m, Game.state.roster, [], {
       activeUids: Game.state.activeUids,
       maxDeploy: Game.MAX_DEPLOY,
       foodAvailableFor: units => {
-        const kitchenExtra = facility && facility.id === "grand_kitchen" ? 1 : 0;
+        const kitchenExtra = kitchenLv >= 1 ? 1 : 0;
         const need = Game.foodNeedFor(units) + kitchenExtra;
         return Math.min(Math.max(0, Game.state.food || 0), need) > 0;
       },
       appetiteByUid,
-      facilityNeeds: facility ? {
-        extortion_ledger: activeAccountant ? [] : [candidateAccountant ? "応募者を会計職として出撃" : "会計職を出撃"],
+      facilityNeeds: {
         grand_kitchen: Math.max(0, Game.state.food || 0) > 0 ? [] : ["戦闘糧食が必要"],
-        graveyard: graveyardWorker ? [] : [candidateNecromancer ? "応募者を建設部門へ配属" : "死霊術師を建設部門へ配属"]
-      } : {}
+        graveyard: graveyardWorker ? [] : [candidateNecromancer ? "応募者を留守番へ配属" : "死霊術師を留守番へ配属"]
+      }
     });
     if (!rows.length) return `<div class="applicant-links muted">現在の軍団との直接接続はまだない</div>`;
     const rowHtml = row => {
@@ -301,7 +326,7 @@ const UI = {
       <div class="card-head">
         ${this.avatarHtml(m, opts.resume ? "photo" : "")}
         <div class="card-identity">
-          <div class="card-name">${U.esc(m.name)} <span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span></div>
+          <div class="card-name">${U.esc(Game.displayName(m))} <span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span></div>
           <div class="card-job">${U.esc(m.race)} / ${U.esc(m.job)}${secondGen ? ` <span class="second-gen">${secondGen}</span>` : ""}</div>
         </div>
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
@@ -333,7 +358,7 @@ const UI = {
       ${this.aptitudeHtml(m)}
       ${opts.resume ? "" : `<div class="traits">${this.traitHtml(m.traits, relicByTrait)}</div>`}
       ${rank.id === "general" ? `<div class="general-ability">⚔ 将軍の号令：出撃中、味方全員の与ダメージ+15%</div>` : ""}
-      ${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}
+      ${this.faceQuote(m)}
       ${opts.resume ? "" : (opts.footer || "")}
     </div>`;
   },
@@ -429,7 +454,7 @@ const UI = {
     if (c.recruit) parts.push(`📋 応募+${c.recruit}`);
     const traits = m.traits || [];
     if (traits.includes("tinkerer")) parts.push("🛢 樽で何か寝かせている");
-    if (m.tplId === "necromancer" && Game.state.activeFacilityId === "graveyard") parts.push("🪦 墓地を守る");
+    if (m.tplId === "necromancer" && Game.facilityLv("graveyard") >= 1) parts.push("🪦 墓地を守る");
     return parts.length ? parts.map(U.esc).join("　") : "手持ち無沙汰";
   },
 
@@ -612,12 +637,13 @@ const UI = {
       active.some(m => (m.traits || []).includes("soul_harvest")) ? "蘇生→魂消費→アンデッド強化" : ""
     ].filter(Boolean);
     const deathPanel = deathHints.length ? `<section class="panel"><h2>💀 死亡反応</h2><div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div></section>` : "";
-    const facility = Game.facilityInfo();
-    const next = FACILITY_LEVELS[Game.state.facilityLevel + 1];
-    const facilityStatus = `<section class="panel castle-facility"><h2>施設</h2>
-      <div><b>Lv.${Game.state.facilityLevel} ${U.esc(facility.name)}</b></div>
-      <div class="muted">${facility.works ? `1戦闘に${facility.works}回稼働` : "大型施設はまだない"}</div>
-      <div class="muted">${next ? `次の施設まで建設進捗 ${Game.state.buildProgress || 0}/${next.buildThreshold}` : "施設は最大レベル"}</div></section>`;
+    // 戦場で効く施設（城下町の「軍」2つ）。建てるのは城下町の札。ここは「今どう効くか」だけ。
+    const army = Game.ARMY_FACILITIES.map(id => ({ id, f: Town.facility(id), lv: Town.level(Game.state, id), ready: Game.facilityReady(id) }))
+      .filter(x => x.f);
+    const facilityStatus = `<section class="panel castle-facility"><h2>戦場で効く施設</h2>
+      ${army.map(x => `<div class="${x.lv ? "" : "muted"}">${x.f.icon} <b>${U.esc(x.f.name)} Lv${x.lv}</b>
+        <span class="muted">${x.lv ? (x.ready ? U.esc(x.f.effect(x.lv)) : "条件を満たしていない（今回は働かない）") : "まだ空き地"}</span></div>`).join("")}
+      <div class="muted">建てるのは城下町の札から。</div></section>`;
     return `<div class="castle-advisor">
       ${this.chainMapPanel(active)}${this.synergyPanel(active)}${deathPanel}${facilityStatus}
       ${Game.state.selectedMission ? this.enemyPreview() : `<section class="panel"><h2>敵情</h2><div class="muted">作戦を選ぶと敵情を確認できます。</div></section>`}
@@ -625,18 +651,22 @@ const UI = {
   },
 
   castle(tab = "army", options = {}) {
-    const allowed = ["army", "records", "advisor"];
+    const allowed = ["army", "records", "advisor", "town"];
     tab = allowed.includes(tab) ? tab : "army";
     if (!options.formation && this.root && this.root.dataset.scene !== "castle") this.castleFrom = Game.state.phase;
+    // 地図を開いた音（2026-09-13 の録音）。開いた瞬間に1回だけ。
+    // 同じ札の再描画（建てる・両替のたびに castle("town") が呼ばれる）では鳴らさない。
+    const openedTown = tab === "town" && this.castleTab !== "town" && !options.formation;
     this.castleTab = tab;
     let content = tab === "records" ? this.recordsCastlePanel()
-      : tab === "advisor" ? this.advisorCastlePanel() : this.armyPanel({ controls: true });
+      : tab === "advisor" ? this.advisorCastlePanel()
+      : tab === "town" && typeof TownUI !== "undefined" ? TownUI.panel() : this.armyPanel({ controls: true });
     if (options.formation) content += `<div class="formation-decisions">
-      ${this.payrollPanel()}${this.debtPanel()}${this.feastPanel()}${this.mercenaryPanel()}
+      ${this.payrollPanel()}${this.debtPanel()}${this.hungerPanel()}
       ${this.kingSlimePanel()}${this.vaultPanel()}
     </div>`;
     const tabs = options.formation ? "" : `<nav class="castle-tabs" aria-label="城のメニュー">
-      ${[["army", "軍団"], ["records", "記録"], ["advisor", "参謀"]].map(([id, label]) =>
+      ${[["army", "軍団"], ["town", "城下町"], ["records", "記録"], ["advisor", "参謀"]].map(([id, label]) =>
         `<button class="castle-tab${tab === id ? " active" : ""}" data-action="castletab" data-tab="${id}">${label}</button>`).join("")}
     </nav>`;
     const empty = Game.activeRoster().length === 0;
@@ -648,9 +678,13 @@ const UI = {
     </div>` : `<button class="wide ghost castle-back" data-action="backcastle">← 戻る</button>`;
     this.set(`${this.hud()}<div class="castle-screen${options.formation ? " formation-shell" : ""}">
       <header class="castle-header"><div><h1>${options.formation ? "編成" : "🏰 城のメニュー"}</h1>
-        <div class="muted">${options.formation ? "出撃する者と城に残る者を決める。詳しい作戦情報は城の参謀札へ。" : "いつでも見るものを、三つの札にまとめました。"}</div></div>${tabs}</header>
+        ${options.formation ? "" : `<button class="small ghost castle-home" data-action="home">⌂ メインへ</button>`}
+        <div class="muted">${options.formation ? "出撃する者と城に残る者を決める。詳しい作戦情報は城の参謀札へ。" : "いつでも見るものを、四つの札にまとめました。"}</div></div>${tabs}</header>
       <main class="castle-content ${options.formation ? "formation-army" : ""}">${content}</main>${formationActions}
     </div>`, options.formation ? "formation" : "castle");
+    // 地図は「次に戦う地点」が中央に来た状態で開く（描いたあとに一度だけ）。
+    if (tab === "town" && typeof MapUI !== "undefined") MapUI.focus(this.root);
+    if (openedTown && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("map-open");
   },
 
   // 軍団のどこでも使う一行表示。操作を隠す面接でも、行そのものから同じ人物詳細へ入る。
@@ -662,6 +696,7 @@ const UI = {
       .find(entry => entry.trait && this.isSkillTrait(entry.id));
     const marks = [
       m.injured > 0 ? `<span class="injured">🩹 負傷</span>` : "",
+      m.leaving ? `<span class="leaving">🎒 去りかけ</span>` : "",
       m.unpaid ? `<span class="unpaid">給与未払い</span>` : "",
       this.memberRelics(m).length ? `<span class="relic-chip">🏺 遺物</span>` : ""
     ].filter(Boolean).join("");
@@ -672,9 +707,9 @@ const UI = {
         <button class="small" data-action="front" data-uid="${m.uid}" ${opts.index === 0 ? "disabled" : ""}>⏫</button>` : ""}
       <button class="small danger" data-action="fire" data-confirm="1" data-uid="${m.uid}">解雇</button>
     </div>` : "";
-    return `<div class="member-row${active ? " active" : " home"}" data-action="member" data-uid="${m.uid}" role="button" tabindex="0">
+    return `<div class="member-row${active ? " active" : " home"}${Game.isGeneral(m) ? " rank-general" : ""}" data-action="member" data-uid="${m.uid}" role="button" tabindex="0">
       ${this.avatarHtml(m)}
-      <div class="member-row-main"><b>${U.esc(m.name)}</b><span>${U.esc(m.race)} / ${U.esc(m.job)}</span>
+      <div class="member-row-main"><b>${U.esc(Game.displayName(m))}</b><span>${U.esc(m.race)} / ${U.esc(m.job)}</span>
         <small>${U.esc(rank.name)}　HP${m.hp} 攻${m.atk} 防${m.def} 速${m.spd}</small></div>
       <div class="member-row-state">${marks}<small>気合 ${typeof m.spirit === "number" ? m.spirit : "-"}</small>
         ${skillEntry ? `<small>🗡 ${U.esc(skillEntry.trait.name)}</small>` : ""}</div>${controls}
@@ -682,6 +717,19 @@ const UI = {
   },
 
   // 名簿と応募者で共用する人物詳細。呼び出し側は uid または applicantIndex の片方を渡す。
+  // 忠義（堕騎士の癖 fealty / oath）の一行。閾値は battle.js が正で、ここは読むだけ。
+  // 忠誠60未満＝本気を出さない（種族技も出ない）、80以上＝主と認めた。
+  FEALTY_TRAITS: ["fealty", "oath"],
+  fealtyLine(m) {
+    if (!m || !(m.traits || []).some(id => this.FEALTY_TRAITS.includes(id))) return "";
+    const loyalty = Number(m.loyalty) || 0;
+    const sworn = loyalty >= 80;
+    return `<div class="fealty-line${sworn ? " sworn" : ""}">${sworn
+      ? "🗡 主と認めた（全力で戦う）"
+      : loyalty >= 60 ? "🗡 まだ主と認めていない（忠誠80で全力になる）"
+        : "🗡 まだ主と認めていない（忠誠60までは本気を出さず、技も出さない）"}</div>`;
+  },
+
   memberDetail(uid, applicantIndex) {
     const st = Game.state;
     this.memberFrom = this.root && this.root.dataset.scene;
@@ -719,19 +767,23 @@ const UI = {
     const active = !isApplicant && st.activeUids.includes(m.uid);
     const actions = isApplicant
       ? `<button class="primary wide" data-action="hire" data-index="${index}" ${Game.canHireApplicant(index) ? "" : "disabled"}>採用する</button>`
-      : `<div class="row"><button data-action="toggledeploy" data-uid="${m.uid}">${active ? "留守番へ" : "出撃隊へ"}</button>
+      : `${m.leaving ? `<p class="leaving-line">🎒 ${U.esc(m.name)}は荷物をまとめている。次の決着までに忠誠が戻らなければ軍を去る。</p>` : ""}
+        <div class="row"><button data-action="toggledeploy" data-uid="${m.uid}">${active ? "留守番へ" : "出撃隊へ"}</button>
+          ${(m.leaving || m.loyalty <= Game.RETAIN_THRESHOLD) ? `<button class="primary" data-action="retain" data-uid="${m.uid}" ${Game.canRetain(m) ? "" : "disabled"}>慰留する（${Game.retainCost(m)}G・忠誠+${Game.RETAIN_LOYALTY}）</button>` : ""}
           <button class="danger" data-action="fire" data-confirm="1" data-uid="${m.uid}">解雇</button></div>`;
     this.set(`<div class="member-overlay"><article class="member-detail">
       <button class="small member-close" data-action="closemember">× 閉じる</button>
-      <header>${this.avatarHtml(m, "photo")}<div><h2>${U.esc(m.name)}</h2><div>${U.esc(m.race)} / ${U.esc(m.job)}${this.secondGenLabel(m)}</div>
+      <button class="small ghost member-home" data-action="home">⌂ メインへ</button>
+      <header>${this.avatarHtml(m, "photo")}<div><h2>${U.esc(Game.displayName(m))}</h2><div>${U.esc(m.race)} / ${U.esc(m.job)}${this.secondGenLabel(m)}</div>
         <div><span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span>　戦功 ${m.merit || 0}${nextRank ? ` / ${nextRank.threshold}` : "・最高位"}</div></div></header>
       <div class="stats member-detail-stats">${stat("HP", "hp")}${stat("攻撃", "atk")}${stat("防御", "def")}${stat("速度", "spd")}</div>
       <div class="meta"><span>気合 ${typeof m.spirit === "number" ? m.spirit : "-"}</span><span>忠誠 ${m.loyalty}</span><span>給与 ${m.salary}G</span></div>
+      ${this.fealtyLine(m)}
       <section><h3>特性と技</h3>${traitGroup("癖", "◌", quirks)}${traitGroup("共通特性", "◆", common)}${traitGroup("遺物由来", "🏺", relicTraits)}${traitGroup("技", "🗡", skills)}
         ${skillStatus ? `<div class="skill-status">${U.esc(skillStatus)}</div>` : ""}${nextSkill ? `<div class="next-skill">次に覚える技／伝承：<b>【${U.esc(nextSkill.name)}】</b></div>` : ""}</section>
       <section><h3>記録</h3><div class="member-record">出撃 ${record.battles || 0}戦（${record.wins || 0}勝）　倒れた ${record.downed || 0}回　担がれた ${record.carried || 0}回　遅刻 ${record.late || 0}回　食べた ${record.ate || 0}回</div></section>
       ${held.length ? `<section><h3>遺物</h3>${held.map(r => `<span class="relic-chip">🏺 ${U.esc(r.name)}</span>`).join("")}</section>` : ""}
-      ${relicActions}${this.resumeHtml(m)}${m.quote ? `<div class="quote">「${U.esc(m.quote)}」</div>` : ""}${actions}
+      ${relicActions}${this.resumeHtml(m)}${this.faceQuote(m)}${actions}
     </article></div>`, "member");
   },
 
@@ -739,20 +791,15 @@ const UI = {
     const st = Game.state;
     const combat = Game.departmentRoster("combat").length;
     const home = Game.departmentRoster("home").length;
-    const facility = Game.facilityInfo();
-    const next = FACILITY_LEVELS[st.facilityLevel + 1];
-    const buildText = next
-      ? `次の施設まで ${Math.max(0, next.buildThreshold - st.buildProgress)} 建材投入`
-      : "施設は最大レベル";
     const output = Game.departmentOutput();
     const foodNeed = Game.foodNeed();
     const balance = output.food - foodNeed;
     return `<div class="department-overview">
       <div><b>⚔ ${combat}</b><span>出撃隊</span></div>
       <div><b>🏰 ${home}</b><span>留守番</span></div>
-      <div><b>${U.esc(facility.name)}</b><span>${facility.works ? `大型施設が1戦闘に ${facility.works} 回働く` : "大型施設なし"}</span></div>
+      <div><b>城下町 Lv計 ${Game.townLevelTotal()}</b><span>建てるのは城下町の札</span></div>
       <div class="${balance < 0 && st.food < -balance ? "warn" : ""}"><b>食料 ${output.food} / 消費 ${foodNeed}</b><span>${balance < 0 ? `赤字 ${-balance}（備蓄 ${st.food} であと${Math.floor(st.food / -balance)}戦）` : `余剰 +${balance}（備蓄 ${st.food}/上限 ${Game.foodCapacity()}）`}</span></div>
-      <div><b>${U.esc(buildText)}</b><span>施工能力 ${output.material} / 回</span></div>
+      <div><b>建材 ${st.materials}</b><span>留守番の調達 +${output.material} / 決着</span></div>
       ${output.wage > 0 ? `<div><b>給与 -${output.wage}%</b><span>留守番の経理</span></div>` : ""}
       ${output.recruit > 0 ? `<div><b>応募 +${output.recruit}名</b><span>留守番の人事</span></div>` : ""}
     </div>`;
@@ -863,6 +910,67 @@ const UI = {
     return text;
   },
 
+  // 成長の読み上げ（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 2節）。
+  // 決着の画面で「○○の攻撃が 1 上がった！」を **0.5 秒ごとに一行ずつ**出す。
+  // タップで残り全部。8行を超える分は「ほか ○ 件」に畳む（中高生が読める量）。
+  GROWTH_MARK: { hp: "❤", atk: "⚔", def: "🛡", spd: "💨" },
+  GROWTH_LABEL: { hp: "HP", atk: "攻撃", def: "防御", spd: "速さ" },
+  GROWTH_LINES: 8,
+  GROWTH_STEP_MS: 500,
+  // 敵将の決着（討った・見逃した・雇った）。何も起きていない決着では出さない。
+  captainPanel() {
+    const out = (Game.state && Game.state.lastCaptains) || null;
+    if (!out || !(out.slain.length + out.spared.length + out.hired.length)) return "";
+    const row = (mark, label, names) => names.length
+      ? `<li><span class="captain-mark">${mark}</span>${U.esc(label)}：${U.esc(names.join("、"))}</li>` : "";
+    return `<div class="panel captain-panel">
+      <h3>⚔ 名のある敵</h3>
+      <ul class="captain-lines">
+        ${row("☠", "討った", out.slain)}
+        ${row("🕊", "見逃した", out.spared)}
+        ${row("🤝", "加わった", out.hired)}
+      </ul>
+    </div>`;
+  },
+  growthPanel() {
+    const rows = (Game.state && Game.state.lastGrowth) || [];
+    if (!rows.length) return "";
+    const shown = rows.slice(0, this.GROWTH_LINES);
+    const rest = rows.length - shown.length;
+    return `<div class="panel growth-panel" data-growth="1">
+      <h3>🌱 一回り大きくなった</h3>
+      <ul class="growth-lines">${shown.map(r => `<li class="growth-line" hidden>
+        <span class="growth-mark">${this.GROWTH_MARK[r.key] || "✦"}</span>${U.esc(r.name || "")}の${
+        U.esc(this.GROWTH_LABEL[r.key] || r.key)}が ${r.delta} 上がった！</li>`).join("")}</ul>
+      ${rest > 0 ? `<div class="growth-rest" hidden>ほか ${rest} 件</div>` : ""}
+    </div>`;
+  },
+  // 描いたあとに1回だけ呼ぶ。行を順に出し、画面のどこかを押したら残りを全部出す。
+  playGrowth(root) {
+    const box = (root || document).querySelector(".growth-panel");
+    if (!box) return;
+    const lines = [...box.querySelectorAll(".growth-line")];
+    const rest = box.querySelector(".growth-rest");
+    if (!lines.length) return;
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let timer = null;
+    const showAll = () => {
+      if (timer) { clearTimeout(timer); timer = null; }
+      for (const line of lines) line.hidden = false;
+      if (rest) rest.hidden = false;
+      document.removeEventListener("pointerdown", showAll);
+    };
+    if (reduced) return showAll();   // 低モーションでは待たせずに全部出す
+    let i = 0;
+    const step = () => {
+      if (i >= lines.length) { if (rest) rest.hidden = false; document.removeEventListener("pointerdown", showAll); return; }
+      lines[i++].hidden = false;
+      timer = setTimeout(step, this.GROWTH_STEP_MS);
+    };
+    document.addEventListener("pointerdown", showAll);
+    step();
+  },
+
   breakthroughPanel(battle) {
     if (!battle) return "";
     const chain = this.battleChainView(battle);
@@ -884,7 +992,7 @@ const UI = {
       : `<div class="muted">連鎖は起きなかった（ひと突きで終わっている）</div>`;
 
     // 「その戦闘で何を揃えて、どこまで壊れたか」を1行に畳む（作業表 B）。
-    // CHAIN・シナジー名・戦意倍率は今までバラバラの場所にあり、達成感が戦果に残らなかった。
+    // CHAIN・シナジー名は今までバラバラの場所にあり、達成感が戦果に残らなかった。
     // 数える対象は既にある戦果データだけで、新しい計算も戦闘式の変更もしていない。
     const synergyNames = (battle.synergies || []).filter(Boolean);
     const synergyLabel = synergyNames.length
@@ -892,11 +1000,9 @@ const UI = {
         ? `${synergyNames.slice(0, 3).map(n => `《${n}》`).join("")}ほか${synergyNames.length - 3}種`
         : synergyNames.map(n => `《${n}》`).join(""))
       : "";
-    const momentum = Math.max(1, Number(battle.momentumPeak) || 1);
     const headline = [
       maxChain ? `⛓ CHAIN ${maxChain}` : "",
-      synergyLabel ? `⚡ ${synergyLabel}` : "",
-      momentum > 1 ? `🔥 戦意 ×${momentum.toFixed(2)}` : ""
+      synergyLabel ? `⚡ ${synergyLabel}` : ""
     ].filter(Boolean);
 
     const details = [];
@@ -923,23 +1029,21 @@ const UI = {
   // 集計は Battle.summarizeFacility / summarizeDeathChains（タイムライン導出）を表示するだけ。
   facilityPanel(battle) {
     if (!battle) return "";
+    // 決着の施設報告は「発火した回数」だけ（2026-09-13。建てる話は城下町の札にある）。
     const facility = battle.facility || null;
     const summary = battle.facilitySummary || { facilities: [] };
     const chains = battle.deathChains || [];
     const lines = [];
-    if (facility && facility.level >= 1) {
-      lines.push(`🏗 施設Lv.${facility.level}（${U.esc(facility.name)}）：大型施設が1戦闘に ${facility.works || 1} 回まで働く`);
-    }
     const fired = new Map((summary.facilities || []).map(f => [f.facilityId, f]));
     const describe = f => {
       if (f.facilityId === "graveyard") return `骸骨従者${f.summons || 0}体を召喚${f.rescued ? "（全滅回避）" : ""}`;
-      if (f.facilityId === "extortion_ledger") return `予約金貨${f.amount}G到達 → 次の味方攻撃+40%`;
-      if (f.facilityId === "grand_kitchen") return "食事強化を2倍化（糧食+1）";
+      if (f.facilityId === "grand_kitchen") return "食事強化を倍化（糧食+1）";
       return `${f.count}回発火`;
     };
     for (const f of fired.values()) lines.push(`🔥 ${U.esc(f.name)}：${U.esc(describe(f))}`);
-    if (facility && facility.activeId && !fired.has(facility.activeId)) {
-      lines.push(`💤 ${U.esc(facility.activeName)}：今回は発火しなかった`);
+    // 建っているのに働かなかった施設は、その事実だけ
+    for (const x of (facility && facility.facilities) || []) {
+      if (!fired.has(x.id)) lines.push(`💤 ${U.esc(x.name)} Lv${x.lv}：今回は発火しなかった`);
     }
     if (!lines.length && !chains.length) return "";
     const chainRows = chains.map(c => `<div class="death-chain"><b>${U.esc(c.name)}</b>
@@ -969,35 +1073,14 @@ const UI = {
   },
 
   // 余った食料の使い道。備蓄が積み上がるだけの資源だったので、判断に変える。
-  feastPanel() {
-    const q = Game.feastQuote();
+  // 飢餓の出口（宴の札に同居していたが、宴の撤去で行き場が無くなったので独立させた。
+  // docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1。飢餓そのものは撤去していない）。
+  hungerPanel() {
     const streak = Game.state.hungerStreak || 0;
-    // 飢餓は損失で終わらない。出口が見えていないと、また「不足＝詰み」に戻る。
-    const hunger = streak > 0
-      ? `<div class="hunger-streak">🥀 飢餓 ${streak}戦目 —
-          あと${Game.HUNGER_ADAPT_TURNS - streak}戦を生き延びた者は<b>飢餓適応</b>（食料を消費しない／最大HP-15%）</div>`
-      : "";
-    if (!q.possible) {
-      return `<div class="panel feast-panel"><h3>🍗 宴</h3>
-        <div class="muted">この軍団は誰も食事を必要としない。宴は開けない。</div>${hunger}</div>`;
-    }
-    const links = [
-      q.bigEaters > 0 ? `大食漢${q.bigEaters}体：食う量2倍・効果2倍` : "",
-      q.cook ? "魔界料理人：必要な食料が半分" : ""
-    ].filter(Boolean);
-    const body = q.held
-      ? `<div class="feast-ready">宴は済んだ。${U.esc(String(Game.state.feastPending.fed))}名が満腹で出撃する（食う者の与ダメージ+${Math.round(Game.state.feastPending.dmgBonus * 100)}%）</div>`
-      : `<button class="wide" data-action="feast" ${q.affordable ? "" : "disabled"}>
-           🍗 宴を開く（食料 ${q.cost} 消費）
-         </button>
-         <div class="muted">${q.affordable
-            ? `食う者${q.eaters}名の忠誠+${q.loyaltyGain}、出撃した食う者の与ダメージ+${Math.round(q.dmgBonus * 100)}%（次の戦闘のみ）。`
-            : `備蓄 ${q.stock}。宴には ${q.cost} と、2戦ぶんの糧食を残す余裕が要る。`}</div>`;
-    return `<div class="panel feast-panel">
-      <h3>🍗 宴 <span class="muted">備蓄 ${q.stock} / 上限 ${Game.foodCapacity()}</span></h3>
-      ${body}
-      ${links.length ? `<div class="synergy-hint">${links.map(U.esc).join(" / ")}</div>` : ""}
-      ${hunger}
+    if (!streak) return "";
+    return `<div class="panel hunger-panel">
+      <div class="hunger-streak">🥀 飢餓 ${streak}戦目 —
+        あと${Game.HUNGER_ADAPT_TURNS - streak}戦を生き延びた者は<b>飢餓適応</b>（食料を消費しない／最大HP-15%）</div>
     </div>`;
   },
 
@@ -1102,40 +1185,6 @@ const UI = {
 
   // 稼いだ金貨の出口。出撃5枠を壊さず「その戦闘だけの6体目」を買う。
   // 同族を雇えば種族シナジーの頭数も増えるので、硬い者と噛み合う者のどちらを取るかが判断になる。
-  mercenaryPanel() {
-    const st = Game.state;
-    const hired = st.mercenaries || [];
-    const offers = Game.mercenaryOffers();
-    const base = Game.mercenaryBaseCost();
-    const full = hired.length >= Game.MERCENARY_COSTS.length;
-    const hiredHtml = hired.length
-      ? `<div class="merc-hired">雇用中：${hired.map(m =>
-          `<span class="merc-chip">${this.icon(m.race)} ${U.esc(m.name)}（${U.esc(m.race)}）${m.hiredFor}G</span>`).join("")}</div>`
-      : "";
-    const cards = full ? "" : offers.map((m, i) => {
-      const cost = Game.mercenaryCost(i);
-      const kin = Game.mercenaryKinCount(m.race);
-      const afford = st.gold >= cost;
-      return `<div class="merc-card">
-        <div class="merc-name">${this.icon(m.race)} <b>${U.esc(m.name)}</b>
-          <span class="muted">${U.esc(m.race)}／${U.esc(m.job)}</span></div>
-        <div class="merc-stats">HP ${m.hp}・攻 ${m.atk}・防 ${m.def}・速 ${m.spd}</div>
-        <div class="merc-traits">${this.traitHtml(m.traits)}</div>
-        ${cost < base ? `<div class="merc-kin">🤝 顔なじみ価格 ${base}G → <b>${cost}G</b>
-          <span class="muted">（出撃隊に${U.esc(m.race)}が${kin}体）</span></div>` : ""}
-        <button class="small primary" data-action="hiremerc" data-index="${i}" ${afford ? "" : "disabled"}>
-          ${afford ? `${cost}G で雇う` : `${cost}G 必要（所持 ${st.gold}G）`}</button>
-      </div>`;
-    }).join("");
-    return `<div class="panel merc-panel">
-      <h3>🗡 傭兵市場 <span class="muted">— この戦闘だけの助っ人</span></h3>
-      <div class="muted">出撃5枠の外から加わる。給与も戦功も持たず、戦闘が終われば去る。
-        ${full ? "これ以上は雇えない。" : `次の1名は ${base}G（出撃隊に同じ種族がいるほど安くなる）。`}</div>
-      ${hiredHtml}
-      ${cards ? `<div class="merc-list">${cards}</div>` : ""}
-    </div>`;
-  },
-
   // シナジーだけ見せても「混ぜると倍率を二重に失う」の片方しか見えない。
   // 《群れの本能》のように編成で決まる特性も、実際に測った倍率で出す。
   traitSynergyHtml(roster) {
@@ -1168,12 +1217,10 @@ const UI = {
   CHAIN_MAP_SIGNAL: "金貨獲得",
 
   chainMapPanel(roster) {
-    const facility = Game.activeFacility();
+    // 施設ノード（旧・恐喝帳簿）は廃止した（2026-09-13）。連鎖の図は人だけで組む。
     const map = Synergy.signalChain(this.CHAIN_MAP_SIGNAL, roster, {
       pool: Game.synergyPool(),
-      slots: Game.MAX_DEPLOY,
-      facility,
-      facilityReady: facility ? Game.facilityReady(facility.id) : false
+      slots: Game.MAX_DEPLOY
     });
     // 起点も反応も無く、手持ちで埋める案も無いなら、この編成に略奪連鎖の話は要らない
     if (!map.sources.length && !map.reactors.length && !map.missing.length) return "";
@@ -1380,31 +1427,11 @@ const UI = {
     })}</div>`).join("");
     // 面接中も比較できる軍団一覧。操作は人物詳細へ集約し、ここでは一行を読むだけ。
     const rosterPanel = st.roster.length ? `<div class="panel">
-      <h3>現在の軍団 <span class="muted">（${st.roster.length}/${Game.MAX_ARMY}）</span></h3>
+      <h3>現在の軍団 <span class="muted">（${st.roster.length}/${Game.maxArmy()}）</span></h3>
       <div class="muted">応募者と比べる。人物をタップすると詳しく見られる。</div>
       <div class="spacer" style="height:8px"></div>
       <div class="member-rows">${st.roster.map(m => this.memberRow(m, { controls: false })).join("")}</div>
     </div>` : "";
-    // 指名求人：金を払って「こういう奴を寄越せ」と条件を出す。中盤から解禁。
-    // 条件をシナジーの発火条件と同じ語彙にしてあるので、狙って揃える手段になる。
-    const briefPanel = (() => {
-      if (!Game.briefUnlocked()) return "";
-      const cost = Game.briefCost();
-      const active = Game.activeBrief();
-      const buttons = RECRUIT_BRIEFS.map(b => `
-        <button class="brief-option ${active && active.id === b.id ? "selected" : ""}"
-          data-action="brief" data-brief="${b.id}" ${Game.canPostBrief(b.id) ? "" : "disabled"}>
-          <span class="brief-title">${b.icon} ${U.esc(b.name)}</span>
-          <span class="brief-note">${U.esc(b.note)}</span>
-        </button>`).join("");
-      return `<div class="panel brief-panel">
-        <h3>📣 指名求人 <span class="muted">— 求人費 ${cost}G（出すたび倍）</span></h3>
-        <div class="muted">条件を指定して求人を出し直す。合う者が来やすくなり、格上も出やすくなる。
-          ${active ? `いまの指名：<b>${active.icon} ${U.esc(active.name)}</b>` : "確実ではない。来ないこともある。"}</div>
-        <div class="brief-options">${buttons}</div>
-        ${st.gold < cost ? `<div class="payroll-warning">指名には ${cost}G 必要（現在 ${st.gold}G）</div>` : ""}
-      </div>`;
-    })();
     this.set(`${this.hud()}
       <div class="panel">
         <h2>📜 応募者面接 <span class="muted">（残り採用枠 ${st.hiresLeft}）</span></h2>
@@ -1412,6 +1439,7 @@ const UI = {
           ? `<div class="muted wipe-rebuild-line">軍団は全滅した。ここから建て直す。${
               (st.relics || []).length ? `　🏺 蔵に ${st.relics.length}品` : ""}</div>` : ""}
         ${this.armyHistoryLine()}
+        ${st.lateBloomerHint ? `<p class="first-guide late-bloomer-hint">モルモ：${U.esc(st.lateBloomerHint)}</p>` : ""}
         ${st.generation === 1 && st.turn <= 2 ?`<p class="first-guide">モルモ：${st.roster.length ? "「今の軍団との接続」は、仲間の能力とつながる手がかりデス。" : "まずは能力の発動条件を一つ見てみましょう。どんな仲間がいれば活かせそうですか？"}</p>` : ""}
         <div class="muted">${
           st.turn === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
@@ -1427,7 +1455,6 @@ const UI = {
         <div class="cards recruit-applicants">${cards}</div>
         <div class="recruit-roster">${rosterPanel}</div>
       </div>
-      ${briefPanel}
       <div class="spacer"></div>
       <div class="row">
         <button data-action="reroll" ${Game.canReroll() ? "" : "disabled"}>
@@ -1445,39 +1472,74 @@ const UI = {
     const offers = st.missionOffers.length ? st.missionOffers : Game.prepareMissions(true);
     const salary = Game.salaryTotal();
     const construction = Game.departmentOutput().material;
-    const nextFacility = FACILITY_LEVELS[st.facilityLevel + 1];
+    // 地図の候補（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
+    // 同じ場所の「落とす／略奪／贈る」は裏の選択肢として offers に並んでいるので、
+    // 表に出すのは代表の1枚だけにして、切り替えは同じ札の中のボタンで行う。
+    const alt = new Map();      // territoryId → [{ index, mission }]
+    offers.forEach((m, i) => {
+      if (!m.territoryId || m.territoryMode === "take") return;
+      if (!alt.has(m.territoryId)) alt.set(m.territoryId, []);
+      alt.get(m.territoryId).push({ index: i, mission: m });
+    });
+    const postAct2 = st.act2Cleared ? `<div class="panel"><h3>第二幕・決着後</h3>
+      <p>軍団と城下町はそのまま。第三幕は今後追加予定。今はこの軍団で訓練と周辺地の略奪を続けられる。</p></div>` : "";
     const cards = offers.map((m, i) => {
+      if (m.territoryId && m.territoryMode !== "take") return "";   // 裏の選択肢は札にしない
+      const others = m.territoryId ? (alt.get(m.territoryId) || []) : [];
       const net = m.reward - salary;
-      const availableMaterials = (st.materials || 0) + (m.materialReward || 0);
-      const buildEstimate = nextFacility ? Math.min(availableMaterials, construction) : 0;
-      const buildRemaining = nextFacility
-        ? Math.max(0, nextFacility.buildThreshold - st.buildProgress)
-        : 0;
-      const buildText = !nextFacility
-        ? "施設は最大レベル"
-        : construction <= 0
-          ? (!st.seizeUsed && st.facilityLevel === 0
-              ? `施工役なし。建材${Math.max(0, 3 - (st.buildProgress || 0))}で勝利後に拠点接収できる（備蓄${st.materials || 0}）`
-              : `施工役なし（${m.materialReward || 0}建材は備蓄）`)
-          : `勝利後 最大${buildEstimate}投入／次施設まで${buildRemaining}`;
-      const consequence = m.missionKind === "invade"
-        ? `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`
-        : m.missionKind === "suppress"
-          ? `生存者の忠誠 +${m.loyaltyDelta}`
-          : "王国攻略は進まない";
+      // 建材は城下町で使う（旧「施工で積む」は撤去した。2026-09-13）
+      const availableMaterials = (st.materials || 0) + (m.materialReward || 0) + construction;
+      const buildText = `勝利後の建材 ${availableMaterials}（城下町で使う）`;
+      // 進軍は「前哨戦 → 本戦」の2戦（2026-09-12）。どちらの戦いなのかを最初に出す。
+      const phase = m.twoStage
+        ? (m.missionPhase === "outpost"
+          ? `<span class="mission-phase outpost">前哨戦</span>`
+          : `<span class="mission-phase main">本戦</span>`)
+        : "";
+      const consequence = m.missionKind === "patrol" ? "攻略は進まない。王国にも気づかれない"
+        : m.missionPhase === "outpost" ? "王国攻略は進まない（勝てば本戦へ）"
+        : m.territoryMode === "take" ? "勝てば領土になる（王国攻略はここから決まる）"
+        : m.missionKind === "invade"
+        ? (m.missionPhase === "outpost"
+          ? "王国攻略は進まない（勝てば本戦へ）"
+          : `王国攻略 +${m.conquestDelta}（決戦まであと${Math.max(0, Game.MAX_CONQUEST - st.conquest)}勝）`)
+        : m.missionKind === "trial"
+          // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §2）。攻略も警戒も動かない。
+          ? `誰も死なない。勝てば第${(m.trial?.level || 0) + 2}段へ・戦功 +2`
+        : m.missionKind === "train"
+          ? `誰も死なない。戦功 +${m.trainingMerit || 1}・忠誠 +1`
+          : m.missionKind === "suppress"
+            ? `生存者の忠誠 +${m.loyaltyDelta}`
+            : "王国攻略は進まない";
+      // 訓練（2026-09-13）：相手を3つの小ボタンから選ぶ。解放は征服度で決まる。
+      const trainingPick = m.missionKind === "train" ? `<div class="training-pick">
+        ${Game.trainingOpponents().map(o => `<button class="small${m.opponentId === o.id ? " on" : ""}"
+          data-action="trainpick" data-id="${U.esc(o.id)}" ${o.unlocked ? "" : "disabled"}
+          title="${U.esc(o.unlocked ? o.note : `王国攻略 ${o.conquest} で解放`)}">${U.esc(o.name)}${o.unlocked ? "" : `（攻略${o.conquest}）`}</button>`).join("")}
+      </div>
+      <div class="muted training-note">${U.esc((Game.trainingOpponent(m.opponentId) || {}).note || "")}</div>` : "";
       return `<div class="mission-card mission-${U.esc(m.missionKind)}" data-route="${i + 1}">
-        <div class="mission-route-number"><span>進軍路</span><b>${i + 1}</b></div>
-        <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : "🏰"}
+        <div class="mission-route-number"><span>${m.missionKind === "train" ? "訓練場" : m.missionKind === "trial" ? "闘技場" : "進軍路"}</span><b>${m.missionKind === "train" ? "🥊" : m.missionKind === "trial" ? "🏆" : i + 1}</b></div>
+        <div class="mission-kind">${m.missionKind === "raid" ? "🔥" : m.missionKind === "suppress" ? "⚖" : m.missionKind === "train" ? "🥊" : m.missionKind === "trial" ? "🏆" : "🏰"}
           危険度 ${U.esc(m.difficulty)}</div>
-        <h3>${U.esc(m.missionTitle)}</h3>
+        <h3>${m.missionKind === "train" ? `<span class="mission-phase training">稽古</span>`
+          : m.missionKind === "trial" ? `<span class="mission-phase training">力試し</span>` : phase}${U.esc(m.missionTitle)}</h3>
         <div class="mission-purpose"><b>${U.esc(m.strategyLabel || "作戦")}</b><br>
           <span>${U.esc(m.strategyHint || "")}</span></div>
         <div class="mission-army">${U.esc(m.army)} <span class="muted">— ${U.esc(m.region)}</span></div>
         <div class="mission-formation"><b>敵編成：${U.esc(m.formationName || "基本隊列")}</b><br>
-          <span class="muted">${U.esc(m.formationHint || "敵情を確認して出撃隊を選べ。")}</span></div>
+          <span class="muted">${U.esc(m.formationHint || "敵情を確認して出撃隊を選べ。")}</span>
+          ${m.missionPhase === "main" && m.twoStage ? `<br><span class="outpost-note">前哨で見た隊列と同じ</span>` : ""}
+          ${m.missionPhase === "outpost" ? `<br><span class="outpost-note">この隊列がそのまま本戦の隊列になる</span>` : ""}</div>
         <p>${U.esc(m.description)}</p>
+        ${st.incidents?.intel && m.missionKind==="invade" ? `<p class="letter-intel">手紙の敵情：${m.units.map(u=>`${U.esc(u.name)}（攻${u.atk}・守${u.def}）`).join("、")}</p>` : ""}
+        ${trainingPick}
+        ${m.missionKind === "train" ? `<div class="training-terms">死なない。金は入らない。食料と<b>半分の給与</b>だけ払う。</div>` : ""}
+        ${m.missionKind === "trial" ? `<div class="training-terms">死なない。全滅しても軍団は続く。
+          <b>力試し 第${(m.trial?.level || 0) + 1}段</b>・相手 ×${(m.trial?.mult || 1).toFixed(2)}
+          ${Game.state.trials?.best ? `　これまでの最高 第${Game.state.trials.best}段` : ""}</div>` : ""}
         <dl class="mission-economy">
-          <dt>勝利報酬</dt><dd class="gold">${m.reward}G</dd>
+          <dt>勝利報酬</dt><dd class="gold">${m.missionKind === "trial" ? m.trialReward || 0 : m.reward}G</dd>
           <dt>食料</dt><dd class="food">+${m.foodReward || 0}</dd>
           <dt>建材</dt><dd class="materials">+${m.materialReward || 0}</dd>
           <dt>施設施工見込</dt><dd>${U.esc(buildText)}</dd>
@@ -1488,7 +1550,19 @@ const UI = {
           <dt>軍勢警戒</dt><dd>${m.armyPressure ? `敵能力 +${m.armyPressure}%` : "なし"}</dd>
           ${m.familiarity ? `<dt>守りの慣れ</dt><dd>敵能力 +${m.familiarity}%（この辺りで戦い続けた分）</dd>` : ""}
         </dl>
-        <button class="primary wide" data-action="missionpick" data-index="${i}">この作戦を選ぶ</button>
+        ${m.territoryLine ? `<div class="mission-territory">${U.esc(m.territoryLine)}</div>` : ""}
+        ${m.captainCard ? `<div class="mission-captain">⚠ ${U.esc(m.captainCard.short)}が待ち構えている<small class="muted">　討てば首級（報酬 1.5 倍）。膝をつかせれば、見逃すか雇うか選べる</small></div>` : ""}
+        <button class="primary wide" data-action="missionpick" data-index="${i}">${U.esc(m.territoryMode === "take" ? m.missionTitle : "この作戦を選ぶ")}</button>
+        ${others.map(o => {
+          const t = o.mission;
+          const label = t.missionKind === "tribute"
+            ? `贈って従える（${t.tributeCost.gold}G・食料${t.tributeCost.food}）`
+            : "落とさずに略奪する";
+          const poor = t.missionKind === "tribute"
+            && ((st.gold || 0) < t.tributeCost.gold || (st.food || 0) < t.tributeCost.food);
+          return `<button class="small wide mission-alt" data-action="missionpick" data-index="${o.index}" ${poor ? "disabled" : ""}
+            title="${U.esc(t.strategyHint || "")}">${U.esc(label)}${poor ? "（足りない）" : ""}</button>`;
+        }).join("")}
       </div>`;
     }).join("");
     // 反撃予約中は defend 一択になる。作戦会議の見出しをそれに合わせ、
@@ -1499,6 +1573,7 @@ const UI = {
       ? (isHero ? "勇者アレン一行が城へ向かっている" : `${offers[0].army}が城へ向かっている`)
       : "🗺 作戦会議";
     this.set(`${this.hud()}
+      ${postAct2}
       <div class="mission-warroom">
       <header class="mission-warroom-head">
       <div class="panel mission-briefing">
@@ -1506,51 +1581,28 @@ const UI = {
         <div class="muted">${forced
           ? "迎え撃つほかない。面接と編成で備えよ。"
           : "略奪と鎮圧は軍団を整える寄り道、王国侵攻は最終決戦を近づける。建設担当がいれば、どの作戦でも勝利後に備蓄建材を施設へ投入する。"}</div>
+        ${forced ? "" : this.outpostMormo(offers)}
       </div>
       <div class="panel mission-assets"><h3>現在の部門と施設</h3>${this.departmentSummary()}</div>
       </header>
       <div class="mission-map-label"><span>王国周辺作戦図</span><small>${forced ? "迎撃準備" : "三本の進軍路から、次の一手を選ぶ"}</small></div>
-      <div class="mission-grid mission-routes">${cards}</div>
+      <div class="mission-grid mission-routes">${cards}${this.incidentCards("A")}</div>
       <div class="spacer"></div>
       ${forced ? "" : `<button class="wide ghost mission-return" data-action="backrecruit">← 面接・軍団確認へ戻る</button>`}
       </div>`, "mission");
   },
 
-  facility() {
-    const st = Game.state;
-    const current = Game.activeFacility();
-    const active = Game.activeRoster();
-    const builders = Game.departmentRoster("home");
-    const statusOf = f => {
-      if (f.id === "extortion_ledger") {
-        const n = active.filter(m => (m.job || "").includes("会計")).length;
-        return n ? `発火可能：会計職の出撃者 ${n}名` : "不足：会計職を出撃隊へ配置";
-      }
-      if (f.id === "grand_kitchen") {
-        const eaters = active.filter(m => (m.traits || []).includes("big_eater")).length;
-        const cooks = active.filter(m => (m.traits || []).includes("demon_cook")).length;
-        return eaters || cooks
-          ? `発火可能：大食漢 ${eaters}名／魔界料理人 ${cooks}名（出撃中）`
-          : "不足：大食漢か魔界料理人を出撃隊へ配置";
-      }
-      const n = builders.filter(m => m.tplId === "necromancer").length;
-      return n ? `発火可能：留守番の死霊術師 ${n}名` : "不足：死霊術師を留守番へ配置";
-    };
-    const cards = FACILITIES.map((f, i) => `<div class="mission-card facility-blueprint" data-plan="${i + 1}">
-      <div class="blueprint-stamp">設計案 ${i + 1}</div>
-      <div class="mission-kind">大型施設 ${current && current.id === f.id ? "・現在稼働中" : ""}</div>
-      <h3>${f.icon} ${U.esc(f.name)}</h3>
-      <p>${U.esc(f.desc)}</p>
-      <div class="mission-purpose"><b>現在の接続</b><br><span>${U.esc(statusOf(f))}</span></div>
-      <button class="primary wide" data-action="choosefacility" data-id="${U.esc(f.id)}">
-        ${current && current.id === f.id ? "この施設を維持する" : current ? "この施設へ建て替える" : "この施設を建てる"}</button>
-    </div>`).join("");
-    this.set(`${this.hud()}<div class="construction-yard"><div class="construction-crane" aria-hidden="true">⚒</div>
-      <div class="panel construction-order"><h2>🔨 大型施設の方針決定</h2>
-      <div>施設Lv.${st.pendingFacilityChoiceLevel}が完成した。稼働できる大型施設は1つだけ。現在のビルドをどの方向へ壊すか選べ。</div>
-    </div><div class="construction-label">魔王城増築計画 <small>採用した人材と接続する設計案を選べ</small></div>
-    <div class="mission-grid construction-plans">${cards}</div></div>`, "facility");
+  // 前哨戦・本戦のモルモの一言（2026-09-12）。進軍が2戦制の段階でだけ出す。
+  outpostMormo(offers) {
+    const invade = (offers || []).find(m => m.missionKind === "invade" && m.twoStage);
+    if (!invade || typeof MORMO_LINES === "undefined") return "";
+    const lines = invade.missionPhase === "outpost" ? MORMO_LINES.outpost : MORMO_LINES.mainBattle;
+    if (!lines || !lines.length) return "";
+    return `<div class="mormo-brief">宰相モルモ「${U.esc(lines[0])}」</div>`;
   },
+
+  // 旧「大型施設の方針決定」画面（facility）は撤去した（2026-09-13）。
+  // 施設は城下町の札から金と建材で建てる。phase "facility" はもう作られない。
 
   formation() {
     const st = Game.state;
@@ -1602,9 +1654,9 @@ const UI = {
     const necromancerFrontWarning = necromancer && active[0] && active[0].uid === necromancer.uid
       ? `配置注意：${necromancer.name}は最前列。本人が倒れると《死霊術》は使えません。`
       : "";
-    const ledgerReady = st.activeFacilityId === "extortion_ledger" && active.some(m => (m.job || "").includes("会計"));
-    const graveyardReady = st.activeFacilityId === "graveyard" && builders.some(m => m.tplId === "necromancer");
-    const kitchenReady = st.activeFacilityId === "grand_kitchen";
+    // 戦場で効く施設（城下町の「軍」2つ）。恐喝帳簿は廃止した（2026-09-13）。
+    const graveyardReady = Game.facilityReady("graveyard");
+    const kitchenReady = Game.facilityReady("grand_kitchen");
     const deadline = st.day === 1 ? "勇者到着まであと2日"
       : st.day === 2 ? "明日、勇者が到着" : "本日、勇者襲来";
     const openingActions = st.day < Game.OPENING_DAYS
@@ -1627,17 +1679,14 @@ const UI = {
       ${!opening && deathHints.length ? `<div class="panel"><b>💀 死亡反応</b>
         <div class="synergy-hint">${deathHints.map(U.esc).join(" → ")}</div>
         ${necromancerFrontWarning ? `<div class="warn">${U.esc(necromancerFrontWarning)}</div>` : ""}</div>` : ""}
-      ${!opening && ledgerReady ? `<div class="panel"><b>📒 恐喝帳簿</b>
-        <div class="synergy-hint">予約金貨3G到達 → 次の味方攻撃+40%</div></div>` : ""}
-      ${!opening && graveyardReady ? `<div class="panel"><b>🪦 墓地</b>
-        <div class="synergy-hint">最初の味方死亡 → ラウンド終了時に骸骨従者を1体召喚</div></div>` : ""}
-      ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房</b>
-        <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を2倍にする。</span>
+      ${!opening && graveyardReady ? `<div class="panel"><b>🪦 墓地 Lv${Game.facilityLv("graveyard")}</b>
+        <div class="synergy-hint">味方死亡 → ラウンド終了時に骸骨従者を ${Game.facilityLv("graveyard")} 体まで召喚</div></div>` : ""}
+      ${!opening && kitchenReady ? `<div class="panel"><b>🍖 巨大厨房 Lv${Game.facilityLv("grand_kitchen")}</b>
+        <span class="muted">戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を ${Game.facilityLv("grand_kitchen") + 1} 倍にする。</span>
       </div>` : ""}
       ${opening ? "" : this.debtPanel()}
-      ${opening ? "" : this.feastPanel()}
       ${this.payrollPanel()}
-      ${opening ? "" : this.mercenaryPanel()}
+      ${opening ? "" : this.hungerPanel()}
       ${this.kingSlimePanel()}
       ${this.vaultPanel()}
       ${empty ? `<div class="panel"><b style="color:var(--red)">出撃隊が空だ。</b> 留守番から最低1体を出せ。</div>` : ""}
@@ -1667,7 +1716,6 @@ const UI = {
   battleManual(out) {
     this.set(BattleScene.shell(out.stageData));
     BattleScene.onRetreatChoice = null;
-    BattleScene.onOrderChoice = null;
     BattleScene.playManual(out.handle, result => Game.finishManualBattle(result));
   },
 
@@ -1678,7 +1726,6 @@ const UI = {
     // 保留されていない戦闘（提案が出なかった／開幕の防衛戦）では settleBattle が false を返すだけ。
     BattleScene.onRetreatChoice = choice => Game.settleBattle(choice);
     // 号令の答え。名指しなら run.js が同じ種で計算し直した新しいタイムラインを返し、描画側が差し替える。
-    BattleScene.onOrderChoice = unitId => Game.answerOrder(unitId);
     BattleScene.play(result.timeline);
   },
 
@@ -1727,7 +1774,19 @@ const UI = {
       ? (b.contribution || []).filter(c => c.injured && !c.mercenary).map(c => c.name) : [];
     const fallen = wiped ? (b.fallen || []).map(f => f.name) : [];
     const relicsLeft = wiped ? (b.relicsLeft || []) : [];
-    const banner = b.defense && b.defended
+    // 稽古（2026-09-13）：勝ち負けを言わない。誰が伸びて、誰が倒れたかだけ。
+    const grown = (b.contribution || []).filter(c => !c.mercenary).length;
+    const learned = (b.unlocked || []).length;
+    const banner = b.training
+      ? `<div class="banner training">
+        <h2>稽古を終えた</h2>
+        <div>${U.esc(b.army)}との練習試合。${grown}人が一回り強くなった${
+          learned ? `。${learned}人が技を覚えた` : ""}。</div>
+        ${(b.trainingDown || []).length ? `<div class="retreat-injured">🩹 ${U.esc(b.trainingDown.join("、"))}は稽古で倒れた。
+          負傷。次の戦いは出られない（留守番として働く）</div>` : ""}
+        <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
+      </div>`
+      : b.defense && b.defended
       ? `<div class="banner win">
         <h2>城を守った</h2>
         <div>${U.esc(b.army)}を退けた。押収した建材・食料は蔵に収まっている。</div>
@@ -1741,8 +1800,8 @@ const UI = {
           : `${U.esc(b.army)}に城を荒らされた。`}${carried.length
           ? `${U.esc(carried.join("、"))}は担いで戻った。` : ""}</div>
         <ul class="notes">
-          ${(b.ransacked.facilityBefore !== undefined && b.ransacked.facilityAfter !== undefined)
-            ? `<li>施設Lv${b.ransacked.facilityBefore}→${b.ransacked.facilityAfter}</li>` : ""}
+          ${b.ransacked.razed
+            ? `<li>${U.esc(b.ransacked.razed.name)} Lv${b.ransacked.razed.from}→Lv${b.ransacked.razed.to}</li>` : ""}
           ${(b.ransacked.foodBefore !== undefined && b.ransacked.foodAfter !== undefined)
             ? `<li>食料 ${b.ransacked.foodBefore}→${b.ransacked.foodAfter}</li>` : ""}
           ${b.ransacked.relic ? `<li>${U.esc(b.ransacked.relic)}を奪われた</li>` : ""}
@@ -1786,22 +1845,16 @@ const UI = {
     this.set(`${this.hud()}
       ${this.storyResultPanel(b)}
       ${banner}
+      ${this.incidentCards("B")}
+      ${st.incidents?.tail?.ready ? '<p><button data-action="incidenttailview">📜 噂の続きが届いている</button></p>' : ""}
+      ${this.incidentResultHtml(st.incidents?.result)}
+      ${this.slimeSplitWhy()}
+      ${st.incidents?.biography ? `<section class="panel"><h3>魔界日報：${U.esc(st.incidents.biography.name)}の歩み</h3>${st.incidents.biography.lines.map(t=>`<p>${U.esc(t)}</p>`).join("")}</section>` : ""}
       ${/* 敗因メモ（ニアミス）は「どこまで届いたか」を残す。全滅と敗走のときだけ出す。
            再起画面がほぼ出なくなった（再建の仕様）ので、ここに無いと二度と読まれない。 */
         (wiped || b.lostOnPoints) ? this.nearMissPanel(b.nearMiss) : ""}
       ${this.skillUnlockPanel(b)}
       ${this.earnedTraitPanel(b)}
-      ${Game.canSeizeStronghold() ? (() => {
-        const q = Game.seizeQuote();
-        return `<div class="panel seize-panel">
-        <h3>🏴 この拠点を接収するか</h3>
-        <div class="muted">建設担当がいなくても、勝ち取った拠点をそのまま城へ組み込める。
-          <b>このランで1度きり</b>だ。<br>
-          代償：建材 <b>${q.need}</b>（備蓄 ${q.have}）を消費し、王国警戒度 <b>+${q.alertCost}</b>。
-          奪った拠点は目立つ。以後の敵は少し強くなる。</div>
-        <button class="primary wide" data-action="seize">🏴 接収して大型施設を選ぶ</button>
-      </div>`; })() : ""}
-
       <div class="panel payroll-result">
         <h3>${payrollPolicy.icon} 給与報告：${U.esc(payrollPolicy.name)}</h3>
         <div>支払額 <b>${payrollReport.paid || 0}G</b>／通常額 ${payrollReport.base || 0}G</div>
@@ -1809,6 +1862,8 @@ const UI = {
       </div>
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
+      ${this.captainPanel()}
+      ${this.growthPanel()}
       ${this.breakthroughPanel(b)}
       ${this.debtPanel()}
       ${this.facilityPanel(b)}
@@ -1817,9 +1872,16 @@ const UI = {
         ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}
       ${(st.lastPromotions && st.lastPromotions.length) ? `<div class="panel promotion-panel">
         <h3>👑 魔王軍人事</h3>
-        ${st.lastPromotions.map(p => `<div class="promotion-row promotion-${U.esc(p.rankId)}"><b>${U.esc(p.name)}</b> を
-          <span class="rank-badge rank-${U.esc(p.rankId)}">${U.esc(p.rankName)}</span> に任ずる！
-          <div class="muted">${U.esc(p.message)}</div></div>`).join("")}
+        ${st.lastPromotions.some(p => p.general) && typeof MORMO_LINES !== "undefined" && (MORMO_LINES.general || []).length
+          ? `<div class="mormo-brief">宰相モルモ「${U.esc(MORMO_LINES.general[0])}」</div>` : ""}
+        ${st.lastPromotions.map(p => p.general
+          ? `<div class="promotion-row promotion-general"><b>${U.esc(p.displayName || p.name)}</b> へ転身！
+              <span class="rank-badge rank-general">将軍</span>
+              <div class="muted">${U.esc(p.message)}</div>
+              <div class="muted">魔王の魔力で体が変わった。気合の上限が1増え、将軍技【魔王の力】を得た。</div></div>`
+          : `<div class="promotion-row promotion-${U.esc(p.rankId)}"><b>${U.esc(p.name)}</b> を
+              <span class="rank-badge rank-${U.esc(p.rankId)}">${U.esc(p.rankName)}</span> に任ずる！
+              <div class="muted">${U.esc(p.message)}</div></div>`).join("")}
       </div>` : ""}
       ${(st.lastFallen && st.lastFallen.length) ? `<div class="panel fallen-panel">
         <h3>🕯 戦没者</h3>
@@ -1831,7 +1893,44 @@ const UI = {
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
       </div>
       <button class="primary wide" data-action="afterresult">次へ</button>`, "report");
+    this.playGrowth(this.root);   // 成長は一行ずつ読み上げる（描いたあとに1回だけ）
     if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
+    // 差し押さえ・荒らし・取り立てで施設が1段落ちた決着では、金庫の音を1回。
+    // 控えは Town.demolishOne が置く（src/core/town.js）。鳴らしたら消すので二度は鳴らない。
+    // `turn` を ±1 まで許すのは、`st.turn += 1` の位置が経路ごとに違うため
+    // （荒らしは加算の前、銀行の差し押さえは稽古の決着だと加算の後に通る）。
+    // run.js を触らずに「この決着で落ちた分か」を見分けるための幅。
+    const razed = (st.town || {}).lastDemolished;
+    if (razed && Math.abs((Number(st.turn) || 0) - (Number(razed.turn) || 0)) <= 1) {
+      if (typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-bank");
+      delete st.town.lastDemolished;
+    }
+    // 転身は「事件」なので一枚見せる。人事の欄より先に目に入る。
+    const general = (st.lastPromotions || []).find(p => p.general);
+    if (general) this.generalCutin(general);
+  },
+
+  // 将軍への転身のカットイン（2.5秒、タップで飛ばせる）。紫の炎が札を包み、二つ名が浮かぶ。
+  // 低モーションでは動かさず、同じ札を静止で出す。
+  generalCutin(entry) {
+    if (!entry || !this.root) return;
+    const old = document.getElementById("general-cutin");
+    if (old) old.remove();
+    const box = document.createElement("div");
+    box.id = "general-cutin";
+    box.className = "general-cutin";
+    box.innerHTML = `<div class="gc-flame" aria-hidden="true"></div>
+      <div class="gc-copy">
+        <span class="gc-kicker">転身</span>
+        <b class="gc-name">${U.esc(entry.displayName || entry.name)}</b>
+        <span class="gc-desc">魔王の魔力を受け、将軍となった</span>
+      </div>`;
+    this.root.appendChild(box);
+    if (typeof Sound !== "undefined") { if (!(Sound.playRecorded && Sound.playRecorded("general-rise"))) Sound.cue("revive"); }
+    const close = () => { box.classList.add("out"); setTimeout(() => box.remove(), 260); };
+    box.addEventListener("click", close);
+    setTimeout(close, 2500);
+    requestAnimationFrame(() => box.classList.add("show"));
   },
 
   // 敗北したが、まだ再起できる状態の画面
@@ -2041,6 +2140,90 @@ const UI = {
     </svg><div class="muted">⚔ 王国軍の砦　🏳 取り戻した　🔥 救った村　💀 焼かれた村</div></div>`;
   },
 
+  incidentCards(door="A") {
+    if(typeof Incidents==="undefined"||!Game.state)return "";
+    const st=Game.state,s=Incidents.init(st);
+    // まだモルモが持ってきていない札は出さない。先に口頭で聞く順序を崩さないため
+    // （docs/SPEC_FORCED_OMEN_2026-09-16.md §3）。張り紙は「読み返す場所」になる。
+    const waiting=new Set((s.pending||[]).map(p=>p.id));
+    const cards=Object.entries(s.offered)
+      .filter(([id,o])=>o.door===door&&o.expires>(st.turn||0)&&!waiting.has(id));
+    const html=cards.map(([id,o])=>{
+      const card=Incidents.card(id); if(!card||!Incidents.alive(st,card,o))return "";
+      return `<article class="mission-card rumor"><h3>📜 ${U.esc(card.title)}</h3><p>${U.esc(Incidents.text(st,card.rumor,Incidents.context(st,o)))}</p>
+      <button data-action="incidentopen" data-id="${id}">${door==="B"?"話を聞く":"めくる"}</button>
+      <button data-action="incidentdecline" data-id="${id}">${U.esc(card.choices[1])}</button></article>`;
+    }).join("");
+    const tail=(s.tail?.ready && !waiting.has(s.tail.id))?`<article class="mission-card rumor"><h3>📜 噂の続き</h3><p>${U.esc(Incidents.card(s.tail.parent)?.title||"その後")}</p><button data-action="incidenttailview">その後を聞く</button></article>`:"";
+    return html+(door==="A"?tail:"");
+  },
+  // 札に出す一言。出来事で変わった一言（faceLine）があればそちらを出す
+  // （docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-2。今は「もう火球は撃たん」だけ）。
+  faceQuote(m) {
+    const line = (m && m.faceLine) || (m && m.quote) || "";
+    if (!line) return "";
+    return `<div class="quote${m.faceLine ? " face-line" : ""}">「${U.esc(line)}」</div>`;
+  },
+
+  // 増殖の元の「なぜ」欄。噂の札と同じ場所に出す。
+  // 同じ決着で二人以上が分裂することがあるので、親ごとに1行ずつ並べる。
+  // 名簿に入ったのか、満員で次の面接に並んだのかは**書き分ける**（結果画面と名簿が食い違わないように）。
+  slimeSplitWhy() {
+    const box = Game.state && Game.state.lastSlimeSplit;
+    const rows = (box && box.rows) || [];
+    if (!rows.length) return "";
+    const line = r => `<li class="slime-split-line${r.joined ? " joined" : " waiting"}">${
+      U.esc(`${r.name}が火を浴びて分裂した（${r.count}体）`)} —
+      <b>${r.joined ? "1体が名簿に加わった" : "名簿は満員。1体が次の面接に並んだ"}</b></li>`;
+    return `<section class="panel incident-result"><h3>🫧 池の同居人が増えた</h3>
+      <ul class="slime-split-lines">${rows.map(line).join("")}</ul>
+      <details><summary>なぜこうなった？</summary>
+        <p>${rows.map(r => U.esc(r.why)).join("<br>")}</p></details></section>`;
+  },
+
+  incidentResultHtml(r) {
+    if(!r)return "";
+    return `<section class="panel incident-result"><h3>${U.esc(r.title)}</h3><p>${U.esc(r.text)}</p>
+      <p class="incident-mormo">モルモ「${U.esc(r.mormo)}」</p><details><summary>なぜこうなった？</summary><p>${U.esc(r.why)}</p></details></section>`;
+  },
+  incident(id, result) {
+    const st=Game.state,s=Incidents.init(st),card=Incidents.card(id),o=s.offered[id];
+    if(result&&!result.pick&&!result.busy) {
+      this.set(`${this.hud()}<div class="event-desk">${this.incidentResultHtml(result)}<button data-action="incidentback">戻る</button></div>`,"event");return;
+    }
+    if(!card||!o)return;
+    const choices=card.pick==="viewer"
+      ? st.roster.map(m=>`<button class="wide" data-action="incidentpick" data-id="${id}" data-uid="${m.uid}">${U.esc(Game.displayName(m))}</button>`).join("")
+      : `<button class="wide primary" data-action="incidentpick" data-id="${id}">${U.esc(card.choices[0])}</button>`;
+    this.set(`${this.hud()}<div class="event-desk"><section class="panel incident-choice"><h2>${U.esc(card.title)}</h2><p>${U.esc(Incidents.text(st,card.rumor,Incidents.context(st,o)))}</p>
+      ${result?.busy?"<p>先に、進行中の噂の後始末をしよう。</p>":choices}
+      <button class="wide" data-action="incidentdecline" data-id="${id}">${U.esc(card.choices[1])}</button></section></div>`,"event");
+  },
+  incidentTail() {
+    const t=Game.state.incidents?.tail;if(!t?.ready)return;
+    const choice={
+      slime_pond:t.branch==="2体以上"?["正式採用の面接へ","池へ返す"]:["池から呼び戻す","散歩を終える"],
+      kobold_dig:t.branch==="借金あり"?["返済窓口を閉じる","銀行へ案内する"]:["箱を銀行へ返す","運搬係を引き受ける"],
+      necro_visitor:t.branch==="遺物あり"?["迎え撃つ","話をつける"]:["通常の面接で話す","保証を断る"],
+      harpy_letter:["手紙のその後を聞く","封筒をしまう"],
+      general_duel:t.branch==="60以上"?["名札を返す","元の名で呼ぶ"]:["再戦を終える","勝敗表をしまう"],
+      mimic_hostel_locker:["受付係を任せる","部屋札を掛け直す"],
+      goblin_market:["店主と話す","契約を断って閉店する"],
+      training_visitor:["師匠の報告を聞く","教室を片付ける"],
+      skeleton_choir:["合唱団を迎える","送別会の誤解を解く"],
+      succubus_party:["閉会を告げる","最後の客を送る"],
+      knight_envoy:t.branch==="90未満"?["名簿の行方を聞く","忘れることにする"]:["王国の動きを聞く","剣の手入れに戻る"]
+    }[t.parent]||["その後を聞く","話を収める"];
+    this.set(`${this.hud()}<div class="event-desk"><h2>噂の続き</h2><p>${U.esc(Incidents.card(t.parent).title)}のその後を聞く。</p>
+      <button data-action="incidenttail" data-accept="yes">${choice[0]}</button><button data-action="incidenttail" data-accept="no">${choice[1]}</button></div>`,"event");
+  },
+  incidentScenes() {
+    const s=Game.state?.incidents;if(!s)return "";
+    return Object.entries(s.scenes||{}).map(([id,scene])=> {
+      const card=Incidents.card(id), subject=Game.state.roster.find(m=>m.uid===scene.subjectUid);
+      return `<p class="incident-scene">📌 ${U.esc(Incidents.text(Game.state,card?.branches[scene.branch]?.text||"",{subject}))}</p>`;
+    }).join("");
+  },
   event() {
     const st = Game.state;
     const ev = Game.currentEvent();
@@ -2112,11 +2295,11 @@ const UI = {
           <dt>最終警戒度</dt><dd>${record.alert || 0}</dd>
           <dt>最大戦力</dt><dd>${record.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${record.maxArmySize || (record.finalRoster || []).length}体</dd>
-          <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
+          <dt>輩出した将軍</dt><dd>${(record.generalsMade || []).map(g => U.esc(g.epithet ? `${g.epithet}・${g.name}` : g.name)).join("、") || "なし"}</dd>
           <dt>殿堂入り</dt><dd>${record.hallOfFame ? `${U.esc(record.hallOfFame.name)}（戦功 ${record.hallOfFame.merit || 0}）` : "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${record.battleIncidentTotal || 0}件</dd>
           <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(record))}</dd>
-          <dt>最終施設</dt><dd>Lv.${record.facilityLevel || 0}</dd>
+          <dt>城下町</dt><dd>Lv計 ${record.townLevels || 0}</dd>
           <dt>主力種族</dt><dd>${U.esc(record.mainRace)}</dd>
           <dt>到達地域</dt><dd>${U.esc(record.region)}</dd>
           <dt>死因</dt><dd>${U.esc(record.cause)}</dd>
@@ -2175,11 +2358,11 @@ const UI = {
           <dt>魔王</dt><dd>${U.esc(r.demonKingName || "若き魔王")}</dd>
           <dt>最大戦力</dt><dd>${r.maxPower}</dd>
           <dt>最大兵員数</dt><dd>${r.maxArmySize || (r.finalRoster || []).length}体</dd>
-          <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.name)).join("、") || "なし"}</dd>
+          <dt>歴代将軍</dt><dd>${(r.generalsMade || []).map(g => U.esc(g.epithet ? `${g.epithet}・${g.name}` : g.name)).join("、") || "なし"}</dd>
           <dt>殿堂入り</dt><dd>${r.hallOfFame ? `${U.esc(r.hallOfFame.name)}（戦功 ${r.hallOfFame.merit || 0}）` : "なし"}</dd>
           <dt>戦場の不祥事</dt><dd>${r.battleIncidentTotal || 0}件</dd>
           <dt>給与方針</dt><dd>${U.esc(this.payrollHistory(r))}</dd>
-          <dt>最終施設</dt><dd>Lv.${r.facilityLevel || 0}</dd>
+          <dt>城下町</dt><dd>Lv計 ${r.townLevels || 0}</dd>
           <dt>勝利数</dt><dd>${r.battlesWon || 0}戦</dd>
           <dt>王国攻略</dt><dd>${r.conquest || 0}/${Game.MAX_CONQUEST}</dd>
           <dt>主力種族</dt><dd>${U.esc(r.mainRace)}</dd>

@@ -3,8 +3,9 @@
 // 複数の採用戦略でランを大量に回し、クリア率・敗北ステージ・シナジー出現数を出す。
 // データを追加したら、まずこれを回して「どのビルドが成立しているか」を確認する。
 const fs = require('fs'), vm = require('vm');
-const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js','src/data/events.js','src/data/demon_kings.js',
-               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js','src/core/run.js'];
+const files = ['src/data/traits.js','src/data/skills.js','src/data/battle_happenings.js','src/data/monsters.js','src/data/bonds.js','src/data/promotions.js','src/data/synergies.js','src/data/enemies.js','src/data/missions.js','src/data/counterattack.js','src/data/departments.js','src/data/territories.js','src/data/enemy_captains.js',...(process.env.SIM_NO_TOWN ? [] : ['src/data/town.js']),'src/data/events.js','src/data/incidents.js','src/data/demon_kings.js',
+               'src/core/util.js','src/core/storage.js','src/core/kpi.js','src/core/synergy.js','src/core/battle.js','src/core/chain.js','src/core/spotlight.js',...(process.env.SIM_NO_TOWN ? [] : ['src/core/town.js']),'src/core/territory.js','src/core/captains.js','src/core/traces.js','src/core/incidents.js','src/core/run.js'];
+// SIM_NO_TOWN=1 で城下町（税）を読まない。再起の回帰テスト（test-chain-measure-retry）は全滅が起きる前提なので、税で楽になった後も同じ種で測れるようにする
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
   getItem: k => (k in store ? store[k] : null),
@@ -13,6 +14,9 @@ const ctx = { console, Math, Date, JSON, localStorage: {
 vm.createContext(ctx);
 for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename:f});
 const Game = vm.runInContext('Game', ctx);
+// 城下町（2026-09-13 の統合で、施設はここ1系統になった）。SIM_NO_TOWN のときは未定義。
+const Town = vm.runInContext('typeof Town !== "undefined" ? Town : null', ctx);
+const Incidents = vm.runInContext('Incidents', ctx);
 const KPI = vm.runInContext('KPI', ctx);
 const Synergy = vm.runInContext('Synergy', ctx);
 const TRAITS = vm.runInContext('TRAITS', ctx);
@@ -21,6 +25,12 @@ const tier2SkillIds = Object.keys(TRAITS).filter(id => TRAITS[id].skill && TRAIT
 const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
 
 function chooseIndex(apps, roster, strat){
+  // 「スライム統一＋魔法職1」：火球を撃つ者が1人だけ要る（増殖の元の起点）。
+  // 1人確保できたら、あとは統一の規則に戻る。
+  if (strat.caster1 && !roster.some(m => (m.tags || []).includes('caster'))) {
+    const hit = apps.findIndex(m => m.tags.includes('caster'));
+    if (hit >= 0) return hit;
+  }
   if (strat.kind === 'race') {
     const hit = apps.findIndex(m => m.race === strat.race);
     if (hit >= 0) return hit;
@@ -37,11 +47,31 @@ function chooseIndex(apps, roster, strat){
   return apps.reduce((b,m,i)=> power(m) > power(apps[b]) ? i : b, 0);
 }
 
+// 張り紙を待たない（docs/SPEC_FORCED_OMEN_2026-09-16.md §5）。
+// 本体は決着の報告のあと presentPending() が走る＝**1戦ごと**に最大2件見せる。
+// 日の終わりにまとめて見せると、その間に失効した札が「見せられなかった札」になり、
+// 表示率が本体より低く出る。測定でも決着のたびに呼ぶ。
+function showPending(st){
+  for (let shown = 0; shown < 2 && (st.incidents?.pending || []).length; shown++)
+    Incidents.markPresented(st, st.incidents.pending[0].id);
+}
+
 function runOnce(strat, stats){
   Game.newRun();
   const st = Game.state;
   let guard = 0;
-  while (st.phase !== 'gameover' && st.phase !== 'clear' && guard++ < 300) {
+  // 従来比較は第二幕の決着で止める。ゲーム本体はその後も継続する。
+  // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §6）の戦略だけ、第二幕の決着で止めずに続ける。
+  // 他の戦略の母集団は今までどおり「第二幕の決着まで」。
+  const stopAtAct2 = !strat.trial;
+  while (st.phase !== 'gameover' && st.phase !== 'clear'
+    && !(stopAtAct2 && st.act2Cleared) && guard++ < (strat.trial ? 400 : 300)) {
+    if (strat.cards) {
+      if (strat.cards === 'open') {
+        if(st.incidents?.tail?.ready) Incidents.finishTail(Game, true);
+        for(const id of Object.keys(st.incidents?.offered || {})) Incidents.open(Game,id,st.roster[0]?.uid);
+      } else for(const [id,o] of Object.entries(st.incidents?.offered || {})) if(o.door==='B') Incidents.decline(Game,id);
+    }
     stats.maxArmy = Math.max(stats.maxArmy, st.roster.length);
     // 採用フェーズ: 枠がある限り採用する
     while (st.phase === 'recruit' && st.applicants.length) {
@@ -128,13 +158,53 @@ function runOnce(strat, stats){
         if (lowLoyalty && (st.missionCounts.suppress || 0) < 2) kind = 'suppress';
         else if (st.gold < salary + 5 && (st.missionCounts.raid || 0) < 4) kind = 'raid';
       }
+      // 訓練（2026-09-13）：「進軍の前に訓練を1回」の戦略は、進軍を選ぶ手番の前に1回だけ稽古する。
+      // 死なないので判断は単純でよい。回数は stats.trainings に数える。
+      if (strat.train && kind === 'invade' && !st.trainedBeforeThisInvade
+        && (!strat.trainMax || (st.simTrainings || 0) < strat.trainMax)
+        && st.missionOffers.some(m => m.missionKind === 'train')) {
+        kind = 'train';
+        st.trainedBeforeThisInvade = true;
+      } else if (kind !== 'train') {
+        st.trainedBeforeThisInvade = false;
+      }
+      // 力試し：第二幕決着後は、決めた回数まで力試しだけを選び続ける（§6）。
+      const trialIndex = st.missionOffers.findIndex(m => m.missionKind === 'trial');
+      if (strat.trial && trialIndex >= 0 && (st.simTrials || 0) < (strat.trial.rounds || 8)) {
+        st.simTrials = (st.simTrials || 0) + 1;
+        const level = st.trials ? st.trials.level : 0;
+        Game.selectMission(trialIndex);
+        st.simTrialLevels = st.simTrialLevels || [];
+        st.simTrialLevels.push(level);
+      } else {
       // 防衛戦（王国の反撃）は一択で来る。選ぶ余地は無いので、あればそれを受ける。
       const defendIndex = st.missionOffers.findIndex(m => m.missionKind === 'defend');
-      if (defendIndex >= 0) Game.selectMission(defendIndex);
-      else {
-        const index = st.missionOffers.findIndex(m => m.missionKind === kind);
-        Game.selectMission(index >= 0 ? index : Math.min(2, st.missionOffers.length - 1));
+      // 地図の上の戦争（段階A）：候補3つからどれを落とすか。
+      //   near     … 候補の先頭（近い順に落とす）
+      //   portTown … 港と町を優先（効き目の大きい土地から取る）
+      const takes = st.missionOffers
+        .map((m, i) => ({ m, i }))
+        .filter(x => x.m.territoryMode === 'take');
+      let territoryIndex = -1;
+      if (strat.territory && takes.length && defendIndex < 0 && kind !== 'train') {
+        if (strat.territory === 'portTown') {
+          const rich = takes.find(x => ['port', 'town'].includes(x.m.territoryKind));
+          territoryIndex = (rich || takes[0]).i;
+        } else territoryIndex = takes[0].i;
       }
+      if (territoryIndex >= 0) Game.selectMission(territoryIndex);
+      else if (defendIndex >= 0 && kind !== 'train') Game.selectMission(defendIndex);
+      else {
+        // 望んだ型が無いときの代わり（地図の候補では 'invade' が出ない決着がある）。
+        // 席順で拾うと巡回ばかり選んで前に進まなくなるので、まず「落とす／従える」を探す。
+        const index = st.missionOffers.findIndex(m => m.missionKind === kind);
+        const take = st.missionOffers.findIndex(m => m.territoryMode === 'take');
+        const fallback = take >= 0 ? take
+          : st.missionOffers.findIndex(m => !['patrol', 'tribute', 'train'].includes(m.missionKind));
+        Game.selectMission(index >= 0 ? index : fallback >= 0 ? fallback : Math.min(2, st.missionOffers.length - 1));
+      }
+      }
+      if (st.selectedMission && st.selectedMission.missionKind === 'train') { stats.trainings = (stats.trainings || 0) + 1; st.simTrainings = (st.simTrainings || 0) + 1; }
     }
     if (st.phase === 'formation') {
       // 出撃隊に入らない者は全員留守番（控えは無い）。「留守番2人」は弱い2人を出撃候補から外す
@@ -176,16 +246,26 @@ function runOnce(strat, stats){
       if (st.roster.some(m => m.unpaid)) stats.unpaid++;
       if (!out.result.victory) stats.lossStage[stageNow] = (stats.lossStage[stageNow]||0)+1;
       stats.battles++;
+      // 力試し：段ごとの勝敗を数える（§6 の「段0 勝率／段3 勝率」）。
+      if (st.lastTrial) {
+        stats.trialByLevel = stats.trialByLevel || {};
+        const at = stats.trialByLevel[st.lastTrial.level] || (stats.trialByLevel[st.lastTrial.level] = { win: 0, lose: 0 });
+        st.lastTrial.won ? at.win++ : at.lose++;
+        delete st.lastTrial;
+      }
+      showPending(st);
     }
-    // 拠点接収：施設ゼロのまま条件を満たしたら必ず使う（入口が到達率をどれだけ動かすかを測る）
-    if (Game.canSeizeStronghold()) { Game.seizeStronghold(); stats.seizes++; }
+    // 拠点接収：条件を満たしたら必ず使う（1ランに1度の建材の追い風）
+    // 城下町：建てられるものがあれば建てる（施設は城下町の1系統になった。2026-09-13）。
+    // 戦略ごとの好みだけ変える。安い順に見て、最初に建てられるものを1件。
+    if (Town && st.phase === 'result') {
+      const want = strat.kind === 'caster' ? ['grand_kitchen', 'market', 'tavern']
+        : strat.kind === 'cheap' ? ['market', 'tavern', 'factory']
+        : ['graveyard', 'market', 'smithy', 'hostel', 'tavern', 'lab', 'factory', 'grand_kitchen'];
+      const order = want.concat(Town.facilities().map(f => f.id));
+      for (const id of order) { if (Town.canBuild(Game, id).ok) { Town.build(Game, id); break; } }
+    }
     if (st.phase === 'result') Game.afterResult();
-    if (st.phase === 'facility') {
-      const id = strat.kind === 'cheap' || strat.kind === 'race' && strat.race === 'ゴブリン'
-        ? 'extortion_ledger'
-        : strat.kind === 'caster' ? 'grand_kitchen' : 'graveyard';
-      Game.chooseFacility(id);
-    }
     // ハプニングは無作為に選ぶ（人間の判断は再現できないため）
     if (st.phase === 'event') {
       if (st.pendingEvent) {
@@ -211,16 +291,62 @@ function runOnce(strat, stats){
   stats.defense.won += def.won || 0;
   stats.defense.lost += def.lost || 0;
   stats.defense.ransack += st.ransackCount || 0;
-  const rec = st.record || {};
+  // 将軍の輩出数（2026-09-13）。仕様2.1 の目安は「1ランに平均 1〜2 体」。
+  // 0.5 未満なら閾値を 18 へ、3 以上なら 26 へ（この列がその判断材料）。
+  if (!stats.generals) stats.generals = 0;
+  stats.generals += (st.generalsMade || []).length;
+  // 第二幕決着では endRun() を呼ばないため、魔界史を作らず測定用の要約だけ返す。
+  let rec = st.record || {};
+  if (!st.record && st.act2Cleared) {
+    rec = {
+      cleared: true, clearedBy: st.act2Cleared.by,
+      battlesWon: st.battlesWon || 0, conquest: st.conquest || 0, alert: st.alert || 0,
+      missionCounts: { ...(st.missionCounts || {}) }, payrollChoices: { ...(st.payrollChoices || {}) },
+      maxChain: st.maxChain || 0, maxOverkill: st.maxOverkill || 0, chainDefVersion: st.chainDefVersion,
+      mainRace: Object.entries(st.raceCounts || {}).sort((a,b) => b[1] - a[1])[0]?.[0] || 'なし',
+      fallenTotal: st.fallenTotal || 0, battleIncidentTotal: st.battleIncidentTotal || 0,
+      generalsMade: (st.generalsMade || []).slice(), retriesUsed: st.retriesUsed || 0,
+      townLevels: Game.townLevelTotal(), townTop: Game.townTopLevel().lv, townTopId: Game.townTopLevel().id,
+      discoveredSynergyIds: (st.discoveredSynergyIds || []).slice(),
+      maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length)
+    };
+    rec.buildName = Game.buildName(rec);
+  }
   if (rec.cause === "城陥落") stats.defense.fall++;
   if (rec.cleared) {
     if (rec.clearedBy === "defense") stats.defense.byDefense++;
     else stats.defense.byConquest++;
   }
+  // 敵将（段階B/D）：討った・雇った・最終戦の顔ぶれ。sim は提案に答えないので全部「討つ」。
+  {
+    const cap = st.captains || {};
+    const list = Object.keys(cap);
+    stats.capSlain = (stats.capSlain || 0) + list.filter(id => cap[id].status === 'slain').length;
+    stats.capHired = (stats.capHired || 0) + list.filter(id => cap[id].status === 'hired').length;
+    stats.capMixed = (stats.capMixed || 0) + ((st.lastHeroParty || []).length ? 1 : 0);
+  }
+  // 地図の上の戦争（段階A）：どこまで面を広げたか・巡回を何回まわしたか
+  stats.splits = (stats.splits || 0) + (st.slimeSpawnCount || 0);   // 増殖の元（分裂した回数）
+  stats.territory = (stats.territory || 0) + ((st.territory?.lands || []).length + (st.territory?.tribes || []).length);
+  stats.patrols = (stats.patrols || 0) + (st.patrolCount || 0);
+  if (st.trials && (st.trials.wins || st.trials.losses)) {
+    stats.trialBest = (stats.trialBest || 0) + (st.trials.best || 0);
+    stats.trialRuns = (stats.trialRuns || 0) + 1;
+  }
+  stats.cards ||= {settles:0,offered:0,opened:0,natural:0,shown:0};
+  stats.cards.shown ||= 0;
+  for(const k of Object.keys(stats.cards)) stats.cards[k] += st.incidents?.stats?.[k] || 0;
   return rec;
 }
 
+// 力試しの梯子の強さは測って決める（§6）。測定のあいだだけ環境変数で振れるようにする
+// （本体の既定値は run.js の TRIAL_BASE / TRIAL_STEP が正本）。
+if (process.env.TRIAL_BASE) Game.TRIAL_BASE = Number(process.env.TRIAL_BASE);
+if (process.env.TRIAL_STEP) Game.TRIAL_STEP = Number(process.env.TRIAL_STEP);
+
 const strategies = [
+  // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §6）。第二幕の決着で止めず、梯子を8回登る。
+  {name:'第二幕後に力試しを続ける', kind:'greedy', trial: { rounds: 8 }},
   {name:'最強優先', kind:'greedy'},
   {name:'ゴブリン統一', kind:'race', race:'ゴブリン'},
   {name:'ゴブリン統一+求人', kind:'race', race:'ゴブリン', reroll:true, keepGold:6},
@@ -236,8 +362,20 @@ const strategies = [
   {name:'慎重経営', kind:'greedy', mission:'careful'},
   {name:'留守番2人', kind:'greedy', mission:'careful', departments:'balanced'},
   {name:'未払い搾取', kind:'greedy', mission:'careful', departments:'balanced', payroll:'exploit'},
+  // 訓練（2026-09-13）：進軍の前に1回だけ稽古を挟む。使用率と破産率だけを見る。
+  {name:'進軍の前に訓練を1回', kind:'greedy', train:true},
+  // 現実の遊び方に近い形：序盤の3回だけ（種族技が開くまで）。無制限の上と見比べる。
+  {name:'訓練は序盤3回だけ', kind:'greedy', train:true, trainMax:3},
+  // 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md §2-5）
+  // スライムの大筋②（docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-4）。火球を撃つ者が1人いる編成。
+  // 池の噂を**開いた**周回だけ分裂が起きる仕様なので、この戦略は札をめくる（cards:'open'）。
+  {name:'スライム統一+魔法職1', kind:'race', race:'スライム', caster1:true, cards:'open'},
+  {name:'近い順に落とす', kind:'greedy', territory:'near'},
+  {name:'港と町を優先', kind:'greedy', territory:'portTown'},
 ];
 const N = Number(process.argv[2] || 400);
+// 連鎖測定器の既存15戦略は維持し、札の比較は通常のsim実行に追加する。
+strategies.push({name:'札を全部めくる',kind:'greedy',cards:'open'}, {name:'全部無視',kind:'greedy',cards:'ignore'});
 // KPIの書き出し先（任意）: node tools/sim.js 30 --kpi /tmp/kpi.json
 // 実機のプレイではないので数値そのものは参考値だが、KPI→レポートの経路を
 // 人間の試遊を待たずに通せる。試遊で集めた本物の export とは混ぜないこと。
@@ -250,25 +388,39 @@ const kpiOut = (() => {
 // 撤去前後の数値は HANDOFF 0節の表に残してある。
 const kpiDump = { version: 1, runs: [], totals: {}, lastRunEndedAt: 0, lastScreen: null };
 const skillTriggerTotals = {};
-for (const s of strategies) {
-  const stats = { syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, seizes:0, skillTriggers:{} };
+for (const s of strategies.filter(s=>!process.env.SIM_INCIDENTS_ONLY || s.cards)) {
+  const stats = { generals:0, trainings:0, syn:{}, payroll:{}, unpaid:0, battles:0, lossStage:{}, retries:0, rerolls:0, events:0, incidents:0, foodShortages:0, maxArmy:0, paidHires:0, paidHireGold:0, skillTriggers:{} };
   const res = [];
   for (let i=0;i<N;i++) res.push(runOnce(s, stats));
   const avg = (res.reduce((a,r)=>a+(r.battlesWon||0),0)/N).toFixed(2);
   const clr = (res.filter(r=>r.cleared).length/N*100).toFixed(1)+'%';
-  const facility = (res.reduce((a,r)=>a+(r.facilityLevel||0),0)/N).toFixed(2);
+  const facility = (res.reduce((a,r)=>a+(r.townLevels||0),0)/N).toFixed(2);
   const loss = Object.keys(stats.lossStage).sort((a,b)=>a-b).map(k=>`S${k}:${stats.lossStage[k]}`).join(' ');
   const syn = Object.entries(stats.syn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ');
-  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  平均施設Lv ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回`);
-  const lv1Rate = (res.filter(r=>(r.facilityLevel||0) >= 1).length/N*100).toFixed(1);
-  const lv3Rate = (res.filter(r=>(r.facilityLevel||0) >= 3).length/N*100).toFixed(1);
+  console.log(`\n■ ${s.name}  平均勝利 ${avg}戦  クリア率 ${clr}  最大軍団 ${stats.maxArmy}体  城下町Lv計 ${facility}  食料不足 ${stats.foodShortages}回  未払い発生 ${(stats.unpaid/stats.battles*100).toFixed(0)}%  戦場不祥事 ${stats.incidents}件  再起 ${stats.retries}回  求人 ${stats.rerolls}回  事件 ${stats.events}回  将軍 ${(stats.generals/N).toFixed(2)}体/ラン  訓練 ${((stats.trainings||0)/N).toFixed(2)}回/ラン  領土 ${((stats.territory||0)/N).toFixed(2)}／ラン  巡回 ${((stats.patrols||0)/N).toFixed(2)}回/ラン  敵将 討${((stats.capSlain||0)/N).toFixed(2)}／雇${((stats.capHired||0)/N).toFixed(2)}／最終戦が混成 ${stats.capMixed||0}ラン  分裂 ${((stats.splits||0)/N).toFixed(2)}回/ラン`);
+  // 表示された札／出た札（§5）。1.0 未満なら 2-2 の上限か順序に穴がある。
+  // 力試し（§6）：best の平均と、段0／段3 の勝率。狙いは 段0 60〜80%、段3 30% 未満。
+  if (stats.trialRuns) {
+    const rate = lv => {
+      const at = (stats.trialByLevel || {})[lv];
+      if (!at || !(at.win + at.lose)) return '—';
+      return `${(100 * at.win / (at.win + at.lose)).toFixed(0)}%（${at.win + at.lose}戦）`;
+    };
+    console.log(`  力試し: best 平均 ${(stats.trialBest / stats.trialRuns).toFixed(2)}段`
+      + `　段0 勝率 ${rate(0)}　段1 ${rate(1)}　段2 ${rate(2)}　段3 勝率 ${rate(3)}　段4 ${rate(4)}`);
+  }
+  const shownRate = (stats.cards.shown/Math.max(1,stats.cards.offered)).toFixed(2);
+  console.log(`  札: 提示 ${stats.cards.offered}／めくった ${stats.cards.opened}／自然発生 ${stats.cards.natural}／決着 ${stats.cards.settles}（波乱 ${(100*stats.cards.natural/Math.max(1,stats.cards.settles)).toFixed(2)}%）　表示された札／出た札 ${shownRate}`);
+  const lv1Rate = (res.filter(r=>(r.townLevels||0) >= 1).length/N*100).toFixed(1);
+  const lv3Rate = (res.filter(r=>(r.townTop||0) >= 3).length/N*100).toFixed(1);
   const nameCount = new Map();
   for (const r of res) if (r.buildName) nameCount.set(r.buildName, (nameCount.get(r.buildName) || 0) + 1);
   const topNames = [...nameCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
     .map(([n, c]) => `${n}:${c}`).join(' / ');
   console.log(`  ビルド名: ${nameCount.size}種/${N}ラン　多い順 ${topNames || 'なし'}`);
-  const facCount = { extortion_ledger: 0, grand_kitchen: 0, graveyard: 0 };
-  for (const r of res) if (r.activeFacilityId in facCount) facCount[r.activeFacilityId]++;
+  // どの施設が「その軍団の顔」になったか（一番高い施設）
+  const facCount = {};
+  for (const r of res) if (r.townTopId) facCount[r.townTopId] = (facCount[r.townTopId] || 0) + 1;
   console.log(`  全滅 ${stats.wipes || 0}回／名簿が空で終わったラン ${stats.emptyEnds || 0}`);
   {
     const d = stats.defense || { won: 0, lost: 0, ransack: 0, fall: 0, byConquest: 0, byDefense: 0 };
@@ -276,7 +428,8 @@ for (const s of strategies) {
     console.log(`  防衛戦 ${total}回（勝ち ${d.won} 負け ${d.lost}${total ? `＝勝率 ${(d.won / total * 100).toFixed(0)}%` : ""}）`
       + `／荒らされた ${d.ransack}回／城陥落 ${d.fall}／クリア内訳 攻めた ${d.byConquest}・待った ${d.byDefense}`);
   }
-  console.log(`  施設到達: Lv1以上 ${lv1Rate}%（Lv3 ${lv3Rate}%）／選択 恐喝帳簿:${facCount.extortion_ledger} 巨大厨房:${facCount.grand_kitchen} 墓地:${facCount.graveyard}／拠点接収 ${stats.seizes}回`);
+  const facTop = Object.entries(facCount).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`${k}:${v}`).join(' ') || 'なし';
+  console.log(`  城下町: 何か建てた ${lv1Rate}%（Lv3 到達 ${lv3Rate}%）／主役 ${facTop}`);
   console.log(`  敗北ステージ: ${loss}`);
   console.log(`  シナジー出現: ${syn || 'なし'}`);
   console.log(`  給与方針: ${Object.entries(stats.payroll).map(([k,v])=>`${k}:${v}`).join(' ')}`);

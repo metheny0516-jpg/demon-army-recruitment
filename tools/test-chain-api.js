@@ -68,8 +68,10 @@ for (let seed = 1; seed <= SEED_TRIES && !fight; seed++) {
   ctx.Math.random = seeded(seed * 7919);
   vm.runInContext('U.rand = Math.random;', ctx);
   Game.newRun();
+  // 追い剥ぎは 2026-09-12 に癖から技（インプ）へ移った。この検証は CHAIN の API が生きているかを見るもので、
+  // 金貨の連鎖の起点は要るので、ゴブリンに癖として直接持たせる（遺物などで持つ形と同じ）。
   const squad = ['goblin', 'ogre', 'skeleton', 'necromancer', 'orc']
-    .map(id => Battle.makeUnit(Game.rollApplicant(id), 'player'));
+    .map(id => { const m = Game.rollApplicant(id); if (id === 'goblin' && !m.traits.includes('pickpocket')) m.traits.push('pickpocket'); return Battle.makeUnit(m, 'player'); });
   const trial = Battle.simulate(squad, foes(4),
     { graveyard: true, extortionLedger: true, facilityWorks: 2, chainDefVersion: 2 });
   if (hasMultiplier(trial)) { fight = trial; usedSeed = seed; }

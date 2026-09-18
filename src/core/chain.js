@@ -86,7 +86,6 @@ const CLASSIFY = {
   revive: () => ({ role: 'effect', kind: 'revive' }),
   summon: () => ({ role: 'effect', kind: 'summon' }),
   heal: () => ({ role: 'effect', kind: 'heal' }),
-  momentum: () => ({ role: 'effect', kind: 'momentum' }),
   resource_gain: d => ({ role: 'effect', kind: 'gain:' + (d.resource || '?') }),
   resource_forfeit: () => ({ role: 'effect', kind: 'forfeit' }),
   // 魂1の消費は《魂の徴収》の内訳（同じ一つの効果の後半）

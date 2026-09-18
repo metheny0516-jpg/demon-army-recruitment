@@ -8,12 +8,16 @@ const Sound = {
   media: new Set(),
   samples: new Map(),
   sampleSeq: 0,
-  SAMPLE_ROLES: { basun: "pierce", gachan: "guard", zushi: "blunt", zuba: "slash" },
+  SAMPLE_ROLES: { basun: "pierce", gachan: "guard", zushi: "blunt", zuba: "slash", dokan: "dokan" },
+  // 爆発系（大技の着弾）。まだ素材が無いので、鳴らせなければオーナー選定済みの
+  // 打撃原音（thwack）を重く・重ねて代用する（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）。
+  DOKAN_FX: new Set(["fire", "dark", "heavy"]),
+  dokanMissing: false,
   PHYSICAL_SAMPLES: [
     "assets/sfx/candidates/candidate-antum-thwack-08.wav",
     "assets/sfx/candidates/candidate-antum-thwack-09.wav"
   ],
-  WIN_SAMPLE: "assets/sfx/recorded/fanfare-win.wav",
+  WIN_SAMPLE: "assets/sfx/recorded/fanfare-win-roar.wav",
   winSample: null,
   physicalSeq: 0,
   volume: 0.55,
@@ -151,6 +155,25 @@ const Sound = {
     }
   },
 
+  // 録音の単発キュー（城下町・地図・将軍、2026-09-13）。name → assets/sfx/recorded/<name>.wav。
+  // 合成音の cue() とは別口。無ければ黙って false（配線先は fallback の cue を鳴らしてよい）。
+  RECORDED_CUES: ["town-build", "town-coin", "town-bank", "map-open", "general-rise"],
+  playRecorded(name, boost = 1) {
+    if (this.muted || typeof Audio === "undefined" || !this.RECORDED_CUES.includes(name)) return false;
+    const url = `assets/sfx/recorded/${name}.wav`;
+    let prototype = this.samples.get(url);
+    if (!prototype) { prototype = new Audio(url); prototype.preload = "auto"; this.samples.set(url, prototype); }
+    const audio = prototype.cloneNode ? prototype.cloneNode() : new Audio(url);
+    audio.volume = Math.min(1, this.volume * .82 * boost);
+    while (this.media.size >= 4) { const oldest = this.media.values().next().value; oldest.pause(); this.media.delete(oldest); }
+    this.media.add(audio);
+    const cleanup = () => this.media.delete(audio);
+    if (audio.addEventListener) audio.addEventListener("ended", cleanup, { once: true });
+    const played = audio.play();
+    if (played && played.catch) played.catch(cleanup);
+    return true;
+  },
+
   playSample(family, data = {}) {
     if (this.muted || typeof Audio === "undefined") return false;
     this.preloadSamples();
@@ -173,6 +196,37 @@ const Sound = {
     if (audio.addEventListener) audio.addEventListener("ended", cleanup, { once: true });
     const played = audio.play();
     if (played && played.catch) played.catch(cleanup);
+    return true;
+  },
+
+  // 爆発音。assets/sfx/recorded/dokan-<a|b|c>.wav が入るまでは thwack を重ねて代用する。
+  // 一度でも鳴らせなければ以後は試さない（毎回 404 を出さない）。
+  playDokan(data = {}) {
+    if (this.muted || typeof Audio === "undefined") return false;
+    const thwack = () => {
+      this.playSample("physical", { ...data, heavy: true, boost: 1.25 });
+      setTimeout(() => this.playSample("physical", { ...data, heavy: true, boost: 1 }), 80);
+    };
+    if (this.dokanMissing) { thwack(); return true; }
+    const url = `assets/sfx/recorded/dokan-${["a", "b", "c"][this.sampleSeq++ % 3]}.wav`;
+    let prototype = this.samples.get(url);
+    if (!prototype) { prototype = new Audio(url); prototype.preload = "auto"; this.samples.set(url, prototype); }
+    const audio = prototype.cloneNode ? prototype.cloneNode() : new Audio(url);
+    audio.volume = Math.min(1, this.volume * .9 * (Number(data.boost) || 1));
+    audio.playbackRate = .92;
+    while (this.media.size >= 4) { const oldest = this.media.values().next().value; oldest.pause(); this.media.delete(oldest); }
+    this.media.add(audio);
+    let failed = false;
+    const cleanup = () => this.media.delete(audio);
+    const fallback = () => { if (failed) return; failed = true; this.dokanMissing = true; cleanup(); thwack(); };
+    if (audio.addEventListener) {
+      audio.addEventListener("ended", cleanup, { once: true });
+      audio.addEventListener("error", fallback, { once: true });
+    }
+    try {
+      const played = audio.play();
+      if (played && played.catch) played.catch(fallback);
+    } catch (e) { fallback(); }
     return true;
   },
 
@@ -376,6 +430,11 @@ const Sound = {
         if (weight >= 4) setTimeout(() => this.playSample("physical", { ...data, heavy: true }), 145);
         break;
       }
+      // 大技の着弾。爆発系（火・闇・重）はドカーン、斬・風は既存の斬撃音を強く。
+      case "big_hit":
+        if (this.DOKAN_FX.has(data.fx)) this.playDokan(data);
+        else this.playSample("zuba", { ...data, heavy: true, boost: 1.3 });
+        break;
       case "incident":
         this.tone(233, .34 * pace, { type: "sawtooth", gain: .05, to: 175 });
         this.tone(220, .34 * pace, { type: "square", gain: .035, to: 142, detune: -12 });
@@ -416,8 +475,12 @@ const Sound = {
     switch (event.type) {
       case "battle_start": if (options.final) this.cue("final", data); break;
       case "round_start": this.cue("round", data); break;
-      case "attack": this.cue(options.attackKind === "magic" ? "magic" : "attack", { ...data, enemy: options.fromSide === "enemy" }); break;
-      case "splash": this.cue(event.label === "仲間割れ" ? "attack" : "magic", data); break;
+      case "attack":
+        if (event.big) { this.cue("big_hit", { ...data, fx: event.fx }); break; }
+        this.cue(options.attackKind === "magic" ? "magic" : "attack", { ...data, enemy: options.fromSide === "enemy" }); break;
+      case "splash":
+        if (event.big) { this.cue("big_hit", { ...data, fx: event.fx }); break; }
+        this.cue(event.label === "仲間割れ" ? "attack" : "magic", data); break;
       case "death": this.cue("death", data); break;
       case "revive": this.cue("revive", data); break;
       case "heal": this.cue("heal", data); break;
@@ -425,7 +488,7 @@ const Sound = {
       case "synergy": this.cue("synergy", data); break;
       // 見せ場は音でも段を作る。積んだ数・余剰の大きさで打撃の重さが変わる。
       case "overkill":
-        this.cue("overkill_hit", { ...data, weight: event.percent >= 300 ? 4 : event.percent >= 100 ? 3 : 1 });
+        this.cue("overkill_hit", { ...data, weight: event.rankId === "annihilation" ? 4 : 1 });
         break;
       case "trait_trigger":
         if (event.traitId === "overload" || event.traitId === "chain_massacre") {

@@ -57,14 +57,19 @@ const Game = {
       missionOffers: [],
       selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
+      // 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md 段階A）。
+      // 落とした土地・従えた部族が領土になる。征服度は決着ごとにここから写す。
+      territory: { lands: [], tribes: [] },
+      // 名前のある敵将（docs/SPEC_CAPTAINS_BD_2026-09-15.md）。討った・見逃した・雇ったを覚える。
+      captains: {},
+      settles: 0,          // 決着の数（「⚠ ○○がいる」札の周期）
+      raided: {},          // 略奪した土地 → 回数（次に落とすとき守備が硬い）
+      patrolCount: 0,      // 巡回で戦った回数（sim の列）
       gold: demonKing.start.gold,
       food: demonKing.start.food,
       materials: demonKing.start.materials,
-      buildProgress: 0,
-      facilityLevel: 0,
-      activeFacilityId: null,
-      pendingFacilityChoiceLevel: null,
-      seizeUsed: false,
+      // 施設は城下町ただ1系統（2026-09-13、docs/SPEC_TOWN_MERGE_2026-09-13.md）。
+      // 旧「戦闘の施設」の3欄（facilityLevel / activeFacilityId / buildProgress）は消した。
       lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
@@ -77,8 +82,6 @@ const Game = {
       extraHiresThisPhase: 0,
       maxPower: 0,
       maxArmySize: 0,
-      mercenaryOffers: [],
-      mercenaries: [],
       kingSlimeMerge: true,   // 出撃時に合体するか（既定は合体。編成画面で断れる）
       maxChain: 0,        // ラン全体の主要記録その1（設計憲法 第11節）
       maxOverkill: 0,     // 同その2。%で持つ
@@ -99,8 +102,6 @@ const Game = {
       retriesLeft: this.RETRIES_PER_RUN,
       retriesUsed: 0,
       rerollsThisPhase: 0,
-      briefId: null,
-      briefsThisPhase: 0,
       pendingEvent: null,
       eventOutcome: null,
       // 結果画面でも立ち絵と吹き出しを出すため、当事者の uid だけ残す（表示専用）
@@ -116,12 +117,14 @@ const Game = {
       fallenRoll: [],
       lastFallen: [],
       lastPromotions: [],
+      // 直近の決着で伸びた数値（決着画面が一行ずつ読み上げる）
+      lastGrowth: [],
       generalsMade: [],
       battleIncidentTotal: 0,
       // 撤退（2026-09-10）
       retreatCount: 0,
-      orderCount: 0,
       stageFights: {},          // 敵の慣れ：段階ごとに戦った回数（通常作戦のみ）
+      outpost: null,            // 前哨戦の札（2026-09-12）。{ stage, cleared, formationId }
       skillLore: {},            // 種族の伝承：species → 覚えた上位技 id
       pendingBattle: null,
       // 全滅の回数（2026-09-10・再建）
@@ -130,6 +133,9 @@ const Game = {
       act: 1,
       actStartedTurn: 1,
       actHistory: [],
+      // 第二幕の決着はラン終了ではなく、第三幕を待つ保存可能な節目。
+      // null または { by: "defense"|"conquest", turn } を正本にする。
+      act2Cleared: null,
       // 王国の反撃（2026-09-10）。開幕の値は newRun() の末尾で入れる。
       counterattack: null,
       heroCame: false,
@@ -148,6 +154,7 @@ const Game = {
       traces: [],
       checkpoint: null
     };
+    if (typeof Town !== "undefined") Town.init(this.state);   // 城下町（2026-09-12）
     // 仕様2.5「開幕の勇者襲来を最初の反撃にする」は**開幕3日間プロトタイプ限定**にした。
     // 開幕モードは 2026-09-03 に撤廃されていて `openingPrototype` は常に false なので、
     // ここは今のところ動かない。通常ループの1戦目をいきなり防衛戦にすると、
@@ -227,6 +234,7 @@ const Game = {
   trace(kind, subject = null, object = null, data = {}) {
     const st = this.state;
     if (!st || typeof Traces === "undefined") return null;
+    if (typeof Incidents !== "undefined") Incidents.init(st);
     return Traces.record(st.traces, { kind, subject, object, data, day: st.day, turn: st.turn });
   },
 
@@ -333,6 +341,23 @@ const Game = {
   migrateState() {
     const st = this.state;
     if (!st || typeof st !== "object") return;
+    // 領土（段階A）。旧セーブは空（魔王城だけ）から始める。征服度は今の値を残す
+    // （次の決着で Territory.conquestOf に置き換わるまで、段階表の見え方は変わらない）。
+    if (typeof Territory !== "undefined") Territory.init(st);
+    if (typeof Captains !== "undefined") Captains.init(st);
+    if (typeof st.settles !== "number") st.settles = Number(st.turn) || 0;
+    if (!st.raided || typeof st.raided !== "object") st.raided = {};
+    delete st.feastPending;   // 宴は撤去（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）
+    delete st.briefId; delete st.briefsThisPhase;   // 指名求人は撤去（同 §1-2）
+    delete st.mercenaries; delete st.mercenaryOffers;   // 傭兵市場は撤去（同 §1-3）
+    delete st.seizeUsed;   // 拠点接収は撤去（同 §1-4。領土の「砦」が同じ役をする）
+    delete st.orderCount;   // 号令は撤去（同 §1-5。指示はコマンドバトルの窓でする）
+    if (typeof st.patrolCount !== "number") st.patrolCount = 0;
+    // 力試しの梯子。旧セーブは段0から始める（第二幕決着後の作戦会議で札が出る）。
+    if (!st.trials || typeof st.trials !== "object") st.trials = { level: 0, best: 0, wins: 0, losses: 0, last: null };
+    for (const [k, v] of Object.entries({ level: 0, best: 0, wins: 0, losses: 0 }))
+      if (typeof st.trials[k] !== "number") st.trials[k] = v;
+    if (st.trials.last === undefined) st.trials.last = null;
     if (typeof Story !== "undefined") Story.init(st);
     const legacyCampaign = st.conquest === undefined;
     if (legacyCampaign) {
@@ -354,7 +379,7 @@ const Game = {
       // 既に入っている値は defaults では上書きされない（下の undefined/null チェック）ので、
       // 途中ラン・ロード・再起で保存済みバージョンは変化しない。
       chainDefVersion: 1,
-      maxChain: 0, maxOverkill: 0, mercenaryOffers: [], mercenaries: [], kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
+      maxChain: 0, maxOverkill: 0, kingSlimeMerge: true, raceCounts: {}, recruitedTplIds: [], discoveredSynergyIds: [], uidSeq: 1,
       lastBattle: null, retriesLeft: this.RETRIES_PER_RUN, retriesUsed: 0,
       // 魔界史へ残す「記憶」1件（R3）。ラン状態の中にあるので、再起で巻き戻せば
       // 記憶も一緒に戻る（やり直した歴史の出来事は残さない）。旧セーブには無い。
@@ -362,9 +387,11 @@ const Game = {
       // 前回出撃の確定値（R2）。旧セーブには無いので、読み直した最初の1戦は
       // 「比較する前がない」＝差分なしとして扱う（無いものを差分として捏造しない）。
       lastBuildSnapshot: null,
-      rerollsThisPhase: 0, briefId: null, briefsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
+      rerollsThisPhase: 0, pendingEvent: null, eventOutcome: null, eventCast: null, laborDispute: null, checkpoint: null,
       pendingVacancies: 0, fallenTotal: 0, fallenRoll: [], lastFallen: [],
       lastPromotions: [],
+      // 直近の決着で伸びた数値（決着画面が一行ずつ読み上げる）
+      lastGrowth: [],
       generalsMade: [],
       battleIncidentTotal: 0,
       turn: 1, conquest: 0, alert: 0, battlesWon: 0,
@@ -372,18 +399,19 @@ const Game = {
       missionOffers: [], selectedMission: null,
       missionCounts: { raid: 0, suppress: 0, invade: 0 },
       food: DEPARTMENT_RULES.startingFood, materials: 0,
-      buildProgress: 0, facilityLevel: 0, activeFacilityId: null, pendingFacilityChoiceLevel: null,
-      seizeUsed: false, lastDepartmentReport: null,
+      lastDepartmentReport: null,
       payrollPolicy: "regular",
       payrollChoices: { regular: 0, withhold: 0, advance: 0 },
       lastPayrollReport: null,
       legacyReturn: null, legacyOffered: false, lessonId: null,
-      feastPending: null, hungerStreak: 0,
+      hungerStreak: 0,
       // 撤退（2026-09-10）。旧セーブには無い。pendingBattle は「答える前の戦闘」で、
       // ロード時には続行として決着させる（同じ戦闘を二度見せない）。
-      retreatCount: 0, pendingBattle: null, wipeCount: 0, orderCount: 0, stageFights: {},
+      retreatCount: 0, pendingBattle: null, wipeCount: 0, stageFights: {}, outpost: null,
       // 幕の進行（2026-09-11）。旧セーブは第一幕として読む。
-      act: 1, actStartedTurn: 1, actHistory: [],
+      act: 1, actStartedTurn: 1, actHistory: [], act2Cleared: null,
+      // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md）。第二幕決着後の梯子。
+      trials: { level: 0, best: 0, wins: 0, losses: 0, last: null },
       // 王国の反撃（2026-09-10）
       counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
       ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false, castleFalls: 0,
@@ -400,16 +428,16 @@ const Game = {
     if (!Array.isArray(st.applicants)) st.applicants = [];
     if (!Array.isArray(st.debts)) st.debts = [];
     if (!Array.isArray(st.missionOffers)) st.missionOffers = [];
-    if (!FACILITIES.some(f => f.id === st.activeFacilityId)) st.activeFacilityId = null;
-    if (st.pendingFacilityChoiceLevel !== null) {
-      st.pendingFacilityChoiceLevel = U.clamp(Number(st.pendingFacilityChoiceLevel) || 0, 1, FACILITY_LEVELS.length - 1);
-    }
-    if (!st.activeFacilityId && !st.pendingFacilityChoiceLevel && Number(st.facilityLevel) >= 1) {
-      st.pendingFacilityChoiceLevel = U.clamp(Number(st.facilityLevel), 1, FACILITY_LEVELS.length - 1);
-    }
+    for (const mission of st.missionOffers) this.applyInvasionReward(mission);
+    this.applyInvasionReward(st.selectedMission);
+    this.migrateOldFacility(st);
     st.hiresLeft = Math.max(0, Number(st.hiresLeft) || 0);
     st.extraHiresThisPhase = Math.max(0, Number(st.extraHiresThisPhase) || 0);
     if (!Array.isArray(st.generalsMade)) st.generalsMade = [];
+    // 殿堂に残る廃止階級は兵卒に丸める（表示だけの値。照合には使っていない）。
+    for (const entry of st.departed || []) {
+      if (entry && entry.formerRankId && !PROMOTION_RANKS.some(r => r.id === entry.formerRankId)) entry.formerRankId = "soldier";
+    }
     if (!Array.isArray(st.recruitedTplIds)) st.recruitedTplIds = [];
     if (!Array.isArray(st.discoveredSynergyIds)) st.discoveredSynergyIds = [];
     for (const m of st.roster) {
@@ -418,13 +446,34 @@ const Game = {
     for (const m of st.roster) {
       if (!m.injured) m.injured = 0;   // 旧セーブに負傷は無い
       if (!Array.isArray(m.relicIds)) m.relicIds = [];
-      this.memberRecord(m);            // record が無い者に record.battles++ すると落ちる
+      this.memberRecord(m);            // record が無い者に record.battles++ すると落ちる（grow もここで入る）
       this.baseOf(m);                  // base が無い旧セーブは現在値を基礎値にする
       if (!m.skillTier) m.skillTier = (m.traits || []).some(id => ((TRAITS[id] || {}).skill || {}).tier === 2) ? 2 : 1;
       if (typeof m.spirit !== "number") m.spirit = this.spiritRules().start;   // 気合（2026-09-10）。旧セーブには無い
       if (m.debutSkill === undefined) m.debutSkill = null;                     // 旧セーブ：上位技は号令でだけ出る
+      // 階級2段（2026-09-13）。小隊長・魔将は廃止して兵卒へ戻す。
+      // **能力は巻き戻さない**（既に掛かった +5%／+8% は据え置き。戻す方が壊れる）。
+      if (m.rankId && !PROMOTION_RANKS.some(r => r.id === m.rankId)) m.rankId = "soldier";
+      // 既に将軍だった者には、転身の中身（気合上限・将軍技・二つ名）を付け直す。
+      // HP・攻撃は再度掛けない（transformToGeneral は数値以外だけを持つ）。
+      if (m.rankId === "general" && !m.epithet) this.transformToGeneral(m);
+      if (m.spiritMaxBonus === undefined) m.spiritMaxBonus = m.rankId === "general" ? 1 : 0;
+      // 技（2026-09-12）。癖として持っていた種族固有の効果は技へ移した。
+      // 旧セーブからはその癖を取り除き、3戦以上出ている者には種族技を持たせる
+      // （何も持たない者が出来ないよう、癖を消すのと技を渡すのは必ず同じ移行で行う）。
+      if (!Array.isArray(m.skills)) m.skills = [];
+      if (typeof m.lateBloomer !== "boolean") m.lateBloomer = this.isLateBloomer(m);
+      if (m.homeBonus === undefined) m.homeBonus = null;
+      const moved = (m.traits || []).filter(id => this.MOVED_TO_SKILL.includes(id));
+      if (moved.length) m.traits = (m.traits || []).filter(id => !this.MOVED_TO_SKILL.includes(id));
+      if ((this.memberRecord(m).battles || 0) >= this.unlockBattlesFor(m, "species")) {
+        const sk = this.speciesSkillFor(m);
+        if (sk) m.skills.push(sk.id);
+      }
     }
     if (!st.stageFights || typeof st.stageFights !== "object") st.stageFights = {};
+    // 前哨戦（2026-09-12）。旧セーブは前哨から始める。
+    if (st.outpost === undefined) st.outpost = null;
     // 種族の伝承（2026-09-11）。旧セーブは今いる上位技持ちから埋める
     if (!st.skillLore || typeof st.skillLore !== "object") {
       st.skillLore = {};
@@ -434,6 +483,8 @@ const Game = {
       }
     }
     if (!Array.isArray(st.departed)) st.departed = [];
+    if (typeof Town !== "undefined") Town.init(st);   // 城下町（2026-09-12）。旧セーブには無い
+    delete st.autoBuild;   // 旧「施工」ごと撤去した（2026-09-13）。flag も残さない
     if (!Array.isArray(st.relics)) st.relics = [];
     if (!Array.isArray(st.traces)) st.traces = [];
     // 答える前の戦闘が保存されていたら、続行として決着させる。
@@ -489,7 +540,7 @@ const Game = {
       m.department = DEPARTMENT_ID(m.department);  // 旧3部門（建設・生活）は留守番へ
       if (!DEPARTMENTS[m.department]) m.department = "combat";
       if (!Array.isArray(m.traits)) m.traits = [];
-      if (m.tplId === "goblin" && !m.traits.includes("pickpocket")) m.traits.push("pickpocket");
+      // （旧移行「ゴブリンに追い剥ぎを足す」は 2026-09-12 に削除。追い剥ぎは技へ移り、上の移行で名簿から外している）
       if (m.tplId === "ogre" && !m.traits.includes("big_eater")) m.traits.push("big_eater");
       if (m.tplId === "necromancer" && !m.traits.includes("gravekeeper")) m.traits.push("gravekeeper");
       if ((m.job || "").includes("料理人") && !m.traits.includes("demon_cook")) m.traits.push("demon_cook");
@@ -577,7 +628,7 @@ const Game = {
     const out = { food: 0, material: 0, wage: 0, recruit: 0, appetite: 0, contributors: [] };
     for (const m of st.roster) {
       const deptId = this.departmentOf(m).id;
-      const c = Aptitude.contribution(m, deptId);
+      const c = this.contributionOf(m, deptId);
       out.food += c.food;
       out.material += c.material;
       out.wage += c.wage;
@@ -610,7 +661,7 @@ const Game = {
     const list = roster || this.state.roster;
     let produce = 0;
     for (const m of list) {
-      produce += Aptitude.contribution(m, this.departmentOf(m).id).food;
+      produce += this.contributionOf(m, this.departmentOf(m).id).food;
     }
     const need = this.foodNeedFor(list);
     return { produce, need, delta: produce - need, stock: Math.max(0, this.state.food || 0) };
@@ -626,9 +677,9 @@ const Game = {
   },
 
   battleRationQuote() {
-    const foodBefore = Math.max(0, this.state.food || 0);
-    const kitchen = this.state.activeFacilityId === "grand_kitchen";
+    const kitchen = this.facilityReady("grand_kitchen");
     const totalNeed = this.foodNeed() + (kitchen ? 1 : 0);
+    const foodBefore = Math.max(0, this.state.food || 0) + (this.isTraining(this.state.selectedMission) && this.state.incidents?.freeTraining ? totalNeed : 0);
     const need = this.foodNeedFor(this.activeRoster()) + (kitchen ? 1 : 0);
     const consumed = Math.min(foodBefore, need);
     return {
@@ -684,54 +735,10 @@ const Game = {
     const over = Math.max(0, (this.state.food || 0) - cap);
     if (over > 0) {
       this.state.food = cap;
-      if (notes) notes.push(`備蓄庫の上限 ${cap} を超えた食料 ${over} が傷んだ。腐らせる前に宴を開くべきだった`);
+      // 宴は撤去したので勧めない（docs/TICKET_REMOVE_DEAD_2026-09-16.md §4-1）。事実だけを残す。
+      if (notes) notes.push(`備蓄庫の上限 ${cap} を超えた食料 ${over} が傷んだ`);
     }
     return over;
-  },
-
-  // 宴：余った食料の使い道。余剰は今まで死に資源で、黒字にする理由がなかった。
-  // 効くのは「食う者」だけなので、アンデッド軍団では宴そのものが成立しない。
-  // 大食漢は食う量が倍になる代わりに効果も倍。負債だったオーガが資産に変わる。
-  feastQuote() {
-    const st = this.state;
-    const active = this.activeRoster();
-    const eaters = st.roster.filter(m => Aptitude.of(m).appetite > 0);
-    const activeEaters = active.filter(m => Aptitude.of(m).appetite > 0);
-    const bigEaters = active.filter(m => (m.traits || []).includes("big_eater")).length;
-    const cook = active.some(m => (m.traits || []).includes("demon_cook"));
-    const base = Math.max(1, this.foodNeed());
-    // 大食漢がいれば倍食う。料理人がいれば同じ量で足りる。
-    let cost = base * (bigEaters > 0 ? 2 : 1);
-    if (cook) cost = Math.max(1, Math.ceil(cost / 2));
-    const stock = Math.max(0, st.food || 0);
-    const dmgBonus = bigEaters > 0 ? .30 : .15;
-    const loyaltyGain = bigEaters > 0 ? 10 : 6;
-    return {
-      cost, stock, dmgBonus, loyaltyGain,
-      bigEaters, cook,
-      eaters: eaters.length,
-      activeEaters: activeEaters.length,
-      held: !!st.feastPending,
-      // 宴は「余剰の使い道」であって、備蓄を削る博打にはしない。
-      // 宴のあとに2戦ぶんの糧食が残らないなら開けない。連打しても飢えないようにする。
-      affordable: stock >= cost + base * 2,
-      possible: eaters.length > 0
-    };
-  },
-
-  holdFeast() {
-    const st = this.state;
-    const q = this.feastQuote();
-    if (st.feastPending || !q.possible || !q.affordable) return null;
-    st.food = Math.max(0, st.food - q.cost);
-    let fed = 0;
-    for (const m of st.roster) {
-      if (Aptitude.of(m).appetite === 0) continue;
-      m.loyalty = U.clamp(m.loyalty + q.loyaltyGain, 0, 100);
-      fed++;
-    }
-    st.feastPending = { dmgBonus: q.dmgBonus, cost: q.cost, fed, bigEaters: q.bigEaters };
-    return st.feastPending;
   },
 
   prepareBattleRations(notes) {
@@ -766,92 +773,95 @@ const Game = {
     return out;
   },
 
-  facilityInfo(level) {
-    const wanted = level === undefined ? this.state.facilityLevel : level;
-    return FACILITY_LEVELS[U.clamp(Number(wanted) || 0, 0, FACILITY_LEVELS.length - 1)];
+  // 旧「戦闘の施設」→ 城下町（2026-09-13、仕様3節）。**一度だけ**動く移行。
+  //   巨大厨房・墓地 → 同じ Lv で城下町に建てた扱い（金も建材も取らない）
+  //   恐喝帳簿      → 施設ではなくなったので Lv×3 の建材で返す
+  //   buildProgress → 途中の積み上げは建材で返す（半分・上限6）
+  // 済んだら3欄を消す。**旧セーブで activeFacilityId が城下町の id だったことは無い**ので衝突しない。
+  migrateOldFacility(st) {
+    if (!st) return null;
+    const had = st.facilityLevel !== undefined || st.activeFacilityId !== undefined
+      || st.buildProgress !== undefined || st.pendingFacilityChoiceLevel !== undefined;
+    if (!had) return null;
+    const lv = U.clamp(Number(st.facilityLevel) || 0, 0, 3);
+    const id = st.activeFacilityId || null;
+    const notes = [];
+    if (typeof Town !== "undefined") {
+      const t = Town.init(st);
+      if (lv >= 1 && (id === "grand_kitchen" || id === "graveyard")) {
+        t.lv[id] = Math.max(t.lv[id] || 0, lv);
+        const f = Town.facility(id);
+        notes.push(`${f ? f.name : id}は城下町へ移した（Lv${lv}のまま）`);
+      } else if (lv >= 1 && id === "extortion_ledger") {
+        const back = lv * 3;
+        st.materials = (st.materials || 0) + back;
+        notes.push(`帳簿は閉じた。紙代は建材で戻った（建材 +${back}）`);
+      }
+    }
+    const left = Math.min(6, Math.floor((Number(st.buildProgress) || 0) / 2));
+    if (left > 0) { st.materials = (st.materials || 0) + left; notes.push(`建てかけの資材が戻った（建材 +${left}）`); }
+    delete st.facilityLevel;
+    delete st.activeFacilityId;
+    delete st.buildProgress;
+    delete st.pendingFacilityChoiceLevel;
+    // 日誌には次の決着で一行ずつ出す（移行はロードの最中に起きるので、その場に出す画面が無い）。
+    if (notes.length) st.lastFacilityMigration = notes;
+    return notes;
   },
 
-  // 施設Lv.は大型Jokerが1戦闘に働ける回数として効く。稼働施設が無ければ0。
+  // 城下町のまとめ（記録・軍風・教訓・sim が読む）。
+  townLevelTotal() {
+    if (typeof Town === "undefined") return 0;
+    return Town.facilities().reduce((sum, f) => sum + Town.level(this.state, f.id), 0);
+  },
+  townTopLevel() {
+    if (typeof Town === "undefined") return { id: null, lv: 0 };
+    const top = Town.facilities().map(f => ({ id: f.id, lv: Town.level(this.state, f.id) }))
+      .sort((a, b) => b.lv - a.lv)[0];
+    return top && top.lv > 0 ? top : { id: null, lv: 0 };
+  },
+  // 「同じ決断か」を見分ける指紋（decision の記録用）。施設の顔ぶれが変われば別の決断。
+  townSignature() {
+    if (typeof Town === "undefined") return "none";
+    const built = Town.facilities().map(f => [f.id, Town.level(this.state, f.id)])
+      .filter(([, lv]) => lv > 0).map(([id, lv]) => `${id}${lv}`);
+    return built.length ? built.join(",") : "none";
+  },
+
+  // 戦果に残す施設の要約（2026-09-13）。旧「共通補正 Lv＋稼働施設1つ」から
+  // 「城下町の軍施設それぞれの Lv」へ。decision の記録と結果画面が読む。
+  facilityReport() {
+    const list = this.ARMY_FACILITIES.map(id => {
+      const f = typeof Town !== "undefined" ? Town.facility(id) : null;
+      return { id, name: f ? f.name : id, icon: f ? f.icon : "", lv: this.facilityLv(id), ready: this.facilityReady(id) };
+    }).filter(x => x.lv > 0);
+    return { level: list.reduce((a, x) => a + x.lv, 0), facilities: list };
+  },
+
+  // 戦場で効く施設は城下町の2つ（巨大厨房・墓地）。Lv がそのまま「1戦闘に働ける回数」。
+  ARMY_FACILITIES: ["grand_kitchen", "graveyard"],
+  facilityLv(id) {
+    return typeof Town !== "undefined" ? Town.level(this.state, id) : 0;
+  },
+  // battle.js へ渡す works。施設ごとの Lv を持たせる（battle.js は数値でもオブジェクトでも読む）。
   facilityWorks() {
-    const st = this.state;
-    if (!st.activeFacilityId) return 0;
-    const info = this.facilityInfo();
-    return Math.max(0, Number(info.works) || 0);
+    const out = {};
+    for (const id of this.ARMY_FACILITIES) out[id] = this.facilityLv(id);
+    return out;
   },
 
-  activeFacility() {
-    return FACILITIES.find(f => f.id === this.state.activeFacilityId) || null;
-  },
-
-  // 選んだ施設が「この出撃で実際に働けるか」。
+  // その施設が「この出撃で実際に働けるか」。
   // deploy() が Battle へ渡す条件と同じ判定をここへ置き、編成画面の見取り図が
   // 同じ答えを読む。二重に書くと、片方だけ直したときに画面だけ嘘をつく。
   facilityReady(facilityId) {
-    const id = facilityId || this.state.activeFacilityId;
-    if (!id) return false;
-    if (id === "extortion_ledger") return this.activeRoster().some(m => (m.job || "").includes("会計"));
-    if (id === "graveyard") return this.departmentRoster("home").some(m => m.tplId === "necromancer");
-    if (id === "grand_kitchen") return true;
+    if (!facilityId || this.facilityLv(facilityId) < 1) return false;
+    // 墓地は留守番に死霊術師がいるときだけ発火する（城下町に建てただけでは働かない）。
+    if (facilityId === "graveyard") return this.departmentRoster("home").some(m => m.tplId === "necromancer");
+    if (facilityId === "grand_kitchen") return true;
     return false;
   },
 
   // 拠点接収：建設部門に誰も置かないと施設は「存在しない」ままだった。
-  // 勝利した拠点をそのまま接収することで、施工役なしでも1ランに一度だけ最初の施設へ届く。
-  // ただし奪った拠点は目立つ（警戒度+3＝以後の敵が約6%強くなる）。
-  // Lv.2以降は従来どおり建設部門の仕事であり、この入口は「最初のJokerを試す」ためだけにある。
-  SEIZE_ALERT_COST: 1,
-
-  seizeQuote() {
-    const st = this.state;
-    const target = FACILITY_LEVELS[1];
-    const need = Math.max(0, target.buildThreshold - (st.buildProgress || 0));
-    return {
-      need,
-      have: st.materials || 0,
-      alertCost: this.SEIZE_ALERT_COST,
-      affordable: (st.materials || 0) >= need
-    };
-  },
-
-  // 表示・sim・実プレイで同じ条件を使う。結果画面でのみ、施設ゼロのときだけ提示する。
-  canSeizeStronghold() {
-    const st = this.state;
-    if (!st || st.phase !== "result") return false;
-    if (st.seizeUsed) return false;
-    if ((st.facilityLevel || 0) >= 1 || st.pendingFacilityChoiceLevel) return false;
-    if (!st.lastBattle || !st.lastBattle.victory) return false;
-    return this.seizeQuote().affordable;
-  },
-
-  seizeStronghold() {
-    if (!this.canSeizeStronghold()) return false;
-    const st = this.state;
-    const quote = this.seizeQuote();
-    st.materials -= quote.need;
-    st.buildProgress += quote.need;
-    st.facilityLevel = 1;
-    st.pendingFacilityChoiceLevel = 1;
-    st.seizeUsed = true;
-    st.alert = Math.max(0, st.alert + this.SEIZE_ALERT_COST);
-    if (st.lastBattle && Array.isArray(st.lastBattle.notes)) {
-      st.lastBattle.notes.push(`拠点接収：建材 ${quote.need} を投じて敵拠点を接収した`
-        + `（施設Lv.1／王国警戒度+${this.SEIZE_ALERT_COST} 現在 ${st.alert}）`);
-    }
-    this.save();
-    return true;
-  },
-
-  chooseFacility(id) {
-    const st = this.state;
-    if (st.phase !== "facility" || !st.pendingFacilityChoiceLevel) return false;
-    if (!FACILITIES.some(f => f.id === id)) return false;
-    st.activeFacilityId = id;
-    st.pendingFacilityChoiceLevel = null;
-    if (this.maybeEvent()) return true;
-    this.nextRecruit();
-    return true;
-  },
-
   // シナジーの発火条件を数える母集団。出撃隊ではなく軍団全体を渡す。
   // 部門へ回した者も条件に参加できるので、「戦力か経営か」の二択が
   // 「どちらでも同じ札が効く」に変わり、同時発動が起きる。
@@ -875,7 +885,6 @@ const Game = {
   // 数値・発火条件は従来のまま。ここで変えているのは「根拠を持ち回るかどうか」だけである。
   mealPlan(rations) {
     const active = this.activeRoster();
-    const feast = this.state.feastPending;
     const cook = active.find(m => (m.traits || []).includes("demon_cook")) || null;
     const hunger = active.find(m => (m.traits || []).includes("hunger_demon")) || null;
     const consumed = rations ? Math.max(0, Number(rations.consumed) || 0) : 0;
@@ -883,7 +892,8 @@ const Game = {
     const target = ranked[0] || null;
     const topAppetite = target ? Aptitude.of(target).appetite : 0;
     // 巨大厨房は Lv.+1 倍。Lv.1で従来どおりの2倍、Lv.3で4倍まで濃くなる。
-    const kitchenMult = rations && rations.kitchen ? 1 + this.facilityWorks() : 1;
+    // 巨大厨房は Lv＋1 倍（facilityWorks() は施設ごとの表を返すので、ここは Lv を直接引く）
+    const kitchenMult = rations && rations.kitchen ? 1 + this.facilityLv("grand_kitchen") : 1;
     const boost = cook && rations ? Math.min(0.8, consumed * 0.08 * kitchenMult) : 0;
     const bigEaterMult = 1 + 0.25 * kitchenMult;
     return {
@@ -913,14 +923,12 @@ const Game = {
             .map(m => ({ uid: m.uid, name: m.name, mult: bigEaterMult }))
         : [],
       hungerUid: hunger && rations && rations.emptied ? hunger.uid : null,
-      hungerName: hunger && rations && rations.emptied ? hunger.name : null,
-      feast: feast ? { dmgBonus: feast.dmgBonus, fed: feast.fed } : null
+      hungerName: hunger && rations && rations.emptied ? hunger.name : null
     };
   },
 
   preparedRoster(rations, plan) {
     const active = this.activeRoster();
-    const feast = this.state.feastPending;
     const meal = plan || this.mealPlan(rations);
     const hungering = active.some(m => (m.traits || []).includes("hunger_demon"));
     return active.map(m => {
@@ -928,11 +936,11 @@ const Game = {
       if (rations && rations.consumed > 0 && (m.traits || []).includes("big_eater")) dmgMult *= meal.bigEaterMult;
       if (meal.targetUid !== null && m.uid === meal.targetUid) dmgMult *= 1 + meal.boost;
       if (rations && rations.emptied && hungering) { dmgMult *= 2; takenMult *= 1.3; }
-      // 宴を食えた者だけが強くなる。食事不要の軍団に宴の効果はない。
-      if (feast && Aptitude.of(m).appetite > 0) dmgMult *= 1 + feast.dmgBonus;
       // 施設の一律HP・防御補正は撤去した（設計憲法 第9節）。施設Lv.は
       // 大型Jokerが働ける回数（facilityWorks）としてのみ効く。
-      return { ...m, battleDmgMult: dmgMult, battleTakenMult: takenMult };
+      const traits=(m.traits||[]).slice();
+      for(const r of this.state.relics||[]) if(r.holderUid===m.uid && r.polishedUntil>(this.state.incidents?.stats?.settles||0) && traits.includes(r.traitId)) traits.push(r.traitId);
+      return { ...m, traits, battleDmgMult: dmgMult, battleTakenMult: takenMult };
     });
   },
 
@@ -947,6 +955,152 @@ const Game = {
 
   rankOf(monster) {
     return PROMOTION_RANKS.find(rank => rank.id === monster.rankId) || PROMOTION_RANKS[0];
+  },
+
+  // 転身した将軍の二つ名。種族ごとに1本（src/data/epithets.js。CodeX が入れるまでは仮の「将軍」）。
+  epithetFor(monster) {
+    const fallback = (typeof GENERAL_TRANSFORM !== "undefined" && GENERAL_TRANSFORM.fallbackEpithet) || "将軍";
+    if (!monster) return fallback;
+    if (typeof EPITHETS === "undefined") return fallback;
+    return EPITHETS[monster.tplId] || EPITHETS[monster.race] || fallback;
+  },
+  // 画面に出す名前。**m.name は変えない**（殿堂・遺物・記録・テストが名前で照合している）。
+  // 噂の札の効果。判定と文章はデータ、状態の変更はここに集める。
+  incidentBonus(m, key, amount, turns=1) {
+    if (!m) return;
+    m[key]=(m[key]||0)+amount;
+    (this.state.incidentEffects ||= []).push({uid:m.uid,key,amount,until:Incidents.init(this.state).stats.settles+turns});
+  },
+  finishIncidentEffects() {
+    const st=this.state;
+    st.incidentEffects=(st.incidentEffects||[]).filter(e=>{
+      if(e.until>Incidents.init(st).stats.settles)return true;
+      const m=st.roster.find(x=>x.uid===e.uid);
+      if(m) { m[e.key]=(m[e.key]||0)-e.amount; if(e.key==="spiritMaxBonus")m.spirit=Math.min(m.spirit||0,this.spiritRules().max+m.spiritMaxBonus); }
+      return false;
+    });
+    for(const r of st.relics||[]) if(r.polishedUntil<=Incidents.init(st).stats.settles)delete r.polishedUntil;
+    for(const m of st.roster) if(m.epithetOverrideUntil<=Incidents.init(st).stats.settles) {delete m.epithetOverride;delete m.epithetOverrideUntil;}
+  },
+  incidentApplicant(tplId, name) {
+    const m=this.rollApplicant(tplId); if(name)m.name=name;
+    (this.state.incidentApplicants ||= []).push(m); return m;
+  },
+  incidentEffect(id, step, c) {
+    const st=this.state,m=c.subject,v=c.viewer,s=Incidents.init(st);
+    const loyalty=(list,n)=>list.filter(Boolean).forEach(x=>x.loyalty=U.clamp((x.loyalty||0)+n,0,100));
+    if(step==="gain") {
+      switch(id) {
+        case "slime_pond": this.incidentBonus(v,"spiritMaxBonus",1); break;
+        case "mage_lab_light":
+          if(this.speciesSkillFor(v)) {v.incidentLearnBonus=1; this.checkSpeciesSkill(v,[]);} else s.freeTraining=true; break;
+        case "kobold_dig": st.materials+=4; this.trace("carried_materials",m.uid,null,{amount:4,facility:null}); break;
+        case "necro_visitor": this.incidentApplicant("skeleton"); break;
+        case "harpy_letter": s.intel=true; break;
+        case "general_duel": for(const x of c.members)this.incidentBonus(x,"spiritMaxBonus",1); break;
+        case "mimic_appraisal": {
+          // 元の特性を次の戦闘入力で二度適用する。名簿の特性や遺物自体は消さない。
+          const r=(st.relics||[])[0];
+          if(r) {if(r.holderUid==null)this.giveRelic(r.id,m.uid);r.polishedUntil=s.stats.settles+1;} break;
+        }
+        case "mimic_hostel_locker": st.materials+=2;break;
+        case "goblin_market": st.gold+=8;break;
+        case "training_visitor": this.incidentApplicant("goblin");break;
+        case "skeleton_choir": loyalty(this.departmentRoster("home"),3);break;
+        case "succubus_party": loyalty(st.roster,5);break;
+        // 堕騎士：使者に会わせると、主を口に出して決める
+        case "knight_envoy": loyalty([m],5);break;
+      }
+      return;
+    }
+    // 出来事の姿・行き先はセーブに残し、城下町と続きの報告で表示する。
+    s.scenes ||= {}; s.scenes[id]={branch:step,turn:st.turn,subjectUid:m?.uid??null};
+    switch(id) {
+      case "slime_pond":
+        if(step==="2体以上") s.bedReserved=st.roster.length<this.maxArmy()?1:0;
+        break;
+      case "mage_lab_light":
+        if(step==="術師以外") {
+          v.skills ||= [];
+          const skill=["mage_fireball","necro_hand","slime_dissolve"].find(k=>typeof SKILLS!=="undefined"&&SKILLS[k]&&!v.skills.includes(k));
+          if(skill)v.skills.push(skill);
+          else {s.scenes[id].branch="術師系";s.lessonUid=v.uid;c.branchOverride="術師系";}
+        } else { s.lessonUid=v.uid; }
+        break;
+      case "kobold_dig": s.bankPassage=step;break;
+      case "necro_visitor":
+        if(step==="遺物あり")s.masterVisit={name:(m?.name||"骸骨")+"の元の主",due:(st.turn||0)+2};
+        break;
+      case "harpy_letter":
+        if(step==="前哨済み") {const a=this.incidentApplicant("goblin","王国の連絡兵");const soldier=this.actStages()[0].units[0];a.race=soldier.race||"人間";a.icon=soldier.icon||"🛡️";a.tplId=soldier.tplId||"soldier";a.tags=(soldier.tags||[]).slice();a.traits=(soldier.traits||[]).slice();}
+        else s.letterEnemy=true;
+        break;
+      case "general_duel":
+        for(const x of c.members)this.trace("trained",x.uid,null,{tier:"将軍の模擬戦"});
+        if(step==="60以上") {c.winner.epithetOverride=c.loser.epithet||"将軍";c.winner.epithetOverrideUntil=s.stats.settles+2;}
+        break;
+      case "mimic_appraisal":
+        this.trace("carried_materials",m.uid,null,{amount:1,facility:"hostel",sourceCard:id});break;
+      case "mimic_hostel_locker": s.locker=step;break;
+      case "goblin_market": if(step==="なし")this.incidentApplicant("goblin","身分証を裏返した客"); break;
+      case "training_visitor":
+        if(step==="最多")s.biography={uid:m.uid,name:m.name,lines:(st.traces||[]).filter(t=>t.subject===m.uid||t.object===m.uid).slice(-5).map(t=>Traces.describe(t,uid=>st.roster.find(x=>x.uid===uid)?.name))};
+        else s.lessonUid=m.uid;
+        break;
+      case "skeleton_choir": if(step==="食料3以下")st.food+=3;break;
+      case "succubus_party": s.party=step;break;
+      // 堕騎士：斬れば王国が気づく（警戒度+5・戦功+3）。断れば名簿を写され、後日 元同僚が討伐隊に混ざる。
+      case "knight_envoy":
+        if(step==="90以上") { st.alert=Math.max(0,(st.alert||0)+5); if(m)m.merit=(m.merit||0)+3; }
+        else { loyalty([m],10); s.envoyRoster={name:(m?.name||"堕騎士")+"の元同僚",due:(st.turn||0)+2}; }
+        break;
+    }
+  },
+  incidentTail(t, accept) {
+    const st=this.state,s=Incidents.init(st);
+    let text="その後、話はひと区切りついた。";
+    switch(t.parent) {
+      case "slime_pond":
+        s.bedReserved=0;
+        if(t.branch==="2体以上"&&accept) {this.incidentApplicant("slime");text="池の分身が、正式に面接へ来た。";}
+        else text=t.branch==="2体以上"?"スライムたちは池へ戻った。宿舎の寝台が空いた。":"水面の友達との散歩が終わり、スライムが帰ってきた。";
+        break;
+      case "kobold_dig": delete s.bankPassage;text="地下の荷物を運び終え、銀行への穴を閉じた。";break;
+      case "necro_visitor":
+        if(t.branch==="遺物あり"&&accept) {
+          if(st.counterattack?.pending) {s.masterVisit.due=(st.turn||0)+1;text="前の主は城の外で待っている。先に今の防衛戦を片付けよう。";break;}
+          st.counterattack={pending:true,kind:"punitive",armyName:s.masterVisit?.name||"骸骨の元の主"};
+          st.missionOffers=[];text="骸骨の元の主を迎え撃つ。城の守りを固めよう。";
+        } else text="骸骨の前の主と話をつけ、借りた品を返した。";
+        delete s.masterVisit;break;
+      case "harpy_letter": s.intel=false;s.letterEnemy=false;text="手紙の主との用事が済んだ。封筒だけが手元に残った。";break;
+      case "general_duel":
+        for(const uid of [t.winnerUid,t.loserUid]) {const m=st.roster.find(x=>x.uid===uid);if(m){delete m.epithetOverride;delete m.epithetOverrideUntil;}}
+        text="名札を返し、将軍たちはいつもの持ち場へ戻った。";break;
+      case "mimic_hostel_locker": delete s.locker;text="荷物に部屋札を掛けると、宿舎は静かになった。";break;
+      case "goblin_market":text="露店を閉じた。契約の話は断り、応募者とは通常の面接で話すことにした。";break;
+      case "training_visitor":delete s.biography;delete s.lessonUid;text="師匠の記事と受け身の稽古が、町の話題になった。";break;
+      case "skeleton_choir":text="合唱団が帰ってきた。送別会の主役は無事に引っ越した。";break;
+      case "succubus_party":delete s.party;text="夜会がお開きになり、客も隊列を解いた。";break;
+      case "knight_envoy":
+        if(t.branch==="90未満"&&s.envoyRoster) {
+          // 「元同僚が王国の隊列に出る」を、既存の防衛戦の予約で実らせる（necro_visitor と同じ口）。
+          if(st.counterattack?.pending) {s.envoyRoster.due=(st.turn||0)+1;text="元同僚はまだ来ない。先に今の防衛戦を片付けよう。";break;}
+          st.counterattack={pending:true,kind:"punitive",armyName:s.envoyRoster.name};
+          text=`写された名簿から、${s.envoyRoster.name}が討伐隊に混ざった。`;
+        } else text="王国はしばらく黙っている。使者の件は、書類の上でだけ残った。";
+        delete s.envoyRoster;break;
+    }
+    if(s.scenes)delete s.scenes[t.parent];
+    return text;
+  },
+  displayName(monster) {
+    if (!monster) return "";
+    const epithet = monster.epithetOverride || monster.epithet;
+    return epithet ? `${epithet}・${monster.name}` : monster.name;
+  },
+  isGeneral(monster) {
+    return !!monster && monster.rankId === "general";
   },
 
   nextRank(monster) {
@@ -1030,12 +1184,39 @@ const Game = {
     // 長さだけで判断していたので、予約が立った直後に3択のまま残ることがあった。
     const pending = !!(st.counterattack && st.counterattack.pending);
     const offers = st.missionOffers;
+    // 第二幕決着後は第三幕の実装を待つ自由活動。攻略札は再生成せず、
+    // 周辺地の略奪と訓練だけを出す。予約済みの防衛が万一残る旧セーブでは防衛を優先する。
+    if (st.act2Cleared) {
+      const validKinds = pending ? ["defend", "train"] : ["raid", "trial", "train"];
+      const stalePostAct2 = !Array.isArray(offers) || !offers.length
+        || offers.some(m => !validKinds.includes(m.missionKind))
+        || validKinds.some(kind => !offers.some(m => m.missionKind === kind));
+      if (!force && !stalePostAct2) {
+        st.phase = "mission";
+        return offers;
+      }
+      const previous = new Map((offers || []).map(m => [m.missionKind, m.formationId]));
+      st.selectedMission = null;
+      // 力試し（§2）。略奪と訓練のあいだに1枚。予約済み防衛が残る旧セーブでは出さない。
+      st.missionOffers = (pending
+        ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
+        : [this.buildMission(MISSION_TYPES[0], previous.get("raid")), this.trialMission()])
+        .concat([this.buildMission(MISSION_TYPES.train, previous.get("train"))]);
+      st.phase = "mission";
+      this.save();
+      return st.missionOffers;
+    }
+    // 訓練は「防衛が来ている決着でも選べる」（勇者の前に鍛え直す場でもある）ので、
+    // 予約中の札は「防衛＋訓練」の2枚、通常は「3系統＋訓練」の4枚になる。
+    // 3択は地図の候補（段階A）。予約中は防衛＋訓練＋巡回。
     // 第1章の最初の出撃は救援一択（物語）。決着するまで作戦会議は救援だけを出す。
     const rescue = typeof Story !== "undefined" && Story.rescuePending(st);
     const stale = !Array.isArray(offers) || !offers.length
       || (rescue ? offers.length !== 1 || offers[0].story !== "goblin_rescue"
-        : pending ? offers.some(m => m.missionKind !== "defend") || offers.length !== 1
-        : offers.length !== MISSION_TYPES.length || offers.some(m => m.missionKind === "defend" || m.story));
+        : offers.some(m => m.story))
+      || (!rescue && ((pending ? !offers.some(m => m.missionKind === "defend")
+        : offers.some(m => m.missionKind === "defend"))
+      || !offers.some(m => m.missionKind === "train")));
     if (!force && !stale) {
       st.phase = "mission";
       return offers;
@@ -1043,16 +1224,389 @@ const Game = {
     const previous = new Map((offers || []).map(m => [m.missionKind, m.formationId]));
     st.selectedMission = null;
     st.missionOffers = rescue
-      ? [Story.rescueMission(this.buildMission(MISSION_TYPES.find(m => m.id === "invade")))]
-      : pending
+      ? [Story.rescueMission(this)]
+      : (pending
       ? [this.buildMission(MISSION_TYPES.defend, previous.get("defend"))]
-      : MISSION_TYPES.map(type => this.buildMission(type, previous.get(type.id)));
+      : this.territoryOffers(previous))
+      .concat(this.patrolOffer() ? [this.patrolOffer()] : [])
+      .concat([this.buildMission(MISSION_TYPES.train, previous.get("train"))]);
     st.phase = "mission";
     this.save();
     return st.missionOffers;
   },
 
-  buildMission(type, previousFormationId) {
+  // 3択＝地図で隣接する候補3つ（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
+  // 人間界の土地は「落とす」（進軍の型）、部族圏は「従える」（鎮圧の型）。
+  // 土地には「略奪」、贈れる部族には「贈る」の札を**同じ場所の裏の選択肢**として並べて返す
+  // （表示側が territoryId でまとめて1枚に畳む。新しい action を増やさずに切り替えられる）。
+  territoryOffers(previous) {
+    if (typeof Territory === "undefined") {
+      return MISSION_TYPES.map(type => this.buildMission(type, (previous || new Map()).get(type.id)));
+    }
+    const st = this.state;
+    Territory.init(st);
+    const places = Territory.candidates(st, U.rand);
+    // 候補が尽きた（幕の全部を落とした）なら今までの3系統へ戻す（幕の着地は既存の経路）。
+    if (!places.length) return MISSION_TYPES.map(type => this.buildMission(type, (previous || new Map()).get(type.id)));
+    const out = [];
+    for (const place of places) {
+      const tribe = Territory.isTribe(place.id);
+      out.push(this.buildMission(tribe ? MISSION_TYPES[1] : MISSION_TYPES[2], null, place));
+      if (!tribe) out.push(this.buildMission(MISSION_TYPES[0], null, place));   // 略奪（裏の選択肢）
+      const cost = Territory.tributeCost(place.id);
+      if (cost) out.push(this.tributeOffer(place, cost));
+    }
+    return out;
+  },
+
+  // 贈る（戦わずに従える）。戦闘の札ではないので units は持たない。
+  // 選んだ時点で selectMission が支払いまで済ませる（新しい action を増やさない）。
+  tributeOffer(place, cost) {
+    return {
+      stage: this.state.turn,
+      missionKind: "tribute",
+      missionTitle: `${place.name}へ贈る`,
+      strategyLabel: "戦わずに従える",
+      strategyHint: `金 ${cost.gold}G と食料 ${cost.food} を贈る。戦わずにその種族が仲間になる。`,
+      description: "贈り物を持たせた使者を出す。魔王軍にも外交はある（たまに）。",
+      territoryId: place.id, territoryMode: "tribute", territoryKind: null,
+      territoryLine: "従えれば、その種族が応募に来る",
+      tributeCost: cost,
+      difficulty: "—", army: `${place.name}の長`, region: place.name,
+      reward: 0, foodReward: 0, materialReward: 0,
+      alertDelta: 0, conquestDelta: 0, loyaltyDelta: 0,
+      armyPressure: 0, familiarity: 0, twoStage: false, missionPhase: "main",
+      training: false, units: []
+    };
+  },
+
+  // 巡回の札。領土が1つも無ければ出さない（見回る先が無い）。
+  patrolOffer() {
+    if (typeof Territory === "undefined") return null;
+    const st = this.state;
+    const t = Territory.init(st);
+    if (!t.lands.length && !t.tribes.length) return null;
+    const stage = Territory.patrolStage(st);
+    // 名前は人間界の領土なら「辺境のパトロール隊」、部族圏なら「反乱の残党」。両方あれば交互。
+    const both = t.lands.length && t.tribes.length;
+    const rebels = both ? ((st.turn || 0) % 2 === 1) : !t.lands.length;
+    return this.buildMission(this.PATROL_TYPE, null,
+      { id: null, name: "領内", garrison: stage, army: rebels ? "反乱の残党" : "辺境のパトロール隊" });
+  },
+
+  // ── 訓練（docs/DESIGN_TRAINING_2026-09-13.md）────────────────
+  // 死なない・金も建材も入らない・王国に知られない。食料は減り、給与は半分出る。
+  // 相手は本戦の隊列を写して倍率を掛けるだけ（battle.js は触らない）。
+  // 稽古で倒れた者は負傷（次の1戦だけ休む）。戦死の処理（継承・遺物・戦没者名簿）は通さない。
+  applyTrainingInjuries(contribution, notes) {
+    const st = this.state;
+    const down = [];
+    for (const row of contribution || []) {
+      if (!row.trainingDown && !row.injured) continue;
+      const monster = st.roster.find(m => m.uid === row.uid);
+      if (!monster) continue;
+      monster.injured = 1;
+      st.activeUids = st.activeUids.filter(uid => uid !== row.uid);
+      down.push(monster.name);
+    }
+    if (down.length) notes.push(`${down.join("、")}が稽古で倒れた（負傷。次の1戦は休む）`);
+    return down;
+  },
+
+  isTraining(stageData) {
+    return !!(stageData && (stageData.training || stageData.missionKind === "train"));
+  },
+  // 訓練では HP0 は戦死ではなく負傷（次の1戦だけ休む）。**結果を読む側で変換する**
+  // （battle.js は触らない。タイムラインは今までどおり death を持つ）。
+  softenTrainingCasualties(contribution) {
+    for (const row of contribution || []) {
+      if (row.survived === false) { row.survived = true; row.injured = true; row.trainingDown = true; }
+    }
+    return contribution;
+  },
+  // 訓練の戦功は「生きて終えたら +1（猛者は +2）」だけ。撃破も最多も数えない。
+  // 力試しの決着（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §4）。稽古の経路の中で呼ぶので、
+  // 死者・警戒度・王国攻略・反撃予約・wipeCount・endRun はどれも動かない。
+  // 動かすのは梯子の段と、勝った時だけの金・戦功・称号。負けは面目だけ失う。
+  TRIAL_LOSS_LINES: [
+    "{mvp}が、稽古なのに本気で泣いた。",
+    "{foe}は帰り際に「次はもう少し粘れ」と言い残した。",
+    "訓練場の藁束が、今日だけは同情してくれた。"
+  ],
+  settleTrial(stageData, result, notes) {
+    const st = this.state, t = this.trials();
+    const level = Math.max(0, (stageData.trial && stageData.trial.level) || 0);
+    const alive = (result.contribution || []).filter(c => !c.mercenary && st.roster.some(m => m.uid === c.uid));
+    const mvp = alive.slice().sort((a, b) => (b.damage || 0) - (a.damage || 0))[0];
+    if (result.victory) {
+      t.wins += 1;
+      t.level = level + 1;
+      t.best = Math.max(t.best || 0, t.level);
+      const gold = Math.max(1, Number(stageData.trialReward) || 1);
+      st.gold += gold;
+      notes.push(`力試し 第${level + 1}段を突破。称賛として ${gold}G（所持金 ${st.gold}G）`);
+      for (const c of alive) {
+        const monster = st.roster.find(m => m.uid === c.uid);
+        if (monster) monster.merit = (monster.merit || 0) + 2;
+      }
+      // 称号は既存の器（epithet）に1本だけ足す。新しい仕組みは作らない。
+      if (mvp) {
+        const monster = st.roster.find(m => m.uid === mvp.uid);
+        if (monster && !monster.epithet) {
+          monster.epithet = `第${level + 1}段の壁を越えた者`;
+          notes.push(`${monster.name}に「${monster.epithet}」の名がついた。`);
+        }
+      }
+      t.last = { level, won: true, opponent: stageData.army || "" };
+    } else {
+      t.losses += 1;
+      const line = U.pick(this.TRIAL_LOSS_LINES)
+        .replace("{mvp}", (mvp && mvp.name) || "誰か")
+        .replace("{foe}", stageData.army || "相手");
+      notes.push(line);
+      t.last = { level, won: false, opponent: stageData.army || "" };
+    }
+    st.lastTrial = { level, won: !!result.victory, mult: (stageData.trial && stageData.trial.mult) || 1,
+      opponent: stageData.army || "", best: t.best };
+  },
+
+  awardTrainingMerit(contribution, stageData, notes) {
+    const st = this.state;
+    st.lastPromotions = [];
+    const gain = Math.max(1, Number(stageData && stageData.trainingMerit) || 1);
+    for (const c of contribution || []) {
+      if (c.mercenary) continue;
+      const monster = st.roster.find(m => m.uid === c.uid);
+      if (!monster) continue;
+      this.trace("trained", monster.uid, null, { tier: stageData.army || "稽古", facility: null });
+      monster.merit = (monster.merit || 0) + gain;
+      monster.loyalty = U.clamp((monster.loyalty || 0) + 1, 0, 100);
+      const targetRank = this.rankForMerit(monster.merit);
+      while (monster.rankId !== targetRank.id) {
+        const next = this.nextRank(monster);
+        if (!next || next.threshold > monster.merit) break;
+        this.promote(monster, next, notes);
+      }
+    }
+    if (st.incidents?.lessonUid != null) {
+      const pupil=(contribution||[]).map(c=>st.roster.find(m=>m.uid===c.uid)).find(m=>m && m.uid!==st.incidents.lessonUid);
+      if(pupil) {pupil.incidentLearnBonus=1;this.checkSpeciesSkill(pupil,notes);notes.push(`${pupil.name}も教材で技のこつをつかんだ。`);delete st.incidents.lessonUid;}
+    }
+    notes.push(`稽古を終えた。出撃した者の戦功 +${gain}・忠誠 +1`);
+  },
+
+  trainingOpponents() {
+    const list = ((typeof MISSION_TYPES !== "undefined" && MISSION_TYPES.train) || {}).opponents || [];
+    return list.map(o => ({ ...o, unlocked: (this.state.conquest || 0) >= o.conquest }));
+  },
+  // 既定は「解放済みのうち一番強いもの」（迷わせないため）。
+  trainingOpponent(id) {
+    const list = this.trainingOpponents();
+    const open = list.filter(o => o.unlocked);
+    return open.find(o => o.id === id) || open[open.length - 1] || list[0];
+  },
+  // 訓練の相手を作る。本戦の隊列（同じ征服度・同じ隊列）を写して倍率を掛け、
+  // 猛者だけ隊長を1体足す。**役はそのまま**（何と戦っているか分からなくならないように）。
+  trainingUnits(baseUnits, opponent) {
+    const mult = opponent.mult || 1;
+    const scale = (v, min) => Math.max(min, Math.round((Number(v) || 0) * mult));
+    const units = (baseUnits || []).map(u => ({
+      ...u, hp: scale(u.hp, 1), atk: scale(u.atk, 1), def: u.def, spd: u.spd
+    }));
+    if (opponent.commander && units.length) {
+      const model = units[0];
+      units.push({ ...model, name: "稽古の隊長", role: "commander",
+        hp: scale(model.hp, 1), atk: scale(model.atk, 1) });
+    }
+    return units;
+  },
+
+  // 前哨戦の規則（docs/SPEC_TWO_STAGE_BATTLES_2026-09-12.md）。
+  // 進軍は「前哨戦 → 本戦」の2戦。征服度が進むのは本戦に勝ったときだけ。
+  TWO_STAGE_REWARD_MULT: 1.3,      // 1段階を2戦に割ったぶんの補正（段階表は触らない）
+  OUTPOST_REWARD_RATIO: 0.5,
+  OUTPOST_FOOD_REWARD: 2,
+  // その段階に前哨が要るか。段階1（チュートリアル）と最終段階（勇者・王都）は一発勝負。
+  outpostNeeded(baseIndex) {
+    if (baseIndex <= 0) return false;                       // 段階1は敵2体。半分にすると1体になり狙い選びが消える
+    if (baseIndex >= this.MAX_CONQUEST - 1) return false;    // 勇者戦・幕の最終段階は前哨なし
+    return true;
+  },
+  // 今の征服度で前哨を制しているか（HUD と作戦カードが読む）。
+  // 前哨を制しているか。土地の札（段階A）では「どの土地の前哨か」まで見る
+  // （ある土地を偵察して、別の土地の本戦へ持ち込めてしまわないように）。
+  outpostCleared(placeId) {
+    const st = this.state;
+    const o = st && st.outpost;
+    if (!o || !o.cleared) return false;
+    if (placeId) return o.place === placeId;
+    // 引数なしは「どこかの前哨を制しているか」（HUD の ▸前哨済 がこれを読む）。
+    return o.place ? true : o.stage === st.conquest;
+  },
+  // 前哨戦の敵：本戦の隊列の前半（役つきを1体は残す）。
+  outpostUnits(units) {
+    const keep = Math.max(1, Math.ceil(units.length / 2));
+    const ROLES = ["shield", "archer", "priest", "caster", "commander", "rogue", "brute"];
+    const picked = units.slice(0, keep);
+    // 前半が全員 fighter なら、役つきを1体だけ後半から引いてくる
+    // （前哨は「どんな隊列か」を読むための戦いなので、役が1つも見えないと意味がない）。
+    if (!picked.some(u => ROLES.includes(u.role))) {
+      const withRole = units.slice(keep).find(u => ROLES.includes(u.role));
+      if (withRole) picked[picked.length - 1] = withRole;
+    }
+    return picked;
+  },
+
+  // 鎮圧（suppress）の敵の姿。人間の隊列を借りているので tplId / race / icon だけ魔物に差し替える（数値・役は触らない）。
+  rebelLook(type, index) {
+    if (!type || type.id !== "suppress" || typeof REBEL_LOOKS === "undefined") return {};
+    const pool = index === 0 ? REBEL_LOOKS.leaders : REBEL_LOOKS.grunts;
+    const look = U.pick(pool) || {};
+    return { tplId: look.tplId, race: look.race, icon: look.icon, rebel: true };
+  },
+
+  // 巡回の札（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。何度でも戦える雑魚戦。
+  // 征服は進まず、警戒も上がらない。戦死はある。データ（missions.js）は触らず、
+  // 型だけここに置く（段階A のあいだは run.js に閉じる）。
+  PATROL_TYPE: {
+    id: "patrol", icon: "🛡", title: "領内を巡回する",
+    strategyLabel: "領内の見回り",
+    strategyHint: "落とした土地を見回る。攻略は進まず、王国にも気づかれない。稼ぎは薄い。",
+    descriptions: [
+      "領内に湧いた小競り合いを片付けに行く。手柄は小さいが、誰も文句を言わない。",
+      "見回りの名目で暴れる。魔王軍の日常業務である。",
+      "残党狩り。地味だが、放っておくと面倒になる。"
+    ],
+    armies: ["辺境のパトロール隊"], regions: ["領内"],
+    enemyTierOffset: 0, enemyMult: 1.0, rewardMult: 0.4, payrollCoverage: 0.5,
+    rewardJitter: [0, 1], foodReward: 1, materialReward: 0,
+    alertDelta: 0, conquestDelta: 0, loyaltyDelta: 0, difficulty: "低"
+  },
+
+  // 土地・部族圏の札に使う守備段階。略奪した土地は次に来るとき硬い。
+  placeStage(place) {
+    const rules = typeof Territory !== "undefined" ? Territory.rules() : { raid: { garrisonBonus: 1 } };
+    const raided = ((this.state.raided || {})[place.id] || 0) * (rules.raid.garrisonBonus || 0);
+    return Math.max(1, (place.garrison || 1) + raided);
+  },
+
+  // ── 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md）────────────────
+  // 第二幕決着後だけ出る梯子。勝つたびに段が上がり、相手が強くなる。
+  // 稽古と同じ経路（training: true）なので誰も死なず、全滅してもランは終わらない。
+  // 測って決めた（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §6、tools/sim.js の
+  // 戦略「第二幕後に力試しを続ける」）。狙いは 段0 勝率 60〜80%、段3 30% 未満。
+  //   base / step   ラン   段0   段3
+  //   1.25 / 1.12    10    67%   38%   ← 仕様書のまま。段3 が狙いに届かない
+  //   1.25 / 1.22    10    63%   24%
+  //   1.25 / 1.22    10    45%   26%   ← 同じ設定でも段0 はこれだけ振れる
+  //   1.20 / 1.22    15    54%   32%
+  //   1.15 / 1.22    15    79%   50%
+  // 伸びを 1.22 にすると段3 は 24〜32% で安定して狙いに入る。段0 は 45〜63% で、
+  // **同じ設定の再測でも 18 ポイント振れる**（1段あたり 20〜26 戦しか標本が取れない）。
+  // base を下げても段0 が上がるとは限らない（1.20 で 54%、1.25 で 63% の回がある）ので、
+  // 段3 が確実に狙いへ入る 1.25 / 1.22 を採る。段0 の詰めは試遊の判断に委ねる。
+  TRIAL_BASE: 1.25,     // 段0 の倍率
+  TRIAL_STEP: 1.22,     // 1段ごとの伸び
+  TRIAL_REWARD_BASE: 0.5, TRIAL_REWARD_STEP: 0.25,   // 金 = 最終段階の reward × (0.5 + 0.25×段)
+
+  trials() {
+    const st = this.state;
+    if (!st.trials || typeof st.trials !== "object") st.trials = { level: 0, best: 0, wins: 0, losses: 0, last: null };
+    return st.trials;
+  },
+  trialMult(level) { return this.TRIAL_BASE * Math.pow(this.TRIAL_STEP, Math.max(0, level || 0)); },
+
+  // 顔ぶれの強さを揃えるための物差し。3つの顔ぶれは素の強さが桁違いで（敵将は HP が小さく、
+  // 連合軍は終盤の正規兵）、そのままだと段が上がったのに楽になる回ができた（測ると
+  // 段2が29%、段3が46%と逆転した）。梯子の難しさは倍率だけで決めたいので、
+  // 顔ぶれごとの素の強さを基準（連合軍）へ寄せてから倍率を掛ける。
+  trialPower(units) {
+    return (units || []).reduce((sum, u) => sum + (u.hp || 0) + (u.atk || 0) * 6 + (u.def || 0) * 4, 0);
+  },
+
+  // 相手の顔ぶれ。段 %3 で3つを順繰り。素材は既存データだけ（新しい敵は作らない）。
+  //   0 討ち漏らした者たち（この周回で討たず雇わなかった敵将）
+  //   1 勇者アレン一行（最終段階の隊列。討たなかった敵将が隣に立つ）
+  //   2 連合軍総力戦（終盤2段階の隊列から強い順に5人）
+  // 段0 は敵将が2人未満なら成立しないので、そのときは段2の顔ぶれを使う。
+  // 倍率を掛ける前の顔ぶれ（勇者一行なら隣に立つ敵将も込み）。強さを測るのはこの姿。
+  trialRoster(level) {
+    const lineup = this.trialLineup(level);
+    if (!lineup.hero || typeof Captains === "undefined") return lineup.units;
+    return Captains.heroParty(this.state, lineup.units, 1);
+  },
+  trialLineup(level) {
+    const st = this.state, stages = this.actStages();
+    const last = stages[stages.length - 1], prev = stages.slice(-3, -1);
+    const byHp = list => list.slice().sort((a, b) => (b.hp || 0) - (a.hp || 0)).slice(0, 5);
+    const union = () => byHp(prev.flatMap(s => s.units || []).map(u => ({ ...u })));
+    const kind = Math.max(0, level || 0) % 3;
+    if (kind === 1) return { name: "勇者アレン一行（再々）", units: (last.units || []).map(u => ({ ...u })), hero: true };
+    if (kind === 2) return { name: "連合軍総力戦", units: union(), hero: false };
+    if (typeof Captains === "undefined") return { name: "連合軍総力戦", units: union(), hero: false };
+    Captains.init(st);
+    const left = Captains.ids().filter(id => {
+      const status = Captains.state(st, id).status;
+      return status !== "slain" && status !== "hired";
+    });
+    if (left.length < 2) return { name: "連合軍総力戦", units: union(), hero: false };
+    // growth（ポルカの「次は少し強い装備」）は掛けない。梯子の倍率だけで強くする。
+    const captains = byHp(left.map(id => Captains.attach([], id, { captains: {} }, 1)[0]).filter(Boolean));
+    // 敵将だけだと、討ち漏らした人数で相手の強さが桁違いに変わる（測ると段0の勝率が
+    // 0%〜100% まで振れた）。梯子の難しさは倍率で決めたいので、空いた枠は正規兵で埋める。
+    // 「討ち漏らした者たちが軍を率いてくる」ので、顔ぶれが変わる面白さは残る。
+    const filler = union().filter(u => !captains.some(c => c.name === u.name));
+    return { name: "討ち漏らした者たち", units: captains.concat(filler).slice(0, 5), hero: false };
+  },
+
+  // 力試しの札。buildMission の段階表ではなく、上の顔ぶれをそのまま相手にする。
+  trialMission() {
+    const type = MISSION_TYPES.trial;
+    const st = this.state, t = this.trials();
+    const level = Math.max(0, t.level || 0);
+    const lineup = this.trialLineup(level);
+    // 顔ぶれの素の強さを基準（連合軍）へ寄せてから、梯子の倍率を掛ける。
+    const reference = this.trialPower(this.trialRoster(2));
+    const own = this.trialPower(this.trialRoster(level));
+    const evenOut = own > 0 && reference > 0 ? U.clamp(reference / own, 0.6, 2.5) : 1;
+    const mult = this.trialMult(level) * evenOut;
+    const stat = (v, min) => Math.max(min, Math.round((v || 0) * mult));
+    let units = lineup.units.map(u => ({ ...u, hp: stat(u.hp, 1), atk: stat(u.atk, 1), def: stat(u.def, 0), spd: stat(u.spd, 1) }));
+    // 勇者一行には、討たなかった敵将が今までどおり隣に立つ（既存の heroParty）。
+    if (lineup.hero && typeof Captains !== "undefined") {
+      units = Captains.heroParty(st, units, mult).map(u => ({ ...u }));
+    }
+    const payrollSupport = Math.round(this.salaryTotal() * (type.payrollCoverage || 0));
+    return {
+      stage: st.turn,
+      missionKind: type.id,
+      missionTitle: `力試し 第${level + 1}段`,
+      strategyLabel: type.strategyLabel,
+      strategyHint: type.strategyHint,
+      description: U.pick(type.descriptions),
+      training: true,                 // 稽古と同じ経路。誰も死なない・ランは終わらない
+      trial: { level, mult: Math.round(this.trialMult(level) * 100) / 100, opponent: lineup.name },
+      opponentId: null, opponentName: lineup.name, opponentNote: null,
+      trainingMerit: 2,
+      missionPhase: "main",
+      twoStage: false,
+      difficulty: type.difficulty,
+      army: lineup.name,
+      region: "闘技場",
+      reward: 0,                      // 勝った決着でだけ直接入金する（4節）
+      trialReward: Math.max(1, Math.round((this.actStages().slice(-1)[0].reward || 0)
+        * (this.TRIAL_REWARD_BASE + this.TRIAL_REWARD_STEP * level))),
+      payrollSupport,
+      alertDelta: 0, conquestDelta: 0, loyaltyDelta: 0,
+      foodReward: 0, materialReward: 0,
+      armyPressure: 0, familiarity: 0,
+      baseStage: this.MAX_CONQUEST,
+      formationId: "trial", formationName: lineup.name, formationHint: type.strategyHint,
+      units
+    };
+  },
+
+  buildMission(type, previousFormationId, place) {
     const st = this.state;
     // 敵も魔王軍レベルに連動する（仕様2.3）。征服段階だけで引いていた頃は、
     // 略奪を繰り返せば応募者だけ強くして敵を据え置きにできた。
@@ -1060,7 +1614,9 @@ const Game = {
     // 通常作戦の敵の段階は**征服度だけ**で決める（2026-09-10）。時間では上がらない。
     // 時間の圧力は警戒度＝王国の反撃（防衛戦は下で魔王軍レベル基準に置き換える）。
     const stages = this.actStages();
-    let baseIndex = U.clamp(st.conquest + type.enemyTierOffset, 0, stages.length - 1);
+    let baseIndex = place
+      ? U.clamp(this.placeStage(place) - 1, 0, stages.length - 1)
+      : U.clamp(st.conquest + type.enemyTierOffset, 0, stages.length - 1);
     // 防衛戦（王国の反撃）。討伐隊は段階7（聖騎士団）まで。勇者は段階8で固定。
     const counter = type.id === "defend" ? (st.counterattack || {}) : null;
     if (counter) {
@@ -1074,7 +1630,9 @@ const Game = {
       { id: "standard", name: "基本隊列", hint: "王国軍の標準的な隊列。", units: base.units },
       ...(base.variants || [])
     ];
-    const formation = formations.find(f => f.id === previousFormationId) || U.pick(formations);
+    // 前哨で見た隊列が本戦の隊列（読みに意味を持たせる）。控えは st.outpost.formationId。
+    const heldId = type.id === "invade" && this.outpostCleared(place ? place.id : null) ? (st.outpost || {}).formationId : null;
+    const formation = formations.find(f => f.id === (heldId || previousFormationId)) || U.pick(formations);
     // 大軍は選抜の自由度が高いぶん敵にも察知される。隠し補正にせず
     // mission.armyPressure として作戦カードへ渡し、解雇・維持の判断材料にする。
     const armyPressure = Math.min(6, Math.max(0, st.roster.length - this.MAX_DEPLOY) * 2);
@@ -1088,36 +1646,66 @@ const Game = {
       hp: stat(unit.hp, 1),
       atk: stat(unit.atk, 1),
       def: stat(unit.def, 0),
-      spd: stat(unit.spd, 1)
+      spd: stat(unit.spd, 1),
+      // 反乱軍は魔物の姿（数値と役はそのまま。先頭が首謀者、残りは初期種族の雑魚）
+      ...this.rebelLook(type, index)
     }));
+    // 訓練：本戦の隊列を写して倍率を掛ける（相手は選んだ段階）。金も警戒も動かない。
+    const training = type.id === "train";
+    const opponent = training ? this.trainingOpponent(this.state.trainingOpponentId) : null;
+    // 進軍だけが2戦制。前哨戦は敵が半分・報酬も半分・征服度は進まない。
+    // 土地を落とす札（進軍の型）は今までどおり2戦制。守りの薄い土地（段階1）と
+    // 幕の最終段階には前哨が付かない。略奪・従える・巡回は1戦のまま。
+    const isOutpost = type.id === "invade" && !counter
+      && this.outpostNeeded(baseIndex) && !this.outpostCleared(place ? place.id : null);
+    const twoStage = type.id === "invade" && !counter && this.outpostNeeded(baseIndex);
     const jitter = U.randInt(type.rewardJitter[0], type.rewardJitter[1]);
     // 略奪は「給与を払ったうえで少し蓄えられる」資金調達策にする。
     // 固定額だけでは大所帯ほど赤字になり、寄り道する意味が逆転してしまう。
     const payrollSupport = Math.round(this.salaryTotal() * (type.payrollCoverage || 0));
-    const reward = Math.max(1, Math.round(base.reward * type.rewardMult) + payrollSupport + jitter);
+    // 1段階を2戦に割ったので、1戦あたりの実入りは落ちる。段階表を触らずここで補正する。
+    const stageReward = base.reward * type.rewardMult * (twoStage ? this.TWO_STAGE_REWARD_MULT : 1);
+    // 訓練は金が1円も入らない（Math.max(1, …) の下限も通さない）。
+    const reward = training ? 0
+      : Math.max(1, Math.round(stageReward * (isOutpost ? this.OUTPOST_REWARD_RATIO : 1))
+        + payrollSupport + jitter);
     const variant = type.armies ? U.randInt(0, type.armies.length - 1) : 0;
     const isInvade = type.id === "invade";
     // 討伐隊の名は段階表から作る（固有の敵を足すときは段階表に行を足すだけで済む）。
+    if (type.id === "invade" && st.incidents?.letterEnemy && units.length) units[0] = {...units[0], name:"王国の連絡兵"};
     const defenseArmy = counter
-      ? (counter.kind === "hero" ? base.army : `${base.army}討伐隊`)
+      ? (counter.armyName || (counter.kind === "hero" ? base.army : `${base.army}討伐隊`))
       : null;
-    return {
+    const mission = {
       stage: st.turn,
       missionKind: type.id,
-      missionTitle: type.title,
+      missionTitle: training ? `訓練：${opponent ? opponent.line : "稽古"}` : (isOutpost ? `前哨戦：${base.region}の斥候` : type.title),
       strategyLabel: type.strategyLabel,
       strategyHint: type.strategyHint,
-      description: U.pick(type.descriptions),
+      description: U.pick((isOutpost && type.outpostDescriptions) || type.descriptions),
+      // 訓練（2026-09-13）。決着の分岐と表示がこの印を読む。
+      training,
+      opponentId: opponent ? opponent.id : null,
+      opponentName: opponent ? opponent.name : null,
+      opponentNote: opponent ? opponent.note : null,
+      trainingMerit: opponent ? (opponent.merit || 1) : 0,
+      // 前哨戦か本戦か（表示と決着が読む）。進軍以外は常に "main"。
+      missionPhase: isOutpost ? "outpost" : "main",
+      twoStage,
       difficulty: type.difficulty,
-      army: defenseArmy || (isInvade ? base.army : type.armies[variant]),
-      region: counter ? "魔王城" : (isInvade ? base.region : type.regions[variant]),
+      army: training ? (opponent ? opponent.armyName : "訓練相手")
+        : defenseArmy || (isInvade ? (isOutpost ? `${base.army}の斥候隊` : base.army) : type.armies[variant]),
+      region: training ? "訓練場" : (counter ? "魔王城" : (isInvade ? base.region : type.regions[variant])),
       reward,
       // 進軍の警戒度は counterattack.js の invadeAlert が正本（反撃A で missions.js を 0 に戻した）。
       // 反撃B はここを読み忘れていて、進軍に勝っても警戒が上がらなかった（時計が動かない）。
-      alertDelta: isInvade ? this.counterRules().invadeAlert : type.alertDelta,
-      conquestDelta: type.conquestDelta,
+      alertDelta: isOutpost
+        ? Math.ceil(this.counterRules().invadeAlert / 2)
+        : (isInvade ? this.counterRules().invadeAlert : type.alertDelta),
+      // 征服度が進むのは本戦の勝ちだけ。
+      conquestDelta: isOutpost ? 0 : type.conquestDelta,
       loyaltyDelta: type.loyaltyDelta,
-      foodReward: type.foodReward || 0,
+      foodReward: isOutpost ? this.OUTPOST_FOOD_REWARD : (type.foodReward || 0),
       materialReward: type.materialReward || 0,
       armyPressure,
       familiarity,
@@ -1125,8 +1713,140 @@ const Game = {
       formationId: formation.id,
       formationName: formation.name,
       formationHint: formation.hint,
-      units
+      units: training ? this.trainingUnits(units, opponent) : (isOutpost ? this.outpostUnits(units) : units)
     };
+    if (place) this.dressPlaceMission(mission, type, place);
+    return this.applyInvasionReward(this.attachCaptains(mission, place, type, scale));
+  },
+
+  // 第一幕の侵攻は、前哨・本戦とも勝利1決着につき固定12G（試遊値）。
+  // reward は表示・入金の総額。敵将賞金にはこの固定加算を含めない。
+  // 札に確定額を持たせ、出撃・旧セーブの決着でも二重に足さない。
+  applyInvasionReward(mission) {
+    if (!mission || mission.invasionRewardBonus !== undefined) return mission;
+    mission.invasionRewardBonus = (this.state.act || 1) === 1
+      && mission.missionKind === "invade" && !mission.training ? 12 : 0;
+    mission.reward += mission.invasionRewardBonus;
+    return mission;
+  },
+
+  // 名前のある敵将を隊列の先頭に乗せる（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
+  // 乗せ方は4つ：部族の首領・関門の将軍・「⚠ ○○がいる」札・不意打ち。
+  // 討った者と雇った者は二度と出ない（見逃した者も既定では出ない）。
+  attachCaptains(mission, place, type, scale) {
+    if (typeof Captains === "undefined" || mission.training || !mission.units) return mission;
+    const st = this.state;
+    Captains.init(st);
+    const ids = [];
+    const alive = id => { const s = Captains.state(st, id).status; return s !== "slain" && s !== "hired"; };
+    const add = id => {
+      if (!id || ids.includes(id) || !Captains.get(id) || !alive(id)) return false;
+      mission.units = Captains.attach(mission.units, id, st, 1);
+      ids.push(id);
+      return true;
+    };
+    const land = place && typeof Territory !== "undefined" ? Territory.byId(place.id) : null;
+    // 1. 部族の首領：その部族圏を従えに行けば必ず守っている
+    if (land && land.chief) add(land.chief.id);
+    // 2. 関門の将軍（王都の砦のガレス）
+    if (land) for (const id of Captains.ids()) if (Captains.get(id).gate === land.id) add(id);
+    // 3. 「⚠ ○○がいる」札：3決着に1回、糸ごとに一人
+    if (land && !ids.length && !mission.counterattack) {
+      const thread = ["village", "hamlet"].includes(land.kind) ? "village"
+        : ["checkpoint", "fort", "port", "temple", "town", "capital"].includes(land.kind) ? "kingdom" : null;
+      const pick = thread ? Captains.pickForCard(st, thread, st.settles || 0) : null;
+      if (pick && add(pick)) {
+        const c = Captains.get(pick);
+        mission.captainCard = { id: pick, short: c.short || c.name };
+        mission.missionTitle = `⚠ ${c.short || c.name}がいる　${mission.missionTitle}`;
+        mission.reward = Math.max(1, Math.round(mission.reward * Captains.rules().bountyMult));
+      }
+    }
+    // 4. 不意打ち：前哨を踏んでいない作戦だけ（訓練・防衛は起きない）
+    if (!ids.length && !mission.counterattack && type.id !== "train" && type.id !== "defend"
+      && mission.missionPhase !== "outpost" && !mission.twoStage) {
+      const hall = this.hallAmbushPool();
+      const hit = Captains.ambush(st, st.alert, U.rand, hall.length > 0);
+      if (hit && hit.kind === "captain") { if (add(hit.id)) mission.ambush = { kind: "captain", id: hit.id }; }
+      else if (hit && hit.kind === "hall" && hall.length) {
+        const who = U.pick(hall);
+        mission.units = [this.hallAmbushUnit(who, scale)].concat(mission.units);
+        mission.ambush = { kind: "hall", name: who.name };
+      }
+    }
+    // 最終戦（都）の顔ぶれ（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-3）。
+    // 勇者アレンの隣に「討たなかった者」が立つ。雇った者はこちらにいるので外れる。
+    if (land && land.kind === "capital") {
+      mission.units = Captains.heroParty(st, mission.units, 1);
+      for (const u of mission.units) if (u.captain && u.captain.id) ids.push(u.captain.id);
+      // 師（ガレス）を討たれた勇者は覚醒が早い（50% → 70%）。癖の表は触らない。
+      if (Captains.state(st, "gareth").status === "slain") {
+        const hero = mission.units.find(u => u.role === "commander");
+        if (hero) hero.awakenAt = 0.7;
+        mission.heroAwakened = true;
+      }
+      // 雇った敵将がこちらの隊列にいると、勇者は開戦で気づく
+      const hired = (st.roster || []).some(m => m.captainId && st.activeUids.includes(m.uid));
+      if (hired) {
+        mission.heroNoticesHired = true;
+        const hero = mission.units.find(u => u.role === "commander");
+        if (hero) hero.introQuote = "……お前も、そちらか。";   // 開戦の一言（battle.js の dialogue が読む）
+      }
+      mission.heroParty = mission.units.filter(u => u.captain).map(u => u.name);
+      st.lastHeroParty = mission.heroParty;   // sim の列（最終戦が既定の3人だけか、混成か）
+    }
+    mission.captainIds = ids;
+    return mission;
+  },
+
+  // 先代の英雄（過去ランの殿堂入り）。名前と種族だけを借りて、敵として一度だけ立つ。
+  hallAmbushPool() {
+    const history = typeof Storage !== "undefined" && Storage.loadHistory ? Storage.loadHistory() : [];
+    return (history || []).map(r => r && r.hallOfFame).filter(h => h && h.name && h.tplId);
+  },
+  hallAmbushUnit(who, scale) {
+    const stages = this.actStages();
+    const base = stages[U.clamp(this.armyLevel() - 1, 0, stages.length - 1)];
+    const model = (base.units || [])[0] || { hp: 40, atk: 10, def: 4, spd: 6 };
+    const k = scale || 1;
+    return {
+      name: `先代の${who.name}`, tplId: who.tplId, race: who.race, role: "brute", icon: "🏅",
+      hp: Math.round(model.hp * 1.3 * k), atk: Math.round(model.atk * 1.2 * k),
+      def: Math.round(model.def * 1.1 * k), spd: model.spd,
+      traits: [], captain: { id: "hall:" + who.name, offer: null }
+    };
+  },
+
+  // 場所の札の見た目と印（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
+  // 型（invade / raid / suppress / patrol）はそのまま使い、どこで誰と戦うかだけ差し替える。
+  // 征服度は決着ごとに Territory.conquestOf で写すので、札では進めない（conquestDelta 0）。
+  dressPlaceMission(mission, type, place) {
+    const kinds = typeof Territory !== "undefined" ? Territory.kinds() : {};
+    const kind = kinds[place.kind] || null;
+    const raid = type.id === "raid";
+    const patrol = type.id === "patrol";
+    const tribe = !patrol && typeof Territory !== "undefined" && Territory.isTribe(place.id);
+    mission.territoryId = patrol ? null : place.id;
+    mission.territoryMode = patrol ? "patrol" : raid ? "raid" : "take";
+    mission.territoryKind = place.kind || null;
+    mission.territoryLine = kind ? kind.line : (tribe ? "従えれば、その種族が応募に来る" : "");
+    mission.conquestDelta = 0;
+    if (patrol) {
+      mission.missionTitle = "領内を巡回する";
+      mission.region = "領内";
+      mission.army = place.army || "辺境のパトロール隊";
+      return mission;
+    }
+    mission.missionTitle = raid ? `${place.name}を略奪する` : tribe ? `${place.name}を従える` : `${place.name}を落とす`;
+    mission.region = place.name;
+    mission.army = tribe
+      ? `${place.name}の群れ`
+      : `${place.name}の守備隊`;
+    mission.strategyLabel = raid ? "資金・食料を補給" : tribe ? "仲間を増やす" : "領土を広げる";
+    mission.strategyHint = raid
+      ? "落とさずに奪って帰る。次に来たときの守りは硬くなる。"
+      : mission.territoryLine;
+    return mission;
   },
 
   selectMission(index) {
@@ -1134,10 +1854,29 @@ const Game = {
     if (st.phase !== "mission") return false;
     const mission = st.missionOffers[index];
     if (!mission) return false;
+    // 贈る（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。戦わない札なので、
+    // 選んだ時点で支払いまで済ませて作戦会議へ戻る（出撃の画面へは進まない）。
+    if (mission.missionKind === "tribute") return this.payTribute(mission);
     st.selectedMission = JSON.parse(JSON.stringify(mission));
     st.payrollPolicy = "regular";
     st.lastPayrollReport = null;
     st.phase = "formation";
+    this.save();
+    return true;
+  },
+
+  // 贈って従える。払えなければ何も起きない（札は残る）。決着は1つ進む。
+  payTribute(mission) {
+    const st = this.state;
+    const cost = mission.tributeCost || { gold: 0, food: 0 };
+    if ((st.gold || 0) < cost.gold || (st.food || 0) < cost.food) return false;
+    st.gold -= cost.gold;
+    st.food -= cost.food;
+    Territory.take(st, mission.territoryId);
+    st.conquest = U.clamp(Territory.conquestOf(st), 0, this.MAX_CONQUEST);
+    st.turn = (st.turn || 0) + 1;
+    st.lastTribute = { id: mission.territoryId, name: mission.region, gold: cost.gold, food: cost.food };
+    this.prepareMissions(true);
     this.save();
     return true;
   },
@@ -1164,6 +1903,7 @@ const Game = {
     const st = this.state;
     st.hiresLeft = 0;
     st.applicants = [];
+    st.lateBloomerHint = null;     // 採用画面の一行（モルモの遅咲きのほのめかし）は面接を閉じたら消える
     if (st.openingPrototype) {
       this.beginOpeningPreparation();
       return;
@@ -1193,7 +1933,7 @@ const Game = {
     { id: "mason", name: "石工の記憶", icon: "🧱",
       when: "城をひとつも建てられずに滅びた",
       effect: "建設に向く者が応募に来やすくなる",
-      test: r => (r.facilityLevel || 0) === 0,
+      test: r => (r.townLevels || 0) === 0,
       favor: ["orc", "ogre"] },
     { id: "mourning", name: "弔いの記憶", icon: "🕯",
       when: "あまりに多くの戦死者を出した",
@@ -1252,14 +1992,18 @@ const Game = {
     // 討伐隊を退けた直後だけ、噂を聞いて1人多く来る。読んだら消える（1回きり）。
     const renown = this.state.renownBonus ? 1 : 0;
     if (renown) this.state.renownBonus = 0;
-    return U.clamp(3 + this.departmentOutput().recruit + bonus + renown, 3, 8);
+    const lands = typeof Territory !== "undefined" ? Territory.effects(this.state).applicants : 0;   // 集落・町
+    return U.clamp(3 + this.departmentOutput().recruit + bonus + renown + lands, 3, 8);
   },
 
   genApplicants() {
     const st = this.state;
     st.applicants = [];
     const n = this.applicantCount();
-    for (let i = 0; i < n; i++) st.applicants.push(this.rollApplicant());
+    // 従えた部族の種族は、応募の列に1人ずつ混ざる（docs/SPEC_TERRITORY_A_2026-09-15.md §2-3）。
+    const races = typeof Territory !== "undefined" ? Territory.effects(st).recruit.slice(0, n) : [];
+    for (let i = 0; i < n; i++) st.applicants.push(this.rollApplicant(races[i] || undefined));
+    if (st.incidentApplicants?.length) { st.applicants.push(...st.incidentApplicants); st.incidentApplicants = []; }
     let legacySlot = -1;
     if (st.legacyReturn && !st.legacyOffered && st.applicants.length) {
       const legacy = st.legacyReturn;
@@ -1274,7 +2018,8 @@ const Game = {
         legacy: {
           generation: legacy.generation,
           formerMerit: legacy.merit || 0,
-          formerRankId: legacy.rankId || "soldier"
+          // 階級は2段になった（2026-09-13）。廃止した階級で残っている記録は兵卒に丸める。
+          formerRankId: PROMOTION_RANKS.some(r => r.id === legacy.rankId) ? legacy.rankId : "soldier"
         }
       });
       const sameName = st.applicants.findIndex(m => m.name === returning.name);
@@ -1345,11 +2090,12 @@ const Game = {
     // 作戦と征服が進むほど高ティアが出やすい
     // 教訓は出現率を3倍に寄せるだけ。確定ではないので「来なかった」も起こる。
     const favored = new Set((this.activeLesson() || {}).favor || []);
-    // 指名求人：条件に合う者へ重みを寄せる。確定ではないので「出したのに来ない」も起きる。
-    const brief = this.activeBrief();
     const pool = this.templates();
     const weights = pool.map(t => {
       let w;
+      // 中盤から来る種族（マンドラゴラ・堕騎士）。tier の重みの前に、征服度で門を閉める。
+      // データ側（monsters.js の minConquest）が持つので、種族を足しても run.js は触らない。
+      if (t.minConquest && (Number(st.conquest) || 0) < t.minConquest) return 0;
       // 低ティアはレベル5以上で来ること自体が珍しくなる（2 → 1）。
       // 珍しくするのは「来たときに歴戦の顔をしている」ための下ごしらえ。
       if (t.tier === 1) w = level <= 3 ? 6 : (level <= 4 ? 2 : 1);
@@ -1357,15 +2103,10 @@ const Game = {
       else w = level <= 2 ? 0.5 : (level <= 4 ? 2 : 5);
       // 第二幕の新顔は、来たことが分かる程度に寄せる（tier 3 と同じ枝のままで少し重く）
       if (t.tier >= 4 && (st.act || 1) >= 2) w *= 1.5;
+      // 珍しい種族（堕騎士は他の tier3 の半分）。tier の枝の**あと**に掛けるので、
+      // 段階が上がっても「会えたら嬉しい」の位置のまま薄まらない。
+      if (t.rarity) w *= t.rarity;
       if (favored.has(t.id)) w *= 3;
-      if (brief) {
-        // 金を払って条件を出した以上は寄る。ただし外れも残す。
-        let hit = false;
-        try { hit = !!brief.match(t); } catch (e) { hit = false; }
-        w = hit ? w * this.BRIEF_WEIGHT : w * 0.35;
-        // 指名求人は「強い奴を寄越せ」でもある。高ティアの目をさらに上げる。
-        if (hit && t.tier >= 2) w *= 1.5;
-      }
       return w;
     });
     const total = weights.reduce((a, b) => a + b, 0);
@@ -1390,6 +2131,8 @@ const Game = {
     const scale = 1 + growth * (level - 1) * (veteran ? veteranMult : 1);
     const vary = v => Math.max(1, Math.round(v * scale * (0.85 + U.rand() * 0.3)));
     const job = U.pick(tpl.jobs);
+    // 遅咲き（裏方の職）は採用の時点で決まる。職業欄を書き換えない限り変わらない。
+    const lateBloomer = this.LATE_BLOOMER_JOBS.some(word => job.indexOf(word) !== -1);
     const traits = (tpl.fixedTraits || [tpl.fixedTrait]).filter(Boolean).slice();
     if (tpl.traitPool.length > 0 && U.chance(0.5)) {
       const extra = U.pick(tpl.traitPool);
@@ -1413,9 +2156,15 @@ const Game = {
       atk: vary(tpl.base.atk),
       def: Math.max(0, Math.round(tpl.base.def * (0.8 + U.rand() * 0.4))),
       spd: Math.max(1, Math.round(tpl.base.spd * (0.85 + U.rand() * 0.3))),
-      salary: U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(level / 4),
+      salary: Math.max(1, Math.round((U.randInt(tpl.salary[0], tpl.salary[1]) + Math.floor(level / 4) - (typeof Town !== "undefined" ? Town.salaryDiscount(st) : 0))
+        * (typeof Territory !== "undefined" ? Territory.effects(st).wageMult : 1))),   // 酒場と、落とした町の給与相場
       loyalty: U.randInt(tpl.loyalty[0], tpl.loyalty[1]),
       traits,
+      // 技（SKILLS）は誰でも3戦で覚える。採用時は空。
+      skills: [],
+      // 遅咲き（裏方の職）。戦場では倍かかるが、代わりに城の仕事を1つぶん多くこなす。
+      lateBloomer,
+      homeBonus: lateBloomer ? U.pick(this.LATE_BLOOMER_FIELDS) : null,
       tags: tpl.tags.slice(),
       quote: U.pick(tpl.quotes),
       prevJob: U.pick(tpl.prevJobs),
@@ -1426,7 +2175,9 @@ const Game = {
       unpaid: false,
       department: "combat",
       merit: 0,
-      rankId: "soldier"
+      rankId: "soldier",
+      spiritMaxBonus: 0,
+      epithet: null
     };
   },
 
@@ -1455,83 +2206,6 @@ const Game = {
   REROLL_BASE_COST: 2,
 
   // ── 傭兵市場 ──────────────────────────────
-  // 稼いだ金貨の出口。中盤で略奪した金が終盤の戦闘に対して何もしないのが、
-  // 略奪ビルドが「中盤は無双、終盤で詰む」原因だった（実測：ゴブリン5体は
-  // 第6戦100%→第7戦8%、そして5体そろえたランのクリア率は12%で最低）。
-  // 出撃5枠は壊さず、金貨で**その戦闘だけの6体目**を買えるようにする
-  // （設計憲法 第3節「6体目以降は高コストな特殊解禁として扱う」）。
-  // 同族を雇えば種族シナジーの頭数も増えるので、「硬い者を雇うか、噛み合う者を雇うか」
-  // という判断になる（実測：ゴブリン5＋オーガ傭兵61% vs ＋ゴブリン傭兵91%）。
-  MERCENARY_COSTS: [10, 20],
-  MERCENARY_OFFERS: 2,
-  // 顔なじみ価格。出撃隊に同じ種族がいるほど安く来る（1体につき10%、最大40%引き）。
-  // 傭兵市場だけだと「誰でも雇えば強くなる」に寄り、稼ぐビルドが報われない
-  // （実測：略奪ビルド +20点に対し、稼がないビルドも +17点）。
-  // 種族を統一したコミットに対して「雇いやすさ」で報いる。倍率は増やさない。
-  MERCENARY_KIN_DISCOUNT: 0.1,
-  MERCENARY_MAX_DISCOUNT: 0.4,
-
-  // 出撃隊にいる同じ種族の数（傭兵は数えない＝雇うほど安くなる連鎖は作らない）
-  mercenaryKinCount(race) {
-    return this.activeRoster().filter(m => m.race === race).length;
-  },
-
-  mercenaryBaseCost() {
-    const hired = (this.state.mercenaries || []).length;
-    return this.MERCENARY_COSTS[hired] !== undefined
-      ? this.MERCENARY_COSTS[hired]
-      : Infinity;   // 上限に達したら雇えない
-  },
-
-  // index を渡すとその候補の顔なじみ価格。省略時は割引前の値段
-  mercenaryCost(index) {
-    const base = this.mercenaryBaseCost();
-    if (!Number.isFinite(base) || index === undefined) return base;
-    const offer = this.mercenaryOffers()[index];
-    if (!offer) return base;
-    const discount = Math.min(this.MERCENARY_MAX_DISCOUNT,
-      this.MERCENARY_KIN_DISCOUNT * this.mercenaryKinCount(offer.race));
-    return Math.max(1, Math.round(base * (1 - discount)));
-  },
-
-  // 候補は作戦ごとに固定する。編成をいじるたびに引き直せると、
-  // 「今いる候補で決める」という判断が消えるため。
-  mercenaryOffers() {
-    const st = this.state;
-    if (!Array.isArray(st.mercenaryOffers)) st.mercenaryOffers = [];
-    if (!st.mercenaryOffers.length && (this.state.mercenaries || []).length < this.MERCENARY_COSTS.length) {
-      st.mercenaryOffers = Array.from({ length: this.MERCENARY_OFFERS }, () => {
-        const merc = this.rollApplicant();
-        merc.mercenary = true;
-        return merc;
-      });
-      this.save();
-    }
-    return st.mercenaryOffers;
-  },
-
-  canHireMercenary(index) {
-    const st = this.state;
-    if (!st || !["formation", "preparation"].includes(st.phase)) return false;
-    if ((st.mercenaries || []).length >= this.MERCENARY_COSTS.length) return false;
-    if (!this.mercenaryOffers()[index]) return false;
-    return st.gold >= this.mercenaryCost(index);
-  },
-
-  hireMercenary(index) {
-    if (!this.canHireMercenary(index)) return false;
-    const st = this.state;
-    const cost = this.mercenaryCost(index);
-    const merc = st.mercenaryOffers[index];
-    st.gold -= cost;
-    st.mercenaries = (st.mercenaries || []).concat([{ ...merc, hiredFor: cost }]);
-    st.mercenaryOffers = st.mercenaryOffers.filter((_, i) => i !== index);
-    this.kpi("formationChanged");   // 傭兵も編成の判断
-    this.kpi("mercenaryHired", merc, cost, this.mercenaryKinCount(merc.race) > 0);
-    this.save();
-    return true;
-  },
-
   // 合体の可否と、合体したらどうなるかの見込み。編成画面が判断材料に使う。
   kingSlimePreview() {
     const slimes = this.activeRoster().filter(m => m.race === "スライム").slice(0, 3);
@@ -1566,57 +2240,9 @@ const Game = {
     return true;
   },
 
-  // 戦闘へ出す形にする。給与も戦功も持たない。
-  // 施設の一律補正は撤去したので、自軍と同じく素の値で出る。
-  preparedMercenaries() {
-    return (this.state.mercenaries || []).map(m => ({
-      ...m, battleDmgMult: 1, battleTakenMult: 1
-    }));
-  },
-
-
-  // ── 指名求人 ────────────────────────────
   // 「こういう奴を寄越せ」と条件を指定して出す有料の求人。
   // 中盤から解禁するのは、序盤に狙い撃ちできると「まず何が出るか見る」段階が消えるため。
   // 条件はシナジーの発火条件と同じ語彙なので、これが爆発を自分で狙う手段になる。
-  BRIEF_UNLOCK_LEVEL: 3,
-  BRIEF_BASE_COST: 6,
-  BRIEF_WEIGHT: 6,
-
-  briefUnlocked() {
-    return this.campaignLevel() >= this.BRIEF_UNLOCK_LEVEL;
-  },
-
-  activeBrief() {
-    const id = this.state && this.state.briefId;
-    if (!id) return null;
-    return RECRUIT_BRIEFS.find(b => b.id === id) || null;
-  },
-
-  // 指名は面接ごとに倍々。連打で理想の軍団を組み上げるのは経営judgementを消す。
-  briefCost() {
-    return this.BRIEF_BASE_COST * Math.pow(2, this.state.briefsThisPhase || 0);
-  },
-
-  canPostBrief(briefId) {
-    const st = this.state;
-    if (!st || st.phase !== "recruit" || !this.briefUnlocked()) return false;
-    if (!RECRUIT_BRIEFS.some(b => b.id === briefId)) return false;
-    return st.gold >= this.briefCost();
-  },
-
-  postBrief(briefId) {
-    if (!this.canPostBrief(briefId)) return false;
-    const st = this.state;
-    st.gold -= this.briefCost();
-    st.briefsThisPhase = (st.briefsThisPhase || 0) + 1;
-    st.briefId = briefId;
-    this.genApplicants();
-    // 指名で入れ替えた応募者は、そのまま無料枠で採れる（求人費とは別の話にしない）
-    this.save();
-    return true;
-  },
-
   rerollCost() {
     const n = this.state.rerollsThisPhase || 0;
     if (n < this.FREE_REROLLS) return 0;
@@ -1639,7 +2265,8 @@ const Game = {
   },
 
   // ── 採用・解雇・編成 ──────────────────────
-  canHire() { return this.state.roster.length < this.MAX_ARMY; },
+  maxArmy() { return this.MAX_ARMY + (typeof Town !== "undefined" ? Town.armyBonus(this.state) : 0) - (this.state?.incidents?.bedReserved || 0); },   // 宿舎
+  canHire() { return this.state.roster.length < this.maxArmy(); },
 
   additionalHireCost() {
     return this.EXTRA_HIRE_BASE_COST * Math.pow(2, this.state.extraHiresThisPhase || 0);
@@ -1685,8 +2312,6 @@ const Game = {
     // 採用後も面接は閉じない。次の候補を見て、追加紹介料を払うか自分で終了する。
     if (this.canHire()) {
       st.rerollsThisPhase = 0;   // 新しい面接なので広告費もリセット
-      st.briefsThisPhase = 0;
-      st.briefId = null;
       this.genApplicants();
     } else {
       st.applicants = [];
@@ -1819,13 +2444,56 @@ const Game = {
 
   // ── 育成：種族技と小成長 ─────────────────────
   // 出撃を重ねた者だけが育つ（留守番では伸びない）。経験値は持たず、出撃数がそのまま経験。
+  // 裏方の職。戦場では遅れて咲くが、城では1つぶん多く働く（仕様4節）。
+  // 職業欄の部分一致で見る（既存の職業名を変えずに拾えるようにしてある）。
+  LATE_BLOOMER_JOBS: ["会計", "倉庫", "広報", "伝令", "受付", "経理", "備品", "配達"],
+  // 技へ移した種族固有の癖（仕様 2026-09-12 の1節）。TRAITS からは**消さない**
+  // （敵・遺物・旧セーブの魔界史が参照する）。名簿から外すのは migrateState だけ。
+  MOVED_TO_SKILL: ["brute", "pickpocket", "fireball", "guardian_prayer", "mischief",
+    "allure", "charge", "regen", "slime_body", "bone", "necromancy"],
+  // 遅咲きの倍率。仕様は「3→6、8→12」なので、種族技は2倍、上位技は1.5倍。
+  // （どちらも2倍にすると上位技が16戦になり、ランの戦闘数（今14〜20）を超えて一生来ない）
+  LATE_BLOOMER_MULT: { species: 2, order: 1.5 },
+
   skillRules() {
     const rules = (typeof SKILL_RULES !== "undefined" && SKILL_RULES) || {};
     return {
-      unlockBattles: rules.unlockBattles !== undefined ? rules.unlockBattles : 6,
+      speciesUnlockBattles: rules.speciesUnlockBattles !== undefined ? rules.speciesUnlockBattles : 3,
+      unlockBattles: rules.unlockBattles !== undefined ? rules.unlockBattles : 8,
       growthPerBattle: rules.growthPerBattle !== undefined ? rules.growthPerBattle : 0.025,
       growthCapBattles: rules.growthCapBattles !== undefined ? rules.growthCapBattles : 12
     };
+  },
+
+  // 遅咲きか（履歴書の職業欄で決まる。採用時に決めて monster.lateBloomer に控える）。
+  isLateBloomer(monster) {
+    if (!monster) return false;
+    if (typeof monster.lateBloomer === "boolean") return monster.lateBloomer;   // 採用時に決めた値が正
+    const job = monster.job || "";
+    return this.LATE_BLOOMER_JOBS.some(word => job.indexOf(word) !== -1);
+  },
+  // その者が技を覚えるまでの戦闘数。遅咲きは倍かかる（3→6、8→12）。
+  unlockBattlesFor(monster, key) {
+    const rules = this.skillRules();
+    const species = key === "species";
+    const raw = species ? rules.speciesUnlockBattles : rules.unlockBattles;
+    const base = this.isLateBloomer(monster) ? Math.round(raw * this.LATE_BLOOMER_MULT[species ? "species" : "order"]) : raw;
+    const lab = typeof Town !== "undefined" ? Town.unlockBonus(this.state, key) : 0;   // 研究所
+    return Math.max(1, base - lab - (species ? (monster.incidentLearnBonus || 0) : 0));
+  },
+  // 遅咲きが代わりに持つ内政の伸び。採用時に決めて monster.homeBonus に控える。
+  // Aptitude（departments.js）は種族と職業だけを見るので、加算はこちら側で行う。
+  LATE_BLOOMER_FIELDS: ["food", "material", "recruit"],
+  homeBonusOf(monster) {
+    const key = monster && monster.homeBonus;
+    return this.LATE_BLOOMER_FIELDS.includes(key) ? key : null;
+  },
+  // 留守番の貢献。Aptitude に遅咲きの +1 を足す唯一の入口。
+  contributionOf(monster, deptId) {
+    const c = Aptitude.contribution(monster, deptId);
+    const key = this.homeBonusOf(monster);
+    if (key && c[key] !== undefined && DEPARTMENT_ID(deptId) !== "combat") c[key] += 1;
+    return c;
   },
 
   // 採用時の値を控える。**昇進の boost は含めない**（含めると伸びが昇進に比例して膨らむ）。
@@ -1841,24 +2509,32 @@ const Game = {
     return monster.base;
   },
 
-  // 小成長。基礎値の 2.5%／戦、12戦で頭打ち（合計 +30%）。spd は伸びない。
+  // 小成長。基礎値の 2.5%／戦、12戦で頭打ち（合計 +30%）。
+  //
+  // **何戦出たかではなく、その数値を使った戦いの数で伸びる**（2026-09-14）。
+  // 殴れば攻撃と速さ、守れば防御、殴られれば HP。使わなかった数値は伸びない。
+  // 「伸びた戦い」の数は `record.grow` が持ち、加算は tallyBattleRecords で行う。
   //
   // 仕様は「毎回 base から現在値を組み直す」だが、**差分だけを足す**形にした。
   // 城内事件は HP を恒久的に減らす（`events.js` の負傷）ので、組み直すとその傷が
   // 黙って治ってしまう。差分方式でも二重加算は起きない（積んだ量を `m.grown` が覚えている）。
+  // 戻り値は伸びた分の `{ uid, key, delta }` の配列（決着の読み上げが読む）。
   applyGrowth(monster) {
-    if (!monster || monster.mercenary) return;
+    if (!monster || monster.mercenary) return [];
     const rules = this.skillRules();
     const base = this.baseOf(monster);
-    const battles = this.memberRecord(monster).battles || 0;
-    const steps = Math.min(battles, rules.growthCapBattles);
-    for (const key of ["hp", "atk", "def"]) {
+    const grow = this.memberRecord(monster).grow;
+    const gained = [];
+    for (const key of this.GROW_KEYS) {
+      const steps = Math.min(grow[key] || 0, rules.growthCapBattles);
       const target = Math.round((base[key] || 0) * rules.growthPerBattle * steps);
       const delta = target - (monster.grown[key] || 0);
       if (!delta) continue;
       monster[key] = Math.max(key === "def" ? 0 : 1, (monster[key] || 0) + delta);
       monster.grown[key] = target;
+      if (delta > 0) gained.push({ uid: monster.uid, name: monster.name, key, delta });
     }
+    return gained;
   },
 
   // その者が次に覚える上位技。既に覚えている／技の無い種族なら null。
@@ -1884,7 +2560,36 @@ const Game = {
       // 種族が一致しない（テンプレートに無い1段目を遺物などで持っている）なら覚えない。
       // 他種族の技を拾わせない。
     }
+    // 1段目がテンプレートから消えた種族（怪力などは技へ移った。仕様 2026-09-12）でも、
+    // **種族が合えば覚える**。replaces を持っていることは条件ではない。
+    for (const key of Object.keys(TRAITS)) {
+      const skill = TRAITS[key].skill;
+      if (skill && skill.tier === 2 && skill.species === monster.tplId) return { id: key, ...TRAITS[key] };
+    }
     return null;
+  },
+
+  // 種族技（SKILLS）。3戦で誰でも覚える。上位技（TRAITS）と違って伝承は要らない。
+  speciesSkillFor(monster) {
+    if (!monster || monster.mercenary || !monster.tplId) return null;
+    if (typeof SPECIES_SKILL === "undefined" || typeof SKILLS === "undefined") return null;
+    const id = SPECIES_SKILL[monster.tplId];
+    if (!id || !SKILLS[id]) return null;
+    if ((monster.skills || []).includes(id)) return null;     // もう覚えている
+    return { id, ...SKILLS[id] };
+  },
+  checkSpeciesSkill(monster, notes) {
+    if (!monster || monster.mercenary) return null;
+    const battles = this.memberRecord(monster).battles || 0;
+    if (battles < this.unlockBattlesFor(monster, "species")) return null;
+    // 研究所が生んだもの＝研究所が無ければまだ覚えていなかった本数（詳細画面が読む）
+    if (typeof Town !== "undefined" && battles < this.unlockBattlesFor(monster, "species") + Town.unlockBonus(this.state, "species")
+      && this.speciesSkillFor(monster)) Town.stat(this.state, "lab", 1);
+    const skill = this.speciesSkillFor(monster);
+    if (!skill) return null;
+    monster.skills = (monster.skills || []).concat(skill.id);
+    if (notes) notes.push(`${monster.name}が技【${skill.name}】を覚えた。次から指示で出せる`);
+    return { uid: monster.uid, name: monster.name, skillId: skill.id, skillName: skill.name, species: true };
   },
 
   // 上位技の解放。1段目（種族固有特性）が上位技に**置き換わる**。
@@ -1916,7 +2621,7 @@ const Game = {
     if (!monster || monster.mercenary) return null;
     const st = this.state;
     const rules = this.skillRules();
-    if ((this.memberRecord(monster).battles || 0) < rules.unlockBattles) return null;
+    if ((this.memberRecord(monster).battles || 0) < this.unlockBattlesFor(monster, "order")) return null;
     const skill = this.nextSkillFor(monster);
     if (!skill) return null;
     const replaced = skill.skill.replaces;
@@ -1927,10 +2632,11 @@ const Game = {
     // （戦死で6戦のカウンタが消えても、種族の技は消えない）。
     st.skillLore = st.skillLore || {};
     if (skill.skill && skill.skill.species) st.skillLore[skill.skill.species] = skill.id;
-    // 覚えた直後の戦いでだけ、技は勝手に出る（お披露目）。以後は号令（気合）でだけ出る（オーナー 2026-09-11）。
+    // 覚えた直後の戦い＝お披露目。手で戦うなら指示窓でその技が光り、一度だけ気合なしで撃てる
+    // （おまかせ・sim では今までどおり勝手に1回出る。2026-09-12）。
     monster.debutSkill = skill.id;
     const quote = U.pick((skill.lines && skill.lines.unlock) || ["……体が、覚えた"]);
-    if (notes) notes.push(`${monster.name}が【${skill.name}】を覚えた（次の戦いで一度だけ勝手に出る。以後は号令で）`);
+    if (notes) notes.push(`${monster.name}が【${skill.name}】を覚えた（次の戦いでは気合なしで一度撃てる。窓で光る）`);
     return { uid: monster.uid, name: monster.name, skillId: skill.id, skillName: skill.name, quote };
   },
 
@@ -1938,17 +2644,31 @@ const Game = {
   // **settleContinue と settleRetreat の両方から呼ぶ。** deploy() の途中に書くと
   // 引数なし呼び出し（sim・テスト）と UI 経由（offerRetreat）で結果がずれる。
   // 数えるのは contribution の uid（出撃した者だけ。留守番は育たない）。
+  // 軍の2施設が生んだもの（巨大厨房＝強めた食事の回数、墓地＝呼び戻した骸骨の数）。
+  // battle.js が出す facility_trigger の要約だけを読む（battle.js は触らない）。
+  tallyFacilityStats(summary) {
+    if (typeof Town === "undefined" || !summary) return;
+    for (const f of summary.facilities || []) {
+      if (f.facilityId === "graveyard") Town.stat(this.state, "graveyard", f.summons || 0);
+      else if (f.facilityId === "grand_kitchen") Town.stat(this.state, "grand_kitchen", f.count || 0);
+    }
+  },
+
   trainSurvivors(contribution, notes) {
     const st = this.state;
     const unlocked = [];
+    // 伸びた数値は決着の画面が一行ずつ読み上げる（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY 2節）。
+    st.lastGrowth = [];
     for (const row of contribution || []) {
       if (row.mercenary) continue;
       if (row.survived === false) continue;      // この戦いで戦死した者は育たない
       const monster = st.roster.find(m => m.uid === row.uid);
       if (!monster) continue;
+      const species = this.checkSpeciesSkill(monster, notes);
+      if (species) unlocked.push(species);
       const gained = this.checkSkillUnlock(monster, notes);
       if (gained) unlocked.push(gained);
-      this.applyGrowth(monster);
+      st.lastGrowth.push(...this.applyGrowth(monster));
     }
     return unlocked;
   },
@@ -1984,11 +2704,21 @@ const Game = {
 
   // 個人カウンタ。痕跡の器（src/core/traces.js、別仕様）が入るまでのつなぎ。
   // 旧セーブには無いので、読むときに必ずここを通して補う。
+  // 成長の器（docs/SPEC_GROWTH_BY_ACTION_2026-09-14.md）。数値ごとに「伸びた戦い」の数を持つ。
+  // 旧セーブには無いので、**そのときは戦闘数を4つに写す**（それまでの伸びを失わせない）。
+  GROW_KEYS: ["hp", "atk", "def", "spd"],
   memberRecord(monster) {
     if (!monster) return { battles: 0, wins: 0, downed: 0, carried: 0, late: 0, ate: 0 };
     if (!monster.record) monster.record = { battles: 0, wins: 0, downed: 0, carried: 0, late: 0, ate: 0, homeStays: 0 };
     for (const key of ["battles", "wins", "downed", "carried", "late", "ate", "homeStays"]) {
       if (typeof monster.record[key] !== "number") monster.record[key] = 0;
+    }
+    if (!monster.record.grow || typeof monster.record.grow !== "object") {
+      const battles = monster.record.battles || 0;
+      monster.record.grow = { hp: battles, atk: battles, def: battles, spd: 0 };
+    }
+    for (const key of this.GROW_KEYS) {
+      if (typeof monster.record.grow[key] !== "number") monster.record.grow[key] = 0;
     }
     return monster.record;
   },
@@ -2000,7 +2730,8 @@ const Game = {
   // 気合（号令の限定）の規則。data に置く（MONSTER_RULES.spirit）。
   spiritRules() {
     const r = (typeof MONSTER_RULES !== "undefined" && MONSTER_RULES.spirit) || {};
-    return { start: r.start ?? 1, max: r.max ?? 3, perBattle: r.perBattle ?? 1, perHomeTurn: r.perHomeTurn ?? 2 };
+    const bonus = typeof Town !== "undefined" && this.state ? Town.spiritMaxBonus(this.state) : 0;   // 鍛冶場
+    return { start: r.start ?? 1, max: (r.max ?? 3) + bonus, perBattle: r.perBattle ?? 1, perHomeTurn: r.perHomeTurn ?? 2 };
   },
   gainSpirit(monster, amount) {
     if (!monster) return;
@@ -2025,6 +2756,20 @@ const Game = {
       if (row.survived === false || row.injured) record.downed += 1;
       if (row.injured) record.carried += 1;
       if (row.late > 0) record.late += 1;
+      // その戦いで使った数値だけが伸びる（1戦で各 +1 まで）。
+      // 技は当面「たたかう」と同じ扱い（仕様2節の表）。食べるでは伸びない。
+      //
+      // **手番の記録が空の戦果もある**ときの保険：撤退の提案で作る戦果が
+      // `summarizeContribution` を actions 抜きで呼んでいた（battle.js 側で修正済み。
+      // 2026-09-15）。古い保存や別経路で全部 0 のまま届いた場合に備えて残してある。
+      // そのときは残っている数字から読める分だけ数える＝**与ダメージがあれば殴っている**。
+      // 守りは数字に残らないので数えない（無い行動をでっち上げない）。
+      const acts = row.actions || {};
+      const recorded = (acts.attack || 0) + (acts.guard || 0) + (acts.skill || 0) + (acts.eat || 0) + (acts.cover || 0);
+      const attacked = recorded > 0 ? (acts.attack || 0) + (acts.skill || 0) >= 1 : (row.dealt || 0) > 0;
+      if (attacked) { record.grow.atk += 1; record.grow.spd += 1; }
+      if ((acts.guard || 0) + (acts.cover || 0) >= 1) record.grow.def += 1;
+      if ((row.taken || 0) > 0) record.grow.hp += 1;
     }
   },
 
@@ -2035,6 +2780,28 @@ const Game = {
     st.roster = st.roster.filter(m => m.uid !== uid);
     st.activeUids = st.activeUids.filter(id => id !== uid);
     this.save();
+  },
+
+  // 慰留（2026-09-12）。去りかけ（leaving）か忠誠が低い者に、給与2回分の慰留金で忠誠を戻す。
+  RETAIN_LOYALTY: 30,
+  RETAIN_THRESHOLD: 20,
+  retainCost(monster) { return Math.max(3, (monster.salary || 0) * 2); },
+  canRetain(monster) {
+    return !!monster && !monster.mercenary && (monster.leaving || monster.loyalty <= this.RETAIN_THRESHOLD) && this.state.gold >= this.retainCost(monster);
+  },
+  retain(uid) {
+    const st = this.state;
+    const m = st.roster.find(x => x.uid === uid);
+    if (!this.canRetain(m)) return false;
+    const cost = this.retainCost(m);
+    st.gold -= cost;
+    m.loyalty = U.clamp(m.loyalty + this.RETAIN_LOYALTY, 0, 100);
+    m.leaving = false;
+    m.unpaid = false;
+    m.unpaidStreak = 0;
+    // 痕跡の種類は17で打ち止め（Traces.MAX_KINDS）なので、慰留は痕跡にしない。日誌の notes だけ
+    this.save();
+    return { cost, loyalty: m.loyalty };
   },
 
   // 出撃隊と留守番の往復。外せば留守番、入れれば出撃隊（枠が無ければ失敗）。
@@ -2110,6 +2877,24 @@ const Game = {
   // sim.js とテストはこの経路を通るので、既定の挙動は変えないこと。
   // options.offerRetreat を渡すのは UI だけ。撤退の提案が出た戦闘では決着を保留し、
   // settleBattle("continue" | "retreat") が呼ばれるまで所持金も名簿も動かさない。
+  // 増殖の元の条件（docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-1）。
+  // 痕跡から読むので、噂を無視した周回では起きない。③で「間引く」を選んだ後（st.slimeCulled）も起きない。
+  slimeSplitOption() {
+    const st = this.state;
+    if (!st || st.slimeCulled) return null;
+    const traces = st.traces || [];
+    const opened = traces.some(t => t.kind === "incident" && t.data && t.data.id === "slime_pond");
+    if (!opened) return null;
+    const sparkedSlime = traces.some(t => {
+      if (t.kind !== "sparked") return false;
+      const m = st.roster.find(x => String(x.uid) === String(t.subject));
+      return m && m.race === "スライム";
+    });
+    if (!sparkedSlime) return null;
+    if (!this.activeRoster().some(m => m.race === "スライム")) return null;
+    return { enabled: true };
+  },
+
   deploy(options = {}) {
     const st = this.state;
     if (this.activeRoster().length === 0) return null;
@@ -2137,21 +2922,10 @@ const Game = {
     }
 
     const battleRations = openingBattle ? null : this.prepareBattleRations(notes);
-    const feastUsed = st.feastPending;
     // 食事の伝票は倍率を掛ける前に一度だけ作り、戦闘入力・戦果・予告で同じものを読む（V2a）
     const mealPlan = battleRations ? this.mealPlan(battleRations) : null;
     const playerUnits = this.preparedRoster(battleRations, mealPlan).map(m => Battle.makeUnit(m, "player"));
-    if (feastUsed) {
-      notes.push(`宴の余韻：${feastUsed.fed}名が満腹のまま戦場へ出た（与ダメージ+${Math.round(feastUsed.dmgBonus * 100)}%）`);
-      st.feastPending = null;
-    }
-    // 雇った傭兵は出撃5枠の外から加わる。戦闘が終われば去る（次の戦闘には残らない）
-    for (const merc of this.preparedMercenaries()) {
-      const unit = Battle.makeUnit(merc, "player");
-      unit.flags.mercenary = true;
-      playerUnits.push(unit);
-    }
-    const stageData = this.stageData();
+    const stageData = this.applyInvasionReward(this.stageData());
     // ビルド試行の判定は戦闘前に取る（戦死・合体で編成が変わる前の「何を試したか」を見るため）
     this.kpi("battleStarted", st, stageData);
     // 物語の枝（道中・現地）。出撃者の性格と前職で、敵の頭数や出足が変わることがある。
@@ -2177,18 +2951,26 @@ const Game = {
       cookUid: playerUnits.find(u => u.traits.includes("demon_cook"))?.uid || null,
       bigEaterUids: playerUnits.filter(u => u.traits.includes("big_eater")).map(u => u.uid),
       hungerUid: playerUnits.find(u => u.traits.includes("hunger_demon"))?.uid || null,
-      feastUid: battleRations.consumed >= 4
-        ? playerUnits.slice().sort((a, b) => a.spd - b.spd)[0]?.uid || null : null,
+      // 宴は撤去した（docs/TICKET_REMOVE_DEAD_2026-09-16.md §1-1）。
+      // battle.js がまだこの鍵を読むので、null 固定で残してある（読む側の削除は別のコミット）。
+      feastUid: null,
       // V2a: 食事強化の起点・対象・効果量。battle.js はまだ読んでいないが、
       // 追加フィールドは無視されるだけで発火順・回数・chainDepth を変えない。
       // 因果イベントとして出すのは V2b（battle.js 側）の仕事。
       meal: mealPlan,
+      // 食べる（2026-09-14）：戦闘中に携行食を1つ食べて HP を戻す。
+      // spare は**前払いを済ませたあとの備蓄**（これ以上は食べられない）。
+      // kitchenLv は巨大厨房（Lv2 で回数 +1、Lv3 で回復量が増える）。
+      // 食べた数は result.rationsEaten で返り、決着で st.food から引く。
+      spare: Math.max(0, Number(st.food) || 0),
+      kitchenLv: typeof Town !== "undefined" ? Town.lv(st, "grand_kitchen") : 0,
       boostSourceUid: mealPlan ? mealPlan.cookUid : null,
       boostTargetUid: mealPlan ? mealPlan.targetUid : null,
       boostAmount: mealPlan ? mealPlan.boost : 0
     } : null;
-    const extortionLedger = st.activeFacilityId === "extortion_ledger" && this.facilityReady("extortion_ledger");
-    const graveyard = st.activeFacilityId === "graveyard" && this.facilityReady("graveyard");
+    // 恐喝帳簿は廃止（2026-09-13）。エンジン側の発火コードは残っているが、run.js が渡さないので眠る。
+    const extortionLedger = false;
+    const graveyard = this.facilityReady("graveyard");
     // 前回出撃との差分（R2）。戦闘へ入る前の確定値で撮る。
     // 戦闘の結果は一切見ないので、「変えたから勝った」の材料にはならない。
     const buildSnapshot = this.buildSnapshot(stageData);
@@ -2203,8 +2985,16 @@ const Game = {
       // 号令（UI だけ）。節目で止めて名指しで命じる。答えを受けたら同じ種で計算し直すので、
       // 戦闘の入力（ユニットと選択肢）を計算前の姿で取っておく。sim・テストは今までどおり。
       offerOrder: !!options.offerRetreat && !openingBattle,
-      seed: options.offerRetreat ? Math.floor(U.rand() * 2147483647) : undefined
+      seed: options.offerRetreat ? Math.floor(U.rand() * 2147483647) : undefined,
+      // 痕跡・遺物・去った者。技の派生行動（skill_effects.js）が読む。戦闘計算の既定では使わない
+      traces: st.traces || [], relics: st.relics || [], departed: st.departed || [],
+      spiritMax: this.spiritRules().max
     };
+    // 増殖の元（docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-1）。
+    // 痕跡2つ（池の噂を開いた／スライムが火の粉を浴びた）＋ 出撃隊にスライムがいる、が揃った周回だけ。
+    // 揃わなければ鍵ごと渡さない（battle.js は options が無ければ何もしない）。
+    const slimeSplit = this.slimeSplitOption();
+    if (slimeSplit) simOptions.slimeSplit = slimeSplit;
     // コマンドバトル（UI の既定、2026-09-11）。指示を受けながらラウンドごとに解決するので、ここでは計算しない。
     // 決着は finishManualBattle()。リロードで戻ったときは replay からおまかせで計算して続行として決着する。
     if (options.manual) {
@@ -2242,12 +3032,10 @@ const Game = {
         .filter(u => (buildChanges && buildChanges.changedUids || []).includes(u.uid))
         .map(u => u.id).filter(Boolean)
     };
-    // 号令の節目がある戦闘は、答えを聞くまで戦闘の中身が確定しない。記録（発見・最大CHAIN・KPI）は
-    // 確定してから取る（answerOrder）。それ以外はここで確定させる。
-    if (!(options.offerRetreat && result.orderOffer)) this.recordBattleResult(pending);
-    // 退く道か号令の節目がある戦闘だけ、UI の求めに応じて決着を保留する。
+    this.recordBattleResult(pending);
+    // 退く道がある戦闘だけ、UI の求めに応じて決着を保留する。
     // 保留中はラン状態を一切変えない（所持金・名簿・警戒度は答えを聞いてから動く）。
-    if (options.offerRetreat && (result.retreatOffer || result.orderOffer)) {
+    if (options.offerRetreat && result.retreatOffer) {
       st.pendingBattle = pending;
       st.phase = "battle";
       this.save();
@@ -2267,17 +3055,79 @@ const Game = {
     const final = result || (live && live.handle && live.handle.result) || null;
     if (!final) return false;
     pending.result = final;
-    // 技で払った気合を名簿へ反映（戦闘中のユニットは名簿の写しなので、ここで戻す）
-    for (const [uid, spent] of Object.entries(final.spiritSpent || {})) {
-      const m = st.roster.find(x => String(x.uid) === String(uid));
-      if (m && typeof m.spirit === "number") m.spirit = Math.max(0, m.spirit - spent);
-    }
+    this.applySpiritChanges(final, pending);
     this.liveBattle = null;
     this.recordBattleResult(pending);
     st.pendingBattle = null;
     if (final.retreated) this.settleRetreat(pending);
     else this.settleContinue(pending);
     return st.phase;
+  },
+
+  // 戦闘で動いた気合を名簿へ戻す。戦闘中のユニットは名簿の写しなので、ここで一度だけ反映する。
+  // 増殖の元の決着（docs/SPEC_SLIME_ARC_2_2026-09-16.md §2-2）。
+  // 戦場で何体に分かれても、名簿に残るのは1体だけ。残りは戦闘が終われば消える。
+  settleSlimeSplit(result, find) {
+    const st = this.state;
+    st.lastSlimeSplit = null;   // 前の決着の分を出し続けない
+    const rows = [];
+    for (const row of result.slimeSplit || []) {
+      const parent = find(row.uid);
+      if (!parent) continue;
+      const mage = find(row.byUid) || null;
+      const name = `${parent.name}の分身`;
+      // 名簿に空きがあればその場で加わる。無ければ次の面接に並ぶ（押し出さない）。
+      // **満員かどうかは行ごとに数え直す**（1体加わった結果、次の親の分から満員になることがある）。
+      const joined = st.roster.length < this.maxArmy();
+      if (joined) {
+        const clone = this.rollApplicant("slime");
+        Object.assign(clone, { name, salary: 1, loyalty: 50, origin: "split" });
+        st.roster.push(clone);
+        this.memberRecord(clone);
+        this.baseOf(clone);
+      } else {
+        const clone = this.incidentApplicant("slime", name);
+        if (clone) Object.assign(clone, { salary: 1, loyalty: 50, origin: "split" });
+      }
+      this.trace("incident", parent.uid, mage ? mage.uid : null, {
+        id: "slime_spawn",
+        joined,
+        text: `${parent.name}が火を浴びて分裂した（${row.count}体）。${joined ? "1体が名簿に加わった" : "1体が次の面接に並んだ"}`
+      });
+      // 撃った本人の一言。既に何か言っている者は上書きしない。
+      if (mage && !mage.faceLine) mage.faceLine = "もう火球は撃たん";
+      // 結果画面の「なぜ」欄の材料。**親ごとに1行**（同じ決着で二人が分裂しても両方残す）。
+      rows.push({
+        name: parent.name, count: row.count, joined,
+        why: `池の噂 ＋ 火の粉を浴びた${parent.name} → 分裂して${row.count}体、`
+          + (joined ? "1体が名簿に加わった" : "名簿が満員だったので1体が次の面接に並んだ")
+      });
+      st.slimeSpawnCount = (st.slimeSpawnCount || 0) + 1;   // ③の条件に使う（表示はしない）
+    }
+    if (rows.length) st.lastSlimeSplit = { rows };
+    return rows;
+  },
+
+  // 払った分（技）と高まった分（まもって大技を受けた・味方が倒れた）の両方。
+  applySpiritChanges(result, pending) {
+    const st = this.state;
+    if (!result || (pending && pending.spiritApplied)) return;
+    if (pending) pending.spiritApplied = true;
+    const find = uid => st.roster.find(x => String(x.uid) === String(uid));
+    // 火の粉（見える小さな事故）を痕跡に。札（途中イベント）の材料になる（docs/DESIGN_INCIDENTS_2026-09-14.md 7-1）
+    for (const sp of result.sparked || []) {
+      const m = find(sp.uid), by = find(sp.byUid);
+      if (m) this.trace("sparked", m.uid, by ? by.uid : null, { skill: (typeof SKILLS !== "undefined" && SKILLS[sp.skillId] && SKILLS[sp.skillId].name) || sp.skillId });
+    }
+    this.settleSlimeSplit(result, find);
+    for (const [uid, spent] of Object.entries(result.spiritSpent || {})) {
+      const m = find(uid);
+      if (m && typeof m.spirit === "number") m.spirit = Math.max(0, m.spirit - spent);
+    }
+    for (const [uid, got] of Object.entries(result.spiritGained || {})) {
+      const m = find(uid);
+      if (m) this.gainSpirit(m, Number(got) || 0);        // 上限は spiritRules().max
+    }
   },
 
   // 戦闘の中身が確定したら一度だけ呼ぶ。シナジーの発見・最大戦力・最大CHAIN／OVERKILL・KPI。
@@ -2312,79 +3162,11 @@ const Game = {
   },
 
   // 号令に答える。UI だけが呼ぶ。unitId が null／"none" なら任せる（計算済みの結末のまま）。
-  // 名指しなら同じ種・同じ入力で計算し直す。提案の手前までは同じ展開、そこから先だけ分岐する。
-  // 戻り値：新しいタイムライン（計算し直した場合）か null（変わらない場合）。
-  // 決着は、撤退の提案がまだ後に控えていなければここで行う（settleBattle と同じ二経路）。
-  // 節目は戦況が動くたびに来る。答えは pending.orders に積み、名指しのたびに同じ種で計算し直す。
-  // 次の提案は計算し直したタイムラインの中から拾う（UI は order_offer に当たるたびにここを呼ぶ）。
-  nextOrderOffer(pending) {
-    const offers = (pending.result && pending.result.orderOffers) || (pending.result && pending.result.orderOffer ? [pending.result.orderOffer] : []);
-    const answered = pending.answeredRounds || {};
-    return offers.find(o => !answered[o.round]) || null;
-  },
-  answerOrder(unitId) {
-    const st = this.state;
-    const pending = st.pendingBattle;
-    if (!pending || !pending.result) return null;
-    const offer = this.nextOrderOffer(pending);
-    if (!offer) return null;
-    pending.answeredRounds = pending.answeredRounds || {};
-    pending.answeredRounds[offer.round] = true;
-    pending.orders = pending.orders || {};
-    let changed = null;
-    const chosen = unitId && unitId !== "none" && offer.candidates.some(c => c.unitId === unitId) ? unitId : null;
-    if (chosen && pending.replay) {
-      const rp = pending.replay;
-      const playerUnits = JSON.parse(JSON.stringify(rp.playerUnits));
-      const enemyUnits = JSON.parse(JSON.stringify(rp.enemyUnits));
-      const orders = Object.assign({}, pending.orders, { [offer.round]: chosen });
-      const options = Object.assign({}, rp.options, { orders });
-      const result = Battle.simulate(playerUnits, enemyUnits, options);
-      // 前半が一致しないなら（乱数の消費が食い違った）、命じなかった結末を使う。黙って別の戦闘にしない。
-      const same = result.timeline.length > offer.index
-        && pending.result.timeline.slice(0, offer.index).every((e, i) => e.type === result.timeline[i].type);
-      if (same) {
-        pending.result = result;
-        pending.orders = orders;
-        pending.ordered = { unitId: chosen, round: offer.round };
-        changed = result.timeline;
-        // 気合を引く。名指しした瞬間に払う（決着で出撃の +1 が戻るので実質 cost−1）。
-        const cand = offer.candidates.find(c => c.unitId === chosen);
-        const unit = rp.playerUnits.find(u => u.id === chosen);
-        const monster = unit && unit.uid != null ? st.roster.find(m => m.uid === unit.uid) : null;
-        if (monster && cand && typeof monster.spirit === "number") monster.spirit = Math.max(0, monster.spirit - (cand.cost || 0));
-        if (monster && cand) this.trace("ordered", monster.uid, null, { skill: cand.skillName, round: offer.round });
-        st.orderCount = (st.orderCount || 0) + 1;
-      }
-    }
-    // まだ後に提案（撤退か次の号令）が控えていれば決着は待つ。
-    const retreatLater = pending.result.retreatOffer && pending.result.retreatOffer.index > offer.index && !pending.retreatAnswered;
-    const orderLater = !!this.nextOrderOffer(pending);
-    if (!retreatLater && !orderLater) {
-      this.recordBattleResult(pending);
-      st.pendingBattle = null;
-      this.settleContinue(pending);
-    } else {
-      this.save();
-    }
-    return changed;
-  },
-
   // 撤退の提案に答える。UI だけが呼ぶ。戻り値は決着後のフェーズ名。
   settleBattle(choice) {
     const st = this.state;
     const pending = st.pendingBattle;
     if (!pending) return false;
-    if (choice !== "retreat") {
-      // 号令の節目が撤退の提案より後に控えていれば、続行の答えだけ覚えて決着は号令の答えを待つ。
-      const offer = this.nextOrderOffer(pending);
-      const retreat = pending.result && pending.result.retreatOffer;
-      if (offer && retreat && offer.index > retreat.index) {
-        pending.retreatAnswered = true;
-        this.save();
-        return st.phase;
-      }
-    }
     st.pendingBattle = null;
     if (choice === "retreat") this.settleRetreat(pending);
     else this.settleContinue(pending);
@@ -2393,31 +3175,73 @@ const Game = {
 
   // 続けた場合の決着。**これが唯一の続行経路**（引数なし deploy() もここを通る）。
   // 二つ持つと「テストは通るのに UI からだけ結果が違う」が起きる。
+  // 戦闘中に食べた携行食を備蓄から引く（2026-09-14）。**決着の経路2つの両方から1回ずつ**。
+  // 蔵から出した分なので、留守番の食事（processDepartments）より前に引く。
+  consumeBattleRations(result, notes) {
+    const st = this.state;
+    const eaten = Math.max(0, Number(result && result.rationsEaten) || 0);
+    if (!eaten) return 0;
+    st.food = Math.max(0, (Number(st.food) || 0) - eaten);
+    if (notes) notes.push(`戦闘中に携行食を${eaten}つ食べた（備蓄 ${st.food}）`);
+    return eaten;
+  },
+
   settleContinue(pending) {
     const st = this.state;
+    if (!pending || pending.settled) return st.phase;
+    this.applyInvasionReward(pending.stageData); // 更新前に保存した戦闘にも1回だけ適用
+    this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);   // 号令で保留した戦闘はここで初めて確定する（済んでいれば何もしない）
     const { result, stageData, notes, battleRations, mealPlan, openingBattle, buildChanges, chainView } = pending;
+    this.consumeBattleRations(result, notes);
+    this.settleCaptains(stageData, result, notes);   // 敵将：討った・見逃した・雇った
+    // 城下町：防衛戦に負けた決着は税収が無い（processDepartments が読む）。勝ちも遠征も false
+    st.lastRansacked = this.isDefenseBattle(stageData) && !result.victory;
     const goldBefore = st.gold;
     const lootGold = Math.max(0, Number(result.resourceChanges && result.resourceChanges.gold) || 0);
     // 判定負け（30ラウンド経過。全滅ではない）は撤退と同じ結末にする。
     // 倒れていた者は担いで帰り、報酬は無い。**決着の経路は二つのまま**
     // （ここで委譲する。カウンタと育成を二度走らせないよう tally より前で分ける）。
-    if (!result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
+    // 訓練（2026-09-13）：誰も死なない。HP0 は負傷に変えてから先へ進める。
+    // 全滅も「全員が負傷して終わった稽古」なので、判定負けの委譲より前に変換する。
+    const training = this.isTraining(stageData);
+    const freeTraining = training && st.incidents?.freeTraining;
+    if (training) this.softenTrainingCasualties(result.contribution);
+    if (!training && !result.victory && !this.wipeOf(result)) return this.settleRetreat(pending, { lostOnPoints: true });
+    pending.settled = true;
+    if (mealPlan?.boost > 0 && mealPlan.cookUid != null) this.trace("cooked", mealPlan.cookUid, null, { facility: this.facilityLv("grand_kitchen") > 0 ? "grand_kitchen" : null });
     // 個人カウンタは名簿が動く前に進める（戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(result.contribution, result.victory);
-    this.recordBattleTraces(result, result.contribution);
-    const storyPost = this.rollAftermath(pending, result.contribution, result.victory);
+    // 痕跡（担がれ・戦友の死）は訓練では立てない（4節の落とし穴）。
+    if (!training) this.recordBattleTraces(result, result.contribution);
+    if(stageData.missionKind==="invade" && this.state.incidents?.intel) {this.state.incidents.intel=false;if(this.state.incidents.letterEnemy)notes.push("王国の連絡兵が、敵の列からハーピーに手を振った。");}
+    const storyPost = training ? [] : this.rollAftermath(pending, result.contribution, result.victory);
     this.recordStageFight(stageData);
     // 育成はカウンタの直後。出撃した者だけが技を覚え、少し伸びる。
     const unlocked = this.trainSurvivors(result.contribution, notes);
     let wipedFallen = null, wipedRelics = null;
     // 幕替わり（表示用）。起きなかった決着・旧セーブには無い。
     let actAdvance = null;
+    let act2Clear = null;
     // 防衛戦（王国の反撃）。勇者戦かどうかは段階で決まる。
     const isDefense = this.isDefenseBattle(stageData);
     const heroDefense = isDefense && (st.counterattack || {}).kind === "hero";
     let defenseOutcome = null, castleFell = false;
-    if (result.victory) {
+    if (training) {
+      // 稽古。金・建材・遺物・痕跡・税・警戒度はどれも動かない（勝ち負けも問わない）。
+      // 動くのは戦闘数（上で済み）・小成長と技（trainSurvivors で済み）・戦功・忠誠・気合・食料・給与。
+      this.awardTrainingMerit(result.contribution, stageData, notes);
+      if (stageData.trial) this.settleTrial(stageData, result, notes);
+      st.turn += 1;
+      st.missionOffers = [];
+      st.phase = "result";
+      // 留守番の仕事と食事・給与（半額）は通常どおり通す。税収だけ 0（processDepartments が読む）。
+      this.processDepartments(stageData, notes, undefined, battleRations);
+      this.paySalaries(notes, undefined, stageData);
+      this.processDepartures(notes);
+      this.settleDebts(notes);
+      if(freeTraining) {delete st.incidents.freeTraining;notes.push("研究所が今回の稽古代と食料を受け持った。");}
+    } else if (result.victory) {
       st.gold += stageData.reward + lootGold;
       notes.push(`勝利報酬 ${stageData.reward}G を獲得（所持金 ${st.gold}G）`);
       if (lootGold > 0) notes.push(`戦闘中の略奪 ${lootGold}G を確定（所持金 ${st.gold}G）`);
@@ -2442,6 +3266,7 @@ const Game = {
       } else {
         this.applyMissionOutcome(stageData, notes);
       }
+      this.advanceOutpost(stageData, true, notes);
       if (openingBattle) {
         const foodReward = Math.max(0, stageData.foodReward || 0);
         const materialReward = Math.max(0, stageData.materialReward || 0);
@@ -2467,7 +3292,7 @@ const Game = {
         st.turn += 1;
         st.phase = "result";
         this.genApplicants();
-      } else if (heroDefense || st.conquest >= this.MAX_CONQUEST) {
+      } else if (!st.act2Cleared && (heroDefense || st.conquest >= this.MAX_CONQUEST)) {
         // 幕の着地。魔王城で勇者を退けた（待った）か、王都まで落とした（攻めた）か。
         // **最後の幕でなければ、ランは終わらずに次の幕が始まる。**
         st.clearedBy = heroDefense ? "defense" : "conquest";
@@ -2476,7 +3301,14 @@ const Game = {
           st.phase = "result";
           this.genApplicants();        // 新しい顔を見せる（未決U1の既定）
         } else {
-          st.phase = "clear";          // 記録の確定は deploy() の末尾でまとめて行う
+          st.act2Cleared = { by: st.clearedBy, turn: st.turn };
+          act2Clear = { ...st.act2Cleared };
+          st.phase = "result";
+          st.counterattack = null;
+          st.alert = 0;
+          notes.push("第二幕に決着がついた。軍団は残り、第三幕への出陣まで訓練と周辺地の略奪を続けられる");
+          this.trace("act2_clear", null, null, { by: st.clearedBy });
+          this.genApplicants();
         }
       } else {
         st.phase = "result";
@@ -2499,6 +3331,7 @@ const Game = {
       const alertDelta = this.WIPE_ALERT;
       st.alert = Math.max(0, st.alert + alertDelta);
       notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
+      this.advanceOutpost(stageData, false, notes);
       // 留守番の仕事と手当は続く。城は落ちていない。
       // 出撃隊は死んでいるので給与は発生しない（paySalaries は名簿を見るが、もう外れている）。
       if (!openingBattle) {
@@ -2543,8 +3376,12 @@ const Game = {
       victory: result.victory,
       // 経験で身についた共通特性（表示用）。身につかなかった決着・旧セーブには無い。
       earned: earnedTraits,
+      // 戦闘中に高まった気合（表示用。まもって大技を受けた／仲間が倒れた）。
+      spiritGained: (result && result.spiritGained) || null,
       // 幕替わり（表示用）。結果画面とモルモの報告が読む。
       actAdvance,
+      // 第二幕の決着報告。ラン終了ではないので clear にはしない。
+      act2Clear,
       // 防衛戦（王国の反撃）の結末（表示用）。
       defense: isDefense,
       castleFell,
@@ -2556,6 +3393,10 @@ const Game = {
       relicsLeft: wipedRelics || [],
       // この戦いで技を覚えた者（表示用）。覚えた者がいない戦い・旧セーブには無い。
       unlocked,
+      // 稽古（2026-09-13）。結果画面はこの印で文言を変える。
+      training,
+      trainingDown: training
+        ? (result.contribution || []).filter(c => c.trainingDown).map(c => c.name) : [],
       missionKind: stageData.missionKind,
       missionTitle: stageData.missionTitle,
       army: stageData.army,
@@ -2582,24 +3423,11 @@ const Game = {
       // 旧セーブにこの鍵は無い。読む側は「無ければV1表示」で、推定生成してはいけない。
       chainView,
       overkillSummary: result.overkillSummary,
-      // 戦意（momentum）の到達倍率。戦闘中は帯に出続けるが、終わると消えてしまい
-      // 「今日はどれだけ乗ったのか」が戦果に残らなかった。タイムラインから導出するだけで、
-      // 戦闘式・数値は変えていない。古いセーブには無いので表示側で 1 として扱う。
-      momentumPeak: (result.timeline || []).reduce((max, e) =>
-        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
       // 施設は「誰の手柄か」を個人へ付けない代わりに、戦果へ短い要約として残す。
       // 共通補正（Lv）と稼働施設（Joker）を分けて書き、どちらを体感したか読めるようにする。
-      facility: (() => {
-        const info = this.facilityInfo();
-        const active = this.activeFacility();
-        return {
-          level: st.facilityLevel || 0, name: info.name, works: this.facilityWorks(),
-          hpMult: info.hpMult, defBonus: info.defBonus,
-          activeId: active ? active.id : null, activeName: active ? active.name : null
-        };
-      })(),
-      facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
+      facility: this.facilityReport(),
+      facilitySummary: (this.tallyFacilityStats(result.facilitySummary), result.facilitySummary || { facilities: [], rescuedFromWipe: false }),
       deathChains: result.deathChains || [],
       // 戦果の1文の材料（B1）。「誰の能力が誰の何を動かし、結果どうなったか」を
       // 根拠イベントID付きで最大1件。証拠が揃わない戦闘では null になり、表示側は
@@ -2616,14 +3444,11 @@ const Game = {
     };
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, result.victory);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
-    // 傭兵は契約終了。次の戦闘は新しい候補から選び直す
-    if ((st.mercenaries || []).length) {
-      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
-    }
-    st.mercenaries = [];
-    st.mercenaryOffers = [];
 
+    // この決着ぶんの回復を先に済ませてから、稽古で倒れた者へ負傷を付ける
+    // （順番を逆にすると、付けた負傷がその場で治る。settleRetreat と同じ作法）。
     this.recoverInjuries();
+    if (training) this.applyTrainingInjuries(result.contribution, notes);
     // 王国の反撃の判定は決着の最後。予告は必ず1手番前になる（奇襲はしない）。
     if (st.phase !== "clear" && st.phase !== "gameover") this.checkCounterattack();
 
@@ -2648,8 +3473,15 @@ const Game = {
   // 倒れていた軍団員は担いで帰る（戦死しない）が、報酬は無く、征服も進まない。
   settleRetreat(pending, options = {}) {
     const st = this.state;
+    if (!pending || pending.settled) return st.phase;
+    pending.settled = true;
+    this.applyInvasionReward(pending.stageData);
+    this.applySpiritChanges(pending && pending.result, pending);
     this.recordBattleResult(pending);
     const { result, stageData, notes, battleRations, mealPlan, chainView } = pending;
+    this.consumeBattleRations(result, notes);
+    this.settleCaptains(stageData, result, notes);   // 退いた戦いでも、見逃した・雇った者は記録に残る
+    st.lastRansacked = this.isDefenseBattle(stageData);   // 城下町：防衛戦から退いた決着も税収は無い
     const goldBefore = st.gold;
     const lostOnPoints = !!options.lostOnPoints;
     // 提案時点の戦果。倒れていた軍団員は survived: true / injured: true になっている。
@@ -2660,12 +3492,15 @@ const Game = {
         : { ...row, survived: true, injured: true })
       : ((result.retreatOffer && result.retreatOffer.contribution) || result.contribution);
     const carried = contribution.filter(c => c.injured && !c.mercenary);
+    if (mealPlan?.boost > 0 && mealPlan.cookUid != null) this.trace("cooked", mealPlan.cookUid, null, { facility: this.facilityLv("grand_kitchen") > 0 ? "grand_kitchen" : null });
+
     // 個人カウンタは名簿が動く前に進める（引退・戦死で消えた者を数え損なわないため）。
     this.tallyBattleRecords(contribution, false);
     this.recordBattleTraces(result, contribution);
     const storyPost = this.rollAftermath(pending, contribution, false);
     if (!lostOnPoints) this.trace("retreated", null, null, { army: stageData.army, carried: carried.map(c => c.name).join("、") });
     for (const row of carried) this.trace("carried", row.uid, null, { army: stageData.army });
+    if(stageData.missionKind==="invade" && this.state.incidents?.intel) {this.state.incidents.intel=false;if(this.state.incidents.letterEnemy)notes.push("王国の連絡兵が、敵の列からハーピーに手を振った。");}
     this.recordStageFight(stageData);
     // 退いた戦いも1戦。出撃はした（仕様2.2）。
     const unlocked = this.trainSurvivors(contribution, notes);
@@ -2740,6 +3575,7 @@ const Game = {
       const alertDelta = Number(stageData.alertDelta) || 1;
       st.alert = Math.max(0, st.alert + alertDelta);
       notes.push(`王国警戒度+${alertDelta}（現在 ${st.alert}）`);
+      this.advanceOutpost(stageData, false, notes);
     }
 
     // 留守番の仕事は戦場の結果と無関係。給与も払う
@@ -2785,19 +3621,9 @@ const Game = {
       chainSummary: result.chainSummary,
       chainView,
       overkillSummary: result.overkillSummary,
-      momentumPeak: (result.timeline || []).reduce((max, e) =>
-        e.type === "momentum" && Number.isFinite(e.mult) ? Math.max(max, e.mult) : max, 1),
       summonCount: result.summonCount || 0,
-      facility: (() => {
-        const info = this.facilityInfo();
-        const active = this.activeFacility();
-        return {
-          level: st.facilityLevel || 0, name: info.name, works: this.facilityWorks(),
-          hpMult: info.hpMult, defBonus: info.defBonus,
-          activeId: active ? active.id : null, activeName: active ? active.name : null
-        };
-      })(),
-      facilitySummary: result.facilitySummary || { facilities: [], rescuedFromWipe: false },
+      facility: this.facilityReport(),
+      facilitySummary: (this.tallyFacilityStats(result.facilitySummary), result.facilitySummary || { facilities: [], rescuedFromWipe: false }),
       deathChains: result.deathChains || [],
       buildChanges: pending.buildChanges,
       spotlight: typeof Spotlight !== "undefined" ? Spotlight.of(result.timeline, {
@@ -2806,11 +3632,6 @@ const Game = {
     };
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, false);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
-    if ((st.mercenaries || []).length) {
-      notes.push(`傭兵${st.mercenaries.length}名との契約が終了した（${st.mercenaries.map(m => m.name).join("、")}）`);
-    }
-    st.mercenaries = [];
-    st.mercenaryOffers = [];
 
     // 王国の反撃の判定は決着の最後（続行側と同じ場所）。
     if (st.phase !== "gameover") this.checkCounterattack();
@@ -2871,6 +3692,8 @@ const Game = {
   // 予約中の面接・編成は通常どおり動く。
   checkCounterattack() {
     const st = this.state;
+    // 第二幕の戦争は決着済み。第三幕が始まるまでは王国側の反撃を新しく予約しない。
+    if (st.act2Cleared) return null;
     if (st.counterattack && st.counterattack.pending) return null;
     const rules = this.counterRules();
     const alert = st.alert || 0;
@@ -2909,13 +3732,14 @@ const Game = {
   ransack(notes) {
     const st = this.state;
     const rules = this.counterRules().ransack;
-    const before = { facility: st.facilityLevel || 0, food: st.food || 0 };
-    if (st.facilityLevel > 0) {
-      st.facilityLevel = Math.max(0, st.facilityLevel - (rules.facilityLevels || 1));
-      // 進捗はその段階の入口まで戻す（次の1投入で上がり直すのは早すぎる）
-      st.buildProgress = (FACILITY_LEVELS[st.facilityLevel] || {}).buildThreshold || 0;
-      if (st.facilityLevel === 0) st.activeFacilityId = null;
-      notes.push(`城が荒らされた。施設レベル ${before.facility} → ${st.facilityLevel}`);
+    const before = { food: st.food || 0 };
+    // 荒らし：城下町の施設が1つ、1段落ちる（銀行の差し押さえと同じ入口）。
+    let razed = null;
+    for (let i = 0; i < (rules.facilityLevels || 1); i++) {
+      const lost = typeof Town !== "undefined" ? Town.demolishOne(st) : null;
+      if (!lost) break;
+      razed = razed || lost;
+      notes.push(`城下町が荒らされた。${lost.name} Lv${lost.from} → Lv${lost.to}`);
     }
     if (st.food > 0) {
       st.food = Math.floor(st.food * (rules.foodRatio !== undefined ? rules.foodRatio : 0.5));
@@ -2932,7 +3756,7 @@ const Game = {
       notes.push(`蔵から【${relic.name}】が持ち去られた`);
     }
     st.ransackCount = (st.ransackCount || 0) + 1;
-    return { facilityBefore: before.facility, facilityAfter: st.facilityLevel,
+    return { razed, facilityBefore: razed ? razed.from : 0, facilityAfter: razed ? razed.to : 0,
       foodBefore: before.food, foodAfter: st.food, relic: relic ? relic.name : null };
   },
 
@@ -2946,8 +3770,11 @@ const Game = {
 
   // 負傷は次の1戦だけ。戦闘が一つ決着するたびに1つ減らす（勝利・敗北・撤退を問わない）。
   recoverInjuries() {
+    const early = typeof Town !== "undefined" ? Town.healBonus(this.state) : 0;   // 宿舎Lv2で1決着早い
     for (const m of this.state.roster) {
-      if (m.injured) m.injured = Math.max(0, m.injured - 1);
+      if (!m.injured) continue;
+      if (early > 0 && m.injured <= 1 + early) Town.stat(this.state, "hostel", 1);   // 宿舎が無ければまだ治っていない
+      m.injured = Math.max(0, m.injured - 1 - early);
     }
   },
 
@@ -2957,10 +3784,96 @@ const Game = {
     return !!(m && m.injured > 0);
   },
 
+  // 前哨と本戦の行き来。勝った／負けた（退いた）の両方から呼ぶ**唯一の入口**。
+  //   前哨に勝った → 本戦へ。本戦に勝った → 征服度が進んで前哨へ戻る（次の段階の前哨）。
+  //   本戦に負けた → 前哨からやり直し（オーナー決定）。前哨に負けた → そのまま前哨。
+  advanceOutpost(mission, won, notes) {
+    const st = this.state;
+    if (!mission || mission.missionKind !== "invade") return null;
+    if (mission.missionPhase === "outpost") {
+      if (!won) return null;                       // 前哨に負けた：もう一度前哨から
+      st.outpost = { stage: st.conquest, place: mission.territoryId || null, cleared: true, formationId: mission.formationId };
+      if (notes) notes.push(`${mission.region}の前哨を制した。次は本戦`);
+      return "outpost-cleared";
+    }
+    // 本戦。勝っても負けても前哨の札は返す（勝ちは次の段階の前哨、負けは同じ段階の前哨）。
+    st.outpost = null;
+    if (!won && notes && mission.twoStage) notes.push("本戦で退けられた。前哨から立て直す");
+    return won ? "main-cleared" : "main-lost";
+  },
+
+  // 敵将の決着（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
+  // 討てば首級（報酬と名声）、雇えば名簿に増える、見逃せば去る。
+  // 状態の更新そのものは Captains.settle に任せる（captains.js は触らない）。
+  settleCaptains(mission, result, notes) {
+    if (typeof Captains === "undefined" || !mission) return null;
+    const st = this.state;
+    const ids = mission.captainIds || [];
+    if (!ids.length && !(result.spared || []).length) return null;
+    const before = {};
+    for (const id of ids) before[id] = Captains.state(st, id).status;
+    Captains.settle(st, result, ids);
+    const rules = Captains.rules();
+    const out = { slain: [], spared: [], hired: [] };
+    for (const id of ids) {
+      const now = Captains.state(st, id).status;
+      if (now === before[id]) continue;
+      const c = Captains.get(id); if (!c) continue;
+      const short = c.short || c.name;
+      if (now === "slain") {
+        const bounty = Math.max(1, Math.round((mission.reward - (mission.invasionRewardBonus || 0)) * (rules.bountyMult - 1)));
+        st.gold += bounty;
+        st.fame = (st.fame || 0) + (rules.fame || 0);
+        out.slain.push(short);
+        notes.push(`${short}を討った。首級 +${bounty}G`);
+        this.trace("captain_slain", null, null, { id, name: short });
+      } else if (now === "spared") { out.spared.push(short); notes.push(`${short}を見逃した。戦場を去っていった`); }
+    }
+    // 雇った者は名簿へ（rollApplicant と同じ形の1体。名前は敵将の short）
+    for (const x of result.spared || []) {
+      if (x.kind !== "hire") continue;
+      const c = Captains.get(x.id); if (!c || !c.hire) continue;
+      const m = this.rollApplicant(c.hire.race);
+      m.name = c.short || c.name;
+      m.loyalty = c.hire.loyalty;
+      m.job = c.hire.job || m.job;
+      if (c.hire.trait && !(m.traits || []).includes(c.hire.trait)) m.traits = (m.traits || []).concat(c.hire.trait);
+      m.captainId = x.id;
+      st.roster.push(m);
+      this.memberRecord(m);
+      this.baseOf(m);
+      out.hired.push(m.name);
+      notes.push(`${m.name}が魔王軍に加わった（忠誠 ${m.loyalty}）`);
+      this.trace("captain_hired", m.uid, null, { id: x.id, name: m.name });
+    }
+    st.lastCaptains = out;
+    return out;
+  },
+
   applyMissionOutcome(mission, notes) {
     const st = this.state;
+    st.settles = (st.settles || 0) + 1;   // 「⚠ ○○がいる」札の周期
     st.alert = Math.max(0, st.alert + (mission.alertDelta || 0));
     st.conquest = U.clamp(st.conquest + (mission.conquestDelta || 0), 0, this.MAX_CONQUEST);
+    // 地図の上の戦争（段階A）。勝った札の場所を領土にし、征服度はそこから写す
+    // （段階表・討伐隊・勇者の判定は今までどおり st.conquest を読む）。
+    if (typeof Territory !== "undefined" && mission.territoryId) {
+      if (mission.territoryMode === "raid") {
+        st.raided[mission.territoryId] = (st.raided[mission.territoryId] || 0) + 1;
+        notes.push(`${mission.region}から奪って引き上げた。次に来るときは守りが硬い`);
+      } else if (mission.territoryMode === "take") {
+        Territory.take(st, mission.territoryId);
+        notes.push(`${mission.region}は魔王軍の領土になった（領土 ${Territory.init(st).lands.length + Territory.init(st).tribes.length}）`);
+      }
+    }
+    if (typeof Territory !== "undefined") {
+      const mapped = Territory.conquestOf(st);
+      if (mapped !== st.conquest) {
+        st.conquest = U.clamp(mapped, 0, this.MAX_CONQUEST);
+        notes.push(`王国攻略 ${st.conquest}/${this.MAX_CONQUEST}。王都へ一歩近づいた`);
+      }
+    }
+    if (mission.territoryMode === "patrol") st.patrolCount = (st.patrolCount || 0) + 1;
     const kind = mission.missionKind || "invade";
     st.missionCounts[kind] = (st.missionCounts[kind] || 0) + 1;
     if (mission.conquestDelta) {
@@ -3023,25 +3936,15 @@ const Game = {
     const adapted = this.advanceHunger(foodShortage > 0, notes);
 
     st.materials += materialReward;
-    const beforeLevel = st.facilityLevel;
-    const maxLevel = FACILITY_LEVELS.length - 1;
-    const canBuild = st.facilityLevel < maxLevel;
+    if (!normalized && materialReward > 0) for (const m of builders) this.trace("carried_materials", m.uid, null, { amount: materialReward / Math.max(1, builders.length), facility: null });
+    // 旧「施工」（建材を進捗に変えて施設 Lv を上げる）は撤去した（2026-09-13）。
+    // 留守番は建材を**運ぶ**だけで、使い道は城下町ただ一つ。st.autoBuild の flag ごと消してある。
     // 供養代行：建設部門の死霊術師は、直前の戦没者を建材へ変える（墓石も城壁も石である）。
     // 戦死という損失が別部門の資源になる、いちばん短い接続。
     const mourners = builders.filter(m => m.tplId === "necromancer").length;
     const salvageTotal = mourners > 0 ? mourners * (st.pendingVacancies || 0) * 2 : 0;
     const salvage = normalized ? this.dailyShare(salvageTotal, dailyDay) : salvageTotal;
     st.materials += salvage;
-    const buildCapacity = normalized ? this.dailyShare(output.material, dailyDay) : output.material;
-    const materialUsed = canBuild ? Math.min(st.materials, buildCapacity) : 0;
-    st.materials -= materialUsed;
-    st.buildProgress += materialUsed;
-    while (st.facilityLevel < maxLevel
-      && st.buildProgress >= FACILITY_LEVELS[st.facilityLevel + 1].buildThreshold) {
-      st.facilityLevel += 1;
-    }
-    if (st.facilityLevel > beforeLevel) st.pendingFacilityChoiceLevel = st.facilityLevel;
-
     const spoiled = this.spoilFood(notes);
     st.lastDepartmentReport = {
       foodReward,
@@ -3053,13 +3956,9 @@ const Game = {
       adapted,
       loyaltyDelta,
       materialReward,
-      materialUsed,
-      buildCapacity,
       salvage,
       wageDiscount: output.wage,
       recruitBonus: output.recruit,
-      facilityBefore: beforeLevel,
-      facilityAfter: st.facilityLevel,
       builders: builders.length,
       lifeWorkers: lifeWorkers.length
     };
@@ -3074,12 +3973,50 @@ const Game = {
     if (salvage > 0) {
       notes.push(`供養代行：戦没者を弔い、墓石ぶんの建材 +${salvage} を得た……`);
     }
-    notes.push(`留守番の建設：建材 +${materialReward} / 投入 ${materialUsed}`
-      + `（施工能力 ${buildCapacity}・備蓄 ${st.materials}）`);
-    if (st.facilityLevel > beforeLevel) {
-      const facility = this.facilityInfo();
-      notes.push(`施設完成【${facility.name}】稼働中の大型施設が1戦闘に ${facility.works} 回まで働く`);
+    notes.push(`留守番の建設：建材 +${materialReward}（備蓄 ${st.materials}）`);
+    // 城下町：税・利子・酒場（決着ごと。開幕の日割りでは呼ばない）。荒らされたかは settleContinue が st.lastRansacked に控える
+    // 訓練の決着は税収が無い（王国に知られていないので領地は動かない）。利子は普通どおり取られる。
+    if (dailyDay === undefined && typeof Town !== "undefined") {
+      Town.settle(this, notes, { ransacked: !!st.lastRansacked || this.isTraining(mission), training: this.isTraining(mission) });
     }
+    // 領土の効き目（docs/SPEC_TERRITORY_A_2026-09-15.md §2-3）。
+    // 食料と金だけをここで入れる（応募者・給与相場・種族は面接の側で読む）。
+    // defenseLine・noPriest・landing は段階C まで保存するだけで読まない。
+    if (dailyDay === undefined && typeof Territory !== "undefined") {
+      const gains = Territory.effects(st);
+      if (gains.food) { st.food += gains.food; notes.push(`領内の村から食料 +${gains.food}`); }
+      if (gains.gold) { st.gold += gains.gold; notes.push(`港の荷から金 +${gains.gold}G`); }
+    }
+    // 噂の札は城下町の有無に関わらず決着ごとに1回（城下町を読まない測定＝SIM_NO_TOWN でも
+    // 札の判定は動かす。状態式が読めない札は Incidents.candidate が黙って見送る）。
+    if (dailyDay === undefined && typeof Incidents !== "undefined") {
+      Incidents.settle(this);
+      this.noteArcOmens();
+    }
+    // 旧施設の移行の報せ（ロード中には出す画面が無いので、次の決着の報告で一度だけ）。
+    if (st.lastFacilityMigration && st.lastFacilityMigration.length) {
+      for (const line of st.lastFacilityMigration) notes.push(line);
+      delete st.lastFacilityMigration;
+    }
+  },
+
+  // 大筋（arc）の予兆をモルモの待ち行列へ積む
+  // （docs/SPEC_FORCED_OMEN_2026-09-16.md §2-4）。
+  //
+  // 予兆そのものは **初回だけ** 言う。2回目以降は日誌と地図の小物だけにする
+  // （毎回言うと予兆ではなく警報になる）。同じ id を二度積まない保証は
+  // Incidents.pushOmen が持つので、ここは「いま予兆が立っているか」だけを見る。
+  //
+  // 大筋の状態（st.arc）はまだ入っていない。入れる側は
+  //   Game.arcOmens = () => [{ id:"swamp_moves", text:"魔王様、沼が動いているそうデス" }]
+  // の形でこの口に差し込めばよく、Incidents 側は運ぶだけで足りる。
+  ARC_OMENS: [],
+  noteArcOmens() {
+    if (typeof Incidents === "undefined") return 0;
+    const list = (typeof this.arcOmens === "function" ? this.arcOmens(this.state) : null) || this.ARC_OMENS;
+    let pushed = 0;
+    for (const omen of list) if (omen && omen.id && Incidents.pushOmen(this, omen)) pushed++;
+    return pushed;
   },
 
   awardMerit(contribution, notes) {
@@ -3115,13 +4052,34 @@ const Game = {
     monster.def = Math.max(0, monster.def + (boost.def || 0));
     monster.loyalty = U.clamp(monster.loyalty + (boost.loyalty || 0), 0, 100);
     monster.salary += boost.salary || 0;
-    const entry = { uid: monster.uid, name: monster.name, rankId: rank.id, rankName: rank.name, message: rank.message };
+    // 将軍は昇進ではなく転身。数値以外（気合の上限・将軍技・二つ名）もここで付ける。
+    if (rank.id === "general") this.transformToGeneral(monster);
+    const entry = { uid: monster.uid, name: monster.name, rankId: rank.id, rankName: rank.name, message: rank.message,
+      epithet: monster.epithet || null, displayName: this.displayName(monster), general: rank.id === "general" };
     this.state.lastPromotions.push(entry);
     if (rank.id === "general" && !this.state.generalsMade.some(g => g.uid === monster.uid)) {
-      this.state.generalsMade.push({ uid: monster.uid, name: monster.name, race: monster.race });
+      this.state.generalsMade.push({ uid: monster.uid, name: monster.name, race: monster.race, epithet: monster.epithet || null });
     }
-    notes.push(`昇進！ ${monster.name} は【${rank.name}】となった。${rank.message}`);
+    notes.push(rank.id === "general"
+      ? `転身！ ${monster.name} は魔王の魔力を受け【${this.displayName(monster)}】となった。${rank.message}`
+      : `昇進！ ${monster.name} は【${rank.name}】となった。${rank.message}`);
     this.trace("promoted", monster.uid, null, { rank: rank.name });
+  },
+
+  // 転身の「数値以外」。付け直し（旧セーブ）からも呼ぶので、**二重に掛からないものだけ**を置く。
+  // HP・攻撃の ×1.4 は promote() の boost が持つ（ここでやると付け直しで二度掛かる）。
+  transformToGeneral(monster) {
+    const rules = (typeof GENERAL_TRANSFORM !== "undefined" && GENERAL_TRANSFORM) || {};
+    monster.spiritMaxBonus = rules.spiritMaxBonus || 1;
+    const skillId = rules.skillId || "general_might";
+    if (typeof SKILLS !== "undefined" && SKILLS[skillId]) {
+      monster.skills = monster.skills || [];
+      if (!monster.skills.includes(skillId)) monster.skills.push(skillId);
+    }
+    if (!monster.epithet) monster.epithet = this.epithetFor(monster);
+    // 気合は転身の瞬間に満タン（次の戦いで将軍技をすぐ見せられる）。
+    monster.spirit = this.spiritRules().max + (monster.spiritMaxBonus || 0);
+    return monster;
   },
 
   // 戦果に応じて各モンスターの一言を選ぶ。
@@ -3210,11 +4168,22 @@ const Game = {
     return true;
   },
 
-  paySalaries(notes, dailyDay) {
+  // 訓練の決着は給与が半分（端数は切り上げ。未払いの判定も半額で行う）。
+  salaryRatio(stageData) {
+    // 既定は半分（設計2.3、オーナーの指示）。2.4 の「破産率が5pt上がれば 1/3」は
+    // 実測で条件を満たしているが、数字の変更はオーナーの判断待ち（報告済み）。
+    return this.isTraining(stageData || this.state.selectedMission) ? 0.5 : 1;
+  },
+  paySalaries(notes, dailyDay, stageData) {
     const st = this.state;
+    if(this.isTraining(stageData || st.selectedMission) && st.incidents?.freeTraining) {
+      st.lastPayrollReport={policyId:this.payrollPolicy().id,base:0,paid:0,loyaltyDelta:0};
+      notes.push("研究所が今回の稽古の給与を受け持った。");return;
+    }
+    const ratio = this.salaryRatio(stageData);
     const assignments = this.salaryAssignments().map(entry => ({
       ...entry,
-      amount: dailyDay === undefined ? entry.amount : this.dailyShare(entry.amount, dailyDay)
+      amount: Math.ceil((dailyDay === undefined ? entry.amount : this.dailyShare(entry.amount, dailyDay)) * ratio)
     }));
     const total = assignments.reduce((sum, entry) => sum + entry.amount, 0);
     const paidRoster = assignments.map(entry => entry.monster);
@@ -3330,6 +4299,7 @@ const Game = {
 
   preparePayrollForBattle(notes) {
     const st = this.state;
+    if(this.isTraining(st.selectedMission) && st.incidents?.freeTraining)return true;
     const quote = this.payrollQuote();
     const policy = quote.policy;
     const assignments = this.salaryAssignments();
@@ -3399,9 +4369,20 @@ const Game = {
       + `この者たちへの給与支払いは不要になった`);
   },
 
+  // 逃亡（2026-09-12 オーナー試遊「急に逃亡されるとへこむ」）。忠誠0で即去るのをやめ、**一度は荷物をまとめる**。
+  // 荷物をまとめた者（leaving）は、次の決着までに忠誠が戻らなければ去る。引き留めは「慰留」（retain：金で忠誠を戻す）か給与を払うこと。
   processDepartures(notes) {
     const st = this.state;
-    const leaving = st.roster.filter(m => m.loyalty <= 0);
+    const leaving = [];
+    for (const m of st.roster) {
+      if (m.loyalty > 0) { if (m.leaving) { m.leaving = false; notes.push(`${m.name} は荷物を解いた（忠誠 ${m.loyalty}）`); } continue; }
+      if (!m.leaving) {
+        m.leaving = true;
+        notes.push(`${m.name} が荷物をまとめ始めた……次の決着までに引き留めなければ軍を去る（給与を払う／慰留）`);
+        continue;
+      }
+      leaving.push(m);
+    }
     for (const m of leaving) {
       notes.push(`${m.name} は愛想を尽かして軍を去った……`);
       this.recordDeparture(m, "deserted");
@@ -3428,12 +4409,13 @@ const Game = {
 
   // 上にあるものほど「そのランを言い表している」と判断する。
   BUILD_TRAITS: [
-    { id: "facility_max", test: r => r.facilityLevel >= 3 && r.activeFacilityId,
+    { id: "facility_max", test: r => (r.townTop || 0) >= 3,
       phrase: r => ({
         graveyard: "墓地を三度も回した",
-        extortion_ledger: "帳簿を三度めくった",
-        grand_kitchen: "厨房を焚き続けた"
-      }[r.activeFacilityId] || "城を建てきった") },
+        grand_kitchen: "厨房を焚き続けた",
+        market: "市場を三度広げた",
+        tavern: "酒場を三度建て増した"
+      }[r.townTopId] || "城下町を建てきった") },
     { id: "overkill", test: r => (r.maxOverkill || 0) >= 200, phrase: () => "過剰殺戮の" },
     { id: "chain", test: r => (r.maxChain || 0) >= (Chain.versionOf(r) >= 2 ? 4 : 6),
       phrase: r => `${r.maxChain}連鎖を通した` },
@@ -3456,8 +4438,7 @@ const Game = {
     // ここから下は「ほぼ全ランで起きる普通の行動」。修飾は珍しさを表すためにあるので、
     // 他に何も言うことがないランだけがこの名前を名乗る。
     // 50ラン計測で上位に置いたところ、名前の半分以上がこの2つに occupied された。
-    { id: "retry", test: r => (r.retriesUsed || 0) >= 1, phrase: () => "一度死に損なった" },
-    { id: "seized", test: r => !!r.seizeUsed, phrase: () => "拠点を接収した" }
+    { id: "retry", test: r => (r.retriesUsed || 0) >= 1, phrase: () => "一度死に損なった" }
   ],
 
   // 中核は、発見したシナジーがあればそれを名乗る。無ければ主力種族。
@@ -3507,8 +4488,7 @@ const Game = {
       }),
       roster: (st.roster || []).map(m => m.uid).sort((a, b) => a - b),
       departments: Object.fromEntries((st.roster || []).map(m => [m.uid, this.departmentOf(m).id])),
-      mercenaries: (st.mercenaries || []).map(m => m.name),
-      facility: `${st.facilityLevel || 0}:${st.activeFacilityId || "none"}`,
+      facility: this.townSignature(),
       payroll: st.payrollPolicy || "regular",
       merge: st.kingSlimeMerge !== false,
       mission: (stageData && stageData.missionKind) || null
@@ -3521,7 +4501,7 @@ const Game = {
     if (!next) return null;
     const none = {
       first: !prev, hired: [], deployed: [], benched: [], reassigned: [],
-      reordered: false, mercenaries: [], facility: null, payroll: null,
+      reordered: false, facility: null, payroll: null,
       merge: false, mission: null, changedUids: []
     };
     if (!prev) return none;
@@ -3546,7 +4526,6 @@ const Game = {
     const changed = new Set([...hired, ...deployed, ...reassigned].map(d => d.uid));
     return {
       first: false, hired, deployed, benched, reassigned, reordered,
-      mercenaries: next.mercenaries.filter(name => !prev.mercenaries.includes(name)),
       facility: prev.facility !== next.facility ? { from: prev.facility, to: next.facility } : null,
       payroll: prev.payroll !== next.payroll ? { from: prev.payroll, to: next.payroll } : null,
       merge: prev.merge !== next.merge,
@@ -3645,8 +4624,11 @@ const Game = {
       })),
       generalsMade: (st.generalsMade || []).map(g => ({ name: g.name, race: g.race })),
       battleIncidentTotal: st.battleIncidentTotal || 0,
-      facilityLevel: st.facilityLevel || 0,
-      activeFacilityId: st.activeFacilityId || null,
+      // 城下町（2026-09-13）。旧 facilityLevel / activeFacilityId の置き換え。
+      // 魔界史・軍風・教訓が読む。townTop は一番高い施設の Lv、townTopId はその id。
+      townLevels: this.townLevelTotal(),
+      townTop: this.townTopLevel().lv,
+      townTopId: this.townTopLevel().id,
       finalResources: { food: st.food || 0, materials: st.materials || 0 },
       departmentCounts: Object.fromEntries(DEPARTMENT_ORDER.map(id => [id, this.departmentRoster(id).length])),
       finalRoster: st.roster.map(m => ({
@@ -3660,7 +4642,10 @@ const Game = {
       // 旧魔界史にこの鍵は無い。無ければ表示しないのが正しく、推定生成してはいけない。
       memory: st.memory || null,
       maxArmySize: Math.max(st.maxArmySize || 0, st.roster.length),
-      seizeUsed: !!st.seizeUsed,
+      // 力試しはどこまで登ったか（docs/SPEC_TRIAL_BATTLE_2026-09-18.md §4）。
+      // 挑んでいないランでは best 0（殿堂の一行は best>=1 のときだけ出す）。
+      trials: { best: (st.trials && st.trials.best) || 0, wins: (st.trials && st.trials.wins) || 0,
+        losses: (st.trials && st.trials.losses) || 0 },
       date: new Date().toISOString().slice(0, 10)
     };
     // 名前は record が出揃ってから付ける（材料は record の中だけ）
@@ -3751,12 +4736,11 @@ const Game = {
         st.alert = Math.max(0, st.alert + debt.amount);
         return `${head}王国警戒度 +${debt.amount}（現在 ${st.alert}）`;
       case "facilityLevel": {
-        // 稼働中の施設を 0 まで落とすと、選んだ施設が宙に浮く。最低 Lv.1 は残す。
-        const floor = st.activeFacilityId ? 1 : 0;
-        const before = st.facilityLevel || 0;
-        st.facilityLevel = Math.max(floor, before + debt.amount);
-        if (st.facilityLevel === before) return `${head}施設は無傷で済んだ（Lv.${before}）`;
-        return `${head}施設Lv.${before} → Lv.${st.facilityLevel}`;
+        // ツケの種類名は互換のまま（events.js のデータが持っている）。中身は
+        // 「城下町の施設が1つ、1段落ちる」——荒らし・差し押さえと同じ入口を通す。
+        const lost = typeof Town !== "undefined" ? Town.demolishOne(st) : null;
+        if (!lost) return `${head}落とせる施設が無かった（城下町は空き地のまま）`;
+        return `${head}${lost.name} Lv${lost.from} → Lv${lost.to}`;
       }
       case "loyalty_all":
         for (const m of st.roster) loyalty(m, debt.amount);
@@ -3917,11 +4901,6 @@ const Game = {
       this.save();
       return "preparation";
     }
-    if (st.pendingFacilityChoiceLevel) {
-      st.phase = "facility";
-      this.save();
-      return "facility";
-    }
     if (this.maybeEvent()) return "event";
     this.nextRecruit();
     return "recruit";
@@ -3936,8 +4915,6 @@ const Game = {
     st.pendingVacancies = 0;
     st.rerollsThisPhase = 0;
     // 指名は面接1回ぶん。次の面接へは持ち越さない（払い続けないと狙い撃ちできない）
-    st.briefsThisPhase = 0;
-    st.briefId = null;
     st.pendingEvent = null;
     st.eventOutcome = null;
     st.eventCast = null;

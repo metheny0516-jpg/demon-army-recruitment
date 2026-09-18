@@ -38,16 +38,9 @@ console.log(`  判定: ${attemptsPerBattle >= 0.6
   ? '既存の材料はよく試されている → 足りないのは「種族/役割」の可能性が高い'
   : '試行が戦闘数に対して少ない → 足りないのは「試せる回数・組み替えやすさ」の可能性が高い'}`);
 console.log('');
-console.log('■ 金貨の出口（傭兵市場）');
-console.log(`  雇った傭兵: 平均 ${fixed(mean('mercenariesHired'))}人/ラン（うち同族 ${fixed(mean('kinHires'))}人）`);
-console.log(`  傭兵へ払った金貨: 平均 ${fixed(mean('mercenaryGold'))}G/ラン`);
+console.log('■ 金貨の出口');
 console.log(`  合体を断った回数: 平均 ${fixed(mean('mergesRefused'))}回/ラン`);
 console.log(`  有料追加採用: 平均 ${fixed(mean('paidHires'))}人/ラン・紹介料 ${fixed(mean('paidHireGold'))}G/ラン`);
-console.log(`  判定: ${mean('mercenariesHired') < 0.5
-  ? '傭兵がほぼ使われていない → 見つけられていないか、金が回っていない'
-  : mean('kinHires') / Math.max(0.001, mean('mercenariesHired')) >= 0.6
-    ? 'ビルドを濃くする買い物になっている（同族が多い）'
-    : '頭数だけ買っている → 同族の価値が伝わっていない可能性'}`);
 console.log('');
 // ── シナジー観測 ─────────────────────────────────────
 // 「種族統一ボーナスを厚くする」のではなく「異なる条件が繋がる」方向へ進めるための材料。

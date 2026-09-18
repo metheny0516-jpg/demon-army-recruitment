@@ -1,0 +1,108 @@
+{
+  "schema_version": 2,
+  "character": "skeleton",
+  "source_sheet": "/workspace/scratch/2a7e56be1139/demon-army-recruitment/docs/skeleton-ready-spin-source/skeleton-ready-spin-source-repacked.png",
+  "frames_dir": "../../assets/battle/units/skeleton/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": "../skeleton-ready-spin-qc",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": []
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "complete",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/skeleton/ready-spin/0.webp": "bb2a60994948007e6e8e7006777f2eaedeeb3580ce12e672b59f7be3e450548b",
+    "../../assets/battle/units/skeleton/ready-spin/1.webp": "cdae1a6444707df59e352562e31d2291e4a63df1631821fc97c7e3df853af0eb",
+    "../../assets/battle/units/skeleton/ready-spin/2.webp": "80a2c9bd09e60d45ca5a50675ba101c647c024558658a0ab97427954722cf6fb",
+    "../../assets/battle/units/skeleton/ready-spin/3.webp": "195e9ca1d65904bf56fa0a3a16d9941446ce8333fc6cd23b697c6cfeb67bdcf4",
+    "../../assets/battle/units/skeleton/ready-spin/4.webp": "5216075c72c43ec72908385a5874dd8c0e9ddbbbf2637fb3d1a36c39ef6c61f0",
+    "../../assets/battle/units/skeleton/ready-spin/5.webp": "67d15e9195f42228c2cde67d010a66523ffe650491b7d9544630b2e466701cd4",
+    "../../assets/battle/units/skeleton/ready-spin/6.webp": "ce98508593b197ea2e6a17ba3d8b7671de68e2d3b9adf2745cb0965a025e6c46",
+    "../../assets/battle/units/skeleton/ready-spin/7.webp": "01cdb785d4ebf1ff4c3079c9cdc2be15fc633c4e9b3e0d3baf3fa43497d65786",
+    "../../assets/battle/units/skeleton/ready-spin/8.webp": "628f80ac8cd5239f61537a51196ea1a9ff9009f4fe2066eeff84c7eeb4366ad2",
+    "../../assets/battle/units/skeleton/ready-spin/9.webp": "8bc1bdd8e2110df11f53b4792beb8c869cdf0f69fd403b746edcae4c79814232",
+    "contact-sheet.png": "18483b70c9230df82f86c233c7f88a49cbf495d718064feae22aa12062dfdf61",
+    "actual-speed.mp4": "af363c7013bc0dbee57c18b596a21373fae983dd0102c90e6cbc022f57aa6c21",
+    "../skeleton-ready-spin-qc/qc.json": "d1421f9a002d1ce9a3eca6704ab65393dbfd99f58ed81e6a369d086dfec6a31a"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": false,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": []
+  },
+  "grid": {
+    "column_edges": [
+      0,
+      418,
+      836,
+      1254
+    ],
+    "row_edges": [
+      0,
+      418,
+      836,
+      1254
+    ]
+  }
+}

@@ -8,8 +8,8 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
-  'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/data/departments.js', 'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -21,6 +21,7 @@ vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 vm.runInContext('U.chance = () => false; U.pick = arr => arr[0]; U.rand = () => 0.5;', ctx);
 const Game = vm.runInContext('Game', ctx), Battle = vm.runInContext('Battle', ctx);
+const Town = vm.runInContext('Town', ctx);
 const assert = (condition, message) => { if (!condition) throw new Error(message); console.log(`✓ ${message}`); };
 const player = (uid, name, traits, hp, atk, spd, tags) => Battle.makeUnit({
   uid, tplId: 'test', name, race: '試験魔族', job: '', hp, atk, def: 0, spd,
@@ -104,16 +105,19 @@ Game.newRun();
 Object.assign(Game.state, {
   roster: [{ uid: 1, tplId: 'ogre', name: '巨人', race: 'オーガ', job: '門番', hp: 999, atk: 999, def: 0, spd: 99,
     salary: 0, loyalty: 90, traits: [], tags: [], department: 'combat', merit: 0, rankId: 'soldier' }],
-  activeUids: [1], applicants: [], phase: 'formation', selectedMission: null,
-  facilityLevel: 2, activeFacilityId: 'graveyard'
+  activeUids: [1], applicants: [], phase: 'formation', selectedMission: null
 });
+// 施設は城下町ただ1系統（2026-09-13）。墓地 Lv2 を建てた状態にする。
+Town.init(Game.state);
+Game.state.town.lv.graveyard = 2;
 const meritBefore = Game.state.roster[0].merit;
 const out = Game.deploy();
 const b = Game.state.lastBattle;
-assert(out.result.victory && b.facility && b.facility.level === 2 && b.facility.works === 2,
-  '戦果に施設Lvと、Jokerが働ける回数を残す');
-assert(b.facility.activeId === 'graveyard' && b.facility.activeName === '墓地',
-  '戦果に稼働中の大型施設を残す');
+assert(out.result.victory && b.facility && b.facility.level === 2,
+  `戦果に城下町の軍施設の Lv 合計を残す（${b.facility && b.facility.level}）`);
+assert(b.facility.facilities.length === 1 && b.facility.facilities[0].id === 'graveyard'
+  && b.facility.facilities[0].name === '墓地' && b.facility.facilities[0].lv === 2,
+  '戦果に施設ごとの Lv を残す（UIが「今回は発火しなかった」を書ける）');
 assert(b.facilitySummary && b.facilitySummary.facilities.length === 0 && Array.isArray(b.deathChains),
   '発火しなかった施設は要約に載らず、UIが「今回は発火しなかった」と読める');
 const meritWithFacility = Game.state.roster[0].merit - meritBefore;
@@ -126,8 +130,8 @@ Object.assign(Game.state, {
 });
 Game.deploy();
 assert(Game.state.roster[0].merit === meritWithFacility && Game.state.lastBattle.facility.level === 0
-  && Game.state.lastBattle.facility.activeId === null,
-  '施設要約は戦功へ接続しない（表示専用）。施設なしの戦果はLv.0・稼働なしを残す');
+  && Game.state.lastBattle.facility.facilities.length === 0,
+  '施設要約は戦功へ接続しない（表示専用）。施設なしの戦果は空の要約を残す');
 
 // ── 6. 旧セーブ（要約が無い戦果）でも描画側が壊れないための形 ────────
 assert(typeof Battle.summarizeFacility(undefined).facilities.length === 'number'

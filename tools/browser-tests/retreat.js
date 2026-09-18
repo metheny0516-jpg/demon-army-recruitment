@@ -53,14 +53,14 @@ const COUNT_ATTACKS = () => {
 };
 
 
-// 指示待ちのたびに「決定」で進め、「退く」が出るまで待つ（ラウンド1では誰も倒れていない）
+// 指示待ちのたびに「全員たたかう」で進め、「退く」が出るまで待つ（ラウンド1では誰も倒れていない）
 async function advanceUntilRetreat(page) {
   for (let i = 0; i < 12; i++) {
     await page.waitForFunction(() => !document.getElementById('command-panel').hidden || BattleScene.finished, null, { timeout: 30000 });
     if (await page.evaluate(() => BattleScene.finished)) return false;
     if (await page.locator('[data-cmdall="retreat"]').count()) return true;
     if (process.env.DEBUG_RETREAT) console.log('    round', await page.evaluate(() => (BattleScene.manual && BattleScene.manual.prompt || {}).round), 'rows', await page.locator('.cmd-row').count());
-    await page.evaluate(() => document.querySelector('[data-cmdall="go"]').click());
+    await page.evaluate(() => document.querySelector('[data-cmdall="attack"]').click());
   }
   return false;
 }
@@ -85,7 +85,7 @@ async function advanceUntilRetreat(page) {
   const offer = await page.evaluate(() => ({
     label: document.querySelector('[data-cmdall="retreat"]').textContent,
     paused: BattleScene.paused, panelShown: !document.getElementById('command-panel').hidden,
-    rows: document.querySelectorAll('.cmd-row').length,
+    rows: BattleScene.manual.prompt.allies.length,
     attacks: window.__drawn.filter(t => t === 'attack').length
   }));
   ok(/捨て駒A/.test(offer.label), `退くボタンに倒れた者の名前（${offer.label}）`);
@@ -94,8 +94,8 @@ async function advanceUntilRetreat(page) {
   ok(offer.rows === 1, `立っている者だけが指示の対象（${offer.rows}人）`);
   await page.screenshot({ path: (process.env.SP || '.screenshots') + '/retreat-offer.png' });
 
-  console.log('▼ 「決定」で続ければ今までどおり最後まで進む');
-  await page.evaluate(() => document.querySelector('[data-cmdall="go"]').click());
+  console.log('▼ 「全員たたかう」で続ければ今までどおり最後まで進む');
+  await page.evaluate(() => document.querySelector('[data-cmdall="attack"]').click());
   await page.evaluate(() => BattleScene.skip());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 60000 });
   const cont = await page.evaluate(() => ({
@@ -198,6 +198,55 @@ async function advanceUntilRetreat(page) {
   await page.evaluate(() => BattleScene.skip());
   await page.waitForFunction(() => BattleScene.finished === true, null, { timeout: 20000 });
   ok(await page.evaluate(() => !Game.state.pendingBattle), '保留も残らない');
+
+  // ── 見逃す／雇うの窓（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）──
+  // 敵将が膝をついたら、指示の前に一度だけ聞く。窓は撤退の提案と同じ一言の窓。
+  console.log('▼ 見逃す／雇うの窓');
+  await page.evaluate(() => { Game.newRun(); });
+  await enterMissionPhase(page);
+  await page.evaluate(() => {
+    Game.state.roster = [{ uid: 904, tplId: 'ogre', name: '無双', race: 'オーガ', job: '', hp: 900, atk: 90, def: 40, spd: 20,
+      salary: 2, loyalty: 70, traits: [], tags: [], quote: '', unpaid: false, injured: 0 }];
+    Game.state.activeUids = [904];
+    Game.state.gold = 80; Game.state.food = 40; Game.state.phase = 'formation'; App.render();
+  });
+  await page.click('[data-action="deploy"]');
+  await page.waitForFunction(() => !document.getElementById('command-panel').hidden || BattleScene.finished, null, { timeout: 20000 });
+  // 本物の指示待ちに、敵将が膝をついた印だけを足して聞かせる（戦闘の中身は node のテストが見る）
+  const spare = await page.evaluate(async () => {
+    window.__asides = [];
+    BattleScene.resetSpare();
+    BattleScene.manual.prompt.canSpare = { id: 'e0', captainId: 'gareth', name: '王国将軍ガレス', kind: 'spare' };
+    BattleScene.awaitCommands();
+    await new Promise(r => setTimeout(r, 150));
+    return {
+      asked: !!document.querySelector('.mormo-aside'),
+      asides: window.__asides.length,
+      text: (window.__asides[window.__asides.length - 1] || {}).text || '',
+      labels: [...document.querySelectorAll('.mormo-aside [data-choice]')].map(b => b.textContent.trim())
+    };
+  });
+  ok(spare.asked && spare.asides === 1, `敵将が膝をつくと一度だけ聞かれる（${spare.asides}）`);
+  ok(/ガレス/.test(spare.text), `誰が膝をついたか分かる（${spare.text.replace(/\n/g, ' ').slice(0, 40)}）`);
+  ok(spare.labels.some(l => /見逃す/.test(l)) && spare.labels.some(l => /討つ/.test(l)),
+    `「見逃す」と「討つ」が並ぶ（${spare.labels.join('／')}）`);
+
+  const sent = await page.evaluate(async () => {
+    [...document.querySelectorAll('.mormo-aside [data-choice]')].find(b => /見逃す/.test(b.textContent))?.click();
+    await new Promise(r => setTimeout(r, 120));
+    const panelOpen = !document.getElementById('command-panel').hidden;
+    // 送り口だけを見る（この先の再生は本物の敵将が要るので、ここでは差し替えて確かめる）
+    const next = BattleScene.manual.next;
+    BattleScene.manual.next = cmd => { window.__sent = cmd; BattleScene.manual.done = true; return { type: 'commands' }; };
+    BattleScene.submitCommands({});
+    BattleScene.manual.next = next;
+    return { panelOpen, spare: !!(window.__sent || {}).spare, asked: BattleScene.spareAsked, wanted: BattleScene.spareWanted };
+  });
+  ok(sent.panelOpen, '答えたら指示の窓が開く（聞いたまま止まらない）');
+  ok(sent.spare, '「見逃す」を選ぶと、次の指示と一緒に spare が送られる');
+  ok(!sent.wanted, '送ったら印は落とす（次の指示で二重に送らない）');
+  ok(sent.asked, '同じ戦闘では二度と聞かれない');
+  await page.evaluate(() => { BattleScene.stop(); Game.state.pendingBattle = null; });
 
   if (errs.length) { process.exitCode = 1; console.log('  ✗ ページ例外: ' + errs.join(' / ')); }
   await b.close();

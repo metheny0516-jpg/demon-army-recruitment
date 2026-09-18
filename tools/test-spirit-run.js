@@ -60,43 +60,18 @@ const spiritOf = (st, uid) => (st.roster.find(m => m.uid === uid) || {}).spirit;
 {
   const st = freshRun([1, 1, 1]);
   Game.deploy();
-  assert(spiritOf(st, 102) === 1 + rules.perBattle || !st.roster.some(m => m.uid === 102), `出撃者は決着で +${rules.perBattle}`);
+  // 決着で +perBattle。さらに戦闘中に仲間が倒れていれば result.spiritGained で +1（2026-09-12）。
+  const gained = ((st.lastBattle || {}).spiritGained || {})[102] || 0;
+  assert(spiritOf(st, 102) === Math.min(rules.max, 1 + rules.perBattle + gained)
+    || !st.roster.some(m => m.uid === 102),
+    `出撃者は決着で +${rules.perBattle}（+戦闘中の高まり ${gained}）`);
   assert(spiritOf(st, 103) === Math.min(rules.max, 1 + rules.perHomeTurn), `留守番は +${rules.perHomeTurn}（上限 ${rules.max}）`);
   const st2 = freshRun([3, 3, 3]);
   Game.deploy();
   assert(spiritOf(st2, 103) === rules.max, '上限を超えない');
 }
 
-// 3. 名指しで cost を引く。足りなければ候補に出ない
-{
-  let got = null;
-  for (let i = 0; i < 40 && !got; i++) {
-    const st = freshRun([1, 3, 1]);
-    const out = Game.deploy({ offerRetreat: true });
-    if (out && out.result.orderOffer) got = { st, out };
-  }
-  assert(!!got, '（前提）気合3のガロで号令の節目が出る戦闘を引ける');
-  if (got) {
-    const { st, out } = got;
-    const cand = out.result.orderOffer.candidates.find(c => c.skillId === 'brute');
-    assert(cand && cand.cost === 1 && cand.spirit === 3, '候補に cost 1・気合3 が載る');
-    Game.answerOrder(cand.unitId);
-    const after = spiritOf(st, 102);
-    // 引いて（3→2）、決着で出撃の +1 が戻る（→3）。撤退の提案が後に控えていれば決着前なので 2。
-    assert(after === 2 || after === 3, `名指しで cost を引く（3 → ${after}）`);
-  }
-  let none = true;
-  for (let i = 0; i < 25 && none; i++) {
-    const st = freshRun([1, 0, 1]);
-    const out = Game.deploy({ offerRetreat: true });
-    if (out && out.result.orderOffer) none = false;
-    if (st.pendingBattle) Game.answerOrder('none');
-    if (st.pendingBattle) Game.settleBattle('continue');
-  }
-  assert(none, '気合0のガロ（cost 1）では提案が出ない');
-}
-
-// 4. 技を覚えた直後の戦いだけ debutSkill が立ち、その決着で消える
+// 3. 技を覚えた直後の戦いだけ debutSkill が立ち、その決着で消える
 {
   const st = freshRun([1, 1, 1]);
   const garo = st.roster.find(m => m.uid === 102);

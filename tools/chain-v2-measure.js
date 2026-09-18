@@ -64,7 +64,11 @@ if (!SIM_SRC.includes(CUT)) {
 const outer = { console, Math: seededMath, Date, JSON, require, process };
 vm.createContext(outer);
 vm.runInContext(SIM_SRC.slice(0, SIM_SRC.indexOf(CUT)), outer, { filename: 'tools/sim.js(戦略定義のみ)' });
-const strategies = vm.runInContext('strategies', outer);
+// 連鎖の深さを測るのは**戦う戦略**だけ。訓練を挟む戦略（2026-09-13）は
+// 稽古で戦闘数が伸びるぶん連鎖の分布が別物になるので、この測定からは外す。
+// 力試し（2026-09-18）は第二幕の決着を越えて戦い続ける戦略なので、
+// 「第二幕までの連鎖」を測るこの測定器からは外す（母集団が変わってしまう）。
+const strategies = vm.runInContext('strategies', outer).filter(s => !s.train && !s.trial);
 const runOnce = vm.runInContext('runOnce', outer);
 const Game = vm.runInContext('Game', outer);
 const KPI = vm.runInContext('KPI', outer);
@@ -73,8 +77,11 @@ const Chain = vm.runInContext('Chain', inner);
 const Battle = vm.runInContext('Battle', inner);
 const store = vm.runInContext('store', outer);
 
-if (strategies.length !== 15) {
-  throw new Error(`chain-v2-measure: 戦略が15本でない（${strategies.length}本）。sim.js の変更を確認すること`);
+// 2026-09-15：地図の上の戦争（段階A）で「近い順に落とす」「港と町を優先」を足して 15 → 17 本。
+// 2026-09-16：スライム②で「スライム統一+魔法職1」を足して 18 本。
+// 2026-09-18：力試しの戦略は上で外しているので 18 本のまま。
+if (strategies.length !== 18) {
+  throw new Error(`chain-v2-measure: 戦う戦略が18本でない（${strategies.length}本）。sim.js の変更を確認すること`);
 }
 
 // ── 1戦闘ぶんの観測。KPI.battleFinished を包んで結果を受け取る ──

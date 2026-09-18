@@ -250,6 +250,16 @@ button.wide { width: 100%; }
 /* 「押していい」の合図は光らせて出す。位置は動かさない——
    指を置く先が常時動くのは押しにくく、自動テストのクリック待ちも永久に止まる */
 .mormo-scene-next.ready { color: var(--gold); animation: mormoNext .9s ease-in-out infinite alternate; }
+/* 噂の札をモルモが持ってくる場面の選択肢（張り紙を待たない §2-3）。
+   390px でも3つ縦に並ぶので、幅いっぱいの縦積みにする。 */
+.mormo-scene-choices { display: grid; gap: 8px; margin-top: 12px; clear: both; }
+.mormo-scene-choice {
+  width: 100%;
+  text-align: left;
+  border-color: rgba(240, 196, 106, .3);
+  background: rgba(15, 10, 25, .58);
+}
+.mormo-scene-choice.primary { color: var(--gold); border-color: rgba(240, 196, 106, .6); }
 .mormo-scene-panic .mormo-scene-backdrop,
 .mormo-scene-angry .mormo-scene-backdrop { filter: sepia(.15) saturate(1.35); }
 .mormo-scene-joy .mormo-scene-aura { box-shadow: 0 0 90px rgba(240, 196, 106, .36); }
@@ -585,8 +595,6 @@ button.wide { width: 100%; }
 .history-item .build-name { font-size: 14px; margin: 2px 0 4px; opacity: .95; }
 /* 拠点接収は1ランに1度きりの分岐なので、勝利バナー直下で目立たせる。
    結果画面の最下部に置いていたときは実プレイで一度も使われなかった（2画面ぶん下にあった）。 */
-.seize-panel { border: 1px solid var(--gold); box-shadow: 0 0 0 2px rgba(0,0,0,.25) inset; }
-.seize-panel h3 { color: var(--gold); }
 .build-name-panel { text-align: center; }
 /* 敗北からの方向転換。負けた直後にいちばん読ませたいので、他の集計より前に置いている */
 .lesson-panel { border: 1px solid var(--gold); }
@@ -844,20 +852,23 @@ button.wide { width: 100%; }
   position: absolute;
   left: 0; right: 0;
   font-weight: bold;
-  font-size: 15px;
+  font-size: 17px;
   color: #ffdd66;
   text-shadow: 0 1px 3px #000, 0 0 8px #000;
-  animation: floatUp .9s ease-out forwards;
+  animation: floatUp 1.8s ease-out forwards;
   white-space: nowrap;
 }
-.fnum.big { font-size: 21px; color: #ff8a5a; }
+.fnum.big { font-size: 24px; color: #ff8a5a; }
 .fnum.heal { color: #6fd08c; }
 .fnum.guard { color: #8fb8ff; font-size: 13px; }
 .fnum.fallen { color: #d7c2c2; font-size: 13px; }
+/* 出てすぐ止まり、寿命の7割は読める位置に留まってから消える（2026-09-16: すぐ消えて読めない） */
 @keyframes floatUp {
   0%   { transform: translateY(6px) scale(.7); opacity: 0; }
-  25%  { transform: translateY(-4px) scale(1.15); opacity: 1; }
-  100% { transform: translateY(-34px) scale(1); opacity: 0; }
+  12%  { transform: translateY(-4px) scale(1.18); opacity: 1; }
+  30%  { transform: translateY(-10px) scale(1); opacity: 1; }
+  72%  { transform: translateY(-16px) scale(1); opacity: 1; }
+  100% { transform: translateY(-36px) scale(.96); opacity: 0; }
 }
 
 /* ── 画面揺れ（決定打） ── */
@@ -883,18 +894,19 @@ button.wide { width: 100%; }
   color: #fff0c4;
   background: rgba(15, 10, 24, .92);
   text-align: center;
-  font-size: 12px;
+  /* 状況の説明は脇役。台詞は吹き出しが受け持つので、ここは一段小さく（2026-09-18） */
+  font-size: 11px;
   font-weight: bold;
-  opacity: 0;
+  opacity: .92;
   transform: translate(-50%, -50%) scale(.92);
   pointer-events: none;
 }
+/* 字幕は自分から消えない。次の行動の字幕に置き換わるまで残る（2026-09-16: すぐ消えて読めない） */
 @keyframes actionCaption {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); }
-  18%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.04); }
+  12%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
-.action-caption.show { animation: actionCaption .62s ease-out; }
+.action-caption.show { animation: actionCaption 1.2s ease-out forwards; }
 
 .round-banner,
 .scene-intro {
@@ -1552,23 +1564,6 @@ button.wide { width: 100%; }
 .king-compare > div { flex: 1 1 45%; background: #1b1530; border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
 .king-compare b { font-size: 13px; }
 .king-compare .muted { font-size: 11px; display: block; }
-
-/* 傭兵市場。金貨の出口をここに置く */
-.merc-panel { border-color: #8a6a20; }
-.merc-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
-.merc-card { background: #1b1530; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-.merc-name { font-size: 13px; }
-.merc-name .muted { font-size: 11px; margin-left: 4px; }
-.merc-stats { font-size: 12px; color: var(--dim); margin: 2px 0 4px; }
-.merc-traits { margin-bottom: 6px; }
-.merc-kin { font-size: 11px; color: #9ef0b8; margin-bottom: 4px; }
-.merc-kin b { color: #b8ffcf; }
-.merc-hired { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
-.merc-chip {
-  font-size: 11px; padding: 2px 8px; border-radius: 10px;
-  background: #4a3a12; color: var(--gold); border: 1px solid #8a6a20;
-}
-.contrib-badge.merc { background: #4a3a12; color: var(--gold); border: 1px solid #8a6a20; }
 
 /* 編成画面のシナジー予告。効果量と「あと1体で／入れ替えると」を出す */
 .syn.on { border-left: 3px solid var(--gold); }
@@ -2288,12 +2283,14 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-battle .bu.summon-rise::after { animation: actingFocus .72s ease-out; }
 .game-scene-battle .action-caption {
   width: min(88%, 560px);
-  padding: 10px 18px;
+  /* 状況の説明は脇役。台詞は本人の吹き出しが受け持つ（2026-09-18 オーナー指摘）。
+     15px だと画面の主役を張ってしまうので一段下げる。 */
+  padding: 7px 16px;
   border-radius: 2px;
-  border-color: rgba(255,224,154,.72);
+  border-color: rgba(255,224,154,.6);
   font-family: "Yu Mincho", serif;
-  font-size: 15px;
-  letter-spacing: .08em;
+  font-size: 13px;
+  letter-spacing: .06em;
 }
 .game-scene-battle .cutin {
   left: 5%;
@@ -2882,14 +2879,6 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-recruit .hire-food.warn { color: #853f3f; border-color: #a46161; background: rgba(164,97,97,.12); }
 .department-overview .warn b { color: #ff9a9a; }
 
-/* 宴：余剰食料の使い道。備蓄が積み上がるだけの資源だと判断が生まれない。 */
-.feast-panel .feast-ready {
-  font-size: 12px; color: #f2dc9a;
-  padding: 5px 8px; border-radius: 3px;
-  border: 1px solid rgba(240, 210, 120, .45); background: rgba(240, 210, 120, .08);
-}
-.feast-panel h3 .muted { font-size: 12px; font-weight: normal; }
-
 /* 飢餓の連鎖には出口がある。見えていないと、また「不足＝詰み」に戻る。 */
 .hunger-streak {
   margin-top: 6px; font-size: 12px; color: #e9b4b4;
@@ -2897,16 +2886,6 @@ button.primary::first-letter { color: var(--gold); }
   border: 1px solid rgba(230, 140, 140, .4); background: rgba(230, 140, 140, .08);
 }
 .hunger-streak b { color: #ffd0d0; }
-
-/* 指名求人：条件を出して求人し直す。給与方針の3択と同じ見え方に揃える。 */
-.brief-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 6px; margin-top: 8px; }
-.brief-option {
-  display: flex; flex-direction: column; gap: 3px; align-items: flex-start;
-  padding: 7px 9px; text-align: left; line-height: 1.35;
-}
-.brief-option .brief-title { font-weight: bold; }
-.brief-option .brief-note { font-size: 11px; opacity: .8; white-space: normal; }
-.brief-option.selected { border-color: var(--gold); box-shadow: inset 0 0 0 1px rgba(232,189,104,.35); }
 
 /* ── 全画面演出（burst）──────────────────────────
    見せ場だけに使う。《魔王軍完成》と余剰100%以上のOVERKILL。
@@ -3074,62 +3053,6 @@ button.primary::first-letter { color: var(--gold); }
 .scene.zoomed { animation: sceneZoom var(--burst-life, 1.2s) ease-out; }
 @media (prefers-reduced-motion: reduce) { .scene.zoomed { animation: none; } }
 
-/* ── 魔王軍の戦意 ──────────────────────────────
-   OVERKILLの見返りを常に画面へ出す。「いま何倍で殴っているか」が読めないと、
-   連鎖しても強くなった実感が出ない（=ふつうの戦闘に見える）。 */
-.morale {
-  position: absolute;
-  z-index: 6;
-  left: 3%;
-  top: 46%;
-  transform: translateY(-50%);
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  padding: 6px 10px 7px;
-  border-radius: 3px;
-  pointer-events: none;
-  color: #d8d2e6;
-  background: rgba(12, 8, 18, .62);
-  border: 1px solid rgba(255, 255, 255, .14);
-  transition: color .2s linear, border-color .2s linear, box-shadow .2s linear;
-}
-.morale-label { font: 700 9px/1 sans-serif; letter-spacing: .22em; opacity: .8; }
-.morale b { font: 900 clamp(20px, 2.6vw, 30px)/1 Georgia, serif; }
-.morale-bar { width: clamp(64px, 9vw, 108px); height: 4px; border-radius: 2px; background: rgba(255,255,255,.16); overflow: hidden; }
-.morale-bar i { display: block; height: 100%; width: 100%; background: currentColor; box-shadow: 0 0 10px currentColor; transform: scaleX(0); transform-origin: left; transition: transform .25s ease-out; }
-.morale.lit { color: #ffe6a6; border-color: rgba(255, 209, 102, .5); }
-.morale.m2 { color: #ffb14d; border-color: rgba(255, 150, 60, .6); box-shadow: 0 0 20px rgba(255, 140, 50, .3); }
-.morale.m3 { color: #ff6a45; border-color: rgba(255, 90, 60, .75); box-shadow: 0 0 30px rgba(255, 70, 45, .45); }
-.morale b { text-shadow: 0 2px 8px #000, 0 0 18px currentColor; }
-
-@keyframes moraleBump {
-  0%   { transform: translateY(-50%) scale(1); }
-  30%  { transform: translateY(-50%) scale(1.16); }
-  100% { transform: translateY(-50%) scale(1); }
-}
-.morale.bump { animation: moraleBump var(--morale-bump, .42s) cubic-bezier(.2,1.6,.3,1); }
-
-.morale-gain {
-  position: absolute; left: 100%; top: 4px; margin-left: 6px;
-  font: 900 clamp(13px, 1.8vw, 18px)/1 Georgia, serif; white-space: nowrap;
-  opacity: 0; color: #fff3c4; text-shadow: 0 2px 8px #000;
-}
-@keyframes moraleGain {
-  0%   { opacity: 0; transform: translateY(6px) scale(.8); }
-  22%  { opacity: 1; transform: translateY(-2px) scale(1.15); }
-  70%  { opacity: 1; transform: translateY(-8px) scale(1); }
-  100% { opacity: 0; transform: translateY(-18px) scale(1); }
-}
-.morale-gain.show { animation: moraleGain .9s ease-out; }
-
-@media (max-width: 560px) {
-  .morale { left: 4%; top: 26%; padding: 4px 7px 5px; }
-  .morale b { font-size: 18px; }
-  .morale-bar { width: 62px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .morale.bump, .morale-gain.show { animation: none; }
-  .morale-gain { opacity: 1; }
-}
 
 /* 連鎖が深いほど・戦意が高いほど、ダメージ数字そのものを大きく出す。
    「爆発力が上がった」を伝えるのに一番直接的な信号は、でかい数字。 */
@@ -3215,7 +3138,6 @@ button.primary::first-letter { color: var(--gold); }
   .chain-story { min-height: 82px; padding: 8px 10px; }
   .chain-story b { font-size: 12px; line-height: 1.5; }
 }
-@media (prefers-reduced-motion: reduce) { .morale-bar i { transition: none; } }
 
 /* 等速は読む人のための間。字幕は次の説明まで残す。 */
 .action-caption.show { animation: none !important; opacity: 1; transform: translate(-50%, -50%) scale(1); }
@@ -3290,6 +3212,7 @@ button.primary::first-letter { color: var(--gold); }
 .member-detail > header { display: flex; gap: 16px; align-items: center; padding-right: 70px; }
 .member-detail .photo { width: 112px; height: 112px; flex: 0 0 112px; }
 .member-close { position: absolute; right: 14px; top: 14px; }
+.member-home { position: absolute; left: 14px; top: 14px; }
 .member-detail section { margin-top: 16px; }
 .member-detail-stats { margin-top: 14px; }
 .member-trait-group { margin-top: 8px; }
@@ -3312,17 +3235,21 @@ button.primary::first-letter { color: var(--gold); }
 /* ── 城のメニュー（軍団／記録／参謀） ── */
 .castle-screen { display: grid; gap: 14px; }
 .castle-header {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   padding-bottom: 10px; border-bottom: 1px solid rgba(232, 189, 104, .28);
 }
+.castle-header h1 { white-space: nowrap; }
+.castle-header > div { min-width: 0; }
+.castle-tabs { flex: 1 1 100%; }   /* 4札は常に見出しの下へ一列（狭い幅で縦書きに崩れていた、2026-09-12） */
+.castle-home { margin-left: auto; }
 .castle-header h2 { margin: 0; }
 .castle-tabs {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px;   /* 4札（城下町を追加、2026-09-12） */
   position: sticky; top: 0; z-index: 5; padding: 4px 0;
   background: linear-gradient(#151013 75%, transparent);
 }
 .castle-tab {
-  min-width: 0; min-height: 48px; padding: 9px 10px;
+  min-width: 0; min-height: 48px; padding: 9px 6px; white-space: nowrap;
   border-color: rgba(232, 189, 104, .3); background: rgba(31, 23, 22, .88);
   color: var(--muted);
 }
@@ -3459,40 +3386,598 @@ button.primary::first-letter { color: var(--gold); }
 .hud-slot { font-size: 11px; }
 
 
-/* ── コマンドバトルの指示パネル（2026-09-11） ── */
+/* ── コマンドバトルの指示窓（ロマサガ流、2026-09-12） ──
+   戦場（#scene）の中に浮く。味方の列のすぐ上に据え（bottom は JS が計る）、後ろが透ける。 */
 .command-panel {
-  margin: 10px 0 0; padding: 10px 12px; border: 1px solid #7c6136; border-radius: 10px;
-  background: rgba(24, 17, 28, .96); box-shadow: 0 8px 26px rgba(0, 0, 0, .45);
+  position: absolute; z-index: 6; top: 50%; transform: translateY(-50%); right: 3%; left: 45%;
+  max-width: 360px; margin-left: auto; max-height: 86%; box-sizing: border-box; overflow: auto;
+  padding: 8px 10px 10px; border: 2px solid rgba(232, 189, 104, .85); border-radius: 6px;
+  background: rgba(18, 12, 34, .6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55), inset 0 0 0 1px rgba(255, 255, 255, .08);
+  color: #f6e6c2;
 }
-.command-panel .cmd-head { font-size: 15px; margin-bottom: 6px; color: #f6e6c2; }
-.command-panel .cmd-warn { color: #ff9b54; font-weight: bold; }
-.cmd-row { display: grid; gap: 6px; padding: 7px 0; border-top: 1px solid rgba(232, 189, 104, .16); }
-.cmd-row:first-of-type { border-top: 0; }
-.cmd-who { font-size: 14px; color: #f6e6c2; }
-.cmd-who small { color: var(--muted); margin-left: 6px; }
+.command-panel .cmd-head { font-size: 14px; margin-bottom: 6px; line-height: 1.5; }
+.command-panel .cmd-round { display: block; font-size: 11px; color: #cdb98f; letter-spacing: .06em; }
+.command-panel .cmd-head b { font-size: 16px; }
+.command-panel .cmd-head small { color: #d9c9a8; margin-left: 6px; }
+.command-panel .cmd-warn { display: block; color: #ff9b54; font-weight: bold; font-size: 12px; }
 .cmd-spirit { color: #ffd479; letter-spacing: 1px; }
 .cmd-state { color: #e8b45c; }
-.cmd-btns, .cmd-targets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.cmd-targets > span { font-size: 12px; color: var(--muted); margin-right: 2px; }
-.cmd-btn, .cmd-target {
-  padding: 6px 10px; font-size: 13px; border-radius: 7px; border: 1px solid rgba(232, 189, 104, .3);
-  background: rgba(31, 23, 22, .88); color: var(--text); cursor: pointer;
+.cmd-menu { display: grid; gap: 5px; }
+.cmd-btn {
+  display: block; width: 100%; text-align: left; padding: 9px 12px; font-size: 15px; border-radius: 4px;
+  border: 1px solid rgba(232, 189, 104, .35); background: rgba(24, 16, 40, .55); color: #fff; cursor: pointer;
 }
-.cmd-btn small { display: block; font-size: 10px; color: #ffd479; }
+.cmd-btn small { display: inline; margin-left: 8px; font-size: 11px; color: #ffd479; white-space: nowrap; }
 .cmd-btn[disabled] { opacity: .45; cursor: not-allowed; }
-.cmd-btn.on, .cmd-target.on { border-color: var(--gold); background: linear-gradient(180deg, rgba(115, 78, 38, .6), rgba(40, 28, 25, .95)); box-shadow: inset 0 -2px 0 var(--gold); }
-.cmd-target { font-size: 12px; padding: 4px 8px; }
-.cmd-target small { color: var(--muted); }
-.cmd-foot { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 8px; }
-.cmd-foot .primary { min-width: 140px; }
-#scene.awaiting-commands { box-shadow: inset 0 0 0 2px rgba(232, 189, 104, .35); }
+.cmd-btn.on { border-color: var(--gold); background: linear-gradient(90deg, rgba(232, 189, 104, .38), rgba(232, 189, 104, .08)); }
+.cmd-btn.on::before { content: "▶ "; color: var(--gold); }
+.cmd-pick-hint { font-size: 14px; padding: 4px 0 6px; color: #fff; }
+.cmd-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; align-items: stretch; margin-top: 8px; }
+.cmd-foot .danger { grid-column: 1 / -1; }
+.cmd-foot .cmd-btn { width: auto; padding: 6px 10px; font-size: 13px; text-align: center; }
+.cmd-foot .small { font-size: 11px; padding: 5px 6px; min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+#scene.awaiting-commands .bu { filter: brightness(.6); transition: filter .2s; }
+#scene.awaiting-commands .bu.cmd-active { filter: none; z-index: 7; transform: translateY(-6px) scale(1.06); border-color: var(--gold); box-shadow: 0 0 0 2px rgba(232, 189, 104, .6), 0 0 22px rgba(232, 189, 104, .55); }
+#scene.picking-target .bu.cmd-pick { filter: none; cursor: pointer; border-color: #ff8a5c; box-shadow: 0 0 0 2px rgba(255, 138, 92, .55); animation: cmdPick 1s ease-in-out infinite; }
+/* 狙い選び中は細い帯にして上へ寄せ、敵の札を全部見せる */
+#scene.picking-target .command-panel { top: 52px; left: 50%; right: auto; transform: translateX(-50%); width: min(92%, 360px); margin: 0; background: rgba(18, 12, 34, .45); }
+#scene.picking-target .command-panel .cmd-head { display: none; }
+#scene.picking-target .command-panel .cmd-foot { margin-top: 0; }
+@keyframes cmdPick { 0%, 100% { box-shadow: 0 0 0 2px rgba(255, 138, 92, .35); } 50% { box-shadow: 0 0 0 3px rgba(255, 138, 92, .9), 0 0 18px rgba(255, 138, 92, .6); } }
+.cmd-cursor { position: absolute; left: 50%; top: -22px; transform: translateX(-50%); color: var(--gold); font-size: 16px; font-style: normal; text-shadow: 0 0 8px #000; animation: cmdCursor .7s ease-in-out infinite alternate; pointer-events: none; }
+@keyframes cmdCursor { from { transform: translate(-50%, 0); } to { transform: translate(-50%, 4px); } }
+.cmd-badge { position: absolute; right: -4px; top: -8px; font-size: 13px; font-style: normal; background: rgba(0, 0, 0, .7); border: 1px solid rgba(232, 189, 104, .6); border-radius: 50%; width: 22px; height: 22px; line-height: 20px; text-align: center; pointer-events: none; }
 .bu.intent-big .bu-name::before { content: "⚠ "; color: #ff9b54; }
+#scene.picking-target .bu.cmd-covered .bu-name::after { content: " 🛡"; }
+.cmd-covered-hint { display: block; font-size: 11px; color: #9fc4ff; margin-top: 3px; }
 @media (max-width: 560px) {
-  .command-panel { padding: 8px; }
-  .cmd-btn { padding: 8px 9px; font-size: 13px; }
-  .cmd-foot { justify-content: stretch; }
-  .cmd-foot .primary { flex: 1 1 100%; min-height: 46px; }
+  .command-panel { padding: 6px 8px 8px; left: 44%; right: 2%; }
+  .cmd-btn { padding: 10px 12px; font-size: 15px; }
 }
+}
+
+/* ── 指示窓：技の枠・敵の役と構え（2026-09-12） ───────── */
+.cmd-btn.cmd-skill { text-align: left; }
+.cmd-btn.cmd-skill { padding: 7px 10px; }
+/* 技の一行は「名前」＋「効き・気合」。効きは長いので必ず折り返す（390px で切れない） */
+.cmd-btn.cmd-skill small {
+  display: block; margin-left: 0; white-space: normal; overflow-wrap: anywhere;
+  opacity: .8; font-size: 10px; line-height: 1.35;
+}
+.cmd-btn.cmd-skill:disabled { opacity: .45; }
+.cmd-spirit.gain { animation: spirit-gain .7s ease-out; }
+@keyframes spirit-gain {
+  0% { color: inherit; text-shadow: none; }
+  30% { color: #ffd76a; text-shadow: 0 0 8px rgba(255, 215, 106, .9); }
+  100% { color: inherit; text-shadow: none; }
+}
+.bu.spirit-up .bu-actor { animation: spirit-gain .7s ease-out; }
+.bu-role { font-size: 10px; margin-right: 2px; opacity: .9; }
+/* 構えの印。大技（既存の intent-big）と同じ扱いで、色だけ役に合わせる */
+.bu.intent-heal { box-shadow: 0 0 0 2px rgba(120, 220, 160, .8); }
+.bu.intent-aoe { box-shadow: 0 0 0 2px rgba(255, 150, 80, .8); }
+.bu.intent-guard { box-shadow: 0 0 0 2px rgba(150, 180, 255, .8); }
+/* 味方を狙う技：味方の札もタップ対象として光る（cmd-pick は既存の光り方を使う） */
+#band-player .bu.cmd-pick { cursor: pointer; }
+.skill-hint.late-bloomer { opacity: .8; font-style: italic; }
+
+/* 去りかけ（逃亡の予告、2026-09-12） */
+.member-row .leaving, .leaving-line { color: #ffb36b; }
+.leaving-line { font-size: 13px; margin: 6px 0; }
+.member-row .leaving { font-size: 11px; margin-left: 6px; }
+
+/* ── 演出プリセット（docs/TICKET_SKILL_FX_2026-09-12.md 1節） ─────────
+   絵（背景画像）は CodeX が battlefield.css の `.bu-vfx.fx-<name>` に足す。
+   こちらは**動き**（keyframes）と、絵が入るまでの単色プレースホルダだけを持つ。
+   battlefield.css は styles.css の後に読まれるので、絵が入れば背景はそちらが勝つ。 */
+.game-scene-battle .bu-vfx[class*="fx-"] {
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,255,255,.9) 0 10%, rgba(255,255,255,.25) 38%, transparent 70%);
+  background-size: contain; background-position: center; background-repeat: no-repeat;
+}
+.game-scene-battle .bu-vfx.fx-heavy { width: 150%; height: 150%; animation: battleFxHeavy .72s ease-out;
+  background: radial-gradient(circle, rgba(255,244,214,.95) 0 12%, rgba(255,170,80,.55) 40%, transparent 72%); }
+.game-scene-battle .bu-vfx.fx-slash_multi { animation: battleVfxSlash .52s ease-out;
+  background: linear-gradient(115deg, transparent 38%, rgba(255,240,220,.95) 47%, transparent 55%),
+              linear-gradient(115deg, transparent 52%, rgba(255,220,190,.75) 60%, transparent 68%); }
+.game-scene-battle .bu-vfx.fx-fire { animation: battleFxRise .62s ease-out;
+  background: radial-gradient(circle, rgba(255,240,190,.95) 0 12%, rgba(255,120,40,.6) 42%, transparent 74%); }
+.game-scene-battle .bu-vfx.fx-dark { animation: battleFxRipple .7s ease-out;
+  background: radial-gradient(circle, rgba(190,120,255,.7) 0 18%, rgba(60,20,90,.55) 46%, transparent 74%); }
+.game-scene-battle .bu-vfx.fx-holy { width: 92%; animation: battleFxDescend .7s ease-out;
+  background: linear-gradient(180deg, rgba(255,240,190,.9), rgba(255,230,160,.25) 70%, transparent); }
+.game-scene-battle .bu-vfx.fx-nature { animation: battleFxCling .64s ease-out;
+  background: radial-gradient(circle, rgba(150,230,140,.75) 0 20%, rgba(60,120,60,.5) 48%, transparent 76%); }
+.game-scene-battle .bu-vfx.fx-wind { animation: battleFxGust .44s ease-out;
+  background: linear-gradient(100deg, transparent 40%, rgba(220,245,255,.85) 50%, transparent 60%); }
+.game-scene-battle .bu-vfx.fx-aura { width: 120%; height: 60%; top: 86%; border-radius: 50%;
+  animation: battleFxRing .76s ease-out;
+  background: radial-gradient(ellipse, rgba(255,220,130,.75) 0 30%, rgba(255,200,90,.25) 60%, transparent 78%); }
+.game-scene-battle .bu-vfx.fx-shield { width: 118%; height: 118%; animation: battleVfxGuard .68s ease-out;
+  background: radial-gradient(circle, rgba(190,215,255,.55) 0 42%, rgba(120,160,240,.35) 62%, transparent 78%); }
+.game-scene-battle .bu-vfx.fx-summon { width: 160%; height: 180%; top: 38%; animation: battleVfxRevive .86s ease-out;
+  background: radial-gradient(circle, rgba(210,255,220,.7) 0 20%, rgba(80,160,120,.4) 50%, transparent 76%); }
+/* 出どころ：dark は足元から、holy は頭上から */
+.game-scene-battle .bu-vfx.from-ground { top: 78%; }
+.game-scene-battle .bu-vfx.from-above { top: 18%; }
+@keyframes battleFxHeavy {
+  0% { opacity: 0; transform: translate(-50%, -62%) scale(.3) rotate(-14deg); }
+  18% { opacity: 1; transform: translate(-50%, -50%) scale(1.15) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -48%) scale(1.45); }
+}
+@keyframes battleFxRise {
+  0% { opacity: 0; transform: translate(-50%, -28%) scale(.4); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  100% { opacity: 0; transform: translate(-50%, -68%) scale(1.25); }
+}
+@keyframes battleFxRipple {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.25); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+}
+@keyframes battleFxDescend {
+  0% { opacity: 0; transform: translate(-50%, -110%) scale(.9); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -30%) scale(1); }
+}
+@keyframes battleFxCling {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+  35% { opacity: 1; transform: translate(-50%, -50%) scale(1.02); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.1); }
+}
+@keyframes battleFxGust {
+  0% { opacity: 0; transform: translate(-80%, -50%) scale(.8) skewX(-18deg); }
+  40% { opacity: 1; transform: translate(-50%, -50%) scale(1.1) skewX(-18deg); }
+  100% { opacity: 0; transform: translate(-20%, -50%) scale(1.1) skewX(-18deg); }
+}
+@keyframes battleFxRing {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.4); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.25); }
+}
+/* 弾（CodeX が絵を入れるまでの形）。既存の .battle-projectile の上に乗る */
+.projectile-fire::before { width: 16px; height: 16px; left: -8px; top: -8px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 15%, #ffd27a 35%, #ff7a30 65%, #ff4d0000 80%); box-shadow: 0 0 14px #ff9a45; }
+.projectile-fire::after { width: 38px; height: 8px; top: -4px; left: -40px; border-radius: 50%;
+  background: linear-gradient(90deg, transparent, #ff9a45a0); }
+.projectile-wind::before { width: 26px; height: 3px; top: -1px; left: -26px; border-radius: 2px;
+  background: linear-gradient(90deg, transparent, #dff4ff); box-shadow: 0 4px 0 -1px #dff4ff80, 0 -4px 0 -1px #dff4ff80; }
+
+/* 増殖の元：親ごとに1行。名簿に入ったのか、面接待ちなのかを書き分ける */
+.slime-split-lines { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; }
+.slime-split-line { font-size: 13px; padding-left: 16px; position: relative; }
+.slime-split-line::before { position: absolute; left: 0; }
+.slime-split-line.joined::before { content: "🫧"; }
+.slime-split-line.waiting::before { content: "⏳"; }
+.slime-split-line.waiting b { color: #e9c98a; }
+
+/* 出来事で変わった一言（分裂を見た魔法使いなど）。素の口上と見分けが付く程度に */
+.quote.face-line { color: #ffd9a8; font-style: italic; }
+
+/* ── 名のある敵（docs/SPEC_CAPTAINS_BD_2026-09-15.md）── */
+.mission-captain { margin: 4px 0; padding: 4px 6px; border-radius: 4px;
+  background: rgba(150, 40, 40, .22); border: 1px solid rgba(220, 120, 120, .45); font-size: 12px; }
+.captain-panel .captain-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.captain-panel .captain-lines li { font-size: 13px; }
+.captain-panel .captain-mark { margin-right: 6px; }
+
+/* ── 地図の上の戦争（docs/SPEC_TERRITORY_A_2026-09-15.md §2-4）──
+   土地の種類の印と部族圏の顔（CodeX の20枚）。候補は光らせる。
+   正しい配置は段階E。今は既存の地点の上と、城下町の下の横一列に置く。 */
+.map-point .mp-kind { position: absolute; left: 50%; top: -6px; width: 26px; height: 26px;
+  transform: translateX(-50%); pointer-events: none; filter: drop-shadow(0 1px 2px rgba(0,0,0,.8)); }
+.map-point.mp-candidate { z-index: 3; }
+.map-point.mp-candidate .mp-pin, .tribe-pin.mp-candidate { animation: territoryGlow 1.6s ease-in-out infinite; }
+@keyframes territoryGlow {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(255, 214, 120, .6)); }
+  50% { filter: drop-shadow(0 0 10px rgba(255, 214, 120, 1)); }
+}
+.tribe-row { position: absolute; left: 2%; right: 2%; bottom: 1.5%; display: flex; flex-wrap: wrap;
+  gap: 4px; justify-content: center; }
+.tribe-pin { display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 2px 4px; border: 1px solid rgba(255,255,255,.28); border-radius: 6px;
+  background: rgba(14, 12, 20, .72); color: #e8e4f0; font-size: 10px; line-height: 1.1; }
+.tribe-pin .tribe-face { width: 26px; height: 26px; }
+.tribe-pin.owned { border-color: var(--gold, #e8bd68); color: #ffe6a8; }
+.tribe-pin[disabled] { opacity: .55; }
+@media (prefers-reduced-motion: reduce) {
+  .map-point.mp-candidate .mp-pin, .tribe-pin.mp-candidate { animation: none;
+    filter: drop-shadow(0 0 6px rgba(255, 214, 120, .95)); }
+}
+
+/* ── 施設の詳細（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §1・§7）──
+   390px の1画面に収める。スクロールするのは下の「生んだもの」だけ。
+   背景はその施設らしい1枚。無ければ既存の紙のまま（読み込めなければ地の色が出る）。 */
+.facility-detail .fd-header { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.facility-detail .fd-body {
+  background-size: cover; background-position: center; background-repeat: no-repeat;
+  border-radius: 8px; padding: 10px 12px 14px;
+  box-shadow: inset 0 -120px 120px -60px rgba(8, 6, 12, .92), inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.facility-detail .fd-stage { display: flex; justify-content: center; align-items: flex-end; height: 192px; }
+.facility-detail .fd-art { width: 192px; height: 192px; object-fit: contain; image-rendering: auto;
+  filter: drop-shadow(0 6px 14px rgba(0,0,0,.7)); }
+.facility-detail .fd-art.fd-grown { animation: facilityGrown .6s ease-out; }
+@keyframes facilityGrown {
+  0% { opacity: 0; transform: translateY(8px) scale(.9); }
+  60% { opacity: 1; transform: translateY(0) scale(1.04); }
+  100% { opacity: 1; transform: none; }
+}
+.facility-detail .fd-title { display: flex; align-items: center; gap: 6px; margin: 4px 0 2px; font-size: 20px; }
+.facility-detail .fd-lv { font-size: 14px; color: var(--gold, #e8bd68); }
+.facility-detail .fd-dots { display: inline-flex; gap: 3px; }
+.facility-detail .fd-dot { width: 8px; height: 8px; border-radius: 50%; border: 1px solid rgba(255,255,255,.55); }
+.facility-detail .fd-dot.on { background: var(--gold, #e8bd68); border-color: var(--gold, #e8bd68); }
+.facility-detail .fd-line { font-size: 13px; opacity: .9; margin-bottom: 8px; }
+.facility-detail .fd-effects, .facility-detail .fd-born { margin: 0 0 8px; }
+.facility-detail .fd-effects > div, .facility-detail .fd-born > div {
+  display: flex; gap: 8px; align-items: baseline; padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.facility-detail dt { flex: 0 0 5.5em; font-size: 12px; opacity: .75; }
+.facility-detail dd { margin: 0; font-size: 13px; }
+.facility-detail .fd-build { display: flex; flex-direction: column; gap: 4px; margin: 10px 0; }
+.facility-detail .fd-history { max-height: 30vh; overflow-y: auto; }
+.facility-detail .fd-history h2 { font-size: 14px; margin: 6px 0 4px; }
+.facility-detail .fd-mormo { margin-top: 8px; font-size: 13px; background: rgba(12,10,18,.7);
+  border-radius: 6px; padding: 6px 8px; }
+/* 一覧の施設名も詳細への入口（見た目は今までの見出しのまま） */
+.town-name { background: none; border: 0; padding: 0; color: inherit; font: inherit; font-weight: 700;
+  cursor: pointer; text-decoration: underline dotted rgba(255,255,255,.35); text-underline-offset: 3px; }
+.town-name:hover { text-decoration-color: var(--gold, #e8bd68); }
+@media (prefers-reduced-motion: reduce) {
+  .facility-detail .fd-art.fd-grown { animation: none; }
+}
+
+/* ── 指示待ちの決めポーズと行動の構え（docs/SPEC_COMMAND_POSE_2026-09-15.md §2）──
+   絵の差し替えが唐突に見えないよう 0.15 秒だけ重ねる。登場動作は JS（transform）側。 */
+.bu-sprite-img.pose-swap { animation: poseSwap .15s ease-out; }
+@keyframes poseSwap {
+  from { opacity: .35; filter: brightness(1.35); }
+  to   { opacity: 1; filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bu-sprite-img.pose-swap { animation: none; }
+}
+
+/* ── 大技（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）────────────────
+   弾は3倍・尾を長く、着弾は強い揺れと大きい絵。絵が入るまでは
+   既存 impact を2倍（.vfx-impact.big2x）で代用する。 */
+.battle-projectile.big.projectile-fire::before { width: 48px; height: 48px; left: -24px; top: -24px;
+  box-shadow: 0 0 34px 6px #ff9a45; }
+.battle-projectile.big.projectile-fire::after { width: 112px; height: 20px; top: -10px; left: -116px; }
+.battle-projectile.big.projectile-wind::before { width: 74px; height: 8px; top: -4px; left: -74px;
+  box-shadow: 0 10px 0 -2px #dff4ff80, 0 -10px 0 -2px #dff4ff80; }
+.game-scene-battle .bu-vfx.vfx-impact.big2x { width: 224%; height: 224%; }
+.game-scene-battle .bu-vfx.vfx-big { width: 210%; height: 210%; animation: battleFxBig .64s ease-out; }
+@keyframes battleFxBig {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.35); }
+  22% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.5); }
+}
+/* 大技の溜め：放つ本人の札が一回り大きくなって光る */
+.bu.charging-big { animation: chargingBig .56s ease-in-out infinite alternate; z-index: 3; }
+@keyframes chargingBig {
+  from { transform: scale(1); filter: none; }
+  to   { transform: scale(1.12); filter: brightness(1.5) drop-shadow(0 0 12px rgba(255, 220, 150, .9)); }
+}
+/* 強い揺れ（振幅2倍） */
+@keyframes sceneShakeBig {
+  0%,100% { transform: translate(0,0); }
+  15%     { transform: translate(-10px, 6px); }
+  35%     { transform: translate(10px, -6px); }
+  55%     { transform: translate(-7px, -5px); }
+  75%     { transform: translate(7px, 5px); }
+  90%     { transform: translate(-3px, 2px); }
+}
+.scene.shake.shake-big { animation: sceneShakeBig .36s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  .scene.shake.shake-big { animation: none; }
+  .bu.charging-big { animation: none; filter: brightness(1.4); }
+  .game-scene-battle .bu-vfx.vfx-big { animation: none; opacity: .9; }
+}
+
+/* 残る印（拘束・燃焼・鼓舞・かばい）。札の下に小さく並ぶ */
+.bu-marks { position: absolute; top: 100%; left: 0; right: 0; display: flex; gap: 2px; justify-content: center; margin-top: 12px; pointer-events: none; }
+.bu-mark { font-size: 11px; line-height: 1; filter: drop-shadow(0 1px 2px #000); animation: markIn .3s ease-out; }
+.bu.covering { outline: 1px solid rgba(190, 215, 255, .7); }
+@keyframes markIn { from { opacity: 0; transform: translateY(3px) scale(.6); } to { opacity: 1; transform: none; } }
+
+/* ── お披露目（覚えた直後の戦いの1回だけ。docs/SPEC_DEBUT_2026-09-12.md 4節） ── */
+.cmd-btn.cmd-debut {
+  border-color: var(--gold, #e8bd68);
+  background: linear-gradient(90deg, rgba(232, 189, 104, .28), rgba(232, 189, 104, .06));
+  animation: debutPulse 1.4s ease-in-out infinite;
+}
+.cmd-btn.cmd-debut small { color: #ffe6a8; }
+@keyframes debutPulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(232, 189, 104, .45); }
+  50% { box-shadow: 0 0 0 2px rgba(232, 189, 104, .95), 0 0 18px rgba(232, 189, 104, .6); }
+}
+.bu.debut-flash { animation: debutFlash .8s ease-out; }
+@keyframes debutFlash {
+  0% { filter: brightness(2.2) saturate(1.4); }
+  100% { filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cmd-btn.cmd-debut, .bu.debut-flash { animation: none; }
+  .cmd-btn.cmd-debut { box-shadow: 0 0 0 2px rgba(232, 189, 104, .9); }
+}
+
+/* ── 前哨戦と本戦（docs/SPEC_TWO_STAGE_BATTLES_2026-09-12.md 2.5） ── */
+.mission-phase {
+  display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 3px;
+  font-size: 11px; vertical-align: middle; letter-spacing: .04em;
+}
+.mission-phase.outpost { background: rgba(120, 160, 240, .25); border: 1px solid rgba(150, 180, 255, .6); color: #cfe0ff; }
+.mission-phase.main { background: rgba(232, 189, 104, .22); border: 1px solid rgba(232, 189, 104, .6); color: #ffe6a8; }
+.outpost-note { font-size: 11px; color: #cfe0ff; opacity: .9; }
+.outpost-done { color: #cfe0ff; font-size: 11px; }
+.mormo-brief { margin-top: 6px; font-size: 12px; color: #ffe6a8; }
+
+/* ── 城下町（2026-09-12） ── */
+.town-summary { font-size: 15px; margin: 4px 0 2px; }
+.town-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; margin: 10px 0; }
+.town-card { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: rgba(31,23,39,.6); }
+.town-card.built { border-color: rgba(232,189,104,.55); }
+.town-head { display: flex; gap: 6px; align-items: baseline; font-size: 15px; }
+.town-icon { font-size: 18px; }
+.town-lv { margin-left: auto; color: var(--gold); font-weight: bold; }
+.town-line { font-size: 13px; color: #f6e6c2; margin: 2px 0; }
+.town-effect { font-size: 12px; }
+.town-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; font-size: 12px; }
+.town-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0; }
+.town-bank, .town-ledger { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.town-bank h3, .town-ledger h3 { margin: 0 0 4px; font-size: 15px; }
+.town-table { border-collapse: collapse; font-size: 12px; }
+.town-table th, .town-table td { padding: 3px 8px; border-bottom: 1px solid var(--line); text-align: right; }
+.town-table td:first-child, .town-table th:first-child { text-align: left; }
+
+/* 事件で止めて見せる一コマの合図（2026-09-12） */
+.hold-hint { position: absolute; right: 10px; bottom: 8px; z-index: 6; font-size: 12px; color: #f6e6c2; background: rgba(0,0,0,.55); border: 1px solid rgba(232,189,104,.5); border-radius: 12px; padding: 3px 10px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.hold-hint.show { opacity: 1; animation: holdBlink 1.2s ease-in-out infinite; }
+@keyframes holdBlink { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+
+/* HUD の城ボタン：自分の行で読める幅に（「城」が切れて見えた、2026-09-13） */
+.hud-menu-row { justify-content: center; }
+.hud-records { min-width: 0; padding: 6px 14px; white-space: nowrap; }
+.hud-records small { color: var(--muted); font-size: 10px; margin-left: 4px; }
+@media (max-width: 420px) { .hud-records small { display: none; } }
+
+/* ── 将軍への転身（docs/SPEC_GENERAL_2026-09-13.md 2.2・2.6） ───── */
+/* 名簿・詳細・戦場の札：紫の炎の縁。ゆっくり脈打つ（低モーションでは静止） */
+.rank-badge.rank-general {
+  background: linear-gradient(90deg, rgba(150, 80, 220, .45), rgba(90, 40, 150, .25));
+  border: 1px solid rgba(190, 130, 255, .8); color: #f0dcff;
+}
+.card:has(.rank-general), .bu.rank-general, .member-row.rank-general, .promotion-row.promotion-general {
+  box-shadow: 0 0 0 1px rgba(190, 130, 255, .55), 0 0 14px rgba(150, 80, 220, .45);
+  animation: generalAura 2.6s ease-in-out infinite;
+}
+@keyframes generalAura {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(190, 130, 255, .45), 0 0 10px rgba(150, 80, 220, .35); }
+  50% { box-shadow: 0 0 0 2px rgba(190, 130, 255, .9), 0 0 22px rgba(150, 80, 220, .7); }
+}
+.promotion-row.promotion-general { border-radius: 6px; padding: 8px; margin-bottom: 6px; }
+
+/* 転身のカットイン。2.5秒で自分から消える。タップでも消える */
+.general-cutin {
+  position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(circle at center, rgba(60, 20, 100, .55), rgba(8, 4, 16, .85));
+  opacity: 0; transition: opacity .26s ease-out; cursor: pointer;
+}
+.general-cutin.show { opacity: 1; }
+.general-cutin.out { opacity: 0; }
+.general-cutin .gc-flame {
+  position: absolute; width: min(70vw, 320px); aspect-ratio: 1; border-radius: 50%;
+  background: url('../assets/battle/effects/general-aura.webp') center / contain no-repeat,
+    radial-gradient(circle, rgba(210, 160, 255, .85) 0 12%, rgba(150, 60, 230, .55) 38%, transparent 72%);
+  animation: gcFlame 2.5s ease-out;
+}
+.general-cutin .gc-copy { position: relative; text-align: center; color: #f6e6ff; padding: 0 16px; }
+.general-cutin .gc-kicker { display: block; font-size: 12px; letter-spacing: .4em; color: #d9b8ff; }
+.general-cutin .gc-name { display: block; font-size: clamp(24px, 8vw, 40px); margin: 6px 0; text-shadow: 0 0 18px rgba(190, 130, 255, .9); }
+.general-cutin .gc-desc { display: block; font-size: 13px; color: #e3d0ff; }
+@keyframes gcFlame {
+  0% { transform: scale(.3); opacity: 0; }
+  25% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1.25); opacity: .5; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .card:has(.rank-general), .bu.rank-general, .member-row.rank-general, .promotion-row.promotion-general { animation: none; }
+  .general-cutin .gc-flame { animation: none; opacity: 1; }
+  .general-cutin { transition: none; }
+}
+
+/* ── 全体マップ（docs/WORLD_MAP_DESIGN_2026-09-13.md 2・3） ─────────
+   縦スクロール1本だけ。**横スクロールは作らない**（背景を幅いっぱいに縮めて置く）。
+   印の位置は原寸の座標を % に直したもの（src/ui/map.js）。 */
+.world-map {
+  position: relative;
+  max-height: 62vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  margin: 0 0 12px;
+  border: 1px solid var(--line, #3a3550);
+  border-radius: 8px;
+  background: #14101c;
+  -webkit-overflow-scrolling: touch;
+}
+.map-strip {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; gap: 10px; justify-content: space-between; flex-wrap: wrap;
+  padding: 6px 10px; font-size: 12px; color: #f2e4c6;
+  background: linear-gradient(rgba(14, 10, 22, .92), rgba(14, 10, 22, .72));
+  border-bottom: 1px solid rgba(232, 189, 104, .25);
+}
+.map-stage { position: relative; width: 100%; }
+.map-bg { display: block; width: 100%; height: auto; }
+
+/* 地点。印は絵、名前は下に小さく。押せるのは次の地点だけ */
+.map-point {
+  position: absolute; transform: translate(-50%, -50%); z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 0; border: 0; background: none; color: #f6e6c2; cursor: pointer;
+  font: inherit; line-height: 1;
+}
+.map-point .mp-pin { display: block; width: 26px; height: 26px; filter: drop-shadow(0 1px 3px #000); }
+.map-point .mp-name {
+  font-size: 10px; white-space: nowrap; padding: 1px 5px; border-radius: 3px;
+  background: rgba(12, 8, 20, .72); text-shadow: 0 1px 2px #000;
+}
+.map-point .mp-name i { font-style: normal; margin-left: 4px; font-size: 9px; }
+.map-point .mp-tax { color: #ffd479; }
+.map-point .mp-flag { color: #cfe0ff; }
+.map-point .mp-next { color: #ff9b54; }
+.map-point[disabled] { cursor: default; }
+.map-point.mp-far .mp-name, .map-point.mp-fogged .mp-name { opacity: .55; }
+.map-point.mp-fogged .mp-pin { opacity: .35; filter: grayscale(1) blur(.4px); }
+.map-point.mp-owned .mp-pin { filter: drop-shadow(0 0 6px rgba(190, 60, 90, .8)); }
+/* 領地は周りの土地も魔王軍の色に染まる */
+.map-point.mp-owned::before {
+  content: ""; position: absolute; left: 50%; top: 13px; transform: translate(-50%, -50%);
+  width: 62px; height: 62px; border-radius: 50%; pointer-events: none;
+  background: radial-gradient(circle, rgba(190, 50, 90, .38) 0 35%, rgba(120, 30, 80, .18) 62%, transparent 78%);
+}
+.map-point.mp-next .mp-pin { animation: mapPulse 1.8s ease-in-out infinite; }
+.map-point .mp-smoke { position: absolute; top: -14px; right: -14px; width: 28px; height: 28px; pointer-events: none; }
+.map-point .mp-star { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); width: 22px; height: 22px; pointer-events: none; }
+.map-bank .mp-vault { width: 40px; height: 40px; display: block; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55)); }
+@keyframes mapPulse {
+  0%, 100% { transform: none; filter: drop-shadow(0 1px 3px #000); }
+  50% { transform: translateY(-2px); filter: drop-shadow(0 0 8px rgba(255, 155, 84, .9)); }
+}
+
+/* 城下町の区画。施設の絵はまだ無いので、いまは印と名前だけ（背景の空き地が見える） */
+.map-lot {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 2px 4px; border: 1px dashed rgba(232, 189, 104, .45); border-radius: 4px;
+  background: rgba(12, 8, 20, .35); color: #f6e6c2; font: inherit; line-height: 1.1; cursor: pointer;
+}
+.map-lot.built { border-style: solid; background: rgba(60, 30, 80, .55); }
+.map-lot .lot-icon { font-size: 15px; font-style: normal; }
+.map-lot .lot-name { font-size: 9px; white-space: nowrap; }
+.map-lot .lot-lv { font-style: normal; margin-left: 3px; color: #ffd479; }
+.map-lot.mp-empty { width: 46px; height: 26px; border-style: dotted; opacity: .5; }
+/* 施設の絵（64px）。絵がある区画は枠を消し、名前は絵の下に小さく */
+.map-lot .lot-art { width: 64px; height: 64px; display: block; pointer-events: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55)); }
+.map-lot.has-art { border-color: transparent; background: none; padding: 0; }
+.map-lot.has-art .lot-icon { display: none; }
+.map-lot.has-art .lot-name {
+  margin-top: 2px;
+  text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000,
+    0 2px 3px #000, 0 0 5px #000;
+}
+.map-lot.has-art:disabled { opacity: .8; cursor: default; }
+.map-bank {
+  position: absolute; transform: translate(-50%, -50%); text-decoration: none;
+  display: flex; flex-direction: column; align-items: center; font-size: 16px; color: #f6e6c2;
+}
+.map-bank .lot-name { font-size: 9px; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+/* 訓練場。絵が来るまでは絵文字＋名前（金庫と同じ体裁で、城をはさんだ反対側に立つ） */
+.map-training {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 2px 4px; border: 1px solid rgba(160, 220, 160, .55); border-radius: 4px;
+  background: rgba(12, 8, 20, .45); color: #f6e6c2; font: inherit; line-height: 1.1; cursor: pointer;
+}
+.map-training .mp-training-icon { width: 48px; height: 48px; display: block; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .55)); }
+.map-training .lot-name { font-size: 9px; white-space: nowrap; text-shadow: 0 1px 2px #000; }
+.map-training[disabled] { cursor: default; opacity: .55; }
+/* 第二幕の霧。act:2 の地点群の上をゆっくり流れる（第一幕を終えたら描かない） */
+.map-fog {
+  /* 印より下に敷く。霧がかかるのは土地であって、「？？？」の札は読めるままにする */
+  position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none;
+  background: url('../assets/map/props/fog.webp') repeat;
+  background-size: 100% 220px;
+  animation: mapFog 20s linear infinite;
+}
+@keyframes mapFog { from { background-position: 0 0; } to { background-position: 100% 0; } }
+/* 防衛戦が出ている間だけ、王国側から城への道に点線 */
+.map-defend-road {
+  position: absolute; left: 50%; top: 38%; bottom: 8%; width: 0;
+  border-left: 2px dashed rgba(255, 120, 120, .75); transform: translateX(-50%); pointer-events: none;
+  animation: mapDefend 1.6s linear infinite;
+}
+@keyframes mapDefend { 0% { opacity: .35; } 50% { opacity: .9; } 100% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .map-point.mp-next .mp-pin, .map-defend-road, .map-fog { animation: none; }
+  .world-map { scroll-behavior: auto; }
+}
+.map-lot[disabled] { cursor: default; opacity: .8; }
+.town-group { margin: 14px 0 6px; font-size: 14px; border-bottom: 1px solid rgba(232, 189, 104, .25); padding-bottom: 3px; }
+.town-group small { margin-left: 8px; font-weight: normal; font-size: 11px; }
+
+/* ── 訓練場（docs/DESIGN_TRAINING_2026-09-13.md） ───────────── */
+.mission-phase.training { background: rgba(150, 200, 150, .22); border: 1px solid rgba(160, 220, 160, .6); color: #d8f0d8; }
+.training-pick { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; }
+.training-pick .small.on { border-color: var(--gold, #e8bd68); background: rgba(232, 189, 104, .25); color: #ffe6a8; }
+.training-note { font-size: 11px; }
+.training-terms { font-size: 12px; color: #d8f0d8; margin: 4px 0; }
+.banner.training { border-color: rgba(160, 220, 160, .6); }
+
+/* 噂の札は作戦と同じ入口。薄い紙の色で読み分ける。 */
+.mission-card.rumor { background: #e5dac0; color: #352b22; border: 1px dashed #88785f; }
+.mission-card.rumor p, .incident-result p { white-space: pre-line; line-height: 1.65; }
+.town-notices { margin: 12px 0; }
+.town-notices:has(h3:only-child) { display: none; }
+.incident-result details { margin-top: 14px; }
+.incident-result summary { cursor: pointer; text-decoration: underline; }
+.incident-mormo { border-left: 3px solid #99845f; padding-left: 12px; }
+.incident-scene { font-size: .9rem; }
+
+
+.incident-result, .event-desk .incident-choice { background: #e9dec5; color: #352b22; border-color: #8b785a; }
+.incident-result h3, .incident-result summary, .incident-choice h2 { color: inherit; }
+
+/* 食べる（docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md A）。「まもる」の2段目に置く1行 */
+.cmd-menu-eat { margin-top: 4px; }
+.cmd-btn.cmd-eat { border-color: rgba(232, 189, 104, .45); }
+.cmd-btn.cmd-eat[disabled] { opacity: .45; }
+
+/* 忠義の一行（堕騎士）。名簿の詳細で、主と認めたかどうかを出す */
+.fealty-line { margin: 4px 0 0; font-size: 12px; color: #d9c9a0; }
+.fealty-line.sworn { color: #ffe6a8; }
+
+/* 成長の読み上げ（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 2節）。
+   0.5 秒ごとに一行ずつ。タップで残り全部。数字は行の中にだけ出す */
+.growth-panel .growth-lines { list-style: none; margin: 0; padding: 0; }
+.growth-panel .growth-line { padding: 2px 0; font-size: 14px; animation: growthIn .22s ease-out; }
+.growth-panel .growth-mark { margin-right: 6px; }
+.growth-panel .growth-rest { margin-top: 4px; font-size: 12px; color: #d9c9a0; }
+@keyframes growthIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .growth-panel .growth-line { animation: none; } }
+
+/* 技の吹き出し（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 1節）。
+   繰り出す直前に本人の札の上へ。1行目が台詞、2行目が技名。1.4秒で消える */
+.bu-bubble {
+  position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -6px);
+  z-index: 6; pointer-events: none; text-align: center;
+  /* 2026-09-18 オーナー指摘：技の台詞は一番読ませたい所なので大きく。
+     札より広くなるので、nowrap をやめて折り返し、幅は画面に合わせて頭打ちにする。 */
+  white-space: normal; width: max-content; max-width: min(74vw, 300px);
+  padding: 7px 12px; border: 1px solid rgba(232, 189, 104, .7); border-radius: 10px;
+  background: rgba(18, 13, 26, .95); color: #f6e6c2; line-height: 1.35;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .6);
+  animation: bubbleIn .18s ease-out, bubbleOut .2s ease-in forwards;
+  animation-delay: 0s, calc(var(--bubble-life, 1400ms) - 200ms);
+}
+/* 敵の台詞。向きは同じで、色だけ敵側に寄せる */
+.bu-bubble.enemy { border-color: rgba(214, 122, 108, .75); background: rgba(30, 14, 16, .95); color: #f7dcd4; }
+.bu-bubble.enemy::after { border-top-color: rgba(214, 122, 108, .75); }
+/* 技ではないただの台詞は、技名の行を持たない */
+.bu-bubble.talk .bu-quote { font-size: 15px; }
+.bu-bubble::after {
+  content: ""; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: rgba(232, 189, 104, .7);
+}
+.bu-bubble .bu-quote { display: block; font-size: 15px; color: #f0e6d0; }
+.bu-bubble .bu-skill { display: block; margin-top: 2px; font-size: 17px; font-weight: 800; color: #ffe6a8; }
+@keyframes bubbleIn { from { opacity: 0; transform: translate(-50%, 2px); } to { opacity: 1; transform: translate(-50%, -6px); } }
+@keyframes bubbleOut { to { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bu-bubble { animation: none; } }
 
 /* ── 物語（第一幕） ── */
 .story-desk .event-seal.story-seal { background: #4b2a7a; color: #f5e9ff; }

@@ -115,7 +115,7 @@ if (samplePlays < 2) throw new Error(`WAV攻撃音が再生されない: ${sampl
   if (small < 1) throw new Error('小さなOVERKILLにも音が要る');
 
   seen.length = 0;
-  Sound.battle({ type: 'overkill', percent: 320, emphasis: 3 }, {});
+  Sound.battle({ type: 'overkill', percent: 320, rankId: 'annihilation', rank: '殲滅', emphasis: 3 }, {});
   if (seen.length <= small) throw new Error('大きなOVERKILLで音が重ならない');
   if (!seen.every(x => x.family === 'physical')) throw new Error('見せ場の音は選定済みの打撃原音を使うこと');
   const loud = Math.max(...seen.map(x => x.boost));

@@ -15,7 +15,6 @@ const ChainViewUI = {
     else if (effect.type === "summon") action = `${effect.summonedName || effect.targetName || "援軍"}を召喚`;
     else if (effect.type === "revive") action = `${effect.targetName || "味方"}を蘇生`;
     else if (effect.type === "heal") action = `${effect.targetName || "味方"}を回復`;
-    else if (effect.type === "momentum") action = "戦意上昇";
     else if (effect.type === "survive") action = `${effect.targetName || "味方"}が生存`;
     else if (effect.type === "incident") action = effect.label || ability || "行動中止";
     else action = effect.label || ability || effect.type || "反応";

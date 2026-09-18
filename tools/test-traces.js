@@ -56,7 +56,8 @@ check(() => {
 }, 'prune は古い通常痕跡を落とし、fallen と retreated を残す');
 
 check(() => {
-  assert.ok(Object.keys(TRACE_KINDS).length <= Traces.MAX_KINDS);
+  assert.equal(Object.keys(TRACE_KINDS).length, 23);
+  assert.equal(Traces.MAX_KINDS, 23);
   assert.ok(Object.values(TRACE_KINDS).every(kind => kind.label && kind.template));
 }, '登録 kind は上限以下で label と template を持つ');
 check(() => assert.deepEqual(JSON.parse(JSON.stringify(list)), list), '痕跡は JSON 往復で変わらない');

@@ -3,9 +3,9 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js',
-  'src/data/missions.js', 'src/data/counterattack.js', 'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/data/missions.js', 'src/data/counterattack.js', 'src/data/departments.js', 'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
   'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js',
-  'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math, Date, JSON, localStorage: {
@@ -16,6 +16,7 @@ const ctx = { console, Math, Date, JSON, localStorage: {
 vm.createContext(ctx);
 for (const file of files) vm.runInContext(fs.readFileSync(file, 'utf8'), ctx, { filename: file });
 const Game = vm.runInContext('Game', ctx);
+const Town = vm.runInContext('Town', ctx);
 const Aptitude = vm.runInContext('Aptitude', ctx);
 const assert = (condition, message) => {
   if (!condition) throw new Error(message);
@@ -24,7 +25,7 @@ const assert = (condition, message) => {
 
 Game.newRun();
 const st = Game.state;
-assert(st.food === 3 && st.materials === 0 && st.facilityLevel === 0, '新規ランの食料・建材・施設初期値');
+assert(st.food === 3 && st.materials === 0 && Game.townLevelTotal() === 0, '新規ランの食料・建材・城下町');
 
 st.roster = [
   { uid: 1, tplId: 'goblin', name: '戦士', race: 'ゴブリン', job: '兵士', hp: 20, atk: 4, def: 2, spd: 3,
@@ -56,21 +57,18 @@ assert(output.appetite === 4 && Game.foodNeed() === 2, '食料消費は頭数で
 
 st.food = 1;
 st.materials = 2;
-st.buildProgress = 2;
 const notes = [];
 const rations = Game.prepareBattleRations(notes);
 assert(rations.consumed === 1 && st.food === 0, '出撃者ぶんの戦闘糧食を前払いする');
 Game.processDepartments({ foodReward: 0, materialReward: 1 }, notes, undefined, rations);
 assert(st.food === 5, '留守番の調達6から非出撃者ぶん1を引いて5が残る');
 assert(st.roster.every(m => m.loyalty === 61), '食事が足りると軍団全員の忠誠+1');
-assert(st.facilityLevel === 1 && st.buildProgress === 5 && st.materials === 0,
-  'オーク1名の施工能力3が建材を投入して仮設兵舎を完成');
-assert(st.pendingFacilityChoiceLevel === 1 && st.activeFacilityId === null,
-  '施設段階の完成時に大型施設の選択待ちになる');
-st.phase = 'result';
-assert(Game.afterResult() === 'facility' && st.phase === 'facility', '戦果確認後に大型施設3択へ進む');
-assert(Game.chooseFacility('grand_kitchen') && st.activeFacilityId === 'grand_kitchen',
-  '巨大厨房を選び、稼働施設を1つに固定する');
+// 旧「施工」は撤去した（2026-09-13）。留守番は建材を運ぶだけで、使い道は城下町。
+assert(st.materials === 3, `建材は減らずに積まれる（${st.materials}）`);
+assert(Game.townLevelTotal() === 0, '勝手に施設は建たない（建てるのは城下町の札から）');
+// 巨大厨房は城下町に建てる
+Town.init(st); st.town.lv.grand_kitchen = 1;
+assert(Game.facilityReady('grand_kitchen'), '城下町に建てれば巨大厨房が働く');
 st.roster[0].traits = ['big_eater'];
 st.activeUids = [st.roster[0].uid];
 st.food = 10;
@@ -79,19 +77,19 @@ assert(kitchenRations.kitchen && kitchenRations.need === Game.foodNeedFor(Game.a
   '巨大厨房は戦闘糧食を追加で1消費する');
 assert(Game.preparedRoster(kitchenRations)[0].battleDmgMult === 1.5,
   '巨大厨房Lv.1は大食漢の食事強化を2倍にする');
-st.facilityLevel = 3;
+st.town.lv.grand_kitchen = 3;
 assert(Game.preparedRoster(kitchenRations)[0].battleDmgMult === 2,
-  '巨大厨房Lv.3は食事強化を4倍にする（Lv.＝Jokerが働く回数）');
-st.facilityLevel = 1;
+  '巨大厨房Lv.3は食事強化を4倍にする（Lv.＝働く回数）');
+st.town.lv.grand_kitchen = 1;
 
 // 施設Lv.の一律HP・防御補正は2026-09-03に撤去した（設計憲法 第9節）。
 // 伸びるのは軍団の平均値ではなく、稼働中Jokerが働く回数である。
 const prepared = Game.preparedRoster()[0];
-assert(prepared.hp === 20 && prepared.def === 2, '施設Lv.は出撃隊の素の値を変えない');
-assert(Game.facilityWorks() === 1, '施設Lv.1では大型施設が1回働く');
-st.facilityLevel = 3;
-assert(Game.facilityWorks() === 3, '施設Lv.3では大型施設が3回働く');
-st.facilityLevel = 1;
+assert(prepared.hp === 20 && prepared.def === 2, '施設は出撃隊の素の値を変えない');
+assert(Game.facilityWorks().grand_kitchen === 1, '巨大厨房Lv.1は1回働く');
+st.town.lv.graveyard = 3;
+assert(Game.facilityWorks().graveyard === 3, '墓地Lv.3は3回働く（施設ごとに渡す）');
+st.town.lv.graveyard = 0;
 assert(st.roster[0].hp === 20, '施設効果で保存中の個体値を汚さない');
 
 Game.assignDepartment(1, 'life');
@@ -117,8 +115,6 @@ assert(Game.applicantCount() === 4, '人事適性のぶんだけ応募者が増�
 Game.assignDepartment(5, 'construction');
 st.pendingVacancies = 2;
 st.materials = 0;
-st.facilityLevel = 0;
-st.buildProgress = 0;
 const notes2 = [];
 Game.processDepartments({ foodReward: 20, materialReward: 0 }, notes2);
 assert((st.lastDepartmentReport.salvage || 0) === 4,

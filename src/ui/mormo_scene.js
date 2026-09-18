@@ -17,6 +17,11 @@ const MormoScene = {
     this.index = 0;
     this.active = true;
     this.typing = true;
+    // 選択肢つきの報告（噂の札をモルモが持ってくる場面）。
+    // 出ているあいだは下の画面を操作できない＝既存の全画面報告のまま。
+    // 読み切るまでは出さず、読み終えてから「次へ」の代わりに並べる。
+    this.choices = Array.isArray(options.choices) && options.choices.length ? options.choices : null;
+    this.onChoose = typeof options.onChoose === "function" ? options.onChoose : null;
 
     const scene = document.createElement("section");
     scene.id = "mormo-scene";
@@ -35,6 +40,7 @@ const MormoScene = {
           <div class="mormo-scene-name">${U.esc(options.title || "宰相モルモ")}</div>
           <div class="mormo-scene-text" aria-live="polite"></div>
           <button type="button" class="mormo-scene-next" data-action="mormocontinue">全文表示</button>
+          <div class="mormo-scene-choices" hidden></div>
         </div>
       </div>`;
     document.body.appendChild(scene);
@@ -79,11 +85,38 @@ const MormoScene = {
   completeTyping() {
     this.typing = false;
     const button = document.querySelector("#mormo-scene .mormo-scene-next");
+    if (this.choices) return this.showChoices(button);
     if (button) {
       button.textContent = "次へ  ▼";
       button.classList.add("ready");
       button.focus({ preventScroll: true });
     }
+  },
+
+  // 読み終えてから選択肢を出す。押すまで閉じない（Enter/Escape でも閉じない）。
+  showChoices(nextButton) {
+    const box = document.querySelector("#mormo-scene .mormo-scene-choices");
+    if (!box) return;
+    if (nextButton) nextButton.hidden = true;
+    box.hidden = false;
+    box.innerHTML = this.choices.map((c, i) =>
+      `<button type="button" class="mormo-scene-choice${i === 0 ? " primary" : ""}"
+        data-action="${U.esc(String(c.action || ""))}" data-id="${U.esc(String(c.id ?? ""))}"
+        data-index="${i}">${U.esc(String(c.label || ""))}</button>`).join("");
+    for (const button of box.querySelectorAll(".mormo-scene-choice")) {
+      button.addEventListener("click", ev => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const choice = this.choices[Number(button.dataset.index)];
+        const handler = this.onChoose;
+        if (typeof Sound !== "undefined") { Sound.unlock(); Sound.cue("click"); }
+        this.close();
+        if (typeof choice?.onSelect === "function") choice.onSelect(choice);
+        else if (handler) handler(choice);
+      }, { once: true });
+    }
+    const primary = box.querySelector(".mormo-scene-choice");
+    if (primary) primary.focus({ preventScroll: true });
   },
 
   reveal() {
@@ -97,6 +130,8 @@ const MormoScene = {
 
   advance() {
     if (!this.active) return;
+    // 選択肢が出ている間は送るだけでは閉じない（判断を飛ばさせない）。
+    if (!this.typing && this.choices) return;
     if (this.typing) {
       // 全文が出る前に送った＝報告を読み切らなかった（第14節の「報告スキップ」）
       if (typeof KPI !== "undefined") KPI.reportSkipped();
@@ -209,5 +244,7 @@ const MormoScene = {
     this.keyHandler = null;
     this.active = false;
     this.typing = false;
+    this.choices = null;
+    this.onChoose = null;
   }
 };

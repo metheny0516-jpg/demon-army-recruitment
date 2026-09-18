@@ -9,24 +9,61 @@ const BattleScene = {
   EFFECT_DIR: "assets/battle/effects/",
   UNIT_DIR: "assets/battle/units/",
   VFX_DURATION: { slash: 500, impact: 460, guard: 680, revive: 860, overkill: 860 },
+  // 演出プリセット（docs/TICKET_SKILL_FX_2026-09-12.md 1節）。
+  // 絵は CodeX の `.bu-vfx.fx-<name>`（まだ無いものは CSS の単色プレースホルダ）。
+  // ここが持つのは**動き**だけ：尺・溜め・打数・弾・揺れ・数字の大きさ・残る印。
+  FX: {
+    heavy:      { life: 720, windup: 1.5, shake: true, big: true },
+    slash_multi:{ life: 520, hits: 2 },
+    fire:       { life: 620, projectile: "fire", linger: "burn" },
+    dark:       { life: 700, from: "ground" },
+    holy:       { life: 700, from: "above", friendly: true },
+    nature:     { life: 640, linger: "bound" },
+    wind:       { life: 440, projectile: "wind", fast: true },
+    aura:       { life: 760, friendly: true, linger: "buff" },
+    shield:     { life: 680, friendly: true },
+    summon:     { life: 860, friendly: true }
+  },
+  // 全体技は同時に着弾させる。総尺は単体の1.6倍まで（3体でも「長い」と感じさせない）。
+  AOE_TOTAL_MULT: 1.6,
+  // 大技（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）。
+  // 種類ごとにプリセットを増やさない。エンジンが乗せる `ev.big` を見る分岐を
+  // 着弾（damage）と発火印（trait_trigger）に1か所ずつ置くだけにする。
+  BIG: {
+    stopMs: 80,        // 止め（ヒットストップ）
+    knockPx: 12,       // 相手が後ろへ弾かれる距離
+    projectileMult: 1.3, // 弾が飛ぶ時間（速いほど迫力が落ちる）
+    windup: 1.6        // 溜め
+  },
+  // 全体攻撃の余波で1発ごとに止めると重い。最初の1発だけ止め＋フラッシュ。
+  BIG_STOP_GAP: 420,
+  lastBigStopAt: 0,
   missingSprites: new Set(),
+  traitQuoteShown: new Set(),   // 癖の台詞は1戦闘1回（play() で空にする）
   preloadedSprites: new Set(),
+  // 指示待ちの高速2回転を持つ種族（10コマ素材が届いた11種、2026-09-17 CodeX）。
+  READY_SPIN_SPRITES: new Set(["goblin", "harpy", "imp", "kobold", "minotaur", "orc",
+    "skeleton", "slime", "succubus", "troll", "zombie"]),
   vfxPreloaded: false,
+  // ready / guard は採用できる18種だけ（指示待ちの決めポーズと防御の構え、docs/SPEC_COMMAND_POSE_2026-09-15.md。2026-09-15 CodeX）
   BATTLE_SPRITES: {
-    goblin: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    skeleton: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    orc: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    goblin: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    harpy: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    mimic: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    troll: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    skeleton: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    orc: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
     swordsman: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     archer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     cleric: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     sage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    mage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    imp: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    necromancer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    kobold: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    zombie: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    ogre: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    mage: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    imp: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    necromancer: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    kobold: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    zombie: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    ogre: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
     king_slime: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     shield: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     slinger: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
@@ -34,27 +71,39 @@ const BattleScene = {
     cavalry: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     commander: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
     hero: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    succubus: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    minotaur: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
-    lich: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"])
+    succubus: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    minotaur: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    lich: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),
+    rebel_boss: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),        // 反乱軍の首謀者（2026-09-14）
+    dragoon: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),           // 第二幕（2026-09-14 CodeX）
+    dragoon_heavy: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    inquisitor: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    chorister: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    artillery: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen"]),
+    mandragora: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"]),     // 回復役の新種族（2026-09-14）
+    fallen_knight: new Set(["idle", "attack-windup", "strike", "recover", "hurt", "fallen", "ready", "guard"])   // 堕騎士（2026-09-15）
   },
   motions: new Set(),
   pendingHits: new Set(),
   // emphasis(0-3) → 尺(ms)。「どれくらい重要か」は戦闘側、「何秒見せるか」は描画側の責任。
-  DURATION: { 0: 460, 1: 620, 2: 820, 3: 1050 },
+  // 2026-09-16 オーナー試遊: 「一瞬で次の人の行動に移る」。コマンドバトルは1ラウンドが短いので
+  // 総尺予算より1行動ずつの読みやすさを優先し、全段をおよそ1.6倍へ伸ばした。
+  DURATION: { 0: 760, 1: 1000, 2: 1300, 3: 1650 },
   // 事件は「読み切れる尺」を基礎値にする。実プレイで大食漢・追い剥ぎ・OVERKILLが
   // 一瞬で流れて見逃されたため、能力発火と資源獲得を1秒以上へ引き上げた（2026-09-02）。
   // 急ぎたい人には速度x2/x4と「最後まで飛ばす」があるので、x1は観戦側に振る。
   SPECIAL_DURATION: {
     battle_start: 500, round_start: 1150, synergy: 1650, synergy_trigger: 1050, facility_trigger: 1250,
-    note: 260, dialogue: 1900, incident: 1700, death: 750, revive: 1250, survive: 750,
-    heal: 500, summon: 1250, trait_trigger: 1150, resource_gain: 900,
-    resource_forfeit: 900, resource_consume: 750, overkill: 1250, momentum: 900, result: 1200,
-    order_offer: 1200, order_exec: 1600
+    note: 260, dialogue: 1900, incident: 1700, death: 1100, revive: 1250, survive: 1000,
+    heal: 800, summon: 1250, trait_trigger: 1500, resource_gain: 1200,
+    resource_forfeit: 1200, resource_consume: 750, overkill: 1400, result: 1200,
+    order_exec: 2000, cover: 1300
   },
   // 答え合わせの1行を読み切るための下限。倍速では割られるので、速い側でも1秒は残る
   ANSWER_READ_MS: 2200,
   VICTORY_PAUSE_MS: 900,
+  // 浮かぶ数字（ダメージ・回復・獲得）の寿命
+  FLOAT_MS: 1800,
   VICTORY_HOLD_MS: 3500,
 
   // 尺は事件の大きさに比例させる（GAME_DESIGN_PRINCIPLES 第3節）。
@@ -63,15 +112,15 @@ const BattleScene = {
   // 連鎖の中間は緩急を付ける。起点・初条件・最大余剰・蘇生・召喚・永久戦死を保護する。
   // 2026-09-05 試遊: 全段を等速3秒にした版はオーナーが否定。「強弱を付ける」へ戻し、
   // ただし連鎖の各段は CHAIN_STEP_FLOOR より短くしない（一瞬で流れて読めなかったため）。
-  BUDGET_MS: 45000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
+  BUDGET_MS: 70000,     // 上限ではなく予算。保護区間だけで超える戦闘は超えてよい
   MIN_COMPRESS: 0.45,   // 圧縮対象イベントの最小倍率（退屈な区間なので深く縮めてよい）
-  CHAIN_STEP_FLOOR: { hit: 560, overkill: 800, other: 520 },
+  CHAIN_STEP_FLOOR: { hit: 950, overkill: 1200, other: 850 },
 
   // type だけで保護が決まるもの。事件そのもの・資源の増減・決着。
   PROTECTED_TYPES: new Set([
     "battle_start", "dialogue", "synergy", "synergy_trigger", "facility_trigger", "trait_trigger",
-    "resource_gain", "resource_forfeit", "resource_consume", "momentum",
-    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_offer", "order_exec", "result"
+    "resource_gain", "resource_forfeit", "resource_consume",
+    "overkill", "revive", "summon", "survive", "incident", "retreat_offer", "order_exec", "skill_call", "result"
   ]),
 
   EFFECT_CLASSES: [
@@ -95,15 +144,17 @@ const BattleScene = {
       "🗡": "swordsman", "🗡️": "swordsman", "⚔️": "swordsman",
       "🏹": "archer", "✨": "cleric", "📖": "sage",
       "🛡️": "shield", "🪨": "slinger", "🪓": "axeman",
-      "🐎": "cavalry", "🎖️": "commander", "👑": "hero"
+      "🐎": "cavalry", "🎖️": "commander", "👑": "hero",
+      "🐉": "dragoon", "🐲": "dragoon_heavy", "🔥": "inquisitor", "🎵": "chorister", "💥": "artillery"   // 第二幕
     }[u.icon] : undefined);
   },
 
   // 表示上の分類だけ。射程・ダメージ種別・命中率などの戦闘ルールではない。
   attackKind(u) {
     if (!u) return "melee";
-    if (u.icon === "🏹") return "arrow";
-    if (u.icon === "🪨") return "stone";
+    if (u.icon === "🏹" || u.icon === "🐉") return "arrow";
+    if (u.icon === "🪨" || u.icon === "💥") return "stone";
+    if (u.icon === "🔥" || u.icon === "🎵") return "magic";
     if (["mage", "necromancer", "imp"].includes(u.tplId) || ["✨", "📖"].includes(u.icon)) return "magic";
     return "melee";
   },
@@ -158,10 +209,14 @@ const BattleScene = {
       scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt, .mormo-aside").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
       scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
-      const morale = document.getElementById("morale");
-      if (morale) morale.classList.remove("bump");
     }
     for (const u of Object.values(this.units || {})) {
+      u.readySpinToken = (u.readySpinToken || 0) + 1;
+      this.cancelConfirmSpin(u);
+      if (u.readySpinOnError && u.sprite) {
+        u.sprite.onerror = u.readySpinOnError;
+        u.readySpinOnError = null;
+      }
       u.el.classList.remove("acting", "targeted", "trouble", "lunge-up", "lunge-down", "hit", "hit-big", "revive-rise", "summon-rise", "pop");
       if (!u.sprite || !u.tplId || u.sprite.dataset.spriteFailed) continue;
       this.setPose(u, u.el.classList.contains("dead") ? "fallen" : "idle");
@@ -196,12 +251,6 @@ const BattleScene = {
       <div class="${sceneClass}" id="scene">
         <div class="scene-fx" id="scene-fx"></div>
         <div class="battle-streak" id="battle-streak"><i></i><i></i><i></i></div>
-        <div class="morale" id="morale">
-          <span class="morale-label">魔王軍の戦意</span>
-          <b id="morale-mult">×1.00</b>
-          <div class="morale-bar"><i id="morale-fill"></i></div>
-          <span class="morale-gain" id="morale-gain"></span>
-        </div>
         <div class="chain-flare" id="chain-flare">
           <span class="chain-label">連鎖</span><b></b><i class="chain-mult"></i>
           <div class="chain-rungs" id="chain-rungs"></div>
@@ -235,13 +284,15 @@ const BattleScene = {
           <img class="cutin-portrait" id="cutin-portrait" alt="">
           <div class="cutin-copy"><b id="cutin-name"></b><span id="cutin-desc"></span></div>
         </div>
+        <div class="command-panel" id="command-panel" hidden></div>
+        <div class="hold-hint" id="hold-hint" aria-hidden="true">▶ タップで進む</div>
       </div>
-      <div class="command-panel" id="command-panel" hidden></div>
       <div class="scene-ctrl">
         <button class="small" data-action="speed" id="speed-btn">速度 x1</button>
         <button class="small" data-action="pausebattle" id="pause-btn">⏸ 読むために停止</button>
         <button class="small" data-action="skiplog">▶▶ 最後まで飛ばす</button>
         <button class="small" data-action="autobattle" id="auto-btn">指示：手動（押して自動へ）</button>
+        <button class="primary" data-action="resumecommands" id="resume-btn" style="display:none">✋ 指示に戻る</button>
         <button class="primary" data-action="afterbattle" id="next-btn" style="display:none">結果を見る</button>
       </div>
       </section>
@@ -252,14 +303,27 @@ const BattleScene = {
       </div>`;
   },
 
+  // 名簿の本人を引く（将軍の縁と二つ名のため）。**タイムラインの snap には uid も階級も無い**ので
+  // 名前で引く（同じ軍団に同名は居ない＝ Game.uniqueName が保証している）。
+  // 引けなくても（傭兵・召喚・敵・テストの直作り）今までどおりの札になるだけ。
+  rosterOf(u) {
+    if (!u || u.side !== "player" || u.summoned) return null;
+    const roster = (typeof Game !== "undefined" && Game.state && Game.state.roster) || [];
+    return roster.find(m => m.name === u.name) || null;
+  },
+
   unitHtml(u) {
-    return `<div class="bu" id="bu-${u.id}" data-side="${u.side}">
+    const mine = this.rosterOf(u);
+    const general = !!mine && mine.rankId === "general";
+    const shown = general && typeof Game !== "undefined" && Game.displayName ? Game.displayName(mine) : u.name;
+    return `<div class="bu${general ? " rank-general" : ""}" id="bu-${u.id}" data-side="${u.side}">
       <div class="bu-vfx-anchor" aria-hidden="true"></div>
       <div class="bu-flash"></div>
       <div class="bu-actor"><div class="bu-icon">${this.portraitHtml(u)}</div></div>
-      <div class="bu-name">${U.esc(u.name)}</div>
+      <div class="bu-name">${u.side === "enemy" && this.ROLE_ICON[u.role] ? `<i class="bu-role" title="${U.esc(this.ROLE_LABEL[u.role] || "")}">${this.ROLE_ICON[u.role]}</i>` : ""}${U.esc(shown)}</div>
       <div class="bu-hp"><div class="bu-hpfill" id="hp-${u.id}"></div></div>
       <span class="bu-state"></span>
+      <span class="bu-marks" aria-hidden="true"></span>
       <div class="bu-pop" id="pop-${u.id}"></div>
     </div>`;
   },
@@ -278,6 +342,17 @@ const BattleScene = {
       for (const pose of this.BATTLE_SPRITES[artId]) {
         const image = new Image();
         image.src = `${this.UNIT_DIR}${artId}/${pose}.webp`;
+      }
+      if (this.READY_SPIN_SPRITES.has(artId)) {
+        for (let frame = 0; frame < 9; frame++) {
+          const image = new Image();
+          image.src = `${this.UNIT_DIR}${artId}/ready-spin/${frame}.webp`;
+        }
+        // 10コマ目（指示確定後の構え）は、素材が届いた種族だけ先読みする。
+        if (this.CONFIRM_SPIN_SPRITES.has(artId)) {
+          const tail = new Image();
+          tail.src = `${this.UNIT_DIR}${artId}/ready-spin/9.webp`;
+        }
       }
     }
     this.units[u.id] = {
@@ -321,6 +396,7 @@ const BattleScene = {
   },
 
   setLife(u, dead, permanent = false) {
+    if (dead) { this.cancelReadySpin(u); this.cancelConfirmSpin(u); }
     u.el.classList.toggle("dead", dead);
     u.el.dataset.life = dead ? (permanent ? "fallen" : "down") : "alive";
     const label = u.el.querySelector(".bu-state");
@@ -357,6 +433,8 @@ const BattleScene = {
 
   // ── 再生 ──────────────────────────────────
   play(timeline, onDone) {
+    this.bindBattlefieldTaps();   // 事件のタップ送り（自動再生でも効く）
+    this.traitQuoteShown = new Set();   // 癖の台詞は1戦闘1回
     this.stop();
     if (typeof Sound !== "undefined") Sound.stopAll();
     this.loadSpeed();
@@ -367,10 +445,9 @@ const BattleScene = {
     this.mormoAwaiting = false;
     this.asideUsed = {};
     this.retreatAnswered = false;
+    this.resetSpare();
     this.retreated = false;
     this.resumeSkipAfterRetreat = false;
-    this.orderAnswered = new Set();   // 答えた order_offer の eventId（節目は戦況が動くたびに来る）
-    this.resumeSkipAfterOrder = false;
     if (!this.manualStarting) { this.manual = null; this.autoRest = false; this.hideCommandPanel(); }
     this.manualStarting = false;
     this.resultPending = null;
@@ -477,8 +554,45 @@ const BattleScene = {
     // モルモの確認待ちに入ったイベントでは次の予約を作らない。
     // 読み終えた時間がそのまま「この一拍」なので、確認後は直ちに次へ進む。
     if (this.mormoAwaiting) return;
-    const wait = Math.max(60, ((item.duration || dur) * this.eventScale) / this.speed);
+    let wait = Math.max(60, ((item.duration || dur) * this.eventScale) / this.speed);
+    // 事件（特性の発動・技・かばう・構え・戦死・蘇生・食事）は一コマをしっかり見せる：
+    // 最短 HOLD_MS は次へ進まず、戦場をタップすれば先へ（オーナー試遊 2026-09-12「一コマ一コマ演出が短すぎ」）。
+    // おまかせで流している間と低モーションは今までどおり。
+    if (this.isBeat(ev) && !this.autoRest && !this.reducedMotion()) {
+      wait = Math.max(wait, this.HOLD_MS / Math.max(1, this.speed / 2));
+      this.showHoldHint(true);
+    } else this.showHoldHint(false);
     this.scheduleStep(wait);
+  },
+
+  // 止めて見せる出来事。数字は「読み終える尺」。x1 で 2.6 秒、x2 で 2.6 秒、x4 で 1.3 秒。
+  HOLD_MS: 2600,
+  // 技は「繰り出す一瞬」を止めて見せる。order_exec は指示の記録になった（quiet）ので外す。
+  // 一戦ごとに戻す印（見逃す／雇うは1戦闘に1回まで）
+  resetSpare() { this.spareAsked = false; this.spareWanted = false; },
+  BEAT_TYPES: new Set(["trait_trigger", "skill_call", "cover", "intent", "incident", "revive", "summon", "synergy_trigger", "facility_trigger", "retreat_offer"]),
+  isBeat(ev) {
+    if (!ev) return false;
+    if (ev.type === "trait_trigger") return (ev.emphasis || 0) >= 3 || (!!ev.quote && !this.traitQuoteShown.has(ev.traitId));
+    if (this.BEAT_TYPES.has(ev.type)) return true;
+    if (ev.type === "death") { const u = this.units[ev.unitId]; return !!(u && u.side === "player"); }
+    if (ev.type === "note") return !!(ev.skillMiss || ev.spiritGain || ev.stunned || ev.buff);
+    return false;
+  },
+  reducedMotion() { return typeof matchMedia !== "undefined" && matchMedia("(prefers-reduced-motion: reduce)").matches; },
+  showHoldHint(on) {
+    const h = document.getElementById("hold-hint");
+    if (h) h.classList.toggle("show", !!on);
+  },
+  // 戦場のタップで、止めて見せている一コマを先へ送る（指示待ち・停止中・モルモの確認中は何もしない）
+  advanceBeat() {
+    if (this.paused || this.finished || this.mormoAwaiting || !this.stepTimer) return false;
+    const h = document.getElementById("hold-hint");
+    if (!h || !h.classList.contains("show")) return false;
+    clearTimeout(this.stepTimer);
+    this.showHoldHint(false);
+    this.step();
+    return true;
   },
 
   scheduleStep(wait) {
@@ -511,8 +625,8 @@ const BattleScene = {
   magnitude(ev) {
     let mult = 1;
     // 深度による一律延長はしない。連鎖全体の緩急は plan() が決める。
-    // 蹂躙・粉砕+50%、消滅・魔王級+75%。小さな余剰は日常茶飯事なので短いままにし、
-    // 大きい余剰だけがはっきり長くなるようにする（尺は事件の大きさに比例）
+    // 殲滅（大技の直撃）+75%。小さな余剰は日常茶飯事なので短いままにし、
+    // 殲滅だけがはっきり長くなるようにする（尺は事件の大きさに比例）
     if (ev.type === "overkill") mult += 0.25 * (ev.emphasis || 0);
     // カットインを読み切れる尺にする
     if (ev.type === "synergy" && ev.firstDiscovery) mult += 0.45;
@@ -541,6 +655,36 @@ const BattleScene = {
       protected: this.isProtected(ev, !!(ev.eventId && parents.has(ev.eventId))),
       scale: 1
     }));
+    // 全体技（aoe）は「1体ずつ順に」だと3体で長い。同じ技の連続を1拍にまとめ、
+    // 先頭で全員へ同時に着弾させる（描画は render の aoeGroup が行う）。
+    this.aoeGroups = new Map();
+    for (let i = 0; i < events.length; i++) {
+      const head = events[i];
+      if (!head.aoe || !head.skillId) continue;
+      const at = i;
+      const group = [head];
+      const members = [];
+      // 一撃のはずの全体技が「連続していること」だけで束ねられていたため、
+      // 途中に death / overkill が挟まるだけでグループが切れ、残りの敵へ**もう一度殴りに行く**
+      // 見え方になっていた（2026-09-18 オーナー指摘。実測で e0 の death が e1 を切っていた）。
+      // 打撃以外のイベントは読み飛ばして、同じ技・同じ使い手の着弾をすべて1拍に束ねる。
+      let j = i;
+      while (j + 1 < events.length) {
+        const next = events[j + 1];
+        if (next.aoe && next.skillId === head.skillId && next.fromId === head.fromId) {
+          group.push(next); members.push(j + 1); j++; continue;
+        }
+        // 別の打撃が始まったらそこまで。付随のイベント（死亡・撃破・気合・台詞）は跨いでよい。
+        if (next.type === "attack" || next.type === "splash" || next.type === "skill_call") break;
+        j++;
+      }
+      if (group.length < 2) continue;
+      i = members[members.length - 1];
+      items[at].duration = Math.round(items[at].duration * this.AOE_TOTAL_MULT);
+      for (const k of members) items[k].duration = 0;
+      this.aoeGroups.set(head, group);
+      for (const member of group.slice(1)) this.aoeGroups.set(member, null);   // 描画済みの印
+    }
     const chains = new Map();
     events.forEach((ev, index) => {
       if (!ev.chainId) return;
@@ -633,13 +777,14 @@ const BattleScene = {
           if (label) label.textContent = "遅刻中";
         }
         this.synergyNames = [];
-        this.setMorale(1, 0);
         this.showForecast(true);
         if (this.isFinalBattle) this.battleIntro();
         break;
       }
       case "round_start":
-        // ラウンドが変わったら、伸びていた鎖はそこで締める
+        // ラウンドが変わったら、伸びていた鎖はそこで締める。残る印もここで一度落とす
+        // （拘束・燃焼・鼓舞はどれも1ラウンドで解ける。解除のイベントは無い）。
+        this.clearMarks();
         this.settleChain();
         this.roundBanner(ev.round);
         break;
@@ -652,13 +797,29 @@ const BattleScene = {
           const who = ev.name === "モルモ" ? null : { name: ev.name, src: this.unitPortraitSrc(speaker) };
           if (this.speakAside({ speaker: who, expression: "worried", text: ev.quote })) break;
         }
-        this.showAction(`${ev.name}「${ev.quote}」`, 1700);
+        // 敵も味方も、台詞は本人の吹き出しで（上の字幕は状況の説明だけに使う）。
+        // 吹き出しに入れてよいのは**その札の本人が、その場で**言った台詞だけ。
+        // 代弁（遅刻をモルモが告げる）と戦場の外からの声は、札に貼ると嘘になるので字幕へ。
+        const ownVoice = speaker && !ev.offstage && ev.name === speaker.name;
+        if (ownVoice) this.bubble(speaker, ev.quote, "", { talk: true, life: 1700 });
+        else this.showAction(`${ev.name}「${ev.quote}」`, 1700);
         break;
       }
       case "attack":
       case "splash": {
+        const group = this.aoeGroups && this.aoeGroups.has(ev) ? this.aoeGroups.get(ev) : undefined;
+        if (group === null) break;                    // 先頭で一緒に描き終えている（字幕と記録だけ残す）
         const from = this.units[ev.fromId], to = this.units[ev.toId];
         this.focusAttack(from, to, ev);
+        if (group) {
+          // 全体技：対象全員へ同時。数字も同時に出る。
+          for (const member of group) {
+            const target = this.units[member.toId];
+            if (target) target.el.classList.add("targeted");
+            this.attackMotion(from, target, member);
+          }
+          break;
+        }
         this.attackMotion(from, to, ev);
         break;
       }
@@ -676,6 +837,7 @@ const BattleScene = {
           this.setLife(u, false);
           this.setHp(u, ev.hp, ev.maxHp);
           this.arrival(u, "revive");
+          if (ev.fx) this.fxVfx(u, ev.fx, 2);
         }
         break;
       }
@@ -693,7 +855,15 @@ const BattleScene = {
       }
       case "heal": {
         const u = this.units[ev.unitId];
-        if (u) { this.setHp(u, ev.hp, ev.maxHp); this.float(u, "+" + ev.amount, "heal"); }
+        const src = this.units[ev.sourceId];
+        // 味方対象：使用者は動かない（acting だけ）。光るのは対象の側。
+        if (src && src !== u) src.el.classList.add("acting");
+        if (u) {
+          this.setHp(u, ev.hp, ev.maxHp);
+          this.fxVfx(u, ev.fx || (ev.skillId ? "holy" : null), 1);
+          this.float(u, "+" + ev.amount, "heal");
+          if (ev.label) this.showAction(`${ev.label}　→　${u.name} に +${ev.amount}`, 900);
+        }
         break;
       }
       case "survive": {
@@ -760,14 +930,6 @@ const BattleScene = {
         if (ev.resource === "soul") this.showAction(`魂を${ev.amount}消費`, 750);
         break;
       }
-      // 戦意：OVERKILLの見返りを数字で見せ続ける。
-      // 常設のメーターが上がっていくことが「爆発力が上がった」の実体。
-      case "momentum": {
-        this.setMorale(ev.mult, ev.gain);
-        this.showAction(`戦意 +${ev.gain}%　与ダメージ ×${ev.mult.toFixed(2)}`, 900);
-        this.flash(1);
-        break;
-      }
       case "trait_trigger": {
         const u = this.units[ev.sourceId];
         this.clearFocus();
@@ -780,10 +942,24 @@ const BattleScene = {
           // 飛んだ手番。何が起きているか本人にも浮かせる
           this.float(u, "食事中", "guard");
           this.showAction(`${u.name}「${ev.quote}」（食事中で動けない）`, 1400);
-        } else this.showAction(propagating
-          ? `【${ev.name}】連鎖${ev.propagationDepth || 1}段目！　余剰の${ev.ratio || 35}%が流れ込む`
-          : ev.quote ? `${u ? u.name : ""}「${ev.quote}」` : `【${ev.name}】発動！`, ev.quote ? 1400 : 1000);
+        } else {
+          // 癖の台詞は1戦闘に1回まで。毎回「さわった……」と言われると意味が分からない（オーナー試遊 2026-09-13）。
+          // 2回目以降は何が起きたかだけを短く（【腐敗】など）。
+          const first = !this.traitQuoteShown.has(ev.traitId);
+          if (ev.quote && first) this.traitQuoteShown.add(ev.traitId);
+          this.showAction(propagating
+            ? `【${ev.name}】連鎖${ev.propagationDepth || 1}段目！　余剰の${ev.ratio || 35}%が流れ込む`
+            : ev.quote && first ? `${u ? u.name : ""}「${ev.quote}」　【${ev.name}】`
+            : `【${ev.name}】${ev.note ? "　" + ev.note : ""}`, ev.quote && first ? 1400 : 900);
+        }
         this.pulse(ev.traitId);
+        // 大技の発火印（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）。
+        // 回復系の大技は着弾を出さないので、「大きさ」を見せるのはここだけになる。
+        if (ev.big && u) {
+          const hold = this.visualDuration(560 * this.BIG.windup);
+          u.el.classList.add("charging-big");
+          this.timers.push(setTimeout(() => u.el.classList.remove("charging-big"), hold));
+        }
         if (propagating) {
           this.flash(1);
           if (u) this.unitVfx(u, "overkill", "", 3);
@@ -807,18 +983,15 @@ const BattleScene = {
         }
         this.showAction(`${ev.rank}　余剰${ev.excess}ダメージ`, 1100);
         this.pulse("overkill");
-        // 実測でOVERKILLは1戦4回出るが、その97%は余剰100%未満の「日常」。
-        // 旧しきい値（揺れ300%・カットイン500%）は実プレイでほぼ発火しておらず、
-        // 見せ場が一度も立っていなかった。蹂躙以上（100%以上・約10戦に1回）を見せ場にする。
-        if (ev.percent >= 100 && this.activeBeat?.showBurst !== false) {
+        // 全画面は殲滅（大技の直撃で倒した）だけ。余剰の割合で段を分けていた頃は
+        // 蹂躙（100%）以上が実測 0% で、見せ場が一度も立っていなかった。
+        if (ev.rankId === "annihilation" && this.activeBeat?.showBurst !== false) {
           this.shake();
           this.burst({
             kicker: "OVERKILL",
             name: ev.rank,
-            desc: this.units[ev.fromId]?.side === "player"
-              ? `余剰 ${ev.excess} ダメージ（${ev.percent}%）→ 魔王軍の戦意へ`
-              : `余剰 ${ev.excess} ダメージ（${ev.percent}%）`,
-            stacks: ev.percent >= 300 ? 4 : ev.percent >= 200 ? 3 : 2,
+            desc: `大技の直撃　余剰 ${ev.excess} ダメージ（${ev.percent}%）`,
+            stacks: 3,
             tone: "fx-overkill"
           });
         }
@@ -840,29 +1013,113 @@ const BattleScene = {
         if (ev.manual) { this.showAction(ev.text ? String(ev.text).trim() : "魔王軍、退く", 1800); break; }   // コマンドで退いた（提案ではない）
         this.askRetreat(ev);
         break;
-      // 敵の大技の構え。次のラウンドに来る。
+      // 敵の構え。次のラウンドに来る（大技・癒やし・全体術・守り）。
       case "intent": {
         const u = this.units[ev.unitId];
+        const kind = this.INTENT[ev.intent] ? ev.intent : "big";
         this.clearFocus();
-        if (u) { u.el.classList.add("acting"); this.float(u, "大技の構え", "guard"); u.el.classList.add("intent-big"); }
-        this.showAction(`${ev.name}が大技の構えを見せた`, 1400);
+        if (u) {
+          u.el.classList.add("acting", "intent-" + kind);
+          this.float(u, this.INTENT[kind].mark + " 構え", "guard");
+        }
+        this.showAction(`${ev.name}が${this.INTENT[kind].word}`, 1400);
         break;
       }
-      // 号令の節目。撤退の提案と同じく**必ず**止める。
-      case "order_offer":
-        this.askOrder(ev);
-        break;
-      // 号令の実行。魔王の一声と本人の返事。止めない（直前に選んだばかり）。
-      case "order_exec": {
+      // 技の外れ・気合の高まり・動けない・守り。字幕だけ（ログは render の先頭で出ている）。
+      case "cover": {
         const u = this.units[ev.unitId];
         this.clearFocus();
         if (u) {
-          u.el.classList.add("acting");
-          this.float(u, "号令", "guard");
+          u.el.classList.add("acting", "covering");
+          this.float(u, "🛡 かばう", "guard");
+          this.fxVfx(u, ev.fx || "shield", 2);
+          this.mark(u, "cover");
         }
-        this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」　${ev.name}「${ev.quote}」`, 1600);
-        this.flash(1);
+        this.showAction(`${ev.name}が${ev.forName}をかばった！`, 1300);
+        break;
+      }
+      case "note": {
+        const u = this.units[ev.unitId];
+        // 味方の前に立つ（かばう宣言）。使用者は前へ出るが、狙われるのは次の被弾から。
+        if (ev.covering) {
+          const t = this.units[ev.forId];
+          if (u) { u.el.classList.add("acting", "covering"); this.fxVfx(u, ev.fx || "shield", 2); this.mark(u, "cover"); }
+          if (t) this.fxVfx(t, ev.fx || "shield", 1);
+          this.showAction(String(ev.text || "").trim(), 1000);
+          break;
+        }
+        // 鼓舞：対象全員の足元に同時に輪。1ラウンド残る。
+        if (ev.buff) {
+          const side = u ? u.side : "player";
+          const ids = (ev.targets && ev.targets.length)
+            ? ev.targets
+            : Object.values(this.units).filter(x => x.side === side && !x.el.classList.contains("dead")).map(x => x.id);
+          for (const id of ids) {
+            const t = this.units[id];
+            if (!t) continue;
+            this.fxVfx(t, ev.fx || "aura", 1);
+            this.mark(t, "buff");
+          }
+          if (u) u.el.classList.add("acting");
+          this.showAction(String(ev.text || "").trim(), 1100);
+          break;
+        }
+        if (ev.skillMiss) {
+          if (u) this.float(u, "外れた", "guard");
+          this.showAction(String(ev.text || "").trim(), 900);
+        } else if (ev.spiritGain) {
+          if (u) { this.float(u, `気合+${ev.spiritGain}`, "heal"); u.el.classList.add("spirit-up"); setTimeout(() => u.el.classList.remove("spirit-up"), 700); }
+          this.flashSpirit(ev.unitId);
+          this.showAction(String(ev.text || "").trim(), 800);
+        } else if (ev.stunned) {
+          // 拘束は残る印。次のラウンド頭で解ける（解除のイベントは無い）。
+          if (u) { this.float(u, "✦ 動けない", "guard"); this.fxVfx(u, "nature", 1); this.mark(u, "bound"); }
+        } else if (ev.guarding) {
+          if (u) this.float(u, "🛡", "guard");
+        }
+        break;
+      }
+      // 号令の実行。魔王の一声と本人の返事。止めない（直前に選んだばかり）。
+      // 技の台詞と技名は **skill_call**（繰り出す直前）が出す。order_exec は指示の記録として
+      // 残るだけ（quiet: true）。データは消していない（お披露目の判定と sim の集計が読む）。
+      case "order_exec": {
+        const u = this.units[ev.unitId];
+        this.clearFocus();
+        if (u) u.el.classList.add("acting");
+        if (ev.quiet) break;
+        // 旧いタイムライン（quiet を持たない保存）を再生したときだけ、今までどおり出す。
+        const sk = this.skillOf(ev.skillId);
+        if (u) {
+          const here = ["self", "none", "all_allies"].includes(ev.target) || (sk && sk.kind === "rest");
+          if (here && ev.fx) this.fxVfx(u, ev.fx, 2);
+          this.float(u, ev.debut ? "お披露目！" : sk && sk.kind === "charm" ? "♥ 魅惑" : "号令",
+            ev.debut ? "big" : sk && sk.kind === "charm" ? "heal" : "guard");
+          if (ev.debut) u.el.classList.add("debut-flash");
+        }
+        // 本人の台詞は繰り出す瞬間の吹き出しが大きく出す。字幕は魔王の号令だけにする
+        // （2026-09-18：字幕に台詞まで詰めると小さくて読めない）。
+        this.showAction(`魔王「${ev.name}、${ev.label || ev.skillName}！」`, ev.debut ? 2000 : 1600);
+        this.flash(ev.debut ? 2 : 1);
         this.pulse("order");
+        if (ev.debut) this.cutin(ev.skillName || ev.label, `${ev.name}、お披露目`, ev.skillId);
+        break;
+      }
+      // 技を繰り出す直前。本人の口元に吹き出し（台詞＋技名）。ロマサガ風に札の上へ浮かせる。
+      case "skill_call": {
+        const u = this.units[ev.unitId];
+        const sk = this.skillOf(ev.skillId);
+        if (u) {
+          u.el.classList.add("acting");
+          // 吹き出しに出すのは**技名**（label は「叩け」のような号令の言い方なので使わない）
+          this.bubble(u, ev.quote, ev.skillName || ev.label);
+          // 自分・全体対象はその場で光る。味方1体を狙う技は、光るのは対象の側。
+          const here = ["self", "none", "all_allies"].includes(ev.target) || (sk && sk.kind === "rest");
+          if (here && ev.fx) this.fxVfx(u, ev.fx, 2);
+          if (ev.debut) u.el.classList.add("debut-flash");
+        }
+        this.pulse("order");
+        // お披露目のカットインは**繰り出す瞬間**へ移した（指示の時点ではもう出さない）。
+        if (ev.debut) { this.flash(2); this.cutin(ev.skillName || ev.label, `${ev.name}、お披露目`, ev.skillId); }
         break;
       }
       case "result":
@@ -978,7 +1235,6 @@ const BattleScene = {
       const who = actor(e)?.name || "";
       if (e.type === "resource_gain") return `${who} ${e.label || "獲得"} +${e.amount}${e.resource === "gold" ? "G" : e.resource === "soul" ? "魂" : e.resource}`;
       if (e.type === "attack" || e.type === "splash") return `${who}の${e.label || (e.parentEventId ? "追撃" : "攻撃")}`;
-      if (e.type === "momentum") return `戦意 ×${Number(e.mult).toFixed(2)}`;
       if (e.type === "overkill") return `${e.rank || "OVERKILL"} ${e.percent}%`;
       if (e.type === "death") return `${who}が倒れた`;
       if (e.type === "summon" && e.late) return `${e.unit ? e.unit.name : who}が遅れて到着`;
@@ -999,9 +1255,6 @@ const BattleScene = {
     } else if (ev.type === "resource_gain") {
       const unit = ev.resource === "gold" ? "G" : ev.resource === "soul" ? "魂" : ev.resource;
       slots = { who, by: `${cause}で${ev.label || "獲得"}`, to: "", amount: `+${ev.amount}${unit}` };
-    } else if (ev.type === "momentum") {
-      slots = { who: "味方全員", by: `${cause}の余剰ダメージで戦意上昇`, to: "",
-        amount: `与ダメージ ×${Number(ev.mult).toFixed(2)}` };
     } else if (ev.type === "overkill") {
       slots = { who: actor(parent)?.name || who, by: `${cause}が残りHPを超えた`,
         to: `${this.units[parent.toId]?.name || this.units[ev.toId]?.name || "敵"}に`,
@@ -1035,7 +1288,10 @@ const BattleScene = {
     // 「爆発力が上がった」を伝えるのに一番直接的な信号は、でかい数字。
     const tier = Math.min(3, Math.max(0, scale || 0));
     const cls = [emphasis >= 2 ? "big" : "", tier ? `surge s${tier}` : ""].filter(Boolean).join(" ");
-    this.float(u, (label ? label + " " : "") + dmg, cls);
+    // 数字に技名を足すと、札の幅（5体並ぶと 70px 台）を超えて左右へはみ出し、
+    // 端の札では画面の外へ出て読めなくなる（2026-09-18 オーナー指摘、スマホ縦）。
+    // 技の名は上の字幕と吹き出しが既に言っているので、ここは数字だけにする。
+    this.float(u, String(dmg), cls);
   },
 
   clearFocus() {
@@ -1051,9 +1307,13 @@ const BattleScene = {
     if (from) from.el.closest(".scene-band").style.zIndex = "3";
     if (to) to.el.classList.add("targeted");
     if (!from || !to) return;
-    const action = ev.type === "splash" ? (ev.label || "追撃")
+    // 技（label）はその名で。全体技は「→ 敵全体」（対象ごとに字幕を差し替えない）
+    const action = ev.label ? ev.label
+      : ev.type === "splash" ? "追撃"
       : ({ arrow: "射撃", stone: "投石", magic: "魔法攻撃" }[this.attackKind(from)] || "攻撃");
-    this.showAction(`${from.name}の${action}　→　${to.name}`);
+    // 技の名は《》でくくる。「オーク将軍の魔王の力」だと「の」が続いて読みにくい。
+    const act = ev.label ? `《${action}》` : action;
+    this.showAction(`${from.name}の${act}　→　${ev.aoe ? (to.side === "player" ? "魔王軍全体" : "敵全体") : to.name}`);
   },
 
   // 生成画像は戦闘ルールを知らない表示素材。読込失敗時は既存CSS演出だけが残る。
@@ -1072,6 +1332,52 @@ const BattleScene = {
     this.timers.push(setTimeout(() => img.remove(), life));
   },
 
+  // プリセットの絵を1枚重ねる。クラス名は CodeX の CSS と揃える（.bu-vfx.fx-<name>）。
+  fxVfx(u, fx, emphasis) {
+    if (!u || !u.el || !fx) return;
+    const anchor = u.el.querySelector(".bu-vfx-anchor");
+    if (!anchor) return;
+    const preset = this.FX[fx] || {};
+    const el = document.createElement("i");
+    el.className = `bu-vfx fx-${fx}${emphasis >= 2 ? " heavy" : ""}${preset.from ? ` from-${preset.from}` : ""}`;
+    const life = this.visualDuration(preset.life || 560);
+    el.style.animationDuration = `${life}ms`;
+    anchor.appendChild(el);
+    this.timers.push(setTimeout(() => el.remove(), life));
+    return el;
+  },
+
+  // 技の定義を引く（表示だけに使う。無ければ null＝今までどおりの見た目）。
+  // データは const 宣言なので window には乗らない。識別子を typeof で確かめてから引く。
+  skillOf(id) {
+    if (!id) return null;
+    if (typeof SKILLS !== "undefined" && SKILLS[id]) return SKILLS[id];
+    if (typeof UPPER_SKILLS !== "undefined" && UPPER_SKILLS[id]) return UPPER_SKILLS[id];
+    if (typeof SKILL_CATALOG !== "undefined" && SKILL_CATALOG[id]) return SKILL_CATALOG[id];
+    return null;
+  },
+
+  // 残る印（拘束・燃焼・鼓舞・かばい）。解除のイベントが無いものは次のラウンド頭で消す。
+  MARKS: { bound: "🌿", burn: "🔥", buff: "✨", cover: "🛡", charm: "💗" },
+  mark(u, kind, on = true) {
+    if (!u || !u.el || !this.MARKS[kind]) return;
+    const box = u.el.querySelector(".bu-marks");
+    if (!box) return;
+    const found = box.querySelector(`.bu-mark-${kind}`);
+    if (!on) { if (found) found.remove(); return; }
+    if (found) return;
+    const el = document.createElement("i");
+    el.className = `bu-mark bu-mark-${kind}`;
+    el.textContent = this.MARKS[kind];
+    box.appendChild(el);
+  },
+  clearMarks() {
+    for (const u of Object.values(this.units)) {
+      const box = u.el && u.el.querySelector(".bu-marks");
+      if (box) box.innerHTML = "";
+    }
+  },
+
   setPose(u, pose) {
     if (!u || !u.sprite || u.sprite.dataset.spriteFailed || !this.BATTLE_SPRITES[u.tplId]?.has(pose)) return;
     u.sprite.dataset.pose = pose;
@@ -1083,6 +1389,7 @@ const BattleScene = {
     const motion = u.actor.animate(frames, { duration, easing: "linear" });
     this.motions.add(motion);
     motion.onfinish = () => { this.motions.delete(motion); motion.cancel(); };
+    return motion;
   },
 
   meleeFrames(u, dx, dy, direction) {
@@ -1206,7 +1513,7 @@ const BattleScene = {
     this.timers.push(setTimeout(() => el.remove(), life));
   },
 
-  projectileMotion(from, to, kind, contact) {
+  projectileMotion(from, to, kind, contact, big) {
     const scene = document.getElementById("scene");
     if (!scene || !from?.actor || !to?.actor) return () => {};
     const stage = scene.getBoundingClientRect();
@@ -1215,7 +1522,7 @@ const BattleScene = {
     const end = { x: b.x + b.width / 2 - stage.x - scene.clientLeft, y: b.y + b.height * .6 - stage.y - scene.clientTop };
     const angle = Math.atan2(end.y - start.y, end.x - start.x) * 180 / Math.PI;
     const el = document.createElement("span");
-    el.className = `battle-projectile projectile-${kind}`;
+    el.className = `battle-projectile projectile-${kind}${big ? " big" : ""}`;
     el.setAttribute("aria-hidden", "true");
     const pose = p => `translate(${p.x}px, ${p.y}px) rotate(${angle}deg)`;
     scene.appendChild(el);
@@ -1234,11 +1541,18 @@ const BattleScene = {
   // 中断時は pendingHits でHPだけ確定し、次イベントやスキップと食い違わせない。
   attackMotion(from, to, ev) {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // 読む時間を長くしても、攻撃動作自体はスローモーションにしない。
-    const total = this.visualDuration(Math.min(950, this.durationOf(ev) * .88));
-    const kind = ev.type === "splash" ? "melee" : this.attackKind(from);
+    // 振りかぶり→接触→戻りのポーズを、それぞれ目で追える長さにする（2026-09-16 オーナー: ポーズが一瞬で見損ねる）。
+    // 尺の上限は倍近くまで許す。読む時間（durationOf）より先に動作が終わるのは変えない。
+    const total = this.visualDuration(Math.min(1700, this.durationOf(ev) * .85));
+    // 演出プリセット。無い（通常攻撃）なら今までどおり。
+    const preset = (ev.fx && this.FX[ev.fx]) || null;
+    const kind = ev.type === "splash" ? "melee"
+      : preset && preset.projectile ? preset.projectile : this.attackKind(from);
     const ranged = kind !== "melee";
-    const contact = reduced ? 0 : total * (ranged ? .62 : .38);
+    // heavy は溜めてから当てる（接触を後ろへ）。wind は速い（接触を前へ）。
+    // 大技は溜めを長く、弾もゆっくり飛ばす（速いほど迫力が落ちる）。
+    const beat = (preset ? (preset.windup ? 1.5 : preset.fast ? 0.6 : 1) : 1) * (ev.big ? this.BIG.projectileMult : 1);
+    const contact = reduced ? 0 : Math.min(total * .85, total * (ranged ? .62 : .38) * beat);
     const settle = () => { if (to) this.setHp(to, ev.hp, ev.maxHp); };
     this.pendingHits.add(settle);
     const later = (fn, ms) => this.timers.push(setTimeout(fn, ms));
@@ -1248,7 +1562,7 @@ const BattleScene = {
       later(() => this.setPose(from, "strike"), total * .22);
       later(() => this.setPose(from, "recover"), total * .68);
       later(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : "idle"), total);
-      removeProjectile = this.projectileMotion(from, to, kind, contact);
+      removeProjectile = this.projectileMotion(from, to, kind, contact, ev.big);
       const direction = from.side === "player" ? 1 : -1;
       const frames = from.tplId === "imp" ? [
         { transform: "translateY(0) scale(1)", offset: 0 },
@@ -1286,15 +1600,27 @@ const BattleScene = {
       settle();
       this.pendingHits.delete(settle);
       if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId, attackKind: kind });
+
       if (!to) return;
-      if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
-      this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
-      // 連鎖の段と戦意の高さで数字の大きさが変わる
-      const surge = Math.max(
-        Math.max(0, (ev.chainDepth || 1) - 2),
-        this.moraleTier || 0
-      );
-      this.hit(to, ev.dmg, ev.emphasis, ev.label, surge);
+      if (preset) {
+        // プリセットの絵。打数のある技（二連打・血の雄叫び）は短い間隔で2回。
+        const hits = preset.hits || 1;
+        for (let i = 0; i < hits; i++) {
+          if (i === 0) this.fxVfx(to, ev.fx, ev.emphasis);
+          else later(() => { this.fxVfx(to, ev.fx, ev.emphasis); this.float(to, String(ev.dmg), "big"); }, 140 * i);
+        }
+        this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
+        // 燃焼は札の下に小さな炎を残す（次のラウンド頭で消える）
+        // （燃え移る技だけ。火球のように燃焼を残さない技には付けない）
+        if (preset.linger === "burn" && (this.skillOf(ev.skillId) || {}).burn
+          && to.el && !to.el.classList.contains("dead")) this.mark(to, "burn");
+      } else {
+        if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
+        this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
+      }
+      // 連鎖の段で数字の大きさが変わる
+      const surge = Math.max(0, (ev.chainDepth || 1) - 2);
+      this.hit(to, ev.dmg, preset && preset.big ? Math.max(2, ev.emphasis || 0) : ev.emphasis, ev.label, surge);
       this.setPose(to, "hurt");
       const recoil = to.side === "player" ? -1 : 1;
       this.animateActor(to, ["slime", "king_slime"].includes(to.tplId) ? [
@@ -1311,7 +1637,11 @@ const BattleScene = {
         this.setPose(to, to.el.classList.contains("dead") ? "fallen" : "idle");
         to.el.classList.remove("hit", "hit-big");
       }, Math.min(total * .5, total - contact));
-      if (ev.emphasis >= 3 && !reduced) this.shake();
+      // 大技（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）。
+      // 止め→白フラッシュ→強い揺れ→相手を弾く→着弾の絵。ここが `ev.big` を見る唯一の着弾側の分岐。
+      if (ev.big) this.bigImpact(to, ev);
+      // heavy は一撃で画面が小さく揺れる（大技を「重い」と感じさせるのはここだけ）
+      else if ((ev.emphasis >= 3 || (preset && preset.shake)) && !reduced) this.shake();
     };
     if (reduced) impact(); else later(impact, contact);
   },
@@ -1441,11 +1771,11 @@ const BattleScene = {
     if (!c) return;
     if (this.captionTimer) clearTimeout(this.captionTimer);
     c.textContent = text;
-    c.style.animationDuration = `${this.visualDuration(duration || 600)}ms`;
+    c.style.animationDuration = `${this.visualDuration(duration || 1200)}ms`;
     c.classList.remove("show");
     void c.offsetWidth;
     c.classList.add("show");
-    // 次の説明で置き換えるまで残す。読む途中でフェードアウトしない。
+    // 次の説明で置き換えるまで残す（CSS 側が forwards で最終フレームに留める）。読む途中でフェードアウトしない。
   },
 
   // モルモは1戦闘に一度だけ顔を出す。「連発しない」を後追いの判定で守ろうとすると、
@@ -1630,74 +1960,10 @@ const BattleScene = {
     this.finish();
   },
 
-  // 「号令を」。戦闘を止めて、名指しのボタン（最大3）と「任せる」を出す。
-  // 既定は「任せる」（今までの挙動＝命じない）。テストの自動送りも既定を押す。
-  askOrder(ev) {
-    if (this.orderAnswered.has(ev.eventId) || this.finished) return false;
-    this.currentOrderOffer = ev;
-    if (this.mormoAwaiting) this.closeAside();
-    this.mormoAwaiting = true;
-    this.paused = true;
-    this.setMormoControlsLocked(true, false);
-    const candidates = ev.candidates || [];
-    const unready = (ev.unready || []).map(u => `${u.name}は気合が抜けたまま（${u.spirit}/${u.cost}）`).join("。");
-    const box = MormoScene.aside({
-      expression: "report",
-      text: ev.text ? String(ev.text).replace(/^\s*モルモ「|」\s*$/g, "") : "号令を",
-      // 候補が3人だと説明が長くなって帯からはみ出す。3人のときは候補ごとの説明を省き、共通の一文だけにする。
-      note: `${candidates.length <= 2 ? candidates.map(c => `${c.name}：${c.note}`).join("。") + "。" : ""}${unready ? unready + "。" : ""}命じた者は次に真っ先に動いて技を必ず出す（与ダメ+50%）が、その次の手番は息が上がって動けない。`,
-      host: document.getElementById("scene"),
-      choices: [
-        ...candidates.map(c => ({ label: `📣 ${c.name}「${c.label}」${typeof c.cost === "number" && c.cost > 0 ? `（気合${c.cost}）` : ""}`, value: c.unitId })),
-        { label: "任せる", value: "none", primary: true }
-      ],
-      onChoose: choice => this.answerOrder(choice)
-    });
-    if (!box) {
-      this.mormoAwaiting = false;
-      this.paused = false;
-      this.setMormoControlsLocked(false);
-      this.orderAnswered.add(ev.eventId);
-      if (typeof this.onOrderChoice === "function") this.onOrderChoice("none");
-      return false;
-    }
-    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
-    return true;
-  },
-
-  answerOrder(choice) {
-    const ev = this.currentOrderOffer;
-    if (!ev || this.orderAnswered.has(ev.eventId)) return;
-    this.orderAnswered.add(ev.eventId);
-    // run.js が同じ種で計算し直したタイムラインを返す（任せたなら null）。
-    // 提案の手前までは同じなので、今の位置からそのまま続きを再生できる。
-    const next = typeof this.onOrderChoice === "function" ? this.onOrderChoice(choice) : null;
-    if (Array.isArray(next) && next.length > this.index) this.swapTimeline(next);
-    if (this.resumeSkipAfterOrder) {
-      this.resumeSkipAfterOrder = false;
-      this.mormoAwaiting = false;
-      this.paused = false;
-      this.setMormoControlsLocked(false);
-      return this.skip();
-    }
-    return this.continueAfterMormo(false);
-  },
-
-  // 再生中のタイムラインを差し替える（号令のあと）。手前は一致している前提なので、
-  // 位置（index）と盤面はそのまま。尺の計画と因果の索引だけ作り直す。
-  swapTimeline(next) {
-    this.timeline = next;
-    this.eventById = new Map(next.filter(e => e.eventId).map(e => [e.eventId, e]));
-    this.prepareChainView(next);
-    this.chainAnswer = this.pickChainAnswer(next);
-    this.pacing = this.plan(next);
-    this.mormoAside = this.pickMormoAside(next);
-  },
-
-  // まだ答えていない提案（撤退／号令）が、今の位置より先にあるか。
+  // まだ答えていない撤退の提案が、今の位置より先にあるか。
   pendingOfferAt() {
     return this.timeline.findIndex((e, i) => i >= this.index
-      && ((e.type === "retreat_offer" && !e.manual && !this.retreatAnswered) || (e.type === "order_offer" && !this.orderAnswered.has(e.eventId))));
+      && e.type === "retreat_offer" && !e.manual && !this.retreatAnswered);
   },
 
   // ── コマンドバトル（2026-09-11） ──────────────────────────
@@ -1719,6 +1985,18 @@ const BattleScene = {
       // 指示待ちの最中に自動へ切り替えたら、今のラウンドをおまかせで進める
       if (on && this.index >= this.timeline.length && this.paused) this.submitCommands({});
     }
+    this.showResumeButton(on && !!this.manual && !this.manual.done);
+  },
+  // おまかせで流している最中に「指示に戻る」（この戦いだけのおまかせも、以後もおまかせも解く）。次のラウンドの頭から窓が出る。
+  resumeCommands() {
+    this.autoRest = false;
+    if (this.loadAutoBattle()) this.saveAutoBattle(false);
+    this.showResumeButton(false);
+    this.showAction("次のラウンドから指示に戻る", 1200);
+  },
+  showResumeButton(on) {
+    const b = document.getElementById("resume-btn");
+    if (b) b.style.display = on ? "" : "none";
   },
 
   playManual(handle, onEnd, onDone) {
@@ -1753,18 +2031,62 @@ const BattleScene = {
     const handle = this.manual;
     if (!handle || handle.done) return this.finish();
     if (this.autoRest) {
+      this.showResumeButton(true);
       this.submitCommands({});
       return;
     }
+    this.showResumeButton(false);
     this.paused = true;
+    // 敵将が膝をついた（docs/SPEC_CAPTAINS_BD_2026-09-15.md §2-2）。
+    // 指示の前に一度だけ「討つ／見逃す（雇う）」を聞く。断れば同じ戦闘では二度と出ない。
+    if (handle.prompt && handle.prompt.canSpare && !this.spareAsked && this.askSpare(handle.prompt)) return;
     this.renderCommandPanel(handle.prompt);
+  },
+
+  // 見逃す／雇うの窓。撤退の提案と同じ一言の窓を使う（新しい窓は作らない）。
+  askSpare(prompt) {
+    const offer = prompt.canSpare;
+    if (!offer || this.finished) return false;
+    this.spareAsked = true;
+    if (this.mormoAwaiting) this.closeAside();
+    this.mormoAwaiting = true;
+    this.setMormoControlsLocked(true, false);
+    const hire = offer.kind === "hire";
+    const line = (typeof Captains !== "undefined" && Captains.get(offer.captainId)?.lines?.beaten || [])[0] || "";
+    const box = MormoScene.aside({
+      expression: "worried",
+      text: `${offer.name}が膝をついています。${line ? `\n「${line}」` : ""}`,
+      note: hire
+        ? "雇えば魔王軍に加わる（忠誠は低いところから）。討てば首級の報酬が入る。"
+        : "見逃せば戦場を去る（この戦いの数には入らない）。討てば首級の報酬が入る。",
+      host: document.getElementById("scene"),
+      choices: [
+        { label: hire ? "🤝 雇う" : "🕊 見逃す", value: "spare", primary: true },
+        { label: "⚔ 討つ", value: "fight" }
+      ],
+      onChoose: choice => this.answerSpare(choice)
+    });
+    if (!box) { this.mormoAwaiting = false; this.setMormoControlsLocked(false); return false; }
+    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 2 });
+    return true;
+  },
+
+  answerSpare(choice) {
+    this.spareWanted = choice === "spare";
+    this.mormoAwaiting = false;
+    this.closeAside();
+    this.setMormoControlsLocked(false);
+    if (this.manual && this.manual.prompt) this.renderCommandPanel(this.manual.prompt);
   },
 
   submitCommands(commands) {
     const handle = this.manual;
     if (!handle || handle.done) return;
     this.hideCommandPanel();
-    const step = handle.next(commands || {});
+    const payload = commands || {};
+    // 見逃す／雇うは指示と一緒に送る（battle.js の next({ spare: true, ... })）。
+    if (this.spareWanted) { payload.spare = true; this.spareWanted = false; }
+    const step = handle.next(payload);
     this.eventById = new Map(this.timeline.filter(e => e.eventId).map(e => [e.eventId, e]));
     this.pacing = this.plan(this.timeline);
     if (step.type === "end") this.settleManual(step.result);
@@ -1776,95 +2098,450 @@ const BattleScene = {
 
   hideCommandPanel() {
     const panel = document.getElementById("command-panel");
-    if (panel) { panel.hidden = true; panel.innerHTML = ""; }
+    if (panel) { panel.hidden = true; panel.innerHTML = ""; delete panel.dataset.unit; delete panel.dataset.mode; }
     const scene = document.getElementById("scene");
-    if (scene) scene.classList.remove("awaiting-commands");
+    if (scene) scene.classList.remove("awaiting-commands", "picking-target");
+    for (const id in this.units) {
+      const u = this.units[id];
+      this.cancelReadySpin(u);
+      const el = u && u.el;
+      if (!el) continue;
+      el.classList.remove("cmd-active", "cmd-pick", "cmd-decided",
+        ...Object.keys(this.INTENT).map(k => "intent-" + k));
+      const cur = el.querySelector(".cmd-cursor"); if (cur) cur.remove();
+      const badge = el.querySelector(".cmd-badge"); if (badge) badge.remove();
+    }
+    this.cmdSeq = null;
+    this.cmdTargetSide = null;
+    this.cmdTargetKind = null;
   },
 
-  // 指示パネル。味方ごとに たたかう／まもる／技／おまかせ、たたかうなら狙い。下に 全員たたかう／おまかせで最後まで／退く／決定。
+  // ── 指示窓（ロマサガ流、2026-09-12） ──
+  // 隊列の先頭から一人ずつ。窓は戦場の中央（味方の列のすぐ上）に浮き、後ろの戦場が透ける。
+  // たたかう／技を選ぶと窓が細くなり、敵をタップして狙いを決める（敵が1体なら省く）。
+  // 最後の一人が決めた瞬間にラウンド開始。「もどる」で一人前へ。味方の札をタップすればその者へ飛べる。
+  CMD_ICON: { attack: "⚔", guard: "🛡", skill: "✨", auto: "🤖", eat: "🍖" },
+  // 決めた行動の構え（docs/SPEC_COMMAND_POSE_2026-09-15.md §2）。
+  // たたかう・技は attack-windup のまま実行へ入り、そのまま strike へつながる。
+  // 食べる・おまかせは構えを持たないので idle。
+  COMMAND_POSE: { attack: "attack-windup", skill: "attack-windup", guard: "guard", eat: "idle", auto: "idle" },
+  // 指示確定後の戦闘準備姿勢（10コマ契約の 9.webp）。
+  // 8＝指示待ちの見せ場、9＝命令を受けて戦闘態勢に入った姿。用途が違う。
+  // 0.16秒で 0→7 を1周してから 9 に着地し、自分の行動順が来るまで保つ。
+  // 有効にするのは 9.webp を持つ種族だけ。持たない旧9コマの種族は従来の構えのまま。
+  // 素材が届いた種族をここに足す（READY_SPIN_SPRITES と同じ運用）。ファイルの有無を
+  // 実行時に探ると、未収録の種族ぶんだけ 404 がコンソールに出る（scene.js が拾う）。
+  // 2026-09-17：11種ぶんの 0〜9.webp が届いたので、両方の一覧が同じ顔ぶれになった。
+  // confirmSpinReady は「読めなくなった種族を落とす」ための実行時の札で、
+  // 既定は一覧のとおり。
+  CONFIRM_SPIN_SPRITES: new Set(["goblin", "harpy", "imp", "kobold", "minotaur", "orc",
+    "skeleton", "slime", "succubus", "troll", "zombie"]),
+  CONFIRM_SPIN_MS: 160,
+  confirmSpinReady: {},
+  // 指示の番が来たときの登場動作。種族で分けない1種類（小さく跳ねて半回転→戻る）。
+  // 絵は「止まった姿」だけなので、回る・跳ねるはここの transform で見せる。
+  // 2026-09-16 オーナー試遊：250ms では半回転を見逃す。回転はそのまま、時間を 1.5 倍に。
+  POSE_ENTER_MS: 375,
+
+  // 構えを差し替える。絵の切り替わりが唐突に見えないよう 0.15 秒だけ重ねる。
+  // 倒れている者は fallen のまま（構えを取らせない）。
+  commandPose(u, pose) {
+    if (!u || !u.el || u.el.classList.contains("dead")) return;
+    this.cancelReadySpin(u);
+    this.cancelConfirmSpin(u);
+    this.setPose(u, pose);
+    // 10コマ目が読めなかったときに戻る先（＝従来の構え）を覚えておく。
+    if (u.sprite && pose !== "ready") u.sprite.dataset.commandPose = pose;
+    const img = u.sprite;
+    if (!img || img.dataset.spriteFailed) return;
+    img.classList.remove("pose-swap");
+    void img.offsetWidth;
+    img.classList.add("pose-swap");
+    this.timers.push(setTimeout(() => img.classList.remove("pose-swap"), 150));
+  },
+
+  cancelReadySpin(u) {
+    if (!u) return;
+    u.readySpinToken = (u.readySpinToken || 0) + 1;
+    if (u.readySpinMotion) {
+      u.readySpinMotion.cancel();
+      this.motions.delete(u.readySpinMotion);
+      u.readySpinMotion = null;
+    }
+    if (u.readySpinOnError) {
+      u.sprite.onerror = u.readySpinOnError;
+      u.readySpinOnError = null;
+    }
+  },
+
+  // 指示の番が回ってきた者の登場動作。吹き出し（指示窓）と同時に始める＝待たない。
+  // 2周目以降も省略しない（大事なパートなので、短縮の分岐を作らない）。
+  poseEnter(u) {
+    if (!u || !u.el || u.el.classList.contains("dead")) return;
+    if (this.READY_SPIN_SPRITES.has(u.tplId)) return this.readySpinEnter(u);
+    const direction = u.side === "player" ? 1 : -1;
+    u.readySpinMotion = this.animateActor(u, [
+      { transform: "translateY(0) rotateY(0deg) scale(1)", offset: 0 },
+      { transform: `translateY(-9px) translateX(${direction * 3}px) rotateY(180deg) scale(1.04)`, offset: .45 },
+      { transform: `translateY(2px) rotateY(340deg) scale(.98,1.02)`, offset: .78 },
+      { transform: "translateY(0) rotateY(360deg) scale(1)", offset: 1 }
+    ], this.POSE_ENTER_MS);
+  },
+
+  // 承認済み3種族だけ、8方向を2周してから決める。画像は試作と同じクロマキー・切り出しを
+  // tools/extract-ready-spin-frames.cjs で事前処理し、戦闘中の Canvas 処理を避ける。
+  readySpinEnter(u) {
+    if (!u?.sprite || u.sprite.dataset.spriteFailed) return;
+    // 低モーションでは回さず、指示待ちの決めポーズ（8.webp）へ直接切り替える。
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      u.sprite.dataset.pose = "ready-hold";
+      u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/8.webp`;
+      return;
+    }
+    const token = u.readySpinToken = (u.readySpinToken || 0) + 1;
+    const live = () => u.readySpinToken === token && u.sprite?.isConnected && !u.el.classList.contains("dead");
+    const show = frame => { if (live()) u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/${frame}.webp`; };
+    const normalError = u.sprite.onerror;
+    u.readySpinOnError = normalError;
+    u.sprite.onerror = () => {
+      if (!live()) return;
+      u.readySpinToken++;
+      u.sprite.onerror = normalError;
+      u.readySpinOnError = null;
+      this.setPose(u, "ready");
+    };
+    show(0);
+    // 予備 0.09 秒 → 2周 0.275 秒 → 決め → 0.08 秒で軽く沈む。
+    // 倍速では回転も一緒に速くする（2026-09-17 オーナー指摘）。尺の決め方は
+    // 他の演出と同じ visualDuration（= ms × eventScale ÷ speed）に合わせる。
+    // x4 ではコマ落ちするが、8 への着地は必ず起きる（タイマーの順序は保たれる）。
+    const t = ms => this.visualDuration(ms);
+    u.readySpinMotion = this.animateActor(u, [
+      { transform: "translateY(0) scale(1.03,1)", offset: 0 },
+      { transform: "translateY(0) scale(1.03,.95)", offset: .202 },
+      { transform: "translateY(-10px) rotate(-1.4deg) scale(1.03,1)", offset: .51 },
+      { transform: "translateY(0) scale(1,.975)", offset: .82 },
+      { transform: "translateY(2px) scale(1,.975)", offset: .9 },
+      { transform: "translateY(0) scale(1)", offset: 1 }
+    ], t(445));
+    for (let step = 0; step < 16; step++) {
+      this.timers.push(setTimeout(() => show(step % 8), t(90 + step * (275 / 16))));
+    }
+    this.timers.push(setTimeout(() => show(8), t(365)));
+    this.timers.push(setTimeout(() => {
+      if (!live()) return;
+      u.sprite.onerror = normalError;
+      u.readySpinOnError = null;
+    }, t(445)));
+  },
+
+  // 指示が確定した瞬間の短い1周（0→7、約0.16秒）と、9.webp への着地。
+  // 着地したら行動順が来るまで保つ（`confirmHeld`）。行動が始まれば既存の
+  // 攻撃・技・防御のモーションが 9 を上書きする。
+  //
+  // 呼ぶのは decideCommand だけ＝「対象を含む最終行動が確定した1回」。
+  // 対象選びへ進んだだけ・もどる・同じ人物の再描画・説明の開閉では呼ばない。
+  // 取り消しと画面遷移は既存の個体トークン（cancelReadySpin / stop）でまとめて畳む。
+  confirmSpinEnter(u) {
+    if (!u?.sprite || u.sprite.dataset.spriteFailed) return false;
+    if (!this.CONFIRM_SPIN_SPRITES.has(u.tplId) || this.confirmSpinReady[u.tplId] === false) return false;
+    const land = () => { u.sprite.dataset.pose = "confirm"; u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/9.webp`; };
+    u.confirmHeld = true;
+    // 低モーションでは回さず、そのまま戦闘準備姿勢へ。
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { land(); return true; }
+    // 指示待ちの回転とは別のトークンで数える。最後の一人が決めた瞬間に指示窓が畳まれ、
+    // そこで readySpinToken は必ず進む。同じ札を使うと、確定後回転が出る前に消える。
+    const token = u.confirmSpinToken = (u.confirmSpinToken || 0) + 1;
+    const live = () => u.confirmSpinToken === token && u.sprite?.isConnected && !u.el.classList.contains("dead");
+    const normalError = u.sprite.onerror;
+    u.confirmSpinOnError = normalError;
+    u.sprite.onerror = () => {
+      // 10コマ目が読めなくなったら従来の構えへ戻す（旧9コマの種族と同じ見え方）。
+      if (!live()) return;
+      u.confirmSpinToken++;
+      u.confirmHeld = false;
+      this.confirmSpinReady[u.tplId] = false;
+      u.sprite.onerror = normalError;
+      u.confirmSpinOnError = null;
+      this.setPose(u, u.sprite.dataset.commandPose || "idle");
+    };
+    // 指示待ちの回転と同じく、倍速では確定後回転も速くする。
+    const spin = this.visualDuration(this.CONFIRM_SPIN_MS), step = spin / 8;
+    // 0コマ目はその場で。直前に置いた従来の構えが1瞬だけ見えるのを避ける。
+    u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/0.webp`;
+    for (let frame = 1; frame < 8; frame++) {
+      this.timers.push(setTimeout(() => { if (live()) u.sprite.src = `${this.UNIT_DIR}${u.tplId}/ready-spin/${frame}.webp`; }, frame * step));
+    }
+    this.timers.push(setTimeout(() => {
+      if (!live()) return;
+      land();
+      u.sprite.onerror = normalError;
+      u.confirmSpinOnError = null;
+    }, spin));
+    return true;
+  },
+
+  // 確定後回転を畳む。指示窓を閉じるだけでは畳まない（畳むとラウンド開始と同時に消える）。
+  // 畳むのは 指示を決め直した・死んだ・画面が変わった（stop）の3つ。
+  cancelConfirmSpin(u) {
+    if (!u) return;
+    u.confirmSpinToken = (u.confirmSpinToken || 0) + 1;
+    u.confirmHeld = false;
+    if (u.confirmSpinOnError && u.sprite) {
+      u.sprite.onerror = u.confirmSpinOnError;
+      u.confirmSpinOnError = null;
+    }
+  },
+  // 敵の役（5節）。札の名前の前に小さく出す。fighter は印を出さない（既定なので）。
+  ROLE_ICON: { brute: "💪", shield: "🛡", priest: "✚", caster: "🔥", archer: "🏹", rogue: "🗡", commander: "🎖" },
+  ROLE_LABEL: { brute: "大男", shield: "盾役", priest: "僧侶", caster: "術士", archer: "弓", rogue: "斥候", commander: "隊長" },
+  // 敵の構え。次のラウンドに何が来るかを印と一行で予告する。
+  INTENT: {
+    big: { mark: "⚠", word: "大技を放つ" },
+    heal: { mark: "✚", word: "仲間を癒やそうとしている" },
+    aoe: { mark: "🔥", word: "全体への術を練っている" },
+    guard: { mark: "🛡", word: "守りに入っている" }
+  },
+
   renderCommandPanel(prompt) {
     const panel = document.getElementById("command-panel");
     if (!panel || !prompt) return;
-    const sel = this.cmdSel;
-    for (const a of prompt.allies) {
-      if (!sel[a.id]) sel[a.id] = { cmd: "attack", target: null };
-      if (sel[a.id].cmd === "skill" && !(a.skill && a.skill.ready)) sel[a.id].cmd = "attack";
-      if (sel[a.id].target && !prompt.enemies.some(e => e.id === sel[a.id].target)) sel[a.id].target = null;
+    if (!this.cmdSeq || this.cmdSeq.round !== prompt.round) {
+      this.cmdSeq = { round: prompt.round, idx: 0, mode: "menu", commands: {} };
     }
-    const enemyChip = (e, unitId) => `<button type="button" class="cmd-target ${sel[unitId].target === e.id ? "on" : ""}" data-unit="${e.id === undefined ? "" : U.esc(unitId)}" data-target="${U.esc(e.id)}">${e.intent === "big" ? "⚠ " : ""}${U.esc(e.name)} <small>${Math.max(0, Math.round(e.hp / e.maxHp * 100))}%</small></button>`;
-    const rows = prompt.allies.map(a => {
-      const c = sel[a.id];
-      const skill = a.skill;
-      const skillBtn = skill
-        ? `<button type="button" class="cmd-btn ${c.cmd === "skill" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="skill" ${skill.ready ? "" : "disabled"} title="${U.esc(skill.note)}">技「${U.esc(skill.label)}」<small>気合${skill.cost}</small></button>`
-        : "";
-      const spirit = typeof a.spirit === "number" ? `<small class="cmd-spirit">気合 ${"●".repeat(a.spirit)}${"○".repeat(Math.max(0, 3 - a.spirit))}</small>` : "";
-      const state = a.winded ? `<small class="cmd-state">息切れ</small>` : a.stuffed ? `<small class="cmd-state">食事中</small>` : "";
-      return `<div class="cmd-row" data-unit="${U.esc(a.id)}">
-        <div class="cmd-who"><b>${U.esc(a.name)}</b> <small>HP ${a.hp}/${a.maxHp}</small> ${spirit} ${state}</div>
-        <div class="cmd-btns">
-          <button type="button" class="cmd-btn ${c.cmd === "attack" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="attack">たたかう</button>
-          <button type="button" class="cmd-btn ${c.cmd === "guard" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="guard">まもる</button>
-          ${skillBtn}
-          <button type="button" class="cmd-btn ${c.cmd === "auto" ? "on" : ""}" data-unit="${U.esc(a.id)}" data-cmd="auto">おまかせ</button>
-        </div>
-        ${(c.cmd === "attack" || c.cmd === "skill") && prompt.enemies.length > 1
-          ? `<div class="cmd-targets"><span>狙い</span>${prompt.enemies.map(e => enemyChip(e, a.id)).join("")}<button type="button" class="cmd-target ${c.target ? "" : "on"}" data-unit="${U.esc(a.id)}" data-target="">前から</button></div>` : ""}
-      </div>`;
-    }).join("");
-    const bigOnes = prompt.enemies.filter(e => e.intent === "big").map(e => e.name);
-    panel.innerHTML = `<div class="cmd-head"><b>ラウンド ${prompt.round}</b>　指示を出せ${bigOnes.length ? `　<span class="cmd-warn">⚠ ${U.esc(bigOnes.join("、"))}が大技を放つ</span>` : ""}</div>
-      ${rows}
-      <div class="cmd-foot">
-        <button type="button" class="small" data-cmdall="attack">全員たたかう</button>
-        <button type="button" class="small" data-cmdall="autorest">この戦いはおまかせ</button>
-        <button type="button" class="small" data-cmdall="autoalways">以後もおまかせ</button>
-        ${prompt.canRetreat ? `<button type="button" class="small danger" data-cmdall="retreat">🏰 退く（${U.esc(prompt.downed.join("、"))}を担いで）</button>` : ""}
-        <button type="button" class="primary" data-cmdall="go">決定 ▶</button>
-      </div>`;
-    panel.hidden = false;
+    const seq = this.cmdSeq;
+    const allies = prompt.allies;
+    if (!allies.length) return this.submitCommands({});
+    seq.idx = Math.max(0, Math.min(seq.idx, allies.length - 1));
+    const a = allies[seq.idx];
+    // 味方札タップで未決定の別人へ移った場合も、前の人物の回転を残さない。
+    if (seq.activeId && seq.activeId !== a.id) {
+      const previous = this.units[seq.activeId];
+      this.cancelReadySpin(previous);
+      if (previous && !seq.commands[seq.activeId]) this.setPose(previous, "idle");
+    }
+    const sel = this.cmdSel[a.id] || { cmd: "attack", target: null };
     const scene = document.getElementById("scene");
-    if (scene) scene.classList.add("awaiting-commands");
-    // 構えの印を敵の枠へ
-    for (const e of prompt.enemies) {
-      const u = this.units[e.id];
-      if (u) u.el.classList.toggle("intent-big", e.intent === "big");
+    if (scene) { scene.classList.add("awaiting-commands"); scene.classList.toggle("picking-target", seq.mode === "target"); }
+    // 味方の札：指示中はカーソル、決めた者には印
+    const allyPick = seq.mode === "target" && this.cmdTargetSide === "ally";
+    // 味方を狙う技（かばう・癒やす・起こす）は味方の札が光る。倒れた者だけを狙う技は倒れた札だけ。
+    for (const f of (prompt.fallen || [])) {
+      const u = this.units[f.id]; if (!u) continue;
+      u.el.classList.toggle("cmd-pick", allyPick && this.cmdTargetKind !== "ally-alive");
     }
+    for (const al of allies) {
+      const u = this.units[al.id]; if (!u) continue;
+      u.el.classList.toggle("cmd-pick", allyPick && this.cmdTargetKind !== "fallen");
+      u.el.classList.toggle("cmd-active", al.id === a.id);
+      const done = seq.commands[al.id];
+      u.el.classList.toggle("cmd-decided", !!done && al.id !== a.id);
+      let badge = u.el.querySelector(".cmd-badge");
+      if (done && al.id !== a.id) {
+        if (!badge) { badge = document.createElement("i"); badge.className = "cmd-badge"; u.el.appendChild(badge); }
+        badge.textContent = this.CMD_ICON[done.cmd] || "";
+      } else if (badge) badge.remove();
+      let cur = u.el.querySelector(".cmd-cursor");
+      if (al.id === a.id) { if (!cur) { cur = document.createElement("i"); cur.className = "cmd-cursor"; cur.textContent = "▼"; u.el.appendChild(cur); } }
+      else if (cur) cur.remove();
+      // 指示を待つ者は決めポーズ。番が回ってきた瞬間だけ登場動作を添える
+      // （狙い選びへ入った程度の描き直しでは動かさない。「もどる」で戻ってくれば もう一度やる）。
+      if (al.id === a.id) {
+        if (seq.activeId !== al.id) {
+          this.commandPose(u, "ready");
+          this.poseEnter(u);
+        }
+      } else if (done && !u.confirmHeld) this.commandPose(u, this.COMMAND_POSE[done.cmd] || "idle");
+    }
+    seq.activeId = a.id;
+    // 敵の札：構えの印と、狙い選び中のタップ対象
+    for (const e of prompt.enemies) {
+      const u = this.units[e.id]; if (!u) continue;
+      u.el.classList.toggle("intent-big", e.intent === "big");
+      for (const kind of Object.keys(this.INTENT)) u.el.classList.toggle("intent-" + kind, e.intent === kind);
+      u.el.classList.toggle("cmd-pick", seq.mode === "target" && this.cmdTargetSide !== "ally");
+      u.el.classList.toggle("cmd-covered", !!e.coveredBy);
+    }
+    const covered = prompt.enemies.filter(e => e.coveredBy).map(e => `🛡 ${e.name}は${(prompt.enemies.find(c => c.id === e.coveredBy) || {}).name || "盾役"}に守られている（狙うと盾役が受ける）`);
+    const warnings = prompt.enemies
+      .filter(e => this.INTENT[e.intent])
+      .map(e => `${this.INTENT[e.intent].mark} ${e.name}が${this.INTENT[e.intent].word}`)
+      .concat(covered);
+    const spirit = typeof a.spirit === "number" ? `<small class="cmd-spirit">気合 ${"●".repeat(a.spirit)}${"○".repeat(Math.max(0, 3 - a.spirit))}</small>` : "";
+    const state = a.winded ? `<small class="cmd-state">息切れ</small>` : a.stuffed ? `<small class="cmd-state">食事中</small>` : "";
+    const head = `<div class="cmd-head"><span class="cmd-round">ラウンド ${prompt.round}　${seq.idx + 1}/${allies.length}人目</span>
+        <b>${U.esc(a.name)}</b> <small>HP ${a.hp}/${a.maxHp}</small> ${spirit} ${state}
+        ${warnings.map(w => `<span class="cmd-warn">${U.esc(w)}</span>`).join("")}</div>`;
+    let body;
+    if (seq.mode === "target") {
+      body = `<div class="cmd-pick-hint">${this.cmdTargetSide === "ally"
+          ? (this.cmdTargetKind === "fallen" ? "起こす者をタップ（倒れた味方）" : "かける相手をタップ（味方）")
+          : "狙う敵をタップ"}${this.cmdTargetSide !== "ally" && covered.length ? `<small class="cmd-covered-hint">${U.esc(covered.join("　"))}</small>` : ""}</div>
+        <div class="cmd-foot">
+          <button type="button" class="cmd-btn" data-pick="">${this.cmdTargetSide === "ally" ? "おまかせ" : "前から"}</button>
+          <button type="button" class="cmd-btn cmd-back" data-nav="back">もどる</button>
+        </div>`;
+    } else {
+      // 技は種族技→上位技の順に最大2つ。一行に「技「名」　効き　気合n」。
+      // 選べないときは薄くして理由（why）をそのまま出す（何が足りないのかを窓の中で答える）。
+      const list = (a.skills && a.skills.length ? a.skills : (a.skill ? [a.skill] : [])).slice(0, 2);
+      const skillBtn = list.map(sk => {
+        const on = sel.cmd === "skill" && (sel.skill || list[0].id) === sk.id;
+        // お披露目：覚えた直後の戦いの1回だけ、金の縁が脈打ち、気合なしで撃てる。
+        const cost = sk.debut ? "お披露目・気合なし" : `気合${sk.cost}`;
+        return `<button type="button" class="cmd-btn cmd-skill ${on ? "on" : ""}${sk.debut ? " cmd-debut" : ""}" data-cmd="skill" data-skill="${U.esc(sk.id)}"
+          ${sk.ready ? "" : "disabled"} title="${U.esc(sk.note || "")}">技「${U.esc(sk.name || sk.label)}」<small>${U.esc(sk.note || "")}　${cost}${sk.ready ? "" : "・" + U.esc(sk.why || "")}</small></button>`;
+      }).join("");
+      const first = seq.idx === 0;
+      // 食べる（2026-09-14）：「まもる」の2段目。携行食を1つ食べて HP を戻す（攻撃はしない）。
+      // 隊で1戦に2回まで（巨大厨房 Lv2 で3回）。備蓄が無い・傭兵・召喚は押せない。
+      const eat = a.eat || null;
+      const eatBtn = eat ? `<div class="cmd-menu cmd-menu-eat">
+          <button type="button" class="cmd-btn cmd-eat ${sel.cmd === "eat" ? "on" : ""}" data-cmd="eat"
+            ${eat.ready ? "" : "disabled"} title="${U.esc(eat.ready ? `HP を ${Math.round((eat.heal || 0) * 100)}% 戻す` : "いまは食べられない")}">
+            🍖 食べる<small>あと${eat.left}回${eat.ready ? `　HP +${Math.round((eat.heal || 0) * 100)}%` : "・いまは食べられない"}</small></button>
+        </div>` : "";
+      body = `<div class="cmd-menu">
+          <button type="button" class="cmd-btn ${sel.cmd === "attack" ? "on" : ""}" data-cmd="attack">たたかう</button>
+          <button type="button" class="cmd-btn ${sel.cmd === "guard" ? "on" : ""}" data-cmd="guard">まもる</button>
+          ${skillBtn}
+          <button type="button" class="cmd-btn ${sel.cmd === "auto" ? "on" : ""}" data-cmd="auto">おまかせ</button>
+        </div>
+        ${eatBtn}
+        <div class="cmd-foot">
+          <button type="button" class="cmd-btn cmd-back" data-nav="back" ${first ? "disabled" : ""}>もどる</button>
+          ${first ? `<button type="button" class="small" data-cmdall="attack">全員たたかう</button>
+          <button type="button" class="small" data-cmdall="autorest">この戦いはおまかせ</button>
+          <button type="button" class="small" data-cmdall="autoalways">以後もおまかせ</button>
+          ${prompt.canRetreat ? `<button type="button" class="small danger" data-cmdall="retreat">🏰 退く（${U.esc(prompt.downed.join("、"))}を担いで）</button>` : ""}` : ""}
+        </div>`;
+    }
+    panel.innerHTML = head + body;
+    panel.dataset.unit = a.id;
+    panel.dataset.mode = seq.mode;
+    panel.hidden = false;
+    this.placeCommandPanel();
     if (!panel.dataset.bound) {
       panel.dataset.bound = "1";
       panel.addEventListener("click", ev => {
         const btn = ev.target.closest("button");
-        if (!btn || btn.disabled) return;
+        if (!btn || btn.disabled || !this.cmdSeq) return;
+        const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
+        if (!prompt) return;
+        const cur = prompt.allies[seq.idx];
         if (btn.dataset.cmd) {
-          const unitId = btn.dataset.unit;
-          this.cmdSel[unitId] = Object.assign(this.cmdSel[unitId] || {}, { cmd: btn.dataset.cmd });
-          return this.renderCommandPanel(this.manual && this.manual.prompt);
+          const cmd = btn.dataset.cmd;
+          const skillId = btn.dataset.skill || null;
+          this.cmdSel[cur.id] = Object.assign(this.cmdSel[cur.id] || {}, { cmd, skill: skillId });
+          // 狙いを選ぶのは「敵を1体」か「味方を1体」の技だけ。自分・全体・なしは即決定。
+          const picked = skillId && (cur.skills || []).find(s => s.id === skillId);
+          const want = cmd === "attack" ? "enemy" : (picked ? picked.target : (cmd === "skill" ? "enemy" : null));
+          this.cmdTargetSide = want === "ally" || want === "fallen" ? "ally" : want === "enemy" ? "enemy" : null;
+          this.cmdTargetKind = want === "fallen" ? "fallen" : want === "ally" ? "ally-alive" : null;
+          const allies = this.cmdTargetSide === "ally";
+          const choices = allies
+            ? (want === "fallen" ? (prompt.fallen || []).length : prompt.allies.length)
+            : prompt.enemies.length;
+          if (this.cmdTargetSide && choices > 1) {
+            seq.mode = "target";
+            return this.renderCommandPanel(prompt);
+          }
+          return this.decideCommand(cur.id, cmd, null, skillId);
         }
-        if (btn.dataset.target !== undefined && btn.dataset.unit !== undefined && !btn.dataset.cmdall) {
-          const unitId = btn.dataset.unit;
-          this.cmdSel[unitId] = Object.assign(this.cmdSel[unitId] || { cmd: "attack" }, { target: btn.dataset.target || null });
-          return this.renderCommandPanel(this.manual && this.manual.prompt);
+        if (btn.dataset.pick !== undefined) {
+          const sel = this.cmdSel[cur.id] || {};
+          return this.decideCommand(cur.id, sel.cmd, btn.dataset.pick || null, sel.skill || null);
+        }
+        if (btn.dataset.nav === "back") {
+          if (seq.mode === "target") seq.mode = "menu";
+          else if (seq.idx > 0) seq.idx -= 1;
+          return this.renderCommandPanel(prompt);
         }
         const all = btn.dataset.cmdall;
         if (all === "attack") {
-          for (const a of (this.manual.prompt.allies || [])) this.cmdSel[a.id] = { cmd: "attack", target: null };
-          return this.renderCommandPanel(this.manual.prompt);
-        }
-        if (all === "autorest") { this.autoRest = true; return this.submitCommands({}); }
-        if (all === "autoalways") { this.saveAutoBattle(true); this.autoRest = true; return this.submitCommands({}); }
-        if (all === "retreat") return this.submitCommands({ retreat: true });
-        if (all === "go") {
           const commands = {};
-          for (const a of (this.manual.prompt.allies || [])) {
-            const c = this.cmdSel[a.id] || { cmd: "attack" };
-            if (c.cmd === "auto") continue;
-            commands[a.id] = { cmd: c.cmd, target: c.target || undefined };
-          }
+          for (const al of prompt.allies) { this.cmdSel[al.id] = { cmd: "attack", target: null }; commands[al.id] = { cmd: "attack" }; }
           return this.submitCommands(commands);
         }
+        if (all === "autorest") { this.autoRest = true; this.showResumeButton(true); return this.submitCommands({}); }
+        if (all === "autoalways") { this.saveAutoBattle(true); this.autoRest = true; this.showResumeButton(true); return this.submitCommands({}); }
+        if (all === "retreat") return this.submitCommands({ retreat: true });
       });
     }
-    if (typeof Sound !== "undefined") Sound.cue("mormo", { index: 1 });
+    this.bindBattlefieldTaps();
+    if (seq.mode === "menu" && typeof Sound !== "undefined") Sound.cue("mormo", { index: 1 });
+  },
+
+  // 気合が高まった者の表示を一瞬光らせる（窓が開いていればその中の気合、無ければ札だけ）。
+  flashSpirit(unitId) {
+    const panel = document.getElementById("command-panel");
+    if (!panel || panel.hidden || panel.dataset.unit !== unitId) return;
+    const el = panel.querySelector(".cmd-spirit");
+    if (!el) return;
+    el.classList.add("gain");
+    setTimeout(() => el.classList.remove("gain"), 700);
+  },
+
+  // 一人ぶん決めて次へ。最後の一人ならラウンド開始。
+  decideCommand(unitId, cmd, target, skill) {
+    const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
+    if (!seq || !prompt) return;
+    this.cmdSel[unitId] = { cmd, target, skill: skill || null };
+    seq.commands[unitId] = { cmd, target, skill: skill || null };
+    // 決めた瞬間に構えへ。実行に入っても idle へは戻さない（構えを保つのが要件）。
+    // 10コマ揃っている種族は、そこから短く1周して戦闘準備姿勢（9.webp）へ着地する。
+    // ここは「対象を含む最終行動が確定した」唯一の地点なので、確定後回転もここだけ。
+    this.commandPose(this.units[unitId], this.COMMAND_POSE[cmd] || "idle");
+    this.confirmSpinEnter(this.units[unitId]);
+    seq.mode = "menu";
+    this.cmdTargetSide = null; this.cmdTargetKind = null;
+    if (seq.idx >= prompt.allies.length - 1) {
+      const commands = {};
+      for (const al of prompt.allies) {
+        const c = seq.commands[al.id];
+        if (!c || c.cmd === "auto") continue;
+        commands[al.id] = { cmd: c.cmd, target: c.target || undefined, skill: c.skill || undefined };
+      }
+      return this.submitCommands(commands);
+    }
+    seq.idx += 1;
+    this.renderCommandPanel(prompt);
+  },
+
+  // 窓の置き場所は CSS（味方の列の右、戦場の中央の高さ。狙い選び中は上の帯）。ここでは画面外なら見える所まで送るだけ。
+  placeCommandPanel() {
+    const panel = document.getElementById("command-panel");
+    if (!panel || typeof panel.scrollIntoView !== "function") return;
+    const r = panel.getBoundingClientRect();
+    if (r.top < 0 || r.bottom > innerHeight) panel.scrollIntoView({ block: "center", behavior: "smooth" });
+  },
+
+  // 戦場のタップ：狙い選び中は敵の札で確定。指示中は味方の札でその者へ飛ぶ（決め直し）。
+  bindBattlefieldTaps() {
+    const scene = document.getElementById("scene");
+    if (!scene || scene.dataset.cmdBound) return;
+    scene.dataset.cmdBound = "1";
+    scene.addEventListener("click", ev => {
+      // 事件で止めて見せている最中のタップは「先へ」
+      if (!this.cmdSeq && this.advanceBeat()) return;
+      const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
+      if (!seq || !prompt || !this.paused) return;
+      const card = ev.target.closest(".bu");
+      if (!card) return;
+      const id = card.id.replace(/^bu-/, "");
+      if (seq.mode === "target") {
+        const cur = prompt.allies[seq.idx];
+        const sel = this.cmdSel[cur.id] || {};
+        const ally = this.cmdTargetSide === "ally";
+        const hit = ally
+          ? (this.cmdTargetKind === "fallen" ? (prompt.fallen || []) : prompt.allies).some(x => x.id === id)
+          : prompt.enemies.some(e => e.id === id);
+        if (hit) return this.decideCommand(cur.id, sel.cmd, id, sel.skill || null);
+        if (ally) return;      // 味方を選んでいる最中に敵を押しても何も起きない（誤爆を作らない）
+      }
+      const at = prompt.allies.findIndex(al => al.id === id);
+      if (at >= 0 && at !== seq.idx) { seq.idx = at; seq.mode = "menu"; this.renderCommandPanel(prompt); }
+    });
   },
 
   setMormoControlsLocked(locked, wipe = false) {
@@ -2027,51 +2704,129 @@ const BattleScene = {
   },
 
   // ダメージ数字を浮かせる。カード内に絶対配置するので座標計測は不要。
+  // 技の吹き出し（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 1節）。
+  // 1行目に台詞、2行目に技名。札の上に 1.4 秒。**1体に1つ**で、次が来たら前を消す。
+  // 低モーションでは動かさず、同じ長さだけ静止で出す。
+  BUBBLE_MS: 1400,
+  bubble(u, quote, skillName, options = {}) {
+    if (!u || !u.el) return null;
+    const old = u.el.querySelector(".bu-bubble");
+    if (old) old.remove();
+    const box = document.createElement("div");
+    // 敵の台詞も同じ吹き出しで出す（2026-09-18 オーナー指摘。上の字幕に混ぜない）。
+    box.className = "bu-bubble" + (u.side === "enemy" ? " enemy" : "") + (options.talk ? " talk" : "");
+    const life = this.visualDuration(options.life || this.BUBBLE_MS);
+    box.style.setProperty("--bubble-life", `${life}ms`);
+    box.innerHTML = `${quote ? `<span class="bu-quote">「${U.esc(quote)}」</span>` : ""}
+      ${skillName ? `<b class="bu-skill">${U.esc(skillName)}</b>` : ""}`;
+    u.el.appendChild(box);
+    // 札より広い吹き出しは端で画面からはみ出す。はみ出した分だけ横へ寄せる。
+    this.keepOnScreen(box, 6);
+    this.timers.push(setTimeout(() => box.remove(), life));
+    return box;
+  },
+
   float(u, text, cls) {
     const n = document.createElement("span");
     n.className = "fnum " + (cls || "");
     n.textContent = text;
-    const life = this.visualDuration(900);
+    // 数字は2秒近く残す。次の行動が始まっても前の数字が読める（2026-09-16）。
+    const life = this.visualDuration(this.FLOAT_MS);
     n.style.animationDuration = `${life}ms`;
     u.pop.appendChild(n);
+    this.keepOnScreen(n);
     this.timers.push(setTimeout(() => n.remove(), life));
   },
 
-  shake() {
-    const s = document.getElementById("scene");
-    if (!s) return;
-    s.classList.remove("shake");
-    void s.offsetWidth;
-    s.classList.add("shake");
+  // 札より広い文字（「倒れた！」など）が画面の外へ出ないよう、はみ出した分だけ横へ寄せる。
+  // 札の中央からずらすのは読めなくなる時だけ（2026-09-18、スマホ縦で端の札が切れていた）。
+  //
+  // ずらすのは margin で行う。transform は floatUp（浮き上がり）と吹き出しの出入りが
+  // 使っているので、ここで上書きすると動きが止まる。left も吹き出しの中央寄せに使われている。
+  keepOnScreen(node, margin = 4) {
+    const host = node && node.parentElement;
+    if (!host || typeof host.getBoundingClientRect !== "function") return;
+    const width = (typeof innerWidth === "number" && innerWidth) || 0;
+    const box = host.getBoundingClientRect();
+    // scrollWidth は transform の影響を受けない実寸。アニメ開始時の縮小に惑わされない。
+    const text = node.scrollWidth || 0;
+    if (!width || !box.width || !text) return;
+    const center = box.left + box.width / 2;
+    let shift = 0;
+    if (center - text / 2 < margin) shift = margin - (center - text / 2);
+    else if (center + text / 2 > width - margin) shift = (width - margin) - (center + text / 2);
+    if (!shift) return;
+    shift = Math.round(shift);
+    node.style.marginLeft = `${shift}px`;
+    node.style.marginRight = `${-shift}px`;
   },
 
-  // 戦意メーター。戦闘のあいだ常に出ていて、上がるたびに叩かれる。
-  // 「いま何倍で殴っているか」が常に読めないと、強くなった実感が出ない。
-  setMorale(mult, gain) {
-    const box = document.getElementById("morale");
-    if (!box) return;
-    const value = Math.max(1, Number(mult) || 1);
-    document.getElementById("morale-mult").textContent = `×${value.toFixed(2)}`;
-    const fill = document.getElementById("morale-fill");
-    if (fill) fill.style.transform = `scaleX(${Math.min(1, (value - 1) / 1.2)})`;
-    box.classList.remove("m1", "m2", "m3");
-    this.moraleTier = value >= 1.6 ? 3 : value >= 1.25 ? 2 : value > 1 ? 1 : 0;
-    box.classList.add(value >= 1.6 ? "m3" : value >= 1.25 ? "m2" : "m1");
-    box.classList.toggle("lit", value > 1);
-    if (gain) {
-      const g = document.getElementById("morale-gain");
-      g.textContent = `+${gain}%`;
-      g.classList.remove("show");
-      void g.offsetWidth;
-      g.style.animationDuration = `${this.visualDuration(900)}ms`;
-      g.classList.add("show");
-      this.timers.push(setTimeout(() => g.classList.remove("show"), this.visualDuration(900)));
+  shake(big) {
+    const s = document.getElementById("scene");
+    if (!s) return;
+    s.classList.remove("shake", "shake-big");
+    void s.offsetWidth;
+    s.classList.add("shake");
+    if (big) {
+      s.classList.add("shake-big");
+      this.timers.push(setTimeout(() => s.classList.remove("shake-big"), this.visualDuration(360)));
     }
-    box.classList.remove("bump");
-    void box.offsetWidth;
-    box.style.setProperty("--morale-bump", `${this.visualDuration(420)}ms`);
-    box.classList.add("bump");
   },
+
+  // 止め（ヒットストップ）。走っている動きを数十ミリ秒だけ止めてから解く。
+  // 新しいタイマーで動かし直すのではなく、同じ motion を pause/play する
+  // （スキップや中断で this.motions ごと cancel されても破綻しない）。
+  hitStop(ms) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const held = [...this.motions];
+    for (const m of held) { try { m.pause(); } catch (e) {} }
+    this.timers.push(setTimeout(() => {
+      for (const m of held) { try { if (this.motions.has(m)) m.play(); } catch (e) {} }
+    }, ms));
+  },
+
+  // 大技の着弾。止め→白フラッシュ→強い揺れ→相手を弾く→着弾の絵、の順。
+  // 低モーションでは止め・揺れ・弾きを出さない（絵と音は出す）。
+  bigImpact(to, ev) {
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const now = Date.now();
+    // 連続する余波は最初の1発だけ止め＋フラッシュ。以降は揺れだけ。
+    const lead = !this.lastBigStopAt || now - this.lastBigStopAt > this.BIG_STOP_GAP;
+    if (lead) this.lastBigStopAt = now;
+    const after = fn => this.timers.push(setTimeout(fn, reduced || !lead ? 0 : this.BIG.stopMs));
+    if (lead && !reduced) { this.hitStop(this.BIG.stopMs); this.flash(2); }
+    after(() => {
+      if (!reduced) this.shake(true);
+      if (to && !reduced) {
+        const recoil = to.side === "player" ? -1 : 1;
+        this.animateActor(to, [
+          { transform: "translateX(0)" },
+          { transform: `translateX(${recoil * this.BIG.knockPx}px) rotate(${recoil * 10}deg)`, offset: .3 },
+          { transform: `translateX(${recoil * this.BIG.knockPx * .35}px)`, offset: .6 },
+          { transform: "translateX(0)" }
+        ], this.visualDuration(340));
+      }
+      if (to) this.bigVfx(to, ev.fx);
+    });
+  },
+
+  // 着弾の絵。種類ごとの絵が無ければ既存 impact を2倍で出す。
+  bigVfx(u, fx) {
+    if (!u || !u.el) return;
+    const anchor = u.el.querySelector(".bu-vfx-anchor");
+    if (!anchor) return;
+    const img = document.createElement("img");
+    img.className = `bu-vfx vfx-big fx-big-${fx || "hit"}`;
+    img.alt = "";
+    img.src = `${this.EFFECT_DIR}big-${fx || "hit"}.webp`;
+    const life = this.visualDuration(640);
+    img.style.animationDuration = `${life}ms`;
+    img.onerror = () => { img.remove(); this.unitVfx(u, "impact", "big2x", 3); };
+    anchor.appendChild(img);
+    this.timers.push(setTimeout(() => img.remove(), life));
+    return img;
+  },
+
 
   // 一瞬の白飛び。次に来るものを「構えさせる」ための予備動作。
   flash(strength) {
@@ -2208,8 +2963,8 @@ const BattleScene = {
     }
     // 提案を出したまま飛ばそうとしたら何もしない。stop() が一言ごと消してしまい、
     // 選択肢が無いまま戦闘だけが進む（＝答えずに続行したことになる）。
-    if (this.mormoAwaiting && ((!this.retreatAnswered && this.timeline.some(e => e.type === "retreat_offer" && !e.manual))
-      || this.timeline.some(e => e.type === "order_offer" && !this.orderAnswered.has(e.eventId)))) return;
+    if (this.mormoAwaiting && !this.retreatAnswered
+      && this.timeline.some(e => e.type === "retreat_offer" && !e.manual)) return;
     const announced = !!document.querySelector("#scene .scene-result");
     this.stop();
     if (typeof Music !== "undefined") Music.suspend();
@@ -2240,18 +2995,11 @@ const BattleScene = {
           if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
           if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
           if (ev.type === "revive" && u) this.setLife(u, false);
-          if (ev.type === "momentum") this.setMorale(ev.mult, 0);
           if (ev.type === "synergy") this.countSynergy();
         }
         // 答えたら、通常再生へ戻さずに続きを飛ばす（飛ばすつもりで押したのだから）。
-        const offer = this.timeline[offerAt];
-        if (offer.type === "order_offer") {
-          this.resumeSkipAfterOrder = true;
-          this.askOrder(offer);
-        } else {
-          this.resumeSkipAfterRetreat = true;
-          this.askRetreat(offer);
-        }
+        this.resumeSkipAfterRetreat = true;
+        this.askRetreat(this.timeline[offerAt]);
         return;
       }
     }
@@ -2266,7 +3014,6 @@ const BattleScene = {
       if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
       if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
       if (ev.type === "revive" && u) this.setLife(u, false);
-      if (ev.type === "momentum") this.setMorale(ev.mult, 0);
       if (ev.type === "synergy") this.countSynergy();
       if (this.chainViewVersion >= 2) this.chainFlare(ev);
       this.tellChain(ev, false);

@@ -64,7 +64,7 @@ if (st.phase === 'result') {
   if (st.story.flags.villageSaved) assert(st.story.seen.includes('ch2_open'), '村を救って征服が進めば第2章の場面も見た');
 }
 Game.prepareMissions(true);
-assert(st.missionOffers.length === 3 && st.missionOffers.every(m => !m.story), '救援のあとは通常の3択');
+assert(st.missionOffers.length >= 3 && st.missionOffers.every(m => !m.story), '救援のあとは通常の作戦会議（地図の候補＋訓練）');
 
 // ── 枝：出撃者の性格で変わる ──
 const mk = (over) => ({ uid: 900 + Math.floor(Math.random() * 1000), tplId: 'goblin', name: over.name, race: 'ゴブリン', traits: over.traits || [], tags: [], prevJob: over.prevJob || '' });

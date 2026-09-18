@@ -34,21 +34,10 @@ const DEPARTMENT_ORDER = ["combat", "home"];
 // 設計憲法 第9節：恒久成長を攻撃力+1%のような数値上昇にしない。増やすのは
 // 選択肢・組み合わせ・発見であって、伸びるのは軍団の平均値ではなく壊れ方の濃さである。
 // hpMult / defBonus は 2026-09-03 に撤去した（旧セーブ互換のため 1 / 0 として残す）。
-const FACILITY_LEVELS = [
-  { level: 0, name: "空き部屋", buildThreshold: 0, works: 0, hpMult: 1, defBonus: 0 },
-  { level: 1, name: "仮設兵舎", buildThreshold: 3, works: 1, hpMult: 1, defBonus: 0 },
-  { level: 2, name: "整備工房", buildThreshold: 7, works: 2, hpMult: 1, defBonus: 0 },
-  { level: 3, name: "魔王城作業区", buildThreshold: 12, works: 3, hpMult: 1, defBonus: 0 }
-];
-
-const FACILITIES = [
-  { id: "extortion_ledger", icon: "📒", name: "恐喝帳簿", desc: "会計職を出撃させ、予約金貨3Gごとに次の味方攻撃+40%（Lv.の回数だけ発火）",
-    links: { reacts: ["金貨獲得"], emits: ["攻撃強化"], on: "予約金貨が3Gに届くたび" } },
-  { id: "grand_kitchen", icon: "🍖", name: "巨大厨房", desc: "戦闘糧食を追加で1消費し、大食漢と魔界料理人の食事強化を(Lv.+1)倍化",
-    links: { reacts: ["食料消費"], emits: ["食事強化"] } },
-  { id: "graveyard", icon: "🪦", name: "墓地", desc: "留守番の死霊術師が、戦死者を骸骨従者として召喚（Lv.の体数まで）",
-    links: { reacts: ["味方死亡"], emits: ["召喚"] } }
-];
+// 旧「戦闘の施設」（FACILITY_LEVELS / FACILITIES）は 2026-09-13 に撤去した。
+// 施設は城下町ただ1系統（src/data/town.js の TOWN_FACILITIES）。
+// 戦場で効くのは巨大厨房と墓地の2つで、Lv がそのまま「1戦闘に働ける回数」になる。
+// 恐喝帳簿は施設ではないので廃止（エンジンの発火コードは眠っているだけ。掃除は別チケット）。
 
 const DEPARTMENT_RULES = {
   startingFood: 3,
@@ -180,10 +169,12 @@ const Aptitude = {
   contribution(monster, departmentId) {
     const apt = this.of(monster);
     const home = DEPARTMENT_ID(departmentId) !== "combat";
-    // 城の主：この城の勝手を知っている者は、留守番のとき食料を1多く調達する。
-    // 経験で身についた特性なので、応募者には付かない（run.js が決着ごとに付ける）。
-    const keeper = home && (monster.traits || []).includes("castle_keeper")
-      ? ((typeof TRAITS !== "undefined" && TRAITS.castle_keeper && TRAITS.castle_keeper.homeFood) || 0) : 0;
+    // 留守番のとき食料を多く調達する癖（城の主、マンドラゴラの根の声・目覚めの声）。
+    // 癖の側が `homeFood` を持つので、ここは**持っている癖を合算するだけ**にしてある
+    // （名指しで1つだけ見ていると、癖を足すたびにここを直すことになる）。
+    const keeper = home
+      ? (monster.traits || []).reduce((sum, id) => sum
+        + (((typeof TRAITS !== "undefined" && TRAITS[id]) || {}).homeFood || 0), 0) : 0;
     return {
       food: home ? apt.food + keeper : 0,
       material: home ? apt.material : 0,

@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "character": "succubus",
+  "source_sheet": null,
+  "frames_dir": "../../assets/battle/units/succubus/ready-spin",
+  "preview_dir": ".",
+  "qc_dir": ".",
+  "motion": {
+    "command_request": {
+      "lead_seconds": 0.09,
+      "spin_seconds": 0.275,
+      "settle_seconds": 0.08,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    "command_confirm": {
+      "spin_seconds": 0.16,
+      "sequence": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "hold_frame": 9
+    }
+  },
+  "normalization": {
+    "canvas": [
+      512,
+      512
+    ],
+    "anchor_x": 256,
+    "baseline_y": 480,
+    "alpha_mode": "preserve",
+    "black_chroma_key": false,
+    "minimum_component_pixels": 500,
+    "component_filter_frames": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ]
+  },
+  "stages": {
+    "spec": "complete",
+    "reference": "complete",
+    "source": "unavailable",
+    "split": "complete",
+    "transparency": "complete",
+    "normalize": "complete",
+    "command_pose": "complete",
+    "preview": "complete",
+    "qc": "complete",
+    "delivery": "complete"
+  },
+  "artifacts": {
+    "../../assets/battle/units/succubus/ready-spin/0.webp": "8b351ff244b0369183d48a815673466ab7dc69bed3ec98abf490203b509cfc13",
+    "../../assets/battle/units/succubus/ready-spin/1.webp": "d83444b1ba371726d06a2193927819bf6773b93f6f686b15c4a1b3d91fb15b86",
+    "../../assets/battle/units/succubus/ready-spin/2.webp": "688066a75400ff2956baf94cfe5b73d33ee7f93884de7769193b8f2e949d9aeb",
+    "../../assets/battle/units/succubus/ready-spin/3.webp": "0cec8f33cf094646e1ea45c4af58f85e1d4c6a8b209c6c157ec7f588a27def0f",
+    "../../assets/battle/units/succubus/ready-spin/4.webp": "4efd12e950534e226f6ba3a9450e6988645c6db0cf15f3b052ca95b56a46ee23",
+    "../../assets/battle/units/succubus/ready-spin/5.webp": "5cbdc5d5111aa279f875c4b4487cb143ddcce119a2fdf9d48216f05018c9fad9",
+    "../../assets/battle/units/succubus/ready-spin/6.webp": "f57050b5de40c25a1a71060581d107608f8339863b6339c08e0262b7984b8767",
+    "../../assets/battle/units/succubus/ready-spin/7.webp": "e80539416a698f18142384261ad05f55ed6030dda612038a7146c03a8378b87b",
+    "../../assets/battle/units/succubus/ready-spin/8.webp": "27e4e8006a69f7eced93efbc8b3a80a419d896daa79a1a4e2d87c92cf8e2d610",
+    "../../assets/battle/units/succubus/ready-spin/9.webp": "cf840ec3172661fb74a3a5d4164b38cc777d7c63bb44756d33a76fd57bfb8825",
+    "../../assets/battle/units/succubus/ready-spin-review.png": "57f6ace4bb7b645905f62fa018108f8e2c4a0cdd124de08eee803491677f2a64",
+    "actual-speed.mp4": "7c5993eef558c6463a94ddfc0df15009324488ac9419437be084b2889de51559",
+    "contact-sheet.png": "f57994f07a323d55b5f6a0674aabd537e551bd4f98b71ced41a5146588a92e29",
+    "qc.json": "2ceb65b960a78124cce5f127c8e74f5c4ec5892f4fb391dae9719cec804dc1bc"
+  },
+  "recovery": {
+    "rescued_from_stopped_work_session": true,
+    "regenerated_source": false,
+    "last_completed_stage": "delivery",
+    "notes": [
+      "The lost e5ed4b0 commit was not reconstructed.",
+      "The accepted normalized cells were recovered unchanged and are the authoritative Succubus deliverables.",
+      "ready-spin-source.png was lost with the stopped Work session and is intentionally not regenerated or reconstructed.",
+      "This recovered asset remains a legacy nine-image set. Frame 9 combat-ready production is pending and was not fabricated during recovery.",
+      "Migrated to schema version 2 for a separately generated frame 9 only. Preserve accepted recovered frames 0–8 unchanged. Frame 9 direction: front-left three-quarter combat-ready stance, wings open but contained, tail visible, hands raised with violet magic, focused expression; not an attack impact or frame-8 invitation pose.",
+      "Delivered frame 9 to assets/battle/units/succubus/ready-spin/9.webp. Its source is docs/succubus-ready-spin-source/command-pose-source.png; the updated contact sheet, exact-speed preview, manifest, and QC report remain in docs/succubus-ready-spin-preview/."
+    ]
+  }
+}

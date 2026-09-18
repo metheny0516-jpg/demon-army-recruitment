@@ -102,7 +102,7 @@ PROTECTED_TYPES: new Set([
 | 条件 | 加算 | 意図 |
 |---|---|---|
 | `chainDepth >= 3` | `+min(0.5, 0.1 × (chainDepth − 2))` | 深いCHAINほど1段を長く見せる（最大+50%） |
-| `type === "overkill"` | `+0.2 × emphasis` | 蹂躙+40%、粉砕+40%、消滅・魔王級+60% |
+| `type === "overkill"` | `+0.25 × emphasis` | ふつう+25%、殲滅+75% |
 | `type === "synergy" && firstDiscovery` | `+0.45` | 1650ms → 約2390ms。カットインを読み切れる |
 | `type === "result" && reversal` | `+0.65` | 1200ms → 約1980ms |
 | `type === "death" && permanent` | `+0.5` | 750ms → 約1125ms |

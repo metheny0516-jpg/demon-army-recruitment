@@ -7,8 +7,8 @@ const fs = require('fs'), vm = require('vm');
 const files = [
   'src/data/traits.js', 'src/data/battle_happenings.js', 'src/data/monsters.js',
   'src/data/promotions.js', 'src/data/synergies.js', 'src/data/enemies.js', 'src/data/missions.js', 'src/data/counterattack.js',
-  'src/data/departments.js', 'src/data/events.js', 'src/data/demon_kings.js',
-  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/run.js'
+  'src/data/departments.js', 'src/data/town.js', 'src/data/events.js', 'src/data/demon_kings.js',
+  'src/core/util.js', 'src/core/storage.js', 'src/core/synergy.js', 'src/core/battle.js', 'src/core/chain.js', 'src/core/town.js', 'src/core/run.js'
 ];
 const store = {};
 const ctx = { console, Math: Object.create(Math), Date, JSON, localStorage: {
@@ -23,7 +23,7 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
 
 // ── 1. 起きたことが名前になる ──────────────────────────────
 const name = r => Game.buildName(r);
-assert(name({ facilityLevel: 3, activeFacilityId: 'graveyard',
+assert(name({ townTop: 3, townTopId: 'graveyard',
   discoveredSynergyIds: ['legion_of_dead'], maxArmySize: 9 }) === '墓地を三度も回した死の軍勢',
   '施設Lv.3の墓地と死の軍勢が、そのまま名前になる');
 assert(name({ payrollChoices: { withhold: 7 }, mainRace: 'ゴブリン', maxArmySize: 8 })
@@ -51,18 +51,18 @@ assert(name({ chainDefVersion: 2, maxChain: 3, mainRace: 'ゴブリン', maxArmy
   === '特筆すべきことのないゴブリン軍団', 'V2は3段ではCHAIN名を付けない');
 
 // ── 4. ほぼ全ランで起きることは名前を占領しない ────────────────
-// 拠点接収と再起はどちらも「普通の行動」なので、他に言うことがあるランでは名乗らない。
-assert(name({ mainRace: 'ゴブリン', maxArmySize: 8, seizeUsed: true, retriesUsed: 1,
+// 再起は「普通の行動」なので、他に言うことがあるランでは名乗らない。
+assert(name({ mainRace: 'ゴブリン', maxArmySize: 8, retriesUsed: 1,
   maxOverkill: 250 }) === '過剰殺戮のゴブリン軍団',
-  '珍しいことが起きていれば、拠点接収や再起より先にそちらを名乗る');
-assert(name({ mainRace: 'ゴブリン', maxArmySize: 8, seizeUsed: true, retriesUsed: 1 })
+  '珍しいことが起きていれば、再起より先にそちらを名乗る');
+assert(name({ mainRace: 'ゴブリン', maxArmySize: 8, retriesUsed: 1 })
   === '一度死に損なったゴブリン軍団', '他に何も無いランだけが、普通の行動を名前にする');
 
 // ── 5. 起きたことが違えば名前も違う ────────────────────────
 const variants = [
   { mainRace: 'ゴブリン', maxArmySize: 8, missionCounts: { raid: 6 } },
   { mainRace: 'ゴブリン', maxArmySize: 8, retriesUsed: 1 },
-  { mainRace: 'ゴブリン', maxArmySize: 8, seizeUsed: true },
+  { mainRace: 'ゴブリン', maxArmySize: 8, mainRace2: null, battlesWon: 9 },
   { mainRace: 'ゴブリン', maxArmySize: 8, battleIncidentTotal: 25 },
   { mainRace: 'ゴブリン', maxArmySize: 8, maxOverkill: 250 }
 ].map(name);
@@ -73,13 +73,12 @@ assert(new Set(variants).size === variants.length,
 Game.newRun();
 Object.assign(Game.state, {
   roster: [], activeUids: [], battlesWon: 3, fallenTotal: 12,
-  raceCounts: { 骸骨兵: 5 }, maxArmySize: 8, seizeUsed: true
+  raceCounts: { 骸骨兵: 5 }, maxArmySize: 8
 });
 Game.endRun(false);
 const record = Game.state.record;
 assert(typeof record.buildName === 'string' && record.buildName.length > 0,
   'endRun は魔界史の記録へ buildName を焼き込む');
-assert(record.seizeUsed === true, '拠点接収したかどうかも記録に残る（名前の材料になるため）');
 assert(record.buildName === Game.buildName(record),
   '名前は record の中身だけで再現できる（KPIや乱数に依存しない）');
 

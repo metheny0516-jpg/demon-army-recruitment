@@ -42,7 +42,6 @@ const { autoDismissMormo } = require('./helpers.js');
       const snapshot = () => ({
         hp: Object.values(BattleScene.units).map(u => u.fill.style.transform),
         dead: Object.values(BattleScene.units).map(u => u.el.dataset.life),
-        morale: document.getElementById('morale-mult').textContent,
         origin: document.getElementById('chain-origin').textContent,
         reason: document.getElementById('chain-reason').textContent
       });

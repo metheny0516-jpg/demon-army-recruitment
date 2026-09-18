@@ -198,7 +198,6 @@ function runOnce(strat, acc) {
       for (const k of ['loot','food','death']) if (hit[k] && !first[k]) first[k] = battles;
       if ((hit.loot || hit.food || hit.death) && !first.any) first.any = battles;
     }
-    if (Game.canSeizeStronghold()) Game.seizeStronghold();
     if (st.phase === 'result') Game.afterResult();
     if (st.phase === 'facility') Game.chooseFacility(strat.facility || 'extortion_ledger');
     if (st.phase === 'event') {

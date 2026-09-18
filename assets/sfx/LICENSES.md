@@ -52,3 +52,104 @@
 - 変換: 44.1kHz・24bit・stereo WAVを、試聴条件に合わせて44.1kHz・16bit・mono WAVへ機械的に変換しただけ。音の加工・編集・正規化は行っていない。
 
 候補は比較試聴のためだけに分離してあり、採用するまで `src/ui/sound.js` から読み込まない。採用時は、元ページ・取得日・ライセンスをこの台帳に残したまま、ゲーム用に切り出し・レイヤーした成果物を別名で追加する。
+
+## 2026-09-13 魔王軍の勝利歓声（`recorded/fanfare-win-roar.wav`）
+
+- 採用（2026-09-13 オーナー試聴後）: `candidates/candidate-win-roar-quendel-crowd.wav`（大群衆寄り、下記 Gregor Quendel、**CC-BY 4.0**）。採用WAVはこの候補と同一。クレジットは `CREDITS.md` に記載。
+- 初回案は `candidates/candidate-win-roar-craigsmith-cheer.wav`。男性集団の歓声を3半音下げたもの。以下の原題・変換の記述はこの初回案のもの。
+- 原題: [S12-03 Small group men cheering; encouraging.wav](https://freesound.org/people/craigsmith/sounds/675103/)／作者: craigsmith／取得日: 2026-09-13（日本時間）／ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（同日に配布ページのCC0表記を確認）。
+- 取得音源: 配布ページに掲載された[高品質MP3プレビュー](https://cdn.freesound.org/previews/675/675103_2524442-hq.mp3)。原配布WAVではなくMP3からの変換。
+- 変換: 44.1kHzへリサンプル後、ピッチを3半音下げてテンポを補正。70Hzハイパス／5.5kHzローパス、前後無音を除去（ピーク比−45dB）、加工後の約0.15624秒から2.29秒を切り出し。端フェード（先頭25ms／末尾180ms）、ピーク0.85へ正規化、44.1kHz・16bit・stereo WAV（原音monoの左右複製）。
+- 長さ: 2.29秒。既存の `CUE_LENGTH.win` と揃え、BGM復帰タイミングは変更しない。旧 `recorded/fanfare-win.wav` は保持。
+
+### 比較候補 `candidate-win-roar-craigsmith-shout.wav`
+
+- 原題: [R15-73-Small Group of Men Shouting.wav](https://freesound.org/people/craigsmith/sounds/480805/)
+- 作者: craigsmith
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（同日に配布ページで確認）
+- 取得音源: [高品質MP3プレビュー](https://cdn.freesound.org/previews/480/480805_2524442-hq.mp3)。原配布WAVではなくMP3からの変換。
+- 変換: 採用候補と同じリサンプル・3半音低下・テンポ補正・フィルター・無音除去・端フェード・ピーク0.85・44.1kHz／16bit／stereo処理。加工後の約5.25229秒から2.29秒。原音monoの左右複製。
+- 比較意図: 男性の掛け声寄り。配布説明が怒声寄りのため、勝利の歓声を明示する675103を採用した。
+
+### 比較候補 `candidate-win-roar-quendel-crowd.wav`
+
+- 原題: [Free Crowd Cheering Sounds](https://opengameart.org/content/free-crowd-cheering-sounds) 内 `04 - Strong cheering - II - Short`
+- 作者: Gregor Quendel
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/)（同日に配布ページで確認）
+- 取得音源: 配布ZIP `gregor_quendel_-_free_crowd_cheering_sounds_-_mp3.zip` 内の `Gregor Quendel - Crowd Cheering Sounds - 04 - Strong cheering - II - Short.mp3`。
+- 変換: 採用候補と同じリサンプル・3半音低下・テンポ補正・フィルター・無音除去・端フェード・ピーク0.85・44.1kHz／16bit／stereo処理。加工後の約5.74063秒から2.29秒。
+- 比較意図: 大群衆寄り。今回は男性集団の短い歓声を優先。
+- クレジット: “Free Crowd Cheering Sounds” by Gregor Quendel, licensed under CC BY 4.0. Source and license linked above. Modified: excerpt, pitch/tempo, filtering, trimming, fades, normalization and WAV conversion.
+
+## 2026-09-13 城下町・地図・将軍の音（チケット I-1）
+
+全5本ともCC0。取得日: 2026-09-13（日本時間）、同日に各配布ページのCC0表記を確認。`town-build` はFreesoundの公開高品質MP3プレビュー、残りはOpenGameArtの配布ファイルを取得。
+
+各音は単一原音の連続区間のみを使用。合成・重ね合わせ・打撃の複製・リピートなし。44.1kHz・16bit・stereo WAV、ピーク0.85（PCM16実測0.849976）、前後無音をピーク比−45dBで除去し端フェード。元音がmonoの場合は左右へ同じ音を複製。フィルター後、所定長へ再サンプルして再生速度と音高を同時に調整。
+
+### `recorded/town-build.wav`
+
+- 原題: [Wooden mallet](https://freesound.org/people/leo153/sounds/535629/)
+- 作者: leo153
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: 高品質MP3プレビュー。木槌で板を叩く無加工録音。[配布ファイル](https://cdn.freesound.org/previews/535/535629_2535988-hq.mp3)
+- 切り出し: 元音の約7.53844〜8.21986秒（フィルター後の無音判定）。木槌の連続2打。
+- 変換: 80Hzハイパス／6500Hzローパス（2次Butterworth）、再生速度0.908571倍（約-1.66半音）、0.75秒へ。端フェード5ms／30ms。共通仕様へ正規化・WAV出力。
+
+### `recorded/town-coin.wav`
+
+- 原題: [coin sounds](https://opengameart.org/content/coin-sounds)
+- 作者: syncopika
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: coinsounds011015.wav（実物硬貨の録音）。[配布ファイル](https://opengameart.org/sites/default/files/coinsounds011015.wav)
+- 切り出し: 元音の約7.04005〜7.49000秒（フィルター後の無音判定）。硬貨録音の3つの短い衝突。
+- 変換: 120Hzハイパス／10500Hzローパス（2次Butterworth）、再生速度0.999899倍（約-0.00半音）、0.45秒へ。端フェード4ms／25ms。共通仕様へ正規化・WAV出力。
+
+### `recorded/town-bank.wav`
+
+- 原題: [Fantasy Accessory SFX Library](https://opengameart.org/content/fantasy-accessory-sfx-library)
+- 作者: Vehicle (Jan Schupke)
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: accessory.zip / sfx/keyhole-lockbox-turn-01.wav（錠前を回す実録音）。[配布ファイル](https://opengameart.org/sites/default/files/accessory.zip)
+- 切り出し: 元音の約0.01785〜0.71658秒（フィルター後の無音判定）。金庫の錠前を回す音。
+- 変換: 65Hzハイパス／4800Hzローパス（2次Butterworth）、再生速度0.873413倍（約-2.34半音）、0.80秒へ。端フェード8ms／25ms。共通仕様へ正規化・WAV出力。
+
+### `recorded/map-open.wav`
+
+- 原題: [100 CC0 SFX](https://opengameart.org/content/100-cc0-sfx)
+- 作者: rubberduck
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: 100-CC0-SFX_0.zip / paper_03.ogg（Android端末で録音した紙の音）。[配布ファイル](https://opengameart.org/sites/default/files/100-CC0-SFX_0.zip)
+- 切り出し: 元音の約0.02288〜0.54621秒（フィルター後の無音判定）。紙が擦れて広がる短い部分。
+- 変換: 100Hzハイパス／8500Hzローパス（2次Butterworth）、再生速度1.046667倍（約+0.79半音）、0.50秒へ。端フェード8ms／20ms。共通仕様へ正規化・WAV出力。
+
+### `recorded/general-rise.wav`
+
+- 原題: [16 Monster Growls](https://opengameart.org/content/16-monster-growls)
+- 作者: StarNinjas
+- 取得日: 2026-09-13（日本時間）
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: monster_-_starninjas.zip / monster.11.ogg（作者が口で録音した唸り）。[配布ファイル](https://opengameart.org/sites/default/files/monster_-_starninjas.zip)
+- 切り出し: 元音の約0.00023〜1.66449秒（フィルター後の無音判定）。単独の唸りを低くし、立ち上げて短く止める。
+- 変換: 55Hzハイパス／1500Hzローパス（2次Butterworth）、再生速度0.899602倍（約-1.83半音）、1.85秒へ。端フェード320ms／18ms。共通仕様へ正規化・WAV出力。
+
+検査: 5本のWAVヘッダー・長さ・ピーク・両端ゼロを確認。建設音は連続2打の波形、硬貨は短い3衝突を選定。ゲームへの配線・ブラウザ検証は本チケットの範囲外。
+
+## 2026-09-15 大技の爆発音（`recorded/dokan-a.wav` / `dokan-b.wav` / `dokan-c.wav`）
+
+- 原題: [25 CC0 bang / firework SFX](https://opengameart.org/content/25-cc0-bang-firework-sfx)／作者: rubberduck／取得日: 2026-09-15／ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（取得日に配布ページで確認）。
+- 取得音源: [25-CC0-bang-sfx.zip](https://opengameart.org/sites/default/files/25-CC0-bang-sfx.zip)。花火を録音した爆発・砲撃系OGGから変換。
+- 共通処理: ffmpegで44.1kHz mono floatへデコード、2次Butterworth 45Hz〜7kHz帯域通過、ピーク比0.006の最初の検出点の88サンプル前から切出し。先頭132サンプル線形フェード、末尾5292サンプルは線形フェードの1.3乗。初回ピーク0.70正規化後16bit化。続いてtanhソフトリミットで余韻を持ち上げ、ピーク0.70・RMS0.16へ調整。最終先頭88サンプル／末尾882サンプル線形フェード。44.1kHz・16bit・mono WAV。追加音源の合成なし。
+- 音量比較: 既存zuba-a/b/cはRMS約0.16、basun-a/b/cは約0.19。今回3本はRMS約0.16、ピーク約0.70。聴感の最終確認はゲーム接続後に実施する。
+
+| ファイル | 原音 | 切出し開始サンプル（44.1kHz） | 秒 | tanh係数 | 原音SHA-256 |
+| --- | --- | --- | --- | --- | --- |
+| dokan-a.wav | cannon_01.ogg | 358 | 0.6 | 4.037301345 | `e87ca0ee6b53da1f21cd9086cb75f456495871618fdfed63388bd2208a872596` |
+| dokan-b.wav | cannon_03.ogg | 1586 | 0.52 | 7.011708106 | `c3690a013befc16be1432e6fe62422db71c7b606980ddfe62429e864c5caf1d2` |
+| dokan-c.wav | cannon_04.ogg | 159 | 0.66 | 5.389113673 | `58714ef1d8c73a52cd9358c783de4b961ee96259de112c6493a1028bc60410e8` |

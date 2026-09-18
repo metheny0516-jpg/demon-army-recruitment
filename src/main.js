@@ -40,6 +40,66 @@ const App = {
     return this.render();
   },
 
+  // 張り紙を待たない（docs/SPEC_FORCED_OMEN_2026-09-16.md §2-2・§2-3）。
+  // 決着で出た札を、次の画面に入る前にモルモが持ってくる。1決着に出す上限は2件。
+  // 残りは pending に残り、次の決着で先頭に来る。
+  //
+  // done は「札を出し終えたあとに続ける元の流れ」（帰還報告など）。
+  // 「めくる」だけは UI.incident へ抜けるので、戻ってくる先を pendingResume に預ける。
+  PENDING_LIMIT: 2,
+  pendingResume: null,
+
+  presentPending(done, shown = 0) {
+    const finish = () => { this.pendingResume = null; return done ? done() : undefined; };
+    if (typeof Incidents === "undefined" || typeof MormoScene === "undefined") return finish();
+    const st = Game.state;
+    if (!st || !st.incidents) return finish();
+    const queue = st.incidents.pending || [];
+    if (shown >= this.PENDING_LIMIT || !queue.length) return finish();
+    const entry = queue[0];
+    const text = Incidents.pendingText(st, entry);
+    if (!text) { Incidents.markPresented(st, entry.id); return this.presentPending(done, shown); }
+    const card = Incidents.card(entry.id);
+    const next = () => this.presentPending(done, shown + 1);
+    const choices = entry.kind === "arc"
+      // 予兆は分岐点ではないので判断を求めない（§2-4）。
+      ? [{ label: "わかった", action: "incidentlater", id: entry.id,
+           onSelect: () => { Incidents.later(Game, entry.id); next(); } }]
+      : [
+        { label: entry.kind === "tail" ? "その後を聞く" : (card?.choices?.[0] || "めくる"),
+          action: "incidentopen", id: entry.id,
+          onSelect: () => {
+            this.pendingResume = { done, shown: shown + 1 };
+            if (typeof Sound !== "undefined") Sound.cue("shuffle");
+            Incidents.markPresented(st, entry.id);
+            return entry.kind === "tail" ? UI.incidentTail() : UI.incident(entry.id);
+          } },
+        { label: card?.choices?.[1] || "やめる", action: "incidentdecline", id: entry.id,
+          onSelect: () => {
+            if (entry.kind === "tail") Incidents.later(Game, entry.id);
+            else Incidents.decline(Game, entry.id);
+            next();
+          } },
+        { label: "あとで（張り紙に残す）", action: "incidentlater", id: entry.id,
+          onSelect: () => { Incidents.later(Game, entry.id); next(); } },
+      ];
+    return this.report(entry.kind === "arc" ? "worried" : "report", text, {
+      kicker: entry.kind === "A" ? "城下町の噂" : entry.kind === "B" ? "報告"
+        : entry.kind === "tail" ? "噂の続き" : "予兆",
+      title: "宰相モルモ", choices,
+    });
+  },
+
+  // UI.incident の「戻る」から待ち行列へ帰る。続きが無ければ元の流れへ。
+  resumePending() {
+    const resume = this.pendingResume;
+    if (!resume) return false;
+    this.pendingResume = null;
+    this.render();
+    this.presentPending(resume.done, resume.shown);
+    return true;
+  },
+
   report(expression, text, options = {}) {
     if (typeof MormoScene === "undefined") return;
     MormoScene.show({ expression, text, ...options });
@@ -102,6 +162,14 @@ const App = {
         + `\n魔王様、第${b.actAdvance.to}幕デス。まだ終わりません。`,
         { kicker: "幕替わり", title: "宰相モルモ" });
     }
+    if (b.act2Clear) {
+      return this.report("joy",
+        (b.act2Clear.by === "defense"
+          ? "勇者を再び退け、第二幕の戦いに決着がつきましたデス！"
+          : "連合本陣を落とし、第二幕の戦いに決着がつきましたデス！")
+        + "\n軍団はこのまま残りマス。第三幕への出陣まで、訓練と周辺地の略奪を続けられますヨ。",
+        { kicker: "第二幕・決着", title: "宰相モルモ" });
+    }
     if (st.phase === "clear") {
       return this.report("joy", `${b.army}を撃破――人間界制圧デス！\n魔王様、この軍団の歴史を刻みましょう！`,
         { kicker: "最終戦果報告", title: "宰相モルモ" });
@@ -120,9 +188,7 @@ const App = {
       : work.facilityAfter > work.facilityBefore ? "joy" : "report";
     const workText = work.foodShortage
       ? `ただし食料が${work.foodShortage}不足！ 忠誠低下に注意デス！`
-      : work.facilityAfter > work.facilityBefore
-        ? `さらに施設が完成！ ${Game.facilityInfo().name}が次の出撃隊を支えます！`
-        : `現在、食料${st.food}・建材${st.materials}・施設Lv.${st.facilityLevel}デス。`;
+      : `現在、食料${st.food}・建材${st.materials}・城下町Lv計${Game.townLevelTotal()}デス。`;
     // 撤退は勝利ではない。phase === "result" を勝利と決めつけると
     // 「退いたのに撃退しました！」というウソの報告になる（オーナー試遊で発覚）。
     // 防衛戦の勝敗は、既定の「撃退しました！」より必ず先に見る（同じ穴）。
@@ -177,7 +243,6 @@ const App = {
       case "formation": return UI.formation();
       case "preparation": return UI.formation();
       case "result": return UI.result();
-      case "facility": return UI.facility();
       case "event": return UI.event();
       case "story": return UI.story();
       case "defeat": return UI.defeat();
@@ -190,6 +255,35 @@ const App = {
   onAction(action, data) {
     if (typeof Sound !== "undefined") Sound.ui(action);
     switch (action) {
+      case "incidentopen":
+      case "incidenttailview":
+        this.incidentFrom = UI.root?.dataset.scene === "castle" ? "castle" : null;
+        if (typeof Sound !== "undefined") Sound.cue("shuffle");
+        return action === "incidenttailview" ? UI.incidentTail() : UI.incident(data.id);
+      case "incidentpick": {
+        const result = Incidents.open(Game, data.id, data.uid == null ? undefined : Number(data.uid));
+        if (result && !result.pick && !result.busy && typeof Sound !== "undefined") Sound.cue("mormo");
+        return result ? UI.incident(data.id, result) : this.render();
+      }
+      case "incidenttail": {
+        const result = Incidents.finishTail(Game, data.accept === "yes");
+        if (typeof Sound !== "undefined") Sound.cue("mormo");
+        return result ? UI.incident(result.id, result) : this.render();
+      }
+      case "incidentlater":
+        // 「あとで」＝表示済み扱いで pending から外すだけ。offered には残る＝張り紙で読める。
+        Incidents.later(Game, data.id);
+        if (this.resumePending()) return;
+        return this.render();
+      case "incidentdecline":
+        Incidents.decline(Game, data.id);
+        if (this.resumePending()) return;
+        if (UI.root?.dataset.scene === "castle") return UI.castle(UI.castleTab);
+        // めくる前の画面へ戻る。通常のイベントのphaseは変えない。
+      case "incidentback":
+        if (this.resumePending()) return;
+        if (this.incidentFrom === "castle") { this.incidentFrom = null; return UI.castle(UI.castleTab); }
+        return this.render();
       case "new":
         // 新規は必ずスロットを指定する。中身があるスロットは確認してから上書きする
         // （「続きから」を押し損ねて消える事故を無くすのが目的）。
@@ -264,7 +358,53 @@ const App = {
       case "castletab":
         return UI.castle(data.tab);
 
+      // 城下町（2026-09-12）
+      // 施設の詳細（2026-09-15）。地図の区画と一覧の施設名から開く。
+      case "towndetail":
+        if (typeof TownUI === "undefined" || !Town.facility(data.id)) return UI.castle("town");
+        return UI.set(TownUI.detail(data.id), "castle");
+      case "townbuild": {
+        const out = Town.build(Game, data.id);
+        if (out && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-build");
+        // 詳細から建てたときは詳細のまま。絵はその場で差し替わる（0.6秒）。
+        if (data.from === "detail") {
+          UI.set(TownUI.detail(data.id), "castle");
+          const art = UI.root && UI.root.querySelector(".fd-art");
+          if (art && out) art.classList.add("fd-grown");
+          if (out) { const f = Town.facility(out.id); return this.report("joy", `${f.name}が Lv${out.lv} になりました。${f.line}、デス。`, { kicker: "城下町", title: "宰相モルモ" }); }
+          return;
+        }
+        UI.castle("town");
+        if (out) { const f = Town.facility(out.id); return this.report("joy", `${f.name}が Lv${out.lv} になりました。${f.line}、デス。`, { kicker: "城下町", title: "宰相モルモ" }); }
+        return;
+      }
+      case "townexchange":
+        if (Town.exchange(Game) && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-coin");
+        return UI.castle("town");
+      case "townexchangeback":
+        if (Town.exchangeBack(Game) && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-coin");
+        return UI.castle("town");
+      case "townborrow": {
+        const out = Town.borrow(Game, Number(data.amount));
+        if (out && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-coin");
+        UI.castle("town");
+        if (out) return this.report("worry", `銀行員「${out.line}」　借金は ${out.debt}G デス。`, { kicker: "魔界銀行", title: "宰相モルモ" });
+        return;
+      }
+      case "townrepay": {
+        const out = Town.repay(Game, Number(data.amount));
+        if (out && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-coin");
+        UI.castle("town");
+        if (out) return this.report("joy", `${out.paid}G 返しました。銀行員「${out.line}」　残り ${out.debt}G。`, { kicker: "魔界銀行", title: "宰相モルモ" });
+        return;
+      }
+
       case "backcastle":
+        return this.render();
+
+      // どの画面からでも「いま進めるべき画面」へ。城・詳細・城下町から一発で戻る（オーナー試遊 2026-09-12）
+      case "home":
+        UI.memberFrom = null;
         return this.render();
 
       case "member":
@@ -276,14 +416,24 @@ const App = {
       case "title":
         return this.showTitle();
 
-      case "hire":
+      case "hire": {
+        const hired = Game.state.applicants[Number(data.index)];
         Game.hire(Number(data.index));
         this.render();
+        // 遅咲き（裏方の職）を初めて採ったとき、モルモが一度だけほのめかす（技は6戦・12戦で開く。履歴書は「？？？」）。
+        // 画面を覆う報告にはしない（採用の流れを止めない）。採用画面の一行として出す（UI 側が lateBloomerHint を読む）。
+        if (hired && hired.lateBloomer && !Game.state.lateBloomerHinted && Game.state.roster.some(m => m.uid === hired.uid)) {
+          Game.state.lateBloomerHinted = true;
+          Game.state.lateBloomerHint = `${hired.name}殿……履歴書に書いていないことがありそうデス。戦場に出すと化けるかもしれませんヨ。`;
+          Game.save();
+          this.render();
+        }
         if (Game.state.phase === "preparation" && Game.state.day === 1) {
           return this.report("report", "魔王様、勇者到着まであと2日デス。\n配置と給与方針はそのまま翌日へ持ち越せます。今日は仕込みに徹するか、辺境へ遠征するかお選びください。",
             { kicker: "1日目・準備日", title: "宰相モルモ・期限報告" });
         }
         return;
+      }
 
       case "reroll":
         Game.reroll();
@@ -297,23 +447,10 @@ const App = {
         Game.finishRecruitment();
         return this.render();
 
-      case "seize":
-        if (!Game.seizeStronghold()) return;
-        Game.afterResult();
-        this.render();
-        return this.report("joy", "拠点、接収完了デス！\n建設担当がいなくても城は建ちます。ただし王国には見つかりましタ……",
-          { kicker: "拠点接収", title: "宰相モルモ・接収報告" });
-
       case "chooselesson":
         if (!Game.chooseLesson(data.id)) return;
         this.render();
         return;
-
-      case "choosefacility":
-        Game.chooseFacility(data.id);
-        this.render();
-        return this.report("joy", `大型施設「${Game.activeFacility().name}」を稼働します！ この軍団の壊れ方を決める設備デス！`,
-          { kicker: "施設方針決定", title: "宰相モルモ・竣工報告" });
 
       case "endday": {
         const report = Game.advanceDay(Number(data.day));
@@ -331,6 +468,24 @@ const App = {
         if (!Game.prepareOpeningBattle(data.kind)) return;
         this.render();
         return this.formationReport();
+
+      // 訓練の相手を選ぶ（2026-09-13）。作戦会議の札の中だけで完結する。
+      case "trainpick": {
+        Game.state.trainingOpponentId = data.id;
+        Game.prepareMissions(true);
+        this.render();
+        const first = !Game.state.trainedOnce;
+        const veteran = data.id === "veteran" && !Game.state.trainingVeteranSeen;
+        if (veteran) Game.state.trainingVeteranSeen = true;
+        const lines = typeof MORMO_LINES !== "undefined" ? MORMO_LINES : {};
+        if (veteran && (lines.trainingVeteran || []).length) {
+          return this.report("report", lines.trainingVeteran[0], { kicker: "訓練場", title: "宰相モルモ" });
+        }
+        if (first && (lines.training || []).length) {
+          return this.report("report", lines.training[0], { kicker: "訓練場", title: "宰相モルモ" });
+        }
+        return;
+      }
 
       case "missionpick":
         Game.selectMission(Number(data.index));
@@ -369,21 +524,18 @@ const App = {
         Game.setKingSlimeMerge(data.on === "1");
         return this.render();
 
-      case "hiremerc":
-        Game.hireMercenary(Number(data.index));
-        return this.render();
-
-      case "brief":
-        Game.postBrief(data.brief);
-        return this.render();
-
-      case "feast":
-        Game.holdFeast();
-        return this.render();
-
       case "payrollpolicy":
         Game.setPayrollPolicy(data.policy);
         return this.render();
+
+      case "retain": {
+        const m = Game.state.roster.find(x => x.uid === Number(data.uid));
+        const out = m ? Game.retain(m.uid) : null;
+        this.renderMenuContext();
+        if (out && m) return this.report("joy", `${m.name}殿に慰留金 ${out.cost}G を握らせました。忠誠 ${out.loyalty}。荷物は解いたようデス。`,
+          { kicker: "慰留", title: "宰相モルモ" });
+        return;
+      }
 
       case "fire":
         if (data.confirm === "1" && !window.confirm("この者を解雇しますか？ 城の記録には残ります。")) return;
@@ -420,6 +572,10 @@ const App = {
         BattleScene.skip();
         return;
 
+      case "resumecommands":
+        BattleScene.resumeCommands();
+        return;
+
       case "autobattle":
         BattleScene.toggleAutoBattle();
         return;
@@ -436,28 +592,29 @@ const App = {
         this.render();
         return this.battleReport();
 
-      case "afterresult":
+      case "afterresult": {
         Game.afterResult();
         this.render();
         if (Game.state.phase === "story") return;
-        if (Game.state.phase === "preparation") {
-          return this.report("report", "遠征隊が帰還しました。\nまだ今日の業務は終わっていません。配置を確認したら、日次決算へ進めましょう。",
-            { kicker: `${Game.state.day}日目・遠征帰還`, title: "宰相モルモ" });
-        }
+        // 事件が同じ決着に立っているときは事件が先。札は事件が片付いてから（§2-2）。
         if (Game.state.phase === "event") {
           const ev = Game.currentEvent();
           return this.report("angry", `魔王様、大変デス！\n${ev ? ev.title : "城内事件"}が起きました！`,
             { kicker: "魔王城・緊急報告", title: "宰相モルモ" });
         }
-        if (Game.state.phase === "clear" || Game.state.phase === "gameover") {
-          const won = Game.state.phase === "clear";
-          return this.report(won ? "joy" : "worried",
-            won ? "やりましたネ、魔王様！ 人間界制圧デス！ この軍団の歴史を刻みましょう！"
-              : "この魔王軍の歩みは、次の世代のために魔界史へ残しますネ。",
-            { kicker: "最終報告", title: "宰相モルモ" });
-        }
-        return this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
-          { kicker: "次期採用報告", title: "宰相モルモ" });
+        const returned = Game.state.phase === "preparation"
+          ? () => this.report("report", "遠征隊が帰還しました。\nまだ今日の業務は終わっていません。配置を確認したら、日次決算へ進めましょう。",
+            { kicker: `${Game.state.day}日目・遠征帰還`, title: "宰相モルモ" })
+          : (Game.state.phase === "clear" || Game.state.phase === "gameover")
+            ? () => this.report(Game.state.phase === "clear" ? "joy" : "worried",
+              Game.state.phase === "clear" ? "やりましたネ、魔王様！ 人間界制圧デス！ この軍団の歴史を刻みましょう！"
+                : "この魔王軍の歩みは、次の世代のために魔界史へ残しますネ。",
+              { kicker: "最終報告", title: "宰相モルモ" })
+            : () => this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
+              { kicker: "次期採用報告", title: "宰相モルモ" });
+        // 決着がついた以上、モルモは必ず一度は見せる。判断はプレイヤーに残す（§0）。
+        return this.presentPending(returned);
+      }
 
       case "eventpick":
         Game.chooseEvent(Number(data.index));
@@ -468,8 +625,10 @@ const App = {
       case "eventdone":
         Game.nextRecruit();
         this.render();
-        return this.report("welcome", "城内も落ち着きました。次の応募者を面接しましょう！" + this.bondNote(),
-          { kicker: "人事再開", title: "宰相モルモ" });
+        // 事件の選択が終わって面接へ移る前に、待たせていた札を出す（§2-2）。
+        return this.presentPending(() =>
+          this.report("welcome", "城内も落ち着きました。次の応募者を面接しましょう！" + this.bondNote(),
+            { kicker: "人事再開", title: "宰相モルモ" }));
 
       case "nextrecruit":
         Game.nextRecruit();

@@ -17,13 +17,18 @@ const TRACE_KINDS = {
   defended: { label: "防衛", template: "{data.army}から城を守った" },
   ransacked: { label: "荒らされた", template: "{data.army}に城を荒らされた" },
   act: { label: "幕", template: "第{data.act}幕が始まった" },
+  sparked: { label: "火の粉", template: "{subject}が{object}の「{data.skill}」の火の粉を浴びた" },
+  carried_materials: { label: "建材運び", template: "{subject}が建材を運んだ" },
+  cooked: { label: "料理", template: "{subject}が食事を作った" },
+  trained: { label: "稽古", template: "{subject}が{data.tier}で稽古した" },
+  incident: { label: "噂", template: "{data.text}" },
   // 物語の出来事。object がタグ（saved_village / charged_early …）。kind を増やさずに種類を持つ。
   story: { label: "出来事", template: "{subject}が{object}に関わった" }
 };
 
 const Traces = {
   MAX: 400,
-  MAX_KINDS: 18,
+  MAX_KINDS: 23,
   protectedKinds: new Set(["fallen", "retreated", "story"]),
 
   record(list, trace) {

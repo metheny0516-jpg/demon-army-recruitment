@@ -23,6 +23,12 @@ If transparency is returned as a baked checkerboard, reject it and run a backgro
 
 ## Preparation and QA
 
+Command-pose additions (2026-09-15): use `scripts/prepare_command_poses.py` and
+`command-poses.json`. Accepted individual `*-source.png` files take precedence over
+older motion sheets for entries in that manifest. The owner requested troll's new
+gentle design specifically from its portrait, overriding the general reference rule
+above. See `docs/COMMAND_POSE_ART_REVIEW.md` for scope and integration handoff.
+
 1. Retain accepted source sheets for reproducibility. Discarded drafts need not be checked in.
 2. For the new goblin/swordsman/hall pipeline use `scripts/prepare_goblin_motion.py` with the arguments documented in `docs/BATTLE_MOTION_REVIEW.md`. VFX retain `prepare_battle_effects.py`; `prepare_battle_units.py` is the legacy tall-portrait pipeline.
 3. Confirm alpha extrema include 0 and 255.
