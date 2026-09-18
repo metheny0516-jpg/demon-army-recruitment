@@ -375,7 +375,7 @@ const MONSTER_TEMPLATES = [
   },
   {
     skills: ["harpy_dive"],
-    id: "harpy", race: "ハーピー", tier: 2, tags: [],
+    id: "harpy", race: "ハーピー", tier: 2, gender: "female", tags: [],
     jobs: ["伝令", "広報係", "見張り", "配達員"], base: { hp: 17, atk: 7, def: 2, spd: 11 },
     salary: [3, 5], loyalty: [55, 85], fixedTraits: ["first_strike"], traitPool: ["gale", "coward"],
     prevJobs: ["城壁伝令（風の日担当）", "酒場の呼び込み", "王国郵便の誤配係"],
@@ -484,7 +484,7 @@ const MONSTER_TEMPLATES = [
 const MONSTER_TEMPLATES_ACT2 = [
   {
     skills: ["succubus_charm"],
-    id: "succubus", race: "サキュバス", tier: 4, tags: ["caster"], act: 2,
+    id: "succubus", race: "サキュバス", tier: 4, gender: "female", tags: ["caster"], act: 2,
     jobs: ["交渉役", "接待担当", "秘書（兼・査定担当）", "スカウト", "広報（裏）"],
     base: { hp: 22, atk: 12, def: 3, spd: 8 },   // 2026-09-14 魅了が通常攻撃に付いたぶん攻撃 15→12
     salary: [8, 10], loyalty: [50, 75],

@@ -34,9 +34,22 @@ const Story = {
   chapter(st) { return STORY_CHAPTERS.find(ch => ch.n === (st.story ? st.story.chapter : 1)) || STORY_CHAPTERS[0]; },
 
   // 名前の差し込み口。幹の文面が読む。
-  helpers(st) {
+  // 聞き返し役。物語の説明を「え、どういうこと？」と聞き直す係。名簿からその場面ごとに一人選ぶ
+  // （ガンツは永久にいるわけではないので固定しない。オーナー指示 2026-09-18）。口調は性別で変える。
+  pickAsker(st) {
+    const pool = (st.roster || []).filter(m => m && m.name);
+    if (!pool.length) return null;
+    const m = U.pick(pool);
+    const tpl = (typeof MONSTER_TEMPLATES !== "undefined" ? MONSTER_TEMPLATES : []).concat(typeof MONSTER_TEMPLATES_ACT2 !== "undefined" ? MONSTER_TEMPLATES_ACT2 : []).find(t => t.id === m.tplId);
+    return { uid: m.uid, name: m.name, gender: m.gender || (tpl && tpl.gender) || "male" };
+  },
+
+  helpers(st, asker) {
     return {
+      asker: () => asker || null,
       staffNames: () => st.roster.map(m => m.name),
+      // 聞き返し役。門番ガンツ（最初から城にいるオーク）。いなければ null（その行は出さない）
+      gantz: () => st.roster.find(m => m.staff && m.name === "ガンツ") || null,
       villager: () => st.roster.find(m => /ゴブリン村の出/.test(m.prevJob || "")) || null,
       oldestName: () => {
         const list = st.roster.filter(m => m.uid !== undefined).slice().sort((a, b) => a.uid - b.uid);
@@ -61,9 +74,11 @@ const Story = {
       let ok = true;
       try { ok = !beat.check || !!beat.check(st); } catch (e) { ok = false; }
       if (!ok) continue;
-      const cast = beat.cast ? beat.cast(st) : {};
+      const h = this.helpers(st, this.pickAsker(st));
+      let cast = {};
+      try { cast = beat.cast ? beat.cast(st, h) : {}; } catch (e) { cast = {}; }
       let text = "";
-      try { text = beat.text(st, this.helpers(st)); } catch (e) { text = ""; }
+      try { text = beat.text(st, h); } catch (e) { text = ""; }
       if (!text) continue;
       s.seen.push(beat.id);
       const bg = typeof beat.bg === "function" ? beat.bg(st) : (beat.bg || null);
@@ -214,7 +229,7 @@ const Story = {
     const gantz = game.rollApplicant("orc");
     Object.assign(gantz, {
       name: "ガンツ", job: "門番", prevJob: "魔王城の門番（前魔王の代から）", motive: "門があるので",
-      flaw: "門から離れると落ち着かない", quote: "……通れ。魔王様だろ", salary: 2, loyalty: 92, department: "home"
+      flaw: "話が長いと途中で分からなくなる", quote: "……通れ。魔王様だろ", salary: 2, loyalty: 92, department: "home"
     });
     // 実働部隊は空のまま始める（「最初に誰が来るか」を採用に残す。レビュー 2026-09-18）。
     for (const m of [gantz]) {
