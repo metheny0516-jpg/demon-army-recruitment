@@ -131,6 +131,35 @@ test('全滅しても誰も死なず、ランは続く', () => {
   assert(st.phase !== 'gameover', 'endRun しない');
 });
 
+test('第9段まで登りきったら札は出なくなる', () => {
+  const st = afterAct2();
+  Game.trials().level = Game.TRIAL_MAX - 1;   // newRun 直後は器が空のことがあるので trials() を通す
+  Game.prepareMissions(true);
+  const last = st.missionOffers.find(m => m.missionKind === 'trial');
+  assert(last, `最後の段の札は出る（第${Game.TRIAL_MAX}段）`);
+  assert.equal(last.trial.level, Game.TRIAL_MAX - 1);
+  const notes = [];
+  Game.settleTrial(last, { victory: true, contribution: st.roster.map(m => ({ uid: m.uid, name: m.name, damage: 1 })) }, notes);
+  assert.equal(st.trials.level, Game.TRIAL_MAX, '上がりは第9段');
+  assert(notes.some(n => /登りきった/.test(n)), '登りきったことを伝える一行');
+  Game.prepareMissions(true);
+  assert(!st.missionOffers.some(m => m.missionKind === 'trial'), '登りきったら札は出ない');
+  assert.deepEqual(st.missionOffers.map(m => m.missionKind).sort(), ['raid', 'train'], '残るのは略奪と訓練');
+  // もう一度作戦会議を開いても札は戻らない（作り直しの判定が「無いから古い」と誤解しない）
+  Game.prepareMissions();
+  assert(!st.missionOffers.some(m => m.missionKind === 'trial'));
+});
+
+test('勝ち続けても第9段を越えない', () => {
+  const st = afterAct2();
+  Game.prepareMissions(true);
+  const win = level => Game.settleTrial({ trial: { level }, trialReward: 1, army: '相手' },
+    { victory: true, contribution: st.roster.map(m => ({ uid: m.uid, name: m.name, damage: 1 })) }, []);
+  for (let i = 0; i < Game.TRIAL_MAX + 3; i++) win(st.trials.level);
+  assert.equal(st.trials.level, Game.TRIAL_MAX);
+  assert.equal(st.trials.best, Game.TRIAL_MAX);
+});
+
 test('旧セーブにも梯子の器が入る', () => {
   const st = afterAct2();
   delete st.trials;
