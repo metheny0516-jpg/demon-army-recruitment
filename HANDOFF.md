@@ -21,6 +21,27 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
 
+### 済：敵将13人に戦闘絵を当てた（2026-09-18・Opus）
+
+`docs/SPEC_CAPTAIN_ART_2026-09-18.md`。枝 `claude/captain-art-0918` を本線へ通常 merge。
+battle.js・run.js・絵は触っていない（新しい絵も作っていない＝すべて既存戦闘絵の流用）。
+
+原因：敵将は `tplId` を持たず、`BattleScene.artId` が icon の対応表を引いていたため、
+表に無い者（迷宮の主 🐂・塔の主 🗼・審問官 📜・ポルカ 🎺 ほか）が絵文字のまま立っていた。
+各敵将に `look: { tplId, race }` を持たせ、`attach` / `heroParty` が unit へ写すだけで解決。
+
+仕様書との差分1件：墓守の race は仕様書の「骸骨」ではなく **「骸骨兵」**（`monsters.js` の
+skeleton の表記に合わせた。仕様書 §2 の「同 tplId の応募者と同じ表記」に従うとこちら）。
+
+検証結果：
+- `test-captains.js` に4件追加（look の有無・絵の実在・race の表記ゆれ・attach/heroParty が写す）→ 全通過
+- `tools/browser-tests/captain-art.js` 新規（run-all.sh 登録済み）：13人すべてが
+  `BATTLE_SPRITES` に載る絵を引く／迷宮の主の札に minotaur の img が入り絵文字が残らない
+- battlefield・general・scene 通過、`node tools/sim.js 5` 例外なく完走（数値は不変）
+- 390px 目視：迷宮の主がミノタウロスの絵で敵側に立つ（`.screenshots/captain-art-390.png`）
+
+次：`docs/SPEC_TRIAL_BATTLE_2026-09-18.md`（力試し）を別枝で。run.js は Opus のみ。
+
 ### オーナー指示 2件の仕様書（2026-09-18・統括 Claude Fable）→ Opus へ2チケット（順に、別枝）
 
 1. **敵将・中ボスに戦闘絵を当てる**：`docs/SPEC_CAPTAIN_ART_2026-09-18.md`。原因は敵将 unit に `tplId` が無いこと。`enemy_captains.js` に `look:{tplId,race}`、`captains.js` の `attach/heroParty` が写すだけ。新しい絵は不要（迷宮の主→minotaur、塔の主→necromancer、ヴァル→inquisitor 等）。
