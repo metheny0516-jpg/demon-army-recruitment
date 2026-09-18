@@ -98,5 +98,37 @@ console.log('▼ 4. 覚醒の閾値の上書き（師を討たれた勇者）');
   assert(!a.flags.awakened && b.flags.awakened, 'HP 65% では既定は覚醒せず、awakenAt 0.7 なら覚醒する');
 }
 
+// ── 戦闘絵（docs/SPEC_CAPTAIN_ART_2026-09-18.md）──
+// 敵将は tplId を持たないので、BattleScene.artId が icon の対応表を引き、
+// 表に無い者（迷宮の主 🐂 など）は絵文字のまま戦場に立っていた。
+console.log('\n▼ 6. 戦闘絵');
+assert(ids.every(id => DATA[id].look && DATA[id].look.tplId && DATA[id].look.race),
+  `13人全員に look がある（無い者: ${ids.filter(id => !(DATA[id].look && DATA[id].look.tplId)).join('、') || 'なし'}）`);
+const missingArt = [...new Set(ids.map(id => DATA[id].look && DATA[id].look.tplId))]
+  .filter(tpl => tpl && !fs.existsSync(`assets/battle/units/${tpl}/idle.webp`));
+assert(missingArt.length === 0, `look の絵が実在する（無い: ${missingArt.join('、') || 'なし'}）`);
+// 同じ tplId の応募者がいる種族は、表記を揃える（履歴書・魔界史で名前が割れない）
+const MONSTERS = vm.runInContext('typeof MONSTERS !== "undefined" ? MONSTERS : []', ctx);
+const raceOf = tpl => (MONSTERS.find(m => m.id === tpl) || {}).race;
+const mismatched = ids.filter(id => {
+  const look = DATA[id].look || {}; const race = raceOf(look.tplId);
+  return race && race !== look.race;
+});
+assert(mismatched.length === 0,
+  `race の表記が応募者と揃っている（ずれ: ${mismatched.map(id => `${id}:${DATA[id].look.race}≠${raceOf(DATA[id].look.tplId)}`).join('、') || 'なし'}）`);
+
+{
+  // attach / heroParty が unit へ写すこと（写さないと戦闘画面まで届かない）
+  const st = { captains: {} };
+  const [lord] = C.attach([], 'labyrinth_lord', st, 1);
+  assert(lord.tplId === 'minotaur' && lord.race === 'ミノタウロス',
+    `attach した敵将に絵が乗る（${lord.tplId} / ${lord.race}）`);
+  const base = [{ name: '勇者アレン', role: 'commander', hp: 120, atk: 24, def: 12, spd: 10, traits: [] }];
+  const party = C.heroParty({ captains: {} }, base, 1);
+  const joined = party.filter(u => u.captain);
+  assert(joined.length > 0 && joined.every(u => u.tplId),
+    `勇者一行に加わる敵将にも絵が乗る（${joined.map(u => `${u.name}:${u.tplId}`).join('、') || 'なし'}）`);
+}
+
 console.log(failed ? `\n失敗 ${failed}` : '\n全通過');
 process.exitCode = failed ? 1 : 0;
