@@ -117,6 +117,7 @@ Story.mark(st, 'charged_early', br.uid, { won: false });
 Game.trace('downed', st.roster[0].uid, null, { round: 1 });
 assert(SC('road_brute_charge').resolve(st, { actor: br }, [br]) === 'wait', '前に突っ込んで仲間が倒れていれば命令を待つ');
 // 農具を持った手
+const departedSaved = st.departed; st.departed = [];   // 実戦で戦死者が出ていると激昂が先に立つので、ここでは空にして順に見る
 const fr = fresh({ name: '農家育ち', prevJob: '人間の農家で育った（番犬扱い）' });
 assert(SC('arrival_farm_raised').resolve(st, { actor: fr }, [fr]) === 'hesitate', '初めて人間と戦うならためらう');
 Story.mark(st, 'hesitated', fr.uid, {});
@@ -125,7 +126,7 @@ Game.trace('downed', st.roster[0].uid, null, { round: 2 });
 assert(SC('arrival_farm_raised').resolve(st, { actor: fr }, [fr]) === 'strike', '前にためらって仲間が倒れていれば今回は斬る');
 st.departed.push({ uid: 7777, name: '故人', cause: 'fallen', army: '開拓保護隊' });
 assert(SC('arrival_farm_raised').resolve(st, { actor: fr }, [fr]) === 'rage', '仲間が人間に倒されていれば激昂する');
-st.departed.pop();
+st.departed = departedSaved;
 // 門が閉まる
 const sk = fresh({ name: '骨2', traits: ['bone'] }); sk.tplId = 'skeleton'; sk.tags = ['undead'];
 assert(SC('arrival_undead_fear').resolve(st, { actor: sk }, [sk]) === 'fear', '骸骨だけなら門は閉まる');
