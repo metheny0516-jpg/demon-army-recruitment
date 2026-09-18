@@ -1,5 +1,5 @@
 // 将軍への転身（docs/SPEC_GENERAL_2026-09-13.md 2.2・2.6）：
-// 名簿に二つ名と紫の縁／戦場の札にも／指示窓に将軍技「力を示せ」／転身のカットイン。
+// 名簿に二つ名と紫の縁／戦場の札にも／指示窓に将軍技「魔王の力」／転身のカットイン。
 //   node tools/browser-tests/general.js
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
 const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
@@ -115,7 +115,9 @@ const SETUP = () => {
       spiritMax: ally.spiritMax, cost: (ally.skills.find(s => s.id === 'general_might') || {}).cost
     };
   });
-  ok(/力を示せ/.test(win.text), `指示窓に将軍技「力を示せ」（${win.text}）`);
+  // 指示窓は技の**正式名**を出す。「力を示せ」は魔王の号令の言い方で、
+  // それだけだと何の技か覚えられない（2026-09-18 オーナー指摘）。
+  ok(/魔王の力/.test(win.text), `指示窓に将軍技「魔王の力」（${win.text}）`);
   ok(win.cost === 2 && win.disabled === false, `気合2で押せる（cost=${win.cost}）`);
   ok(win.spiritMax === 4, `気合の上限が4（${win.spiritMax}）`);
   ok(/●●●●/.test(win.spirit), `窓の気合表示も4つ（${win.spirit}）`);
