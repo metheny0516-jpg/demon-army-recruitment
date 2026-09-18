@@ -2075,8 +2075,25 @@ const UI = {
   storyCut: 0,
   storyKey: null,
 
+  // 台詞の直前に置いた話者名（「モルモ「…」」の「モルモ」）は、事件画面では小さな見出しだが、
+  // 紙芝居では名前だけの一枚になってしまう（オーナー試遊 2026-09-18）。字幕の末尾の話者名は削り、空になれば捨てる。
   storyCuts(st, text, cast) {
-    return this.eventScript(text, cast).map(b => ({ say: b.say, body: b.body }));
+    const names = this.eventCastList(cast).map(m => m.name).concat(["モルモ"]).filter(Boolean)
+      .sort((a, b) => b.length - a.length);
+    const out = [];
+    for (const b of this.eventScript(text, cast)) {
+      if (b.say) { out.push({ say: b.say, body: b.body }); continue; }
+      let body = String(b.body || "").trim();
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const n of names) {
+          if (body.endsWith(n)) { body = body.slice(0, -n.length).replace(/[\s、。]+$/, "").trim(); changed = true; }
+        }
+      }
+      if (body) out.push({ say: null, body });
+    }
+    return out;
   },
 
   // 顔枠。戦闘の大顔吹き出し（.mormo-aside-face）と同じ切り抜き。モルモは表情つき全身像、
