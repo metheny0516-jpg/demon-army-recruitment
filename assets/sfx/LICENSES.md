@@ -1,5 +1,14 @@
 # 効果音のライセンス台帳
 
+## 2026-09-19 履歴書をめくる音（`recorded/page.wav`）
+
+- 原題: [100 CC0 SFX](https://opengameart.org/content/100-cc0-sfx) 内 `paper_03.ogg`
+- 作者: rubberduck
+- 取得日: 2026-09-13（日本時間）／履歴書用への採用日: 2026-09-19
+- ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)
+- 原音: Android端末で録音された紙の音。既存の `recorded/map-open.wav` と同じ外部原音に由来する。
+- 変換: `recorded/map-open.wav` の先頭から0.35秒の単一連続区間を切り出し、末尾30msのみフェード。44.1kHz・16bit・stereo WAV。合成・重ね合わせ・追加音源なし。
+
 ## 2026-09-11 勝利ファンファーレ（`recorded/fanfare-win.wav`）
 
 - 原題: [Classic fanfare lick](https://opengameart.org/content/classic-fanfare-lick)／作者: fvcalderan／取得日: 2026-09-11／ライセンス: [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/)（同日に配布ページのCC0表記を確認）／変換: 前後無音を除去、ピーク0.85、端フェード、44.1kHz・16bit・stereo WAV。
