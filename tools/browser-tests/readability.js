@@ -4,7 +4,7 @@
 //  3. 全体技は一撃で全員に当たる（死亡が挟まっても別の一撃に割れない）
 //  4. 技は正式名で覚えられる／ダメージの数字が画面からはみ出さない
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
+const { autoDismissMormo, keepMormoChoices, enterMissionPhase } = require('./helpers.js');
 const assert = require('assert');
 
 (async () => {
@@ -13,6 +13,7 @@ const assert = require('assert');
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   try {
     await autoDismissMormo(page);
+    await keepMormoChoices(page);
     await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
     await page.click('[data-action="new"]');
     await page.locator('[data-action="hire"]:not([disabled])').first().click();

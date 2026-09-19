@@ -39,6 +39,15 @@ const UI = {
   },
 
   // shape: "photo" = 履歴書の証明写真風(3:4) / それ以外 = 丸アイコン
+  // 前借りの担保（docs/SPEC_BANK_ADVANCE_2026-09-19.md §2-2）。
+  // 能力は変わらない。札に印と残りの決着だけ出す。状態は st.town.advance と突き合わせる。
+  collateralNote(m) {
+    if (typeof Town === "undefined" || !m) return "";
+    const a = Town.advance(Game.state);
+    if (!a || a.uid !== m.uid) return "";
+    return `<div class="collateral-note">⛓ 魔界銀行の担保${a.overdue ? "（取り立てが向かっている）" : `（あと${a.settlesLeft}決着で ${a.repay}G）`}</div>`;
+  },
+
   avatarHtml(m, shape) {
     const cls = "avatar" + (shape === "photo" ? " photo" : "");
     const emoji = this.icon(m.race);
@@ -104,7 +113,10 @@ const UI = {
         <span>城下町 <b>Lv計 ${Game.townLevelTotal()}</b></span>
         <span>給与・手当 <b>${salary}G</b>/${opening ? "3日" : "戦"}</span>
         <span>軍団 <b>${st.roster.length}/${Game.maxArmy()}</b></span>
-        ${typeof Town !== "undefined" ? `<span>税 <b>${Town.taxPerSettle(st)}G</b>/戦${Town.init(st).debt ? `　借金 <b>${Town.init(st).debt}G</b>` : ""}</span>` : ""}
+        ${typeof Town !== "undefined" ? `<span>税 <b>${Town.taxPerSettle(st)}G</b>/戦${(() => {
+          const a = Town.advance(st);
+          return a ? `　前借り <b>${a.repay}G</b>（あと${a.settlesLeft}戦）` : "";
+        })()}</span>` : ""}
         <span>出撃 <b>${Game.activeRoster().length}/${Game.MAX_DEPLOY}</b></span>
         <span class="muted">${U.esc(sd.region)}</span>
         <span class="muted hud-slot">保存中：スロット ${Storage.activeSlot()}</span>
@@ -335,6 +347,7 @@ const UI = {
         </div>
         ${opts.badge ? `<span class="pos-badge">${U.esc(opts.badge)}</span>` : ""}
       </div>
+      ${this.collateralNote(m)}
       ${veteranNote}${bondNote}${broughtNote}
       ${legacy}
       ${opts.resume ? `<div class="traits">${this.traitHtml(m.traits, relicByTrait)}</div>

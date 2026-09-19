@@ -28,7 +28,25 @@ async function autoDismissMormo(page) {
       }
       MormoScene.__autoDismiss = true;
       const show = MormoScene.show.bind(MormoScene);
-      MormoScene.show = function (options) { show(options); this.close(); };
+      MormoScene.show = function (options) {
+        show(options);
+        // 選択肢つきの報告（札をめくる／前借りの期限など）は**閉じずに答える**。
+        // 閉じるだけだと判断が黙って捨てられ、その先の流れが進まない（2026-09-19）。
+        // 押すのは**最後の選択肢**＝いちばん静かな道（「あとで」「やめておく」）に揃えてある。
+        // 選択そのものを試したいテストは keepMormoChoices() で止める。
+        if (Array.isArray(options && options.choices) && options.choices.length) {
+          if (this.__keepChoices) return;          // 選択そのものを試すテストは触らない
+          return queueMicrotask(() => {
+            const all = document.querySelectorAll('#mormo-scene .mormo-scene-choice');
+            if (all.length) all[all.length - 1].click();
+            else { this.reveal(); queueMicrotask(() => {
+              const late = document.querySelectorAll('#mormo-scene .mormo-scene-choice');
+              if (late.length) late[late.length - 1].click(); else this.close();
+            }); }
+          });
+        }
+        this.close();
+      };
       const aside = MormoScene.aside.bind(MormoScene);
       MormoScene.aside = function (options) {
         const box = aside(options);
@@ -39,6 +57,17 @@ async function autoDismissMormo(page) {
       };
     };
     patch();
+  });
+}
+
+// 選択肢つきの報告を**自動で答えさせない**。選択そのものを試すテスト用。
+async function keepMormoChoices(page) {
+  await page.addInitScript(() => {
+    const hold = () => {
+      if (typeof MormoScene === "undefined") return setTimeout(hold, 5);
+      MormoScene.__keepChoices = true;
+    };
+    hold();
   });
 }
 
@@ -81,4 +110,4 @@ async function enterMissionPhase(page) {
   await page.waitForTimeout(30);
 }
 
-module.exports = { dismissMormo, autoDismissMormo, silenceMormoFromNow, enterMissionPhase };
+module.exports = { dismissMormo, autoDismissMormo, keepMormoChoices, silenceMormoFromNow, enterMissionPhase };

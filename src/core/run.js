@@ -354,6 +354,13 @@ const Game = {
     delete st.orderCount;   // 号令は撤去（同 §1-5。指示はコマンドバトルの窓でする）
     if (typeof st.patrolCount !== "number") st.patrolCount = 0;
     // 力試しの梯子。旧セーブは段0から始める（第二幕決着後の作戦会議で札が出る）。
+    if (st.advancePrompt === undefined) st.advancePrompt = null;
+    // 旧セーブの利子つき借金は Town.init が帳消しにする。知らせる1行はここで積む。
+    if (st.town && st.town.debtForgiven) {
+      st.lastFacilityMigration = st.lastFacilityMigration || [];
+      st.lastFacilityMigration.push(`銀行が帳簿を書き換えた。前の借金 ${st.town.debtForgiven}G は無かったことになっている。`);
+      delete st.town.debtForgiven;
+    }
     if (!st.trials || typeof st.trials !== "object") st.trials = { level: 0, best: 0, wins: 0, losses: 0, last: null };
     for (const [k, v] of Object.entries({ level: 0, best: 0, wins: 0, losses: 0 }))
       if (typeof st.trials[k] !== "number") st.trials[k] = v;
@@ -412,6 +419,8 @@ const Game = {
       act: 1, actStartedTurn: 1, actHistory: [], act2Cleared: null,
       // 力試し（docs/SPEC_TRIAL_BATTLE_2026-09-18.md）。第二幕決着後の梯子。
       trials: { level: 0, best: 0, wins: 0, losses: 0, last: null },
+      // 前借りの聞くべきこと（docs/SPEC_BANK_ADVANCE_2026-09-19.md）。無ければ null。
+      advancePrompt: null,
       // 王国の反撃（2026-09-10）
       counterattack: null, heroCame: false, defenses: { won: 0, lost: 0 },
       ransackCount: 0, plundered: [], renownBonus: 0, clearedBy: null, castleFell: false, castleFalls: 0,
@@ -1686,6 +1695,10 @@ const Game = {
     const defenseArmy = counter
       ? (counter.armyName || (counter.kind === "hero" ? base.army : `${base.army}討伐隊`))
       : null;
+    // 取り立て人（前借り）。数値は段階表のまま、名前だけ銀行の私兵に差し替える。
+    if (counter && counter.kind === "collector" && typeof TOWN_COLLECTOR_NAMES !== "undefined") {
+      units.forEach((u, i) => { u.name = TOWN_COLLECTOR_NAMES[i % TOWN_COLLECTOR_NAMES.length]; });
+    }
     const mission = {
       stage: st.turn,
       missionKind: type.id,
@@ -3257,7 +3270,17 @@ const Game = {
       if (lootGold > 0) notes.push(`戦闘中の略奪 ${lootGold}G を確定（所持金 ${st.gold}G）`);
       this.processCasualties(result.contribution, notes);
       this.awardMerit(result.contribution, notes);
-      if (this.isDefenseBattle(stageData)) {
+      if (this.isDefenseBattle(stageData) && (st.counterattack || {}).kind === "collector") {
+        // 取り立てを追い返した（前借り）。王国の警戒も押収も動かない＝王国とは別の話。
+        this.advanceCollectorBeaten(notes);
+        st.defenses = st.defenses || { won: 0, lost: 0 };
+        st.defenses.won += 1;
+        defenseOutcome = { defended: true, collector: true };
+        st.counterattack = null;
+        this.processDepartments(stageData, notes, undefined, battleRations);
+        this.paySalaries(notes);
+        this.processDepartures(notes);
+      } else if (this.isDefenseBattle(stageData)) {
         // 城を守った。報酬は無いが、討伐隊の荷を押収する。
         const rules = this.counterRules();
         st.alert = Math.max(0, st.alert - rules.threshold);
@@ -3349,7 +3372,14 @@ const Game = {
         this.paySalaries(notes);
         this.processDepartures(notes);
       }
-      if (this.isDefenseBattle(stageData)) {
+      if (this.isDefenseBattle(stageData) && (st.counterattack || {}).kind === "collector") {
+        // 取り立てに負けた。担保の者を連れて行かれ、蔵からも1品。城は荒らされない。
+        this.advanceCollectorWon(notes);
+        st.defenses = st.defenses || { won: 0, lost: 0 };
+        st.defenses.lost += 1;
+        defenseOutcome = { collector: true, taken: true };
+        st.counterattack = null;
+      } else if (this.isDefenseBattle(stageData)) {
         defenseOutcome = { ransacked: this.ransack(notes) };
         this.trace("ransacked", null, null, { army: stageData.army });
         const rules = this.counterRules();
@@ -3987,7 +4017,8 @@ const Game = {
     // 城下町：税・利子・酒場（決着ごと。開幕の日割りでは呼ばない）。荒らされたかは settleContinue が st.lastRansacked に控える
     // 訓練の決着は税収が無い（王国に知られていないので領地は動かない）。利子は普通どおり取られる。
     if (dailyDay === undefined && typeof Town !== "undefined") {
-      Town.settle(this, notes, { ransacked: !!st.lastRansacked || this.isTraining(mission), training: this.isTraining(mission) });
+      const townOut = Town.settle(this, notes, { ransacked: !!st.lastRansacked || this.isTraining(mission), training: this.isTraining(mission) });
+      this.settleAdvance(townOut && townOut.advance, notes);
     }
     // 領土の効き目（docs/SPEC_TERRITORY_A_2026-09-15.md §2-3）。
     // 食料と金だけをここで入れる（応募者・給与相場・種族は面接の側で読む）。
@@ -4007,6 +4038,109 @@ const Game = {
     if (st.lastFacilityMigration && st.lastFacilityMigration.length) {
       for (const line of st.lastFacilityMigration) notes.push(line);
       delete st.lastFacilityMigration;
+    }
+  },
+
+  // ── 魔界銀行の前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md）──
+  // 期限が来て払えなかったら、次の画面で2択を出す（連れて行かせる／待ってもらう）。
+  // ここでは「聞くべきことがある」印を立てるだけ。選ばせるのは UI（main.js）。
+  // 担保の者が名簿から消えていたら、代わりの指名を先に求める。
+  settleAdvance(out, notes) {
+    const st = this.state;
+    if (typeof Town === "undefined") return;
+    // 担保が戦死・離脱した → 代わりを立てる（立てられなければ期限切れと同じ扱い）
+    if (Town.collateralGone(st)) {
+      const next = (st.roster || [])[0];
+      if (next) {
+        st.advancePrompt = { kind: "reassign" };
+        notes.push("担保にしていた者が名簿から消えた。銀行が代わりを求めている。");
+      } else {
+        st.advancePrompt = { kind: "overdue", noCollateral: true };
+        notes.push("担保も軍団も残っていない。銀行が門の前に立っている。");
+      }
+      return;
+    }
+    if (!out) return;
+    if (out.settled === "overdue") {
+      st.advancePrompt = { kind: "overdue", repay: out.repay, uid: out.uid };
+      notes.push(`魔界銀行への ${out.repay}G が払えない。`);
+    }
+  },
+
+  // 2択の「連れて行かせる」。担保の者が名簿から消え、蔵に借用書が残る。契約は帳消し。
+  advanceHandOver() {
+    const st = this.state;
+    if (typeof Town === "undefined") return null;
+    const t = Town.init(st), a = t.advance;
+    if (!a) return null;
+    const monster = (st.roster || []).find(m => m.uid === a.uid);
+    st.roster = (st.roster || []).filter(m => m.uid !== a.uid);
+    st.activeUids = (st.activeUids || []).filter(uid => uid !== a.uid);
+    if (monster) {
+      st.departed = st.departed || [];
+      st.departed.push({ ...monster, leftTurn: st.turn, leftBy: "bank" });
+      // 借用書は蔵に残る。効果は無く、名前と誰のぶんかだけを残す。
+      st.relics = st.relics || [];
+      st.relics.push({ id: `note_${a.uid}`, name: `${monster.name}の借用書`, traitId: null, holderUid: null,
+        from: { name: monster.name }, note: true });
+    }
+    t.advance = null;
+    t.credit = false;                      // 踏み倒した扱い。そのランではもう借りられない
+    t.advanceRecord.seized += 1;
+    st.advancePrompt = null;
+    this.save();
+    return { name: monster ? monster.name : "担保の者", line: Town.line("taken") };
+  },
+
+  // 2択の「待ってもらう」。次の決着で取り立て人が来る（既存の防衛戦の経路に乗せる）。
+  advanceHoldOff() {
+    const st = this.state;
+    if (typeof Town === "undefined") return null;
+    const t = Town.init(st), a = t.advance;
+    if (!a) return null;
+    a.overdue = true;
+    // 王国の反撃が既に予約されていたら、そちらが先（未決 U3 の既定）。取り立ては次の決着へずれる。
+    if (!(st.counterattack && st.counterattack.pending)) {
+      st.counterattack = { pending: true, kind: "collector", armyName: "魔界銀行の取り立て", turn: st.turn };
+    }
+    st.advancePrompt = null;
+    this.save();
+    return { line: Town.line("collector") };
+  },
+
+  // 担保の指名（初回・立て直しの両方）。
+  advanceAssign(uid) {
+    const st = this.state;
+    if (typeof Town === "undefined") return false;
+    const ok = Town.reassign(this, Number(uid));
+    if (ok) st.advancePrompt = null;
+    return ok;
+  },
+
+  // 取り立て人に勝った（防衛戦の決着から呼ぶ）。契約は帳消し。借用書は残らない（未決 U2 の既定）。
+  advanceCollectorBeaten(notes) {
+    const st = this.state;
+    if (typeof Town === "undefined") return;
+    const t = Town.init(st);
+    if (!t.advance) return;
+    t.advance = null;
+    t.advanceRecord.repaid += 1;
+    notes.push("取り立てを追い返した。銀行は「なかったこと」にしたそうだ。");
+  },
+
+  // 取り立て人に負けた。担保の者を連れて行かれ、蔵からも1品持って行かれる。
+  advanceCollectorWon(notes) {
+    const st = this.state;
+    if (typeof Town === "undefined") return;
+    const taken = this.advanceHandOver();
+    if (taken) notes.push(`${taken.name}が連れて行かれた。`);
+    if ((st.relics || []).length > 1) {
+      // 借用書そのものは持って行かない（残す痕跡なので）
+      const at = st.relics.findIndex(r => !r.note);
+      if (at >= 0) {
+        const lost = st.relics.splice(at, 1)[0];
+        notes.push(`蔵から${lost.name}を持って行かれた。`);
+      }
     }
   },
 
@@ -4656,6 +4790,8 @@ const Game = {
       // 挑んでいないランでは best 0（殿堂の一行は best>=1 のときだけ出す）。
       trials: { best: (st.trials && st.trials.best) || 0, wins: (st.trials && st.trials.wins) || 0,
         losses: (st.trials && st.trials.losses) || 0 },
+      // 前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md §3）。借りた・返した・連れて行かれた回数。
+      advance: { ...((st.town && st.town.advanceRecord) || { borrowed: 0, repaid: 0, seized: 0 }) },
       date: new Date().toISOString().slice(0, 10)
     };
     // 名前は record が出揃ってから付ける（材料は record の中だけ）

@@ -13,7 +13,8 @@ const SAVE = () => {
   Game.state.missionOffers = [];
   Game.state.conquest = 3;
   Game.state.outpost = { stage: 3, cleared: true, formationId: 'standard' };
-  Game.state.town = { lv: { market: 2, tavern: 1 }, debt: 20, ledger: [], builtThisSettle: 0, exchanged: {} };
+  Game.state.town = { lv: { market: 2, tavern: 1 }, ledger: [], builtThisSettle: 0, exchanged: {},
+    advance: { id: 'small', gold: 15, repay: 20, settlesLeft: 2, uid: 1, overdue: false }, credit: true };
   Game.state.lastRansacked = false;
   UI.castle('town');
 };
@@ -113,7 +114,7 @@ const SAVE = () => {
   console.log('\n▼ 税と借金の一行、荒らされた印');
   const strip = await page.evaluate(() => document.querySelector('.map-strip').innerText.replace(/\n/g, ' '));
   ok(/領地 3/.test(strip) && /税/.test(strip), `領地と税（${strip}）`);
-  ok(/借金 20G/.test(strip), `借金も出る（${strip}）`);
+  ok(/前借り 20G/.test(strip), `前借りも出る（${strip}）`);
   const smoke = await page.evaluate(() => {
     Game.state.lastRansacked = true; UI.castle('town');
     return document.querySelectorAll('.map-point .mp-smoke').length;

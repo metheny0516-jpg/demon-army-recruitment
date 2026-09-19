@@ -1,7 +1,7 @@
 // 城下町の経済（2026-09-12）。税・施設・銀行・家計簿。状態は st.town に閉じ、run.js からは決着ごとに Town.settle() を呼ぶだけ。
 // 難しくしない：効果は一文、数字は3段階、1決着に建てるのは1件。
 const Town = {
-  rules() { return typeof TOWN_RULES !== "undefined" ? TOWN_RULES : { taxPerTerritory: { 1: 2 }, buildsPerSettle: 1, jobDiscount: 0.2, bank: { choices: [10, 20, 30], cap: 50, interest: 0.1 } }; },
+  rules() { return typeof TOWN_RULES !== "undefined" ? TOWN_RULES : { taxPerTerritory: { 1: 2 }, buildsPerSettle: 1, jobDiscount: 0.2, advances: [] }; },
   facilities() { return typeof TOWN_FACILITIES !== "undefined" ? TOWN_FACILITIES : []; },
   facility(id) { return this.facilities().find(f => f.id === id) || null; },
 
@@ -12,6 +12,13 @@ const Town = {
     const t = st.town;
     if (!t.lv || typeof t.lv !== "object") t.lv = {};
     for (const f of this.facilities()) if (typeof t.lv[f.id] !== "number") t.lv[f.id] = 0;
+    // 前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md §3）。契約は同時に1つ。信用は2値。
+    if (t.advance === undefined) t.advance = null;
+    if (typeof t.credit !== "boolean") t.credit = true;
+    if (!t.advanceRecord || typeof t.advanceRecord !== "object") t.advanceRecord = { borrowed: 0, repaid: 0, seized: 0 };
+    // 旧セーブの利子つき借金は帳消しにする（利子そのものを捨てたので、残高の置き場が無い）。
+    // 知らせる1行は run.js の migrateState が日誌へ積む（ここは状態だけ直す）。
+    if (typeof t.debt === "number" && t.debt > 0) { t.debtForgiven = t.debt; t.debt = 0; }
     if (typeof t.debt !== "number") t.debt = 0;
     if (typeof t.builtTurn !== "number") t.builtTurn = 0;
     if (typeof t.exchanged !== "number") t.exchanged = 0;
@@ -159,27 +166,60 @@ const Town = {
     return true;
   },
 
-  // ── 魔界銀行 ──
-  canBorrow(st, amount) {
-    const b = this.rules().bank;
-    return b.choices.includes(amount) && (this.init(st).debt + amount) <= b.cap;
+  // ── 魔界銀行の前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md）──
+  // 借りるときに担保の人物を1人指名する。その者の戦功で借りられる口が決まる。
+  // 利子は無い。返す額・期限は契約時に確定する（決着ごとの残高計算はしない）。
+  advances() { return this.rules().advances || []; },
+  advanceOf(id) { return this.advances().find(a => a.id === id) || null; },
+  advance(st) { return this.init(st).advance || null; },
+  line(key) { return U.pick((typeof TOWN_BANK_LINES !== "undefined" && TOWN_BANK_LINES[key]) || ["……"]); },
+
+  // その人物を担保に出して借りられる口（戦功で決まる）。
+  advancesFor(st, monster) {
+    const merit = (monster && monster.merit) || 0;
+    return this.advances().filter(a => merit >= a.merit);
   },
-  borrow(game, amount) {
+  canBorrow(st, id, uid) {
+    const t = this.init(st);
+    if (!t.credit || t.advance) return false;              // 踏み倒した後・契約中は借りられない
+    const spec = this.advanceOf(id); if (!spec) return false;
+    const monster = (st.roster || []).find(m => m.uid === uid);
+    if (!monster) return false;
+    return ((monster.merit || 0) >= spec.merit);
+  },
+  borrow(game, id, uid) {
     const st = game.state, t = this.init(st);
-    if (!this.canBorrow(st, amount)) return false;
-    t.debt += amount; st.gold += amount;
+    if (!this.canBorrow(st, id, uid)) return false;
+    const spec = this.advanceOf(id);
+    t.advance = { id: spec.id, gold: spec.gold, repay: spec.repay, settlesLeft: spec.settles, uid, overdue: false };
+    t.advanceRecord.borrowed += 1;
+    st.gold += spec.gold;
     game.save();
-    return { debt: t.debt, line: U.pick((typeof TOWN_BANK_LINES !== "undefined" && TOWN_BANK_LINES.borrow) || ["……"]) };
+    return { advance: { ...t.advance }, line: this.line("borrow") };
   },
-  repay(game, amount) {
+  // 期限前でもいつでも返せる（額は確定しているので割引は無い）。
+  repay(game) {
     const st = game.state, t = this.init(st);
-    const pay = Math.min(t.debt, Math.max(0, Math.floor(amount)), st.gold || 0);
-    if (pay <= 0) return false;
-    t.debt -= pay; st.gold -= pay;
+    const a = t.advance;
+    if (!a || (st.gold || 0) < a.repay) return false;
+    st.gold -= a.repay;
+    t.advance = null;
+    t.advanceRecord.repaid += 1;
     game.save();
-    return { paid: pay, debt: t.debt, line: U.pick((typeof TOWN_BANK_LINES !== "undefined" && TOWN_BANK_LINES.repay) || ["……"]) };
+    return { paid: a.repay, line: this.line("repay") };
   },
-  interest(st) { const t = this.init(st); return t.debt > 0 ? Math.max(1, Math.ceil(t.debt * this.rules().bank.interest)) : 0; },
+  // 担保の者が名簿から消えたら、代わりを立てる（run.js が決着の頭で呼ぶ）。
+  collateralGone(st) {
+    const a = this.advance(st);
+    return !!a && !(st.roster || []).some(m => m.uid === a.uid);
+  },
+  reassign(game, uid) {
+    const t = this.init(game.state);
+    if (!t.advance || !(game.state.roster || []).some(m => m.uid === uid)) return false;
+    t.advance.uid = uid;
+    game.save();
+    return true;
+  },
 
   // ── 家計簿（決着ごとに1枚。直近8枚） ──
   ledger(st) {
@@ -219,24 +259,36 @@ const Town = {
     }
     // 鍛冶場の貯めた気合は測りにくいので、鍛冶場があった決着の数を数える（§2の表）
     if (this.lv(st, "smithy") > 0) this.stat(st, "smithy", 1);
-    const interest = this.interest(st);
-    if (interest > 0) {
-      if ((st.gold || 0) >= interest) { st.gold -= interest; row.interest += interest; notes.push(`魔界銀行へ利子 ${interest}G（残高 ${t.debt}G）`); }
-      else {
-        // 差し押さえ：いちばん高い施設が1段落ちる。人は取られない
-        st.gold = 0;
-        const lost = this.demolishOne(st);
-        if (lost) { t.seized += 1; row.seized = lost.id; notes.push(`利子が払えず、${lost.name}が差し押さえられた（Lv${lost.from}→${lost.to}）`); }
-        else notes.push(`利子が払えない……銀行員がため息をついた（残高 ${t.debt}G）`);
+    // 前借りの期限。決着ごとに1つ減らし、0 になったら返済（払えなければ run.js が2択を出す）。
+    // 利子の毎決着処理と施設の差し押さえは廃止した（docs/SPEC_BANK_ADVANCE_2026-09-19.md §2-6）。
+    let advance = null;
+    const a = t.advance;
+    if (a && !a.overdue) {
+      a.settlesLeft -= 1;
+      if (a.settlesLeft <= 0) {
+        if ((st.gold || 0) >= a.repay) {
+          st.gold -= a.repay;
+          row.interest += a.repay;            // 家計簿の「銀行へ」の列を流用する（列は増やさない）
+          t.advance = null;
+          t.advanceRecord.repaid += 1;
+          notes.push(`魔界銀行へ ${a.repay}G を返済。完済（所持金 ${st.gold}G）`);
+          advance = { settled: "repaid", repay: a.repay };
+        } else {
+          advance = { settled: "overdue", repay: a.repay, uid: a.uid };   // 決め方は run.js が聞く
+        }
+      } else {
+        notes.push(`${this.line("remind")}。あと${a.settlesLeft}決着で ${a.repay}G`);
+        advance = { settled: null, left: a.settlesLeft, repay: a.repay };
       }
     }
-    return { tax, interest };
+    return { tax, interest: 0, advance };
   },
 
   // 表示用のまとめ
   summary(st) {
     const t = this.init(st);
-    return { tax: this.taxPerSettle(st), territories: this.territories(st), perTerritory: this.taxPerTerritory(st), debt: t.debt, interest: this.interest(st) };
+    return { tax: this.taxPerSettle(st), territories: this.territories(st), perTerritory: this.taxPerTerritory(st),
+      advance: t.advance ? { ...t.advance } : null, credit: t.credit !== false };
   }
 };
 

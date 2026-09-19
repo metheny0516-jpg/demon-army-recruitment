@@ -6,7 +6,14 @@ const TOWN_RULES = {
   taxPerTerritory: { 1: 2, 2: 3, 3: 3 },   // 幕ごとの、領地1つあたりの税（決着ごと）
   buildsPerSettle: 1,                       // 1決着に建てられる件数
   jobDiscount: 0.2,                         // 留守番に合う職業の者がいれば建設費2割引
-  bank: { choices: [10, 20, 30], cap: 50, interest: 0.1 }   // 借入の3択・上限・利子（決着ごと、残高の1割）
+  // 前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md）。利子の残高管理は捨てた。
+  // 契約は「受け取る額・返す額・期限（決着）・担保に要る戦功」が最初から確定した1枚。
+  // merit は担保に出す人物の戦功。強い者を賭けるほど大きく借りられ、失うときも大きい。
+  advances: [
+    { id: "small", name: "小口", gold: 15, repay: 20, settles: 3, merit: 0 },
+    { id: "mid",   name: "中口", gold: 30, repay: 45, settles: 4, merit: 10 },
+    { id: "large", name: "大口", gold: 50, repay: 80, settles: 5, merit: 25 }
+  ]
 };
 
 const TOWN_FACILITIES = [
@@ -41,9 +48,19 @@ const TOWN_FACILITIES = [
 
 // 銀行員（ミミックの親戚）。台詞はくすっと。
 const TOWN_BANK_LINES = {
-  borrow: ["毎度どうも。利子は決着ごとに一割。忘れても、こちらは忘れませんので", "はい、耳を揃えて。返すときは、蓋を叩いてください"],
+  borrow: ["担保はどなたにしますか。……ええ、そういう商売でして", "はい、耳を揃えて。期限は蓋に書いておきます"],
   repay: ["おや、律儀な魔王様。次もご贔屓に", "完済ですか。寂しくなりますねぇ"],
-  seize: ["お支払いがないので、施設の看板を一枚いただきます。恨みっこなしで", "差し押さえです。魔界にも法はあるんですよ"]
+  // 前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md §5）
+  remind: ["銀行から催促状デス", "蓋が一度、勝手に鳴りました。催促だそうデス"],
+  overdue: ["払えません。……どちらにいたしますか"],
+  taken: ["{name}は、笑って手を振って行きました。蔵に借用書が残っています",
+    "{name}は「給料の前借りみたいなものだ」と言って、振り返らずに行きました"],
+  collector: ["銀行の私兵が門の前デス。話し合いは済んだそうデス"],
+  defaulted: ["以後のお取引はご遠慮いただきます。……蓋も閉めておきますので"]
 };
 
-if (typeof module !== "undefined") module.exports = { TOWN_RULES, TOWN_FACILITIES, TOWN_BANK_LINES };
+// 取り立て人の顔ぶれ（docs/SPEC_BANK_ADVANCE_2026-09-19.md §2-3）。
+// 数値は既存の段階表から借り、名前だけ差し替える（専用の敵データは作らない）。
+const TOWN_COLLECTOR_NAMES = ["取立人ザル", "取立人ボネ", "帳簿係ミミ", "用心棒グド", "用心棒ハン", "支店長代理"];
+
+if (typeof module !== "undefined") module.exports = { TOWN_RULES, TOWN_FACILITIES, TOWN_BANK_LINES, TOWN_COLLECTOR_NAMES };

@@ -37,15 +37,30 @@ const TownUI = {
       : `<div class="town-row"><span>行商から建材を買う（決着ごと1回。工場を建てると回数が増え、建材→金もできる）</span>
       <button class="small" data-action="townexchangeback" ${Town.canExchangeBack(st) ? "" : "disabled"}>金4 → 建材2${backLeft ? "" : "（今回は済み）"}</button></div>`;
     // 地図の金庫からここへ飛ぶ（新しい action を足さずに済ませる）
-    const bank = `<section class="town-bank" id="town-bank"><h3>🏦 魔界銀行</h3>
-      <div class="muted">借金 <b>${t.debt}G</b>${t.debt ? `（利子 ${sum.interest}G／決着）` : ""}　上限 ${Town.rules().bank.cap}G。利子は決着ごとに残高の1割。払えないと施設が1段落ちる。</div>
-      <div class="town-row">${Town.rules().bank.choices.map(a => `<button class="small" data-action="townborrow" data-amount="${a}" ${Town.canBorrow(st, a) ? "" : "disabled"}>${a}G 借りる</button>`).join("")}
-        ${t.debt ? `<button class="small" data-action="townrepay" data-amount="${Math.ceil(t.debt / 2)}" ${st.gold > 0 ? "" : "disabled"}>半分返す（${Math.min(st.gold, Math.ceil(t.debt / 2))}G）</button>
-        <button class="small" data-action="townrepay" data-amount="${t.debt}" ${st.gold >= t.debt ? "" : "disabled"}>全部返す（${t.debt}G）</button>` : ""}</div>
-    </section>`;
-    const rows = t.ledger.slice().reverse().map(r => `<tr><td>作戦${r.turn}</td><td>+${r.tax}${r.ransacked ? "（荒らされた）" : ""}</td><td>${r.exchange ? `+${r.exchange}` : "-"}</td><td>${r.build ? `-${r.build}` : "-"}</td><td>${r.interest ? `-${r.interest}` : "-"}${r.seized ? "　差し押さえ" : ""}</td></tr>`).join("");
+    // 前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md）。利子は無い。担保に出す人物で借りられる口が決まる。
+    const a = t.advance;
+    const holder = a ? (st.roster || []).find(m => m.uid === a.uid) : null;
+    const bankBody = a
+      ? `<div class="town-advance"><b>${U.esc(Town.advanceOf(a.id) ? Town.advanceOf(a.id).name : "契約")}</b>
+          ：あと<b>${a.settlesLeft}決着</b>で <b>${a.repay}G</b>
+          ${a.overdue ? "　<span class=\"warn\">取り立てが向かっている</span>" : ""}
+          <br>担保：⛓ ${U.esc(holder ? Game.displayName(holder) : "（名簿に居ない）")}</div>
+        <div class="town-row"><button class="small" data-action="townrepay"
+          ${st.gold >= a.repay ? "" : "disabled"}>いま返す（${a.repay}G）</button></div>`
+      : t.credit === false
+        ? `<div class="muted">「以後のお取引はご遠慮いただきます」——この代ではもう借りられない。</div>`
+        : `<div class="muted">前借り。利子は無く、返す額と期限は借りたときに決まる。
+            <b>担保に出す者の戦功</b>で借りられる口が変わる。期限に返せなければ、その者が連れて行かれる。</div>
+          <div class="town-row">${Town.advances().map(spec => {
+            const ok = (st.roster || []).some(m => (m.merit || 0) >= spec.merit);
+            return `<button class="small" data-action="townborrow" data-id="${spec.id}" ${ok ? "" : "disabled"}>${
+              U.esc(spec.name)} ${spec.gold}G → ${spec.repay}G／${spec.settles}決着${
+              spec.merit ? `（担保 戦功${spec.merit}〜）` : ""}</button>`;
+          }).join("")}</div>`;
+    const bank = `<section class="town-bank" id="town-bank"><h3>🏦 魔界銀行</h3>${bankBody}</section>`;
+    const rows = t.ledger.slice().reverse().map(r => `<tr><td>作戦${r.turn}</td><td>+${r.tax}${r.ransacked ? "（荒らされた）" : ""}</td><td>${r.exchange ? `+${r.exchange}` : "-"}</td><td>${r.build ? `-${r.build}` : "-"}</td><td>${r.interest ? `-${r.interest}` : "-"}</td></tr>`).join("");
     const ledger = `<section class="town-ledger"><h3>📒 家計簿（決着ごと）</h3>
-      ${rows ? `<div class="table-wrap"><table class="town-table"><thead><tr><th></th><th>税</th><th>両替</th><th>建設</th><th>利子</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="muted">まだ決着が無い。</div>`}
+      ${rows ? `<div class="table-wrap"><table class="town-table"><thead><tr><th></th><th>税</th><th>両替</th><th>建設</th><th>銀行へ</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="muted">まだ決着が無い。</div>`}
       <div class="muted">給与と食料は結果画面の報告に。ここは城下町の分だけ。</div></section>`;
     // 地図を先頭に。地図が無くても（データやCSSが欠けても）札はそのまま読める。
     const map = typeof MapUI !== "undefined" ? MapUI.render(st) : "";

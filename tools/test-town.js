@@ -53,21 +53,37 @@ assert(Town.canExchangeBack(st) && Town.exchangeBack(Game) && st.gold === 0 && s
 assert(!Town.canExchangeBack(st), '金が無ければ逆向きはできない');
 st.turn = 9; st.gold = 0; st.materials = 8;
 
-// 銀行：3択・上限50・利子1割・返済
+// 前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md）。利子は無い。担保の戦功で借りられる口が決まる。
 st.gold = 0; st.turn = 10;
-assert(Town.canBorrow(st, 20) && Town.borrow(Game, 20) && st.gold === 20 && st.town.debt === 20, '20G 借りる');
-assert(!Town.canBorrow(st, 15), '3択以外は借りられない');
-assert(Town.borrow(Game, 30) && !Town.canBorrow(st, 10), '合計50で上限');
-assert(Town.interest(st) === 5, `利子は残高の1割（${Town.interest(st)}）`);
-notes = []; st.conquest = 0; st.gold = 20; Town.settle(Game, notes, {});
-assert(st.gold === 15 && notes.some(n => /利子 5G/.test(n)), '決着で利子を払う');
-assert(Town.repay(Game, 25) && st.town.debt === 35 && st.gold === 0, `返せる分だけ返す（所持金15 → 15G返済、残高 ${st.town.debt}）`);
+const weak = Game.rollApplicant('goblin'); weak.uid = 91; weak.merit = 0;
+const strong = Game.rollApplicant('orc'); strong.uid = 92; strong.merit = 30;
+st.roster = [weak, strong];
+assert(Town.advancesFor(st, weak).map(a => a.id).join(',') === 'small', '戦功0の者を担保にできるのは小口だけ');
+assert(Town.advancesFor(st, strong).length === 3, '戦功30なら大口まで借りられる');
+assert(!Town.canBorrow(st, 'large', 91), '戦功が足りない担保では大口は借りられない');
+assert(Town.borrow(Game, 'small', 91) && st.gold === 15, `小口 15G を受け取る（${st.gold}）`);
+assert(st.town.advance.repay === 20 && st.town.advance.settlesLeft === 3, '返す額と期限は契約時に確定する');
+assert(!Town.canBorrow(st, 'small', 92), '契約中は次を借りられない');
 
-// 差し押さえ：払えないと施設が1段落ちる
-st.gold = 0; st.turn = 11; notes = [];
-Town.settle(Game, notes, {});
-assert(Town.lv(st, 'market') === 0 || Town.lv(st, 'factory') === 0, `利子が払えず施設が1段落ちる（${notes.find(n => /差し押さえ/.test(n))}）`);
-assert(st.town.ledger.length >= 3 && st.town.ledger[st.town.ledger.length - 1].seized, '家計簿に差し押さえが残る');
+// 期限：決着ごとに1つ減り、0 で返済。払えなければ run.js が2択を出す印を立てる
+notes = []; st.conquest = 0; Town.settle(Game, notes, {});
+assert(st.town.advance.settlesLeft === 2 && notes.some(n => /あと2決着/.test(n)), '期限が近づくと催促が出る');
+st.gold = 100;
+notes = []; Town.settle(Game, notes, {}); notes = []; const out = Town.settle(Game, notes, {});
+assert(st.town.advance === null && st.gold === 80 && out.advance.settled === 'repaid',
+  `期限に払えれば黙って完済（所持金 ${st.gold}）`);
+
+// 払えないとき：担保の者が連れて行かれ、蔵に借用書が残り、そのランはもう借りられない
+st.gold = 0; st.relics = [];
+assert(Town.borrow(Game, 'small', 91), '小口をもう一度借りる');
+notes = []; Town.settle(Game, notes, {}); notes = []; Town.settle(Game, notes, {});
+notes = []; Game.settleAdvance(Town.settle(Game, notes, {}).advance, notes);
+assert(st.advancePrompt && st.advancePrompt.kind === 'overdue', '払えないと2択を聞く印が立つ');
+const taken = Game.advanceHandOver();
+assert(taken && !st.roster.some(m => m.uid === 91), '連れて行かせると名簿から消える');
+assert(st.relics.some(r => r.note), '蔵に借用書が残る');
+assert(st.town.advance === null && st.town.credit === false, '契約は帳消し、そのランはもう借りられない');
+assert(!Town.canBorrow(st, 'small', 92), '踏み倒した後は借りられない');
 
 // 効果の差し込み：鍛冶場・研究所・宿舎・酒場
 st.town.lv.smithy = 2;

@@ -219,7 +219,7 @@ const MapUI = {
     return `<div class="world-map" data-focus="${focus ? focus.id : ""}" data-focus-y="${focus ? focus.y : 0}">
       <div class="map-strip">
         <span>領地 <b>${sum.territories}</b>　税 <b>${sum.tax}G</b>／決着</span>
-        <span>借金 <b>${sum.debt}G</b>${sum.debt ? `（利子 ${sum.interest}G）` : ""}</span>
+        <span>${sum.advance ? `前借り <b>${sum.advance.repay}G</b>（あと${sum.advance.settlesLeft}決着）` : "借入 <b>なし</b>"}</span>
       </div>
       <div class="map-stage" style="aspect-ratio:${s.w} / ${s.h}">
         <img class="map-bg" src="${this.DIR}bg.webp"

@@ -90,6 +90,77 @@ const App = {
     });
   },
 
+  // 前借りの期限が来て払えなかった（または担保が名簿から消えた）ときの一手。
+  // どちらを選んでもランは終わらない。失うのは人と品まで。
+  askAdvance() {
+    const st = Game.state, prompt = st.advancePrompt;
+    if (!prompt) return this.render();
+    if (prompt.kind === "reassign") {
+      const pick = (st.roster || []).slice(0, 6);
+      return this.report("worried", "担保にしていた者が、もういません。\n銀行が代わりを求めています。", {
+        kicker: "魔界銀行", title: "宰相モルモ",
+        choices: pick.map(m => ({
+          label: `⛓ ${Game.displayName(m)}`, action: "advancepick", id: String(m.uid),
+          onSelect: () => { Game.advanceAssign(m.uid); this.render(); this.afterAdvance(); }
+        }))
+      });
+    }
+    const advance = typeof Town !== "undefined" ? Town.advance(st) : null;
+    const holder = advance ? (st.roster || []).find(m => m.uid === advance.uid) : null;
+    return this.report("worried", `魔界銀行へ ${prompt.repay || (advance && advance.repay) || ""}G。払えません。
+……どちらにいたしますか。`, {
+      kicker: "魔界銀行", title: "宰相モルモ",
+      choices: [
+        { label: holder ? `${Game.displayName(holder)}を連れて行かせる` : "連れて行かせる", action: "advancehandover",
+          onSelect: () => {
+            const out = Game.advanceHandOver();
+            if (typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-bank");
+            this.render();
+            if (out) this.report("worried", `${out.line.replace(/\{name\}/g, out.name)}`,
+              { kicker: "魔界銀行", title: "宰相モルモ", choices: [{ label: "わかった", onSelect: () => this.afterAdvance() }] });
+            else this.afterAdvance();
+          } },
+        { label: "待ってもらう（取り立てが来る）", action: "advanceholdoff",
+          onSelect: () => {
+            const out = Game.advanceHoldOff();
+            if (typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-bank");
+            this.render();
+            if (out) this.report("angry", out.line,
+              { kicker: "魔界銀行", title: "宰相モルモ", choices: [{ label: "受けて立つ", onSelect: () => this.afterAdvance() }] });
+            else this.afterAdvance();
+          } }
+      ]
+    });
+  },
+
+  // 前借りの一手が終わったら、止めていた決着後の流れへ戻す。
+  afterAdvance() {
+    this.render();
+    return this.afterResultReport();
+  },
+
+  // 決着の報告（事件 → 札 → 帰還／最終／次期採用）。afterresult と、前借りの一手のあとから呼ぶ。
+  afterResultReport() {
+    // 事件が同じ決着に立っているときは事件が先。札は事件が片付いてから（§2-2）。
+    if (Game.state.phase === "event") {
+      const ev = Game.currentEvent();
+      return this.report("angry", `魔王様、大変デス！\n${ev ? ev.title : "城内事件"}が起きました！`,
+        { kicker: "魔王城・緊急報告", title: "宰相モルモ" });
+    }
+    const returned = Game.state.phase === "preparation"
+      ? () => this.report("report", "遠征隊が帰還しました。\nまだ今日の業務は終わっていません。配置を確認したら、日次決算へ進めましょう。",
+        { kicker: `${Game.state.day}日目・遠征帰還`, title: "宰相モルモ" })
+      : (Game.state.phase === "clear" || Game.state.phase === "gameover")
+        ? () => this.report(Game.state.phase === "clear" ? "joy" : "worried",
+          Game.state.phase === "clear" ? "やりましたネ、魔王様！ 人間界制圧デス！ この軍団の歴史を刻みましょう！"
+            : "この魔王軍の歩みは、次の世代のために魔界史へ残しますネ。",
+          { kicker: "最終報告", title: "宰相モルモ" })
+        : () => this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
+          { kicker: "次期採用報告", title: "宰相モルモ" });
+    // 決着がついた以上、モルモは必ず一度は見せる。判断はプレイヤーに残す（§0）。
+    return this.presentPending(returned);
+  },
+
   // UI.incident の「戻る」から待ち行列へ帰る。続きが無ければ元の流れへ。
   resumePending() {
     const resume = this.pendingResume;
@@ -395,18 +466,34 @@ const App = {
       case "townexchangeback":
         if (Town.exchangeBack(Game) && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-coin");
         return UI.castle("town");
+      // 前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md）。まず担保を選び、それから契約が成立する。
       case "townborrow": {
-        const out = Town.borrow(Game, Number(data.amount));
-        if (out && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-coin");
-        UI.castle("town");
-        if (out) return this.report("worry", `銀行員「${out.line}」　借金は ${out.debt}G デス。`, { kicker: "魔界銀行", title: "宰相モルモ" });
-        return;
+        const spec = Town.advanceOf(data.id);
+        if (!spec) return;
+        const pick = (Game.state.roster || []).filter(m => (m.merit || 0) >= spec.merit);
+        if (!pick.length) return;
+        return this.report("worry", `${spec.name}（${spec.gold}G を受け取り、${spec.settles}決着後に ${spec.repay}G）。
+担保はどなたにしますか。`, {
+          kicker: "魔界銀行", title: "宰相モルモ",
+          choices: pick.slice(0, 6).map(m => ({
+            label: `⛓ ${Game.displayName(m)}（戦功 ${m.merit || 0}）`,
+            action: "advancepick", id: String(m.uid),
+            onSelect: () => {
+              const out = Town.borrow(Game, spec.id, m.uid);
+              if (out && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-coin");
+              UI.castle("town");
+              if (out) this.report("worry", `銀行員「${out.line}」
+${spec.gold}G 受け取りました。${spec.settles}決着後に ${spec.repay}G デス。`,
+                { kicker: "魔界銀行", title: "宰相モルモ" });
+            }
+          })).concat([{ label: "やめておく", action: "advancecancel", onSelect: () => UI.castle("town") }])
+        });
       }
       case "townrepay": {
-        const out = Town.repay(Game, Number(data.amount));
+        const out = Town.repay(Game);
         if (out && typeof Sound !== "undefined" && Sound.playRecorded) Sound.playRecorded("town-coin");
         UI.castle("town");
-        if (out) return this.report("joy", `${out.paid}G 返しました。銀行員「${out.line}」　残り ${out.debt}G。`, { kicker: "魔界銀行", title: "宰相モルモ" });
+        if (out) return this.report("joy", `${out.paid}G 返しました。銀行員「${out.line}」`, { kicker: "魔界銀行", title: "宰相モルモ" });
         return;
       }
 
@@ -612,24 +699,10 @@ const App = {
         Game.afterResult();
         this.render();
         if (Game.state.phase === "story") return;
-        // 事件が同じ決着に立っているときは事件が先。札は事件が片付いてから（§2-2）。
-        if (Game.state.phase === "event") {
-          const ev = Game.currentEvent();
-          return this.report("angry", `魔王様、大変デス！\n${ev ? ev.title : "城内事件"}が起きました！`,
-            { kicker: "魔王城・緊急報告", title: "宰相モルモ" });
-        }
-        const returned = Game.state.phase === "preparation"
-          ? () => this.report("report", "遠征隊が帰還しました。\nまだ今日の業務は終わっていません。配置を確認したら、日次決算へ進めましょう。",
-            { kicker: `${Game.state.day}日目・遠征帰還`, title: "宰相モルモ" })
-          : (Game.state.phase === "clear" || Game.state.phase === "gameover")
-            ? () => this.report(Game.state.phase === "clear" ? "joy" : "worried",
-              Game.state.phase === "clear" ? "やりましたネ、魔王様！ 人間界制圧デス！ この軍団の歴史を刻みましょう！"
-                : "この魔王軍の歩みは、次の世代のために魔界史へ残しますネ。",
-              { kicker: "最終報告", title: "宰相モルモ" })
-            : () => this.report("report", "戦果の記録が終わりました。次の応募者をお連れしますネ。" + this.bondNote(),
-              { kicker: "次期採用報告", title: "宰相モルモ" });
-        // 決着がついた以上、モルモは必ず一度は見せる。判断はプレイヤーに残す（§0）。
-        return this.presentPending(returned);
+        // 前借りの期限（docs/SPEC_BANK_ADVANCE_2026-09-19.md §2-3）。
+        // 払えない／担保が居なくなったときだけ、ここで先に決めてもらう。
+        if (Game.state.advancePrompt) return this.askAdvance();
+        return this.afterResultReport();
       }
 
       case "eventpick":

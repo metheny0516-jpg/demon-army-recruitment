@@ -110,7 +110,7 @@ const INCIDENTS = [
     pick: null,
     hidden: {
       label: "借金あり／なし",
-      value: (st, c) => (st.town?.debt || 0) > 0 ? "借金あり" : "借金なし"
+      value: (st, c) => (st.town?.advance ? "借金あり" : "借金なし")
     },
     // 建材+4。
     gain: (st, c) => {
