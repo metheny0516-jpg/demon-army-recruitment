@@ -41,6 +41,10 @@ const SEEDS = (process.env.ECON_SEEDS || '').trim()
   ? process.env.ECON_SEEDS.split(',').map(x => Number(x.trim())).filter(x => Number.isFinite(x))
   : null;
 // 終了時に残っていた契約・失った人材・市場の建設時期（どれも state に残っているので読むだけ）
+// ECON_DUMP=<path> でラン単位の結果を JSON に落とす。同じ種で回した3本を
+// **対にして引き算**すれば、ばらつきを消して差だけを見られる（集計同士の比較では埋もれる）。
+const DUMP = process.env.ECON_DUMP || '';
+const perRun = [];           // {seed, gold, debt, lost, town, battles}
 const outstanding = [];      // {repay, settlesLeft}
 const lostStaff = [];        // {power, salary, merit}
 const marketTurn = [];       // 市場 Lv1 に到達した決着
@@ -151,7 +155,11 @@ for (let r = 0; r < N; r++) {
   // upgraded は Lv2 以降しか積まれない（ここを取り違えると 0/N になる）。
   const ms = (st.town && st.town.stats && st.town.stats.market) || null;
   if (ms && ms.built) marketTurn.push(ms.built);
+  if (DUMP) perRun.push({ seed, gold: st.gold, debt: left ? left.repay : 0,
+    lost: (st.departed || []).filter(d => d.leftBy === 'bank').length,
+    town: Game.townLevelTotal(), battles, market: ms && ms.built ? ms.built : 0 });
 }
+if (DUMP) fs.writeFileSync(DUMP, JSON.stringify(perRun));
 const by = new Map();
 for (const r of rows) { if (!by.has(r.battle)) by.set(r.battle, []); by.get(r.battle).push(r); }
 const avg = (a, f) => a.length ? a.reduce((s,x)=>s+f(x),0)/a.length : 0;
