@@ -100,6 +100,44 @@ const { autoDismissMormo } = require('./helpers.js');
     if (r.merit || r.spirit) throw new Error('履歴書に戦功／気合が出ている');
   }
 
+  // きつい札（長文・特性が多い・縁+歴戦+殿堂入りが全部ある）でも1画面に収まり、注記が読める。
+  // 既定の引きだけ見ていると、注記の色が紙の上で読めないことに気づけなかった（2026-09-19 実測）。
+  const hard = await page.evaluate(() => {
+    const st = Game.state;
+    const base = st.applicants[0];
+    const mk = over => Object.assign(JSON.parse(JSON.stringify(base)), over);
+    st.applicants = [
+      mk({ name: '長文づくし',
+           prevJob: '王都第三騎士団附属補給廠の夜勤帳簿係（三年）',
+           motive: '魔王軍なら残業代が出ると聞いたので、家族を養うために応募しました',
+           flaw: '朝がとにかく弱く、遅刻の常習犯で、出勤しても昼まで使い物になりません' }),
+      mk({ name: '特性まみれ', traits: ['pickpocket', 'greedy', 'brute', 'coward', 'show_off', 'regen'] }),
+      mk({ name: '全部入り', traits: ['pickpocket', 'greedy', 'brute'],
+           bond: { name: 'ゴルド' }, veteran: true, legacy: { generation: 3 } })
+    ];
+    st.phase = 'recruit';
+    UI.recruit();
+    const lum = css => {
+      const v = css.match(/[\d.]+/g).slice(0, 3).map(Number).map(n => n / 255)
+        .map(n => n <= .04045 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4);
+      return .2126 * v[0] + .7152 * v[1] + .0722 * v[2];
+    };
+    const paper = lum(getComputedStyle(document.querySelector('.card.resume')).backgroundColor) || 0.78;
+    return [...document.querySelectorAll('.applicant-member')].map((c, i) => {
+      const notes = [...c.querySelectorAll('.resume-notes > *')].map(n => {
+        const a = lum(getComputedStyle(n).color);
+        return Math.round(((Math.max(a, paper) + .05) / (Math.min(a, paper) + .05)) * 10) / 10;
+      });
+      return { name: st.applicants[i].name, h: Math.round(c.getBoundingClientRect().height), notes };
+    });
+  });
+  for (const r of hard) {
+    if (r.h > 560) throw new Error(`きつい札が1画面に収まらない（${r.name}：${r.h}px）`);
+    for (const ratio of r.notes) {
+      if (ratio < 4.5) throw new Error(`注記が紙の上で読めない（${r.name}：コントラスト比 ${ratio}）`);
+    }
+  }
+
   // 人物の詳細には今までどおり残っている（ヒントを消したのではなく、履歴書から外しただけ）。
   // 応募者の引きに左右されないよう、特性を持つ応募者を1人立ててから開く。
   await page.evaluate(() => {
@@ -134,6 +172,7 @@ const { autoDismissMormo } = require('./helpers.js');
 
   if (errors.length) throw new Error(errors.join('\n'));
   console.log('✓ 面接継続・追加紹介・U1情報順/接続条件・死霊術の生存条件'
-    + `・履歴書1画面（最大 ${Math.max(...resume.map(r => r.height))}px・ネタバレ無し・PCは2列）`);
+    + `・履歴書1画面（既定 最大 ${Math.max(...resume.map(r => r.height))}px／`
+    + `きつい札 最大 ${Math.max(...hard.map(r => r.h))}px・ネタバレ無し・注記は読める・PCは2列）`);
   await browser.close();
 })().catch(e => { console.error('✗', e.message); process.exit(1); });

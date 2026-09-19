@@ -1846,6 +1846,18 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-recruit .resume-terms .salary { color: #8a5915; }
 .game-scene-recruit .resume-terms .loyal { color: #315d85; }
 .game-scene-recruit .trait-chip { color: #4a2458; border-color: rgba(121,61,142,.5); background: rgba(91,50,112,.12); }
+/* 注記（🕯 縁 / 🎖 歴戦 / 🏺 持って来た / 📜 殿堂入り）。暗い札用の色のままだと
+   紙の上でほとんど読めなかった（2026-09-19 実測）。紙に乗る濃さへ落とす。 */
+.game-scene-recruit .resume-notes .bond-note { color: #7a4a12; font-weight: 700; }
+.game-scene-recruit .resume-notes .veteran-note { color: #8a5915; font-weight: 700; }
+.game-scene-recruit .resume-notes .general-ability {
+  margin: 0;
+  padding: 4px 8px;
+  color: #5b3a12;
+  background: rgba(194,145,54,.16);
+  border-left-color: #9a681b;
+  font-size: 11px;
+}
 
 /* 編成札は石板。将来の8〜10体表示では横密度を上げられる。 */
 .game-scene-formation .cards { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }
