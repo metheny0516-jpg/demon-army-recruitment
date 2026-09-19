@@ -39,6 +39,7 @@ const BattleScene = {
   BIG_STOP_GAP: 420,
   lastBigStopAt: 0,
   missingSprites: new Set(),
+  downQuoteShown: new Set(),
   traitQuoteShown: new Set(),   // 癖の台詞は1戦闘1回（play() で空にする）
   preloadedSprites: new Set(),
   // 指示待ちの高速2回転を持つ種族（10コマ素材が届いた11種、2026-09-17 CodeX）。
@@ -193,6 +194,7 @@ const BattleScene = {
   saveSpeed() { try { localStorage.setItem("maou_speed", String(this.speed)); } catch (e) {} },
 
   stop() {
+    this.endReport();
     // 決着音を待っているBGMの鳴り直しも、ここで畳む（画面が変われば App 側が鳴らす）
     clearTimeout(this.musicTimer);
     this.musicTimer = null;
@@ -434,6 +436,7 @@ const BattleScene = {
   // ── 再生 ──────────────────────────────────
   play(timeline, onDone) {
     this.bindBattlefieldTaps();   // 事件のタップ送り（自動再生でも効く）
+    this.downQuoteShown = new Set();
     this.traitQuoteShown = new Set();   // 癖の台詞は1戦闘1回
     this.stop();
     if (typeof Sound !== "undefined") Sound.stopAll();
@@ -586,6 +589,7 @@ const BattleScene = {
   },
   // 戦場のタップで、止めて見せている一コマを先へ送る（指示待ち・停止中・モルモの確認中は何もしない）
   advanceBeat() {
+    if (this.reportQueue) { this.advanceReport(); return true; }
     if (this.paused || this.finished || this.mormoAwaiting || !this.stepTimer) return false;
     const h = document.getElementById("hold-hint");
     if (!h || !h.classList.contains("show")) return false;
@@ -828,6 +832,10 @@ const BattleScene = {
         if (u) {
           this.setLife(u, true, !!ev.permanent);
           this.float(u, ev.permanent ? "戦死…" : "倒れた！", "fallen");
+          if (!ev.permanent && u.side === "player" && !u.summoned && !this.downQuoteShown.has(ev.unitId)) {
+            this.downQuoteShown.add(ev.unitId);
+            this.bubble(u, "まだ遺書、書いてませんけど…", "戦闘不能", { talk: true, life: 2600 });
+          }
         }
         break;
       }
@@ -2523,7 +2531,7 @@ const BattleScene = {
     scene.dataset.cmdBound = "1";
     scene.addEventListener("click", ev => {
       // 事件で止めて見せている最中のタップは「先へ」
-      if (!this.cmdSeq && this.advanceBeat()) return;
+      if ((this.reportQueue || !this.cmdSeq) && this.advanceBeat()) return;
       const seq = this.cmdSeq, prompt = this.manual && this.manual.prompt;
       if (!seq || !prompt || !this.paused) return;
       const card = ev.target.closest(".bu");
@@ -2715,14 +2723,14 @@ const BattleScene = {
     const box = document.createElement("div");
     // 敵の台詞も同じ吹き出しで出す（2026-09-18 オーナー指摘。上の字幕に混ぜない）。
     box.className = "bu-bubble" + (u.side === "enemy" ? " enemy" : "") + (options.talk ? " talk" : "");
-    const life = this.visualDuration(options.life || this.BUBBLE_MS);
+    const life = options.report ? options.life : this.visualDuration(options.life || this.BUBBLE_MS);
     box.style.setProperty("--bubble-life", `${life}ms`);
     box.innerHTML = `${quote ? `<span class="bu-quote">「${U.esc(quote)}」</span>` : ""}
       ${skillName ? `<b class="bu-skill">${U.esc(skillName)}</b>` : ""}`;
     u.el.appendChild(box);
     // 札より広い吹き出しは端で画面からはみ出す。はみ出した分だけ横へ寄せる。
     this.keepOnScreen(box, 6);
-    this.timers.push(setTimeout(() => box.remove(), life));
+    if (!options.report) this.timers.push(setTimeout(() => box.remove(), life));
     return box;
   },
 
@@ -2954,6 +2962,7 @@ const BattleScene = {
 
   // 残りを一気に適用して終わらせる
   skip() {
+    if (this.reportQueue) { this.endReport(); return; }
     if (this.finished) return;
     // コマンドバトルの途中なら、残りをおまかせで最後まで回してから飛ばす
     if (this.manual && !this.manual.done) {
@@ -3037,6 +3046,85 @@ const BattleScene = {
   updateSpeedBtn() {
     const b = document.getElementById("speed-btn");
     if (b) b.textContent = `速度 x${this.speed}`;
+  },
+
+  // 決着済みの表示データだけを読む。成長・報酬の適用はしない。
+  reportLines(b, growth) {
+    if (!b) return [];
+    const lines = [];
+    const members = b.contribution || [];
+    const speaker = members.find(c => c.survived !== false && !c.injured && !c.trainingDown && c.voice);
+    if (speaker) lines.push({ name: speaker.name, text: speaker.voice, kind: "voice" });
+    const grouped = new Map();
+    const labels = { hp: "HP", atk: "攻撃", def: "防御", spd: "速度" };
+    for (const r of growth || []) {
+      if (!(r.delta > 0)) continue;
+      const key = r.uid == null ? r.name : r.uid;
+      if (!grouped.has(key)) grouped.set(key, { name: r.name, parts: [] });
+      grouped.get(key).parts.push(`${labels[r.key] || r.key}が${r.delta}アップ`);
+    }
+    for (const row of grouped.values()) lines.push({ name: row.name, text: row.parts.join("、") + "！", kind: "growth" });
+    for (const row of b.unlocked || []) lines.push({ name: row.name, text: `《${row.skillName}》を覚えた！`, kind: "skill" });
+    lines.push({ text: b.training ? "稽古終了" : b.retreated ? "撤退・報酬なし"
+      : b.victory ? `獲得報酬 ${b.reward || 0}G${b.lootGold ? ` ／ 戦利金 ${b.lootGold}G` : ""}` : "敗北・報酬なし", kind: "reward" });
+    return lines;
+  },
+
+  startReport() {
+    const scene = document.getElementById("scene");
+    const st = typeof Game !== "undefined" && Game.state;
+    if (!scene || !st || !st.lastBattle) return;
+    this.endReport();
+    this.reportQueue = this.reportLines(st.lastBattle, st.lastGrowth);
+    scene.classList.add("report-playing");
+    let strip = document.getElementById("battle-report-line");
+    if (!strip) {
+      strip = document.createElement("div");
+      strip.id = "battle-report-line";
+      strip.setAttribute("role", "status");
+      strip.setAttribute("aria-live", "polite");
+      scene.after(strip);
+    }
+    const advance = document.createElement("button");
+    advance.id = "battle-report-next";
+    advance.className = "small";
+    advance.textContent = "次のひとこと ▶";
+    advance.onclick = () => this.advanceReport();
+    strip.after(advance);
+    this.advanceReport();
+  },
+
+  advanceReport() {
+    clearTimeout(this.reportTimer);
+    document.querySelectorAll("#scene .bu-bubble, #scene .report-speaker").forEach(el => {
+      if (el.classList.contains("bu-bubble")) el.remove();
+      else el.classList.remove("report-speaker");
+    });
+    const row = this.reportQueue && this.reportQueue.shift();
+    if (!row) return this.endReport();
+    const strip = document.getElementById("battle-report-line");
+    if (!strip) return this.endReport();
+    strip.textContent = (row.name ? `${row.name}「${row.text}」` : row.text);
+    strip.dataset.kind = row.kind;
+    const u = Object.values(this.units).find(u => u.side === "player" && !u.summoned && u.name === row.name);
+    if (u) {
+      u.el.classList.add("report-speaker");
+      this.bubble(u, row.text, row.kind === "skill" ? "新しい技" : "", { talk: true, life: 3600, report: true });
+    }
+    this.reportTimer = setTimeout(() => this.advanceReport(), row.kind === "skill" ? 3000 : 2400);
+  },
+
+  endReport() {
+    clearTimeout(this.reportTimer);
+    this.reportTimer = null;
+    this.reportQueue = null;
+    document.getElementById("battle-report-next")?.remove();
+    document.querySelectorAll("#scene .bu-bubble, #scene .report-speaker").forEach(el => {
+      if (el.classList.contains("bu-bubble")) el.remove();
+      else el.classList.remove("report-speaker");
+    });
+    const strip = document.getElementById("battle-report-line");
+    if (strip) strip.textContent = "戦果の発表は以上です。結果を見ると、まとめを確認できます。";
   },
 
   finish() {

@@ -4158,3 +4158,10 @@ button.primary::first-letter { color: var(--gold); }
   .story-stage .mormo-aside-bubble { font-size: 18px; line-height: 1.6; padding: 12px 14px; }
   .story-face-emoji { font-size: 64px; }
 }
+
+/* 決着後も戦場を残し、本人と一行の戦果を対応させる。 */
+.scene.report-playing .scene-result { display: none; }
+#battle-report-line { padding: 12px; min-height: 3.5em; background: #191322; color: #fff1d3; border: 1px solid #88704c; line-height: 1.6; overflow-wrap: anywhere; }
+#battle-report-line[data-kind="skill"] { color: #ffe09a; border-color: #d3ad58; }
+.scene .bu.report-speaker { z-index: 30; opacity: 1; }
+.scene .bu.dead:has(.bu-bubble) { opacity: 1; }
