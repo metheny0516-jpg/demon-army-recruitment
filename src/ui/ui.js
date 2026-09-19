@@ -1069,11 +1069,11 @@ const UI = {
   growthPanel() {
     const rows = (Game.state && Game.state.lastGrowth) || [];
     if (!rows.length) return "";
-    const shown = rows.slice(0, this.GROWTH_LINES);
+    const shown = rows;
     const rest = rows.length - shown.length;
     return `<div class="panel growth-panel" data-growth="1">
       <h3>🌱 一回り大きくなった</h3>
-      <ul class="growth-lines">${shown.map(r => `<li class="growth-line" hidden>
+      <ul class="growth-lines">${shown.map(r => `<li class="growth-line">
         <span class="growth-mark">${this.GROWTH_MARK[r.key] || "✦"}</span>${U.esc(r.name || "")}の${
         U.esc(this.GROWTH_LABEL[r.key] || r.key)}が ${r.delta} 上がった！</li>`).join("")}</ul>
       ${rest > 0 ? `<div class="growth-rest" hidden>ほか ${rest} 件</div>` : ""}
@@ -1083,6 +1083,8 @@ const UI = {
   playGrowth(root) {
     const box = (root || document).querySelector(".growth-panel");
     if (!box) return;
+    // 戦場で順に発表済み。結果一覧はスキップ後も全件すぐ読める。
+    if (!box.querySelector(".growth-line[hidden]")) return;
     const lines = [...box.querySelectorAll(".growth-line")];
     const rest = box.querySelector(".growth-rest");
     if (!lines.length) return;
@@ -1856,7 +1858,7 @@ const UI = {
   battleManual(out) {
     this.set(BattleScene.shell(out.stageData));
     BattleScene.onRetreatChoice = null;
-    BattleScene.playManual(out.handle, result => Game.finishManualBattle(result));
+    BattleScene.playManual(out.handle, result => Game.finishManualBattle(result), () => BattleScene.startReport());
   },
 
   battle(result, stageData) {
@@ -1866,7 +1868,7 @@ const UI = {
     // 保留されていない戦闘（提案が出なかった／開幕の防衛戦）では settleBattle が false を返すだけ。
     BattleScene.onRetreatChoice = choice => Game.settleBattle(choice);
     // 号令の答え。名指しなら run.js が同じ種で計算し直した新しいタイムラインを返し、描画側が差し替える。
-    BattleScene.play(result.timeline);
+    BattleScene.play(result.timeline, () => BattleScene.startReport());
   },
 
   // 結果画面の「技を覚えた」見せ場。notes にも同じ文が入るので、こちらは本人の一言を主役にする

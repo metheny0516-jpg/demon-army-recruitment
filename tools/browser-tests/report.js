@@ -150,7 +150,7 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
   if (!oldHeadline.includes('CHAIN 1')) errors.push('旧データで1行サマリのCHAINが消えた: ' + oldHeadline);
 
   // ── 成長の読み上げ（docs/SPEC_SKILL_CALL_AND_GROWTH_DISPLAY_2026-09-14.md 2節）──
-  // 0.5 秒ごとに一行ずつ／タップで残り全部／8行を超えたら「ほか ○ 件」。
+  // 戦場で発表した後の一覧。飛ばした人も全10件を最初から読める。
   const growth = await page.evaluate(async () => {
     const st = Game.state;
     st.lastGrowth = [
@@ -172,11 +172,9 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
       rest: rest ? rest.textContent.trim() : '', restHidden: rest ? rest.hidden : null,
       head: (document.querySelector('.growth-line') || {}).textContent.replace(/\s+/g, ' ').trim() };
   });
-  if (growth.rows !== 8) errors.push(`8行までに畳んでいない（${growth.rows}行）`);
-  if (growth.first !== 1) errors.push(`最初は1行だけのはず（${growth.first}行）`);
-  if (growth.second <= growth.first) errors.push(`0.5秒で次の行が出ない（${growth.first}→${growth.second}）`);
-  if (growth.all !== 8) errors.push(`タップで全部出ない（${growth.all}／8）`);
-  if (!/ほか 2 件/.test(growth.rest) || growth.restHidden) errors.push(`「ほか 2 件」が出ない（${growth.rest}）`);
+  if (growth.rows !== 10 || growth.first !== 10 || growth.second !== 10 || growth.all !== 10)
+    errors.push(`成長一覧が全件見えない（${JSON.stringify(growth)}）`);
+  if (growth.rest) errors.push(`一覧が省略されている（${growth.rest}）`);
   if (!/ゴルドの攻撃が 1 上がった！/.test(growth.head)) errors.push(`読み上げの文が違う（${growth.head}）`);
   if (!/⚔/.test(growth.head)) errors.push(`伸びた数値の印が無い（${growth.head}）`);
 
