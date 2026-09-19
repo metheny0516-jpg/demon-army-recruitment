@@ -11,6 +11,9 @@ const ctx = { console, Math, Date, JSON, localStorage: {
 vm.createContext(ctx);
 for (const f of files) vm.runInContext(fs.readFileSync(f,'utf8'), ctx, {filename:f});
 const Game = vm.runInContext('Game', ctx);
+// Town は vm の中にしか居ない。取り出しておかないと `typeof Town === 'undefined'` になり、
+// 城下町の建設も前借りも**黙って空振りする**（2026-09-19 に踏んだ）。
+const Town = vm.runInContext('Town', ctx);
 // 実験用の上書き（数値は data を触らずに env で）：ECON_REWARD_MULT1（第一幕の進軍報酬）、ECON_REWARD_MULT2（第二幕）、
 // ECON_DEFEND_MULT（防衛勝利の報酬倍率）、ECON_WAGE_RATE（留守番の手当率）
 vm.runInContext(`(() => {
@@ -23,10 +26,39 @@ vm.runInContext(`(() => {
 const power = m => m.hp + m.atk*3 + m.def*2 + m.spd;
 const N = Number(process.argv[2] || 50);
 const mode = process.argv[3] || 'careful';
+// 前借りの方針（docs/SPEC_BANK_ADVANCE_2026-09-19.md §6）。
+//   none  借りない（基準線）
+//   small 契約が空くたびに小口を借りる（「毎回借りる」が常に最善になっていないかを見る）
+//   large 戦功25の担保が立つようになったら大口を1回だけ借りる（分散の大きい賭け）
+// 担保は「いちばん弱い、条件を満たす者」を出す（人間がやりそうな出し方。強い者を賭けるのは別の話）。
+const ADVANCE = process.env.ECON_ADVANCE || 'none';
+const advStat = { borrowed: 0, repaid: 0, seized: 0, collectorLost: 0 };
 
 const rows = []; // {battle, kind, gold0, reward, loot, salary, gold1, roster, home}
 const spends = { hire: 0, reroll: 0, merc: 0, event: 0 };
-let endGold = [], endBattles = [];
+let endGold = [], endBattles = [], endTown = [];
+// 借りる（契約が空いていて、信用があって、担保に立てる者が居るときだけ）
+const tryBorrow = (st, id) => {
+  if (typeof Town === 'undefined' || ADVANCE === 'none') return;
+  if (Town.advance(st) || Town.init(st).credit === false) return;
+  const spec = Town.advanceOf(id); if (!spec) return;
+  const pick = (st.roster || []).filter(m => (m.merit || 0) >= spec.merit)
+    .sort((a, b) => power(a) - power(b))[0];
+  if (!pick) return;
+  if (Town.borrow(Game, id, pick.uid)) advStat.borrowed += 1;
+};
+// 期限切れの2択。ここでは常に「連れて行かせる」＝踏み倒す側に倒す。
+// 取り立て人の防衛戦は勝率が読めず、測りたい「所持金の伸び」が戦闘の引きに埋もれるため。
+// ＝この3本が見ているのは「踏み倒しまで込みで、借りたほうが得か」。
+const settleAdvancePrompt = (st) => {
+  if (!st.advancePrompt) return;
+  if (st.advancePrompt.kind === 'reassign') {
+    const next = (st.roster || [])[0];
+    if (next && Game.advanceAssign(next.uid)) return;
+  }
+  if (Game.advanceHandOver()) advStat.seized += 1;
+  st.advancePrompt = null;
+};
 for (let r = 0; r < N; r++) {
   Game.newRun();
   const st = Game.state;
@@ -78,6 +110,10 @@ for (let r = 0; r < N; r++) {
         gold0, reward: out.result.victory ? (mission ? mission.reward : 0) : 0, salary, paid: rep.paid ?? null, gold1: st.gold, roster, home: roster - st.activeUids.length,
         tax: (st.town && Array.isArray(st.town.ledger) && st.town.ledger.length) ? (st.town.ledger[st.town.ledger.length - 1].tax || 0) : 0 });
     }
+    if (st.phase === 'result') settleAdvancePrompt(st);
+    // 前借り。建てる前に借りる（借りた金で建てられるかを見るため）。
+    if (st.phase === 'result' && ADVANCE === 'small') tryBorrow(st, 'small');
+    if (st.phase === 'result' && ADVANCE === 'large') tryBorrow(st, 'large');
     // 城下町：建てられるものがあれば市場から順に建てる（税収の乗数。sim と同じ「安い順に1件」ではなく市場優先）
     if (typeof Town !== 'undefined' && st.phase === 'result') {
       for (const id of ['market', 'tavern', 'smithy', 'graveyard', 'hostel', 'lab', 'factory', 'grand_kitchen']) { if (Town.canBuild(Game, id).ok) { Town.build(Game, id); break; } }
@@ -90,11 +126,21 @@ for (let r = 0; r < N; r++) {
     if (st.phase === 'defeat') { if (Game.canRetry()) Game.retry(); else Game.concede(); }
   }
   endGold.push(st.gold); endBattles.push(battles);
+  endTown.push(typeof Game.townLevelTotal === 'function' ? Game.townLevelTotal() : 0);
+  if (typeof Town !== 'undefined') {
+    const rec = (st.town && st.town.advanceRecord) || {};
+    advStat.repaid += rec.repaid || 0;
+  }
 }
 const by = new Map();
 for (const r of rows) { if (!by.has(r.battle)) by.set(r.battle, []); by.get(r.battle).push(r); }
 const avg = (a, f) => a.length ? a.reduce((s,x)=>s+f(x),0)/a.length : 0;
-console.log(`■ 戦略 ${mode}  ${N}ラン  平均戦闘数 ${avg(endBattles,x=>x).toFixed(1)}  終了時所持金 平均 ${avg(endGold,x=>x).toFixed(1)}G`);
+const med = a => { const b = a.slice().sort((x, y) => x - y); return b.length ? b[Math.floor(b.length / 2)] : 0; };
+const sd = a => { const m = avg(a, x => x); return a.length ? Math.sqrt(avg(a, x => (x - m) * (x - m))) : 0; };
+console.log(`■ 戦略 ${mode}  前借り ${ADVANCE}  ${N}ラン  平均戦闘数 ${avg(endBattles,x=>x).toFixed(1)}`);
+console.log(`  終了時所持金 平均 ${avg(endGold,x=>x).toFixed(1)}G（中央 ${med(endGold)}G・ばらつき ${sd(endGold).toFixed(1)}）`
+  + `  城下町Lv計 平均 ${avg(endTown,x=>x).toFixed(2)}`
+  + (ADVANCE === 'none' ? '' : `  借りた ${advStat.borrowed} 回／返した ${advStat.repaid} 回／連れて行かれた ${advStat.seized} 人`));
 console.log('戦闘# 件数  出撃前G  報酬   給与   純増(勝)  勝率  軍団/留守  作戦内訳');
 for (const [b, list] of [...by.entries()].sort((a,b)=>a[0]-b[0])) {
   if (b > 20) break;
