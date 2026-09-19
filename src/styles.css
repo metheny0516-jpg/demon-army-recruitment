@@ -3286,12 +3286,62 @@ button.primary::first-letter { color: var(--gold); }
 .member-trait-group { margin-top: 8px; }
 .member-relic-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
 .applicant-member { cursor: pointer; }
+.applicant-deck { min-width: 0; }
+.resume-nav { display: none; }
 .recruit-compare { display: contents; }
+
+@keyframes resume-hire-out {
+  to { transform: translateY(-110%); opacity: 0; }
+}
+@keyframes resume-reroll-out {
+  to { transform: perspective(900px) rotateY(-180deg); opacity: .15; }
+}
+.resume-hire-exit { animation: resume-hire-out .3s ease-in forwards; transform-origin: 50% 0; }
+.resume-reroll-exit { animation: resume-reroll-out .45s ease-in-out forwards; transform-origin: 100% 0; }
+
+@media (max-width: 899px) {
+  .applicant-deck { position: relative; perspective: 900px; }
+  .recruit-applicants { display: block; }
+  .recruit-applicants .applicant-member { display: none; }
+  .recruit-applicants .applicant-member.is-current { display: block; }
+  .resume-nav {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center; gap: 8px; margin-top: 9px;
+  }
+  .resume-nav button { min-width: 0; padding: 9px 7px; }
+  .resume-nav button:last-child { justify-self: stretch; }
+  .resume-count { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .card.resume { position: relative; backface-visibility: hidden; transform-style: preserve-3d; transform-origin: 100% 0; }
+  .card.resume::after {
+    content: ""; position: absolute; inset: 0; z-index: 20; pointer-events: none;
+    border-radius: inherit; background: #cdb78b; transform: rotateY(180deg); backface-visibility: hidden;
+  }
+  .card.resume.resume-flip-next { animation: resume-flip-next .35s ease-in-out forwards; }
+  .card.resume.resume-flip-prev { animation: resume-flip-prev .35s ease-in-out forwards; transform-origin: 0 0; }
+}
+
+@keyframes resume-flip-next {
+  49% { background: #d8c49b; }
+  50%, 100% { background: #cdb78b; }
+  100% { transform: perspective(900px) rotateY(-180deg); }
+}
+@keyframes resume-flip-prev {
+  49% { background: #d8c49b; }
+  50%, 100% { background: #cdb78b; }
+  100% { transform: perspective(900px) rotateY(180deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.resume.resume-flip-next,
+  .card.resume.resume-flip-prev,
+  .resume-hire-exit,
+  .resume-reroll-exit { animation: none !important; transition: none !important; }
+}
 
 @media (max-width: 560px) {
   .recruit-compare { display: flex; flex-direction: column; gap: 12px; }
   .recruit-roster { order: 1; }
-  .recruit-applicants { order: 2; }
+  .applicant-deck { order: 2; }
   .member-row { grid-template-columns: auto minmax(0, 1fr); }
   .member-row-state, .member-row-actions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: 8px; }
   .member-overlay { padding: 0; background: #130f12; }

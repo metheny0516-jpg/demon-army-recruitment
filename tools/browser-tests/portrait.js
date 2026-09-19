@@ -26,10 +26,17 @@ const ok=(c,m)=>{ if(!c) process.exitCode = 1; console.log((c?'  ✓ ':'  ✗ ')
   await page.waitForTimeout(600);
   const a = await page.evaluate(() => Array.from(document.querySelectorAll('.avatar')).map(el=>({
     img: !!el.querySelector('img'), noimg: el.classList.contains('noimg'), fb: el.dataset.fallback,
+    vis: el.offsetParent !== null,
     w: Math.round(el.getBoundingClientRect().width), h: Math.round(el.getBoundingClientRect().height)
   })));
   console.log(`▼ MODE=${MODE}`);
-  ok(a.every(x=>x.w===54&&x.h===72), '採用画面は3:4の証明写真の形 (54x72)');
+  // 390px の面接は履歴書を一枚ずつめくる（docs/SPEC_RESUME_CARD_2026-09-18.md「B. めくり」）。
+  // 隠れている札は 0x0 で測れるものが無いので、**見えているアバターだけ**を測る。
+  // 代わりに「この幅では1枚だけ見えている」を足して、見落としを作らない。
+  const shown = a.filter(x => x.vis);
+  ok(shown.length === 1, `390px では履歴書が一枚だけ見える（${shown.length}枚）`);
+  ok(shown.length > 0 && shown.every(x=>x.w===54&&x.h===72),
+    `採用画面は3:4の証明写真の形 (54x72)（実測 ${shown.map(x=>x.w+'x'+x.h).join(' ') || 'なし'}）`);
   ok(a[1].noimg && !a[1].img, `一覧に無い種族(${absent})は常に絵文字 (`+a[1].fb+')');
 
   if (MODE === 'present') {

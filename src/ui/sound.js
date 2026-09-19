@@ -157,7 +157,7 @@ const Sound = {
 
   // 録音の単発キュー（城下町・地図・将軍、2026-09-13）。name → assets/sfx/recorded/<name>.wav。
   // 合成音の cue() とは別口。無ければ黙って false（配線先は fallback の cue を鳴らしてよい）。
-  RECORDED_CUES: ["town-build", "town-coin", "town-bank", "map-open", "general-rise"],
+  RECORDED_CUES: ["town-build", "town-coin", "town-bank", "map-open", "general-rise", "page"],
   playRecorded(name, boost = 1) {
     if (this.muted || typeof Audio === "undefined" || !this.RECORDED_CUES.includes(name)) return false;
     const url = `assets/sfx/recorded/${name}.wav`;
@@ -339,6 +339,8 @@ const Sound = {
 
   cue(name, data = {}) {
     if (this.muted) return;
+    // 履歴書をめくる紙音。外部CC0録音だけを使い、Web Audio の合成音は重ねない。
+    if (name === "page") { this.playRecorded("page"); return; }
     if (name === "attack") {
       this.playSample("physical", data);
       return;
@@ -461,6 +463,8 @@ const Sound = {
 
   ui(action) {
     if (action === "skiplog") return;
+    // turnResume() が page を鳴らすので、共通click音は重ねない。
+    if (action === "resumenext" || action === "resumeprev") return;
     if (action === "hire") return this.cue("hire");
     if (action === "reroll") return this.cue("shuffle");
     if (action === "fire") return this.cue("dismiss");
