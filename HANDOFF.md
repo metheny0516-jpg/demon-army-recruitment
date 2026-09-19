@@ -21,6 +21,28 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
 
+### 済：ストーリー画像14枚を取り込んだ（2026-09-19・Sol 制作／Opus 統合）
+
+`codex/story-missing-art`（0751485）を本線へ。**画像だけ**で、`src/`・テスト・既存画像の変更は無い。
+
+- 人物6枚 `assets/kingdom/{goldon,vissel,el,graham,king,mira}.png`（768×1024）。
+  これで `KINGDOM_CAST` の9人全員が絵文字ではなく立ち絵になった。
+- 背景8枚 `assets/story/bg/{mine,checkpoint,temple,gate,camp,town,capital,ruins}.webp`（1600×900）。
+  `ruins` は救援失敗側の `after_village_lost`（焼け跡）で出る。
+- 制作記録 `docs/STORY_MISSING_ART_PRODUCTION_2026-09-19.md`。
+
+**検証の注意**：`tools/browser-tests/story.js` の「王国側の人物の顔枠が出る（絵が無ければ絵文字）」は
+**絵が無くても通る**ので、画像化の確認にはならない。画像が付いたことは実画面で見ること。
+今回は本番の経路（`Story.resolveCast` → `UI.storyFaceHtml`）を通して9人全員が img になり
+`naturalWidth > 0` であること、背景8枚が各場面で出ること、390×844 で顔 116×116・`cover 50% 0%`（上寄せ）で
+頭が切れず、台詞 18px／行高 28.8px が画面内に収まること、`assets/` への 4xx が無いことを確認した。
+
+**容量の基準（表記の食い違いに注意）**：依頼は「80KiB／150KiB」。**KiB（1024B）なら14枚とも収まる**が、
+10進 kB（1000B）だと `king.png`（81,468B）と背景5枚（camp・checkpoint・mine・ruins・town）が超える。
+最大は人物 `king.png` 79.6KiB、背景 `ruins.webp` 150.0KiB。10進を厳密な上限にするなら再圧縮が要る（未実施）。
+
+検証：`sh tools/browser-tests/run-all.sh` 全通過。
+
 ### 済：履歴書のめくり演出を取り込んだ（2026-09-19・CodeX 制作／Opus 統合）
 
 `codex/resume-flip`（1380f52）を本線へ。390px で履歴書を一枚ずつ見せ、前後にめくる。
