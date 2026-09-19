@@ -65,7 +65,9 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   ok(cardsCount === 3 && /出撃 0戦/.test(rookieDetail), `3人目の詳細は0戦と分かる（名簿${cardsCount}行）`);
   await page.locator('[data-action="closemember"]').click();
 
-  console.log('▼ 面接：応募者に「3戦で技【…】」「8戦で【…】」（数値は出さない）');
+  // 覚える技は履歴書から人物の詳細へ移した（docs/SPEC_RESUME_CARD_2026-09-18.md §A-2）。
+// 履歴書は手掛かりだけを持ち、攻略の答えはタップした先で読む。
+console.log('▼ 面接：人物の詳細に「3戦で技【…】」「8戦で【…】」（数値は出さない）');
   await page.evaluate(() => {
     Game.state.phase = 'recruit';
     Game.state.applicants = Game.state.applicants && Game.state.applicants.length
@@ -76,10 +78,11 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     // 遅咲き（裏方の職）だと 6戦・12戦になる。ここは普通の応募者を見る（遅咲きは test-skill-unlock）
     a.job = '兵'; a.lateBloomer = false; a.homeBonus = null;
     App.render();
+    UI.memberDetail(null, 0);
   });
-  const hints = (await page.locator('.applicant-member').first().locator('.skill-hint').allTextContents()).join(' / ');
-  ok(/3戦で技【振り下ろす】/.test(hints), `応募者札に種族技「3戦で技【振り下ろす】」（${hints}）`);
-  ok(/8戦で【ぶちかまし】/.test(hints), `応募者札に上位技「8戦で【ぶちかまし】」（${hints}）`);
+  const hints = (await page.locator('.member-detail').locator('.skill-hint').allTextContents()).join(' / ');
+  ok(/3戦で技【振り下ろす】/.test(hints), `人物の詳細に種族技「3戦で技【振り下ろす】」（${hints}）`);
+  ok(/8戦で【ぶちかまし】/.test(hints), `人物の詳細に上位技「8戦で【ぶちかまし】」（${hints}）`);
   ok(!/\d+\s*(HP|攻撃|防御)/.test(hints), '能力値の数字は出さない');
 
   console.log('▼ 面接：既に上位技を持つ応募者に「8戦で」は出さない（種族技はまだ覚えられる）');
@@ -88,8 +91,9 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
     a.name = '上位技持ち応募者';
     a.traits = ['ogre_charge'];
     App.render();
+    UI.memberDetail(null, 0);
   });
-  const afterHints = (await page.locator('.applicant-member').first().locator('.skill-hint').allTextContents()).join(' / ');
+  const afterHints = (await page.locator('.member-detail').locator('.skill-hint').allTextContents()).join(' / ');
   ok(!/戦で【/.test(afterHints), `上位技を既に持つ応募者には「8戦で【…】」を出さない（${afterHints || 'なし'}）`);
 
   console.log('▼ 結果画面：技を覚えた本人の一言');
