@@ -14,6 +14,7 @@ const Game = vm.runInContext('Game', ctx);
 // Town は vm の中にしか居ない。取り出しておかないと `typeof Town === 'undefined'` になり、
 // 城下町の建設も前借りも**黙って空振りする**（2026-09-19 に踏んだ）。
 const Town = vm.runInContext('Town', ctx);
+const U = vm.runInContext('U', ctx);
 // 実験用の上書き（数値は data を触らずに env で）：ECON_REWARD_MULT1（第一幕の進軍報酬）、ECON_REWARD_MULT2（第二幕）、
 // ECON_DEFEND_MULT（防衛勝利の報酬倍率）、ECON_WAGE_RATE（留守番の手当率）
 vm.runInContext(`(() => {
@@ -32,7 +33,17 @@ const mode = process.argv[3] || 'careful';
 //   large 戦功25の担保が立つようになったら大口を1回だけ借りる（分散の大きい賭け）
 // 担保は「いちばん弱い、条件を満たす者」を出す（人間がやりそうな出し方。強い者を賭けるのは別の話）。
 const ADVANCE = process.env.ECON_ADVANCE || 'none';
-const advStat = { borrowed: 0, repaid: 0, seized: 0, collectorLost: 0 };
+const advStat = { borrowed: 0, repaid: 0, seized: 0 };
+// 3本を突き合わせるので、**同じ初期条件・同じ種の並び**で回す（2026-09-19）。
+// U.rand を差し替えると Battle も含めてラン全体が決定的になる（Battle は simulate/start とも退避・復元する）。
+// 種は既定で 1..N。ECON_SEEDS="1,2,3" で明示もできる。
+const SEEDS = (process.env.ECON_SEEDS || '').trim()
+  ? process.env.ECON_SEEDS.split(',').map(x => Number(x.trim())).filter(x => Number.isFinite(x))
+  : null;
+// 終了時に残っていた契約・失った人材・市場の建設時期（どれも state に残っているので読むだけ）
+const outstanding = [];      // {repay, settlesLeft}
+const lostStaff = [];        // {power, salary, merit}
+const marketTurn = [];       // 市場 Lv1 に到達した決着
 
 const rows = []; // {battle, kind, gold0, reward, loot, salary, gold1, roster, home}
 const spends = { hire: 0, reroll: 0, merc: 0, event: 0 };
@@ -60,6 +71,8 @@ const settleAdvancePrompt = (st) => {
   st.advancePrompt = null;
 };
 for (let r = 0; r < N; r++) {
+  const seed = SEEDS ? SEEDS[r % SEEDS.length] : r + 1;
+  U.rand = U.seeded(seed);
   Game.newRun();
   const st = Game.state;
   let guard = 0, battles = 0;
@@ -120,17 +133,24 @@ for (let r = 0; r < N; r++) {
     }
     if (st.phase === 'result') Game.afterResult();
     if (st.phase === 'event') {
-      if (st.pendingEvent) { const o = Game.eventOptions(); if (o.length) Game.chooseEvent(o[Math.floor(Math.random()*o.length)].i); }
+      if (st.pendingEvent) { const o = Game.eventOptions(); if (o.length) Game.chooseEvent(o[Math.floor(U.rand()*o.length)].i); }
       Game.nextRecruit();
     }
     if (st.phase === 'defeat') { if (Game.canRetry()) Game.retry(); else Game.concede(); }
   }
   endGold.push(st.gold); endBattles.push(battles);
-  endTown.push(typeof Game.townLevelTotal === 'function' ? Game.townLevelTotal() : 0);
-  if (typeof Town !== 'undefined') {
-    const rec = (st.town && st.town.advanceRecord) || {};
-    advStat.repaid += rec.repaid || 0;
-  }
+  endTown.push(Game.townLevelTotal());
+  const rec = (st.town && st.town.advanceRecord) || {};
+  advStat.repaid += rec.repaid || 0;
+  // 終わった時点で残っていた契約（＝未精算債務）。所持金と並べないと「得した」を誤読する。
+  const left = Town.advance(st);
+  if (left) outstanding.push({ repay: left.repay, settlesLeft: left.settlesLeft });
+  // 銀行に引き渡した人材（advanceHandOver が leftBy:"bank" で departed に積む）
+  for (const d of (st.departed || [])) if (d.leftBy === 'bank') lostStaff.push({ power: power(d), salary: d.salary || 0, merit: d.merit || 0 });
+  // 市場が Lv1 になった決着。stats.market.built が最初に建てた決着で、
+  // upgraded は Lv2 以降しか積まれない（ここを取り違えると 0/N になる）。
+  const ms = (st.town && st.town.stats && st.town.stats.market) || null;
+  if (ms && ms.built) marketTurn.push(ms.built);
 }
 const by = new Map();
 for (const r of rows) { if (!by.has(r.battle)) by.set(r.battle, []); by.get(r.battle).push(r); }
@@ -140,7 +160,15 @@ const sd = a => { const m = avg(a, x => x); return a.length ? Math.sqrt(avg(a, x
 console.log(`■ 戦略 ${mode}  前借り ${ADVANCE}  ${N}ラン  平均戦闘数 ${avg(endBattles,x=>x).toFixed(1)}`);
 console.log(`  終了時所持金 平均 ${avg(endGold,x=>x).toFixed(1)}G（中央 ${med(endGold)}G・ばらつき ${sd(endGold).toFixed(1)}）`
   + `  城下町Lv計 平均 ${avg(endTown,x=>x).toFixed(2)}`
-  + (ADVANCE === 'none' ? '' : `  借りた ${advStat.borrowed} 回／返した ${advStat.repaid} 回／連れて行かれた ${advStat.seized} 人`));
+  + `  市場Lv1 到達 平均 ${avg(marketTurn,x=>x).toFixed(1)}決着目（${marketTurn.length}/${N}ラン）`);
+if (ADVANCE !== 'none') {
+  const debt = outstanding.reduce((s2, o) => s2 + o.repay, 0);
+  console.log(`  借りた ${advStat.borrowed} 回／返した ${advStat.repaid} 回／連れて行かれた ${advStat.seized} 人`
+    + `　未精算 ${outstanding.length}件 ${debt}G（ラン平均 ${(debt / N).toFixed(1)}G）`);
+  console.log(`  引き渡した人材 ${lostStaff.length}人：戦力 平均 ${avg(lostStaff,x=>x.power).toFixed(1)}`
+    + `／給与 平均 ${avg(lostStaff,x=>x.salary).toFixed(1)}G（浮いた給与の総額 ${lostStaff.reduce((s2,x)=>s2+x.salary,0)}G）`
+    + `／戦功 平均 ${avg(lostStaff,x=>x.merit).toFixed(1)}`);
+}
 console.log('戦闘# 件数  出撃前G  報酬   給与   純増(勝)  勝率  軍団/留守  作戦内訳');
 for (const [b, list] of [...by.entries()].sort((a,b)=>a[0]-b[0])) {
   if (b > 20) break;
