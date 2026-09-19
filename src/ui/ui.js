@@ -105,6 +105,14 @@ const UI = {
     if (!source || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
     const rect = source.getBoundingClientRect();
     const ghost = source.cloneNode(true);
+    // 複製は**見せるだけの紙**。data-action を残すと、操作を探す側（autoplay など）が
+    // 「押せる」と誤って拾い、pointer-events:none のせいで永久に押せずに詰まる（2026-09-19 実測）。
+    // id も重複させない。
+    ghost.removeAttribute("data-action");
+    ghost.removeAttribute("id");
+    ghost.querySelectorAll("[data-action]").forEach(el => el.removeAttribute("data-action"));
+    ghost.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+    ghost.setAttribute("aria-hidden", "true");
     ghost.className += kind === "hire" ? " resume-hire-exit" : " resume-reroll-exit";
     Object.assign(ghost.style, {
       position: "fixed", left: `${rect.left}px`, top: `${rect.top}px`,
