@@ -40,11 +40,14 @@ const { autoDismissMormo } = require('./helpers.js');
   if (await visibleCards().locator('.card.resume').getAttribute('data-resume-index') !== '0') errors.push('末尾から先頭へ循環しない');
 
   // めくりの途中でも採用処理を止めない。
-  const beforeHire = await page.evaluate(() => Game.state.applicants.length);
+  // 採用の成否は**名簿**で見る。Game.hire() は st.applicants から採用者を抜かず、
+  // canHire() が真なら genApplicants() で候補を作り直すので、applicants.length は減らない
+  // （src/core/run.js の hire()）。ここを applicants で見ると、めくりの有無に関わらず必ず落ちる。
+  const beforeHire = await page.evaluate(() => Game.state.roster.length);
   await page.click('[data-action="resumenext"]');
   await page.locator('.applicant-member.is-current [data-action="hire"]:not([disabled])').click();
   await page.waitForTimeout(30);
-  if (await page.evaluate(() => Game.state.applicants.length) !== beforeHire - 1) errors.push('めくり中に採用できない');
+  if (await page.evaluate(() => Game.state.roster.length) !== beforeHire + 1) errors.push('めくり中に採用できない');
   await page.waitForTimeout(360);
   if (await page.evaluate(() => UI.resumeFlipping || UI.resumeFlipTimer != null)) errors.push('採用後も旧めくりタイマーが残る');
 
