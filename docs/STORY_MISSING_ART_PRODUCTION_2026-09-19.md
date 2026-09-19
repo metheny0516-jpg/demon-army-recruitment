@@ -11,27 +11,16 @@
 | `assets/kingdom/goldon.png` | 768×1024 PNG | 79,136 bytes | 顔は上55%以内。40px縮小でも髪・眉・文官服が判別可能。帳簿と、画面端で一部切れる算盤を確認。 |
 | `assets/story/bg/mine.webp` | 1600×900 WebP | 152,898 bytes | 坑道入口・櫓・帳簿机を上2/3と中央に配置。中央600pxトリミングと下部会話帯で場所の特徴が残ることを確認。人物・文字・UIなし。 |
 | `assets/story/bg/ruins.webp` | 1600×900 WebP | 153,556 bytes | `village.webp` と同じ左右の小屋・中央広場・柵・見張り台の構図を維持。中央トリミングと会話帯でも焼け跡と朝空が判別可能。人物・遺体・文字・UIなし。 |
-
 | `assets/kingdom/vissel.png` | 768×1024 PNG | 79,295 bytes | 顔は上55%以内。40pxで老眼鏡・灰髪・書類箱が判別可能。羊皮紙に読める文字なし。 |
-
 | `assets/kingdom/el.png` | 768×1024 PNG | 75,784 bytes | 顔は上55%以内。40pxで乱れた結い髪・疲れた目・青い肩布が判別可能。包帯を巻く手を確認。 |
-
 | `assets/kingdom/graham.png` | 768×1024 PNG | 73,933 bytes | 顔は上55%以内。40pxで短髪・頬傷・軍装が判別可能。無文字の書類を破る仕草を確認。 |
-
 | `assets/kingdom/king.png` | 768×1024 PNG | 81,468 bytes | 顔は上55%以内。40pxで冠・疲れた目・短い髭が判別可能。閉じる帳簿を確認。 |
-
 | `assets/kingdom/mira.png` | 768×1024 PNG | 63,822 bytes | 顔は上55%以内。40pxで銀灰髪・丸眼鏡・紫外套が判別可能。既存戦闘素材との同一性と経費書類を確認。 |
-
 | `assets/story/bg/checkpoint.webp` | 1600×900 WebP | 150,934 bytes | 石門・書庫窓・羊皮紙机を中央上部に配置。中央トリミングと会話帯で識別可能。人物・読める文字・UIなし。 |
-
 | `assets/story/bg/temple.webp` | 1600×900 WebP | 148,264 bytes | 白い柱・避難民の荷物・毛布を上2/3へ配置。中央トリミングと会話帯で避難所が判別可能。人物・文字・UIなし。 |
-
 | `assets/story/bg/gate.webp` | 1600×900 WebP | 148,328 bytes | 閉じた城門と松明を中央に配置。夜の中央トリミングでも門と火が明瞭。人物・文字・UIなし。 |
-
 | `assets/story/bg/camp.webp` | 1600×900 WebP | 151,464 bytes | 三列の旗・荷馬車・天幕を中央上部に配置。朝霧と中央トリミングでも遠征陣が判別可能。人物・文字・UIなし。 |
-
 | `assets/story/bg/town.webp` | 1600×900 WebP | 152,666 bytes | 開いた門と空の食料庫を中央に配置。中央トリミングと会話帯で不足状態が判別可能。人物・文字・UIなし。 |
-
 | `assets/story/bg/capital.webp` | 1600×900 WebP | 149,360 bytes | 玉座・閉じた帳簿・窓外の王都を中央上部へ配置。中央トリミングと会話帯で三要素が残る。人物・文字・UIなし。 |
 
 ## 制作来歴
