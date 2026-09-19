@@ -5,6 +5,10 @@ const UI = {
   castleFrom: null,
   castleTab: "army",
   memberFrom: null,
+  // 履歴書の束で現在見ている添字。画面内だけの状態で、セーブには含めない。
+  resumeIndex: 0,
+  resumeFlipping: false,
+  resumeFlipTimer: null,
 
   RACE_ICON: {
     "ゴブリン": "👺", "オーク": "🐗", "スライム": "🟢", "コボルト": "🐕",
@@ -51,6 +55,56 @@ const UI = {
   },
 
   init(root) { this.root = root; },
+
+  turnResume(direction) {
+    const count = (Game.state?.applicants || []).length;
+    if (count < 2 || this.resumeFlipping) return;
+    const member = this.root?.querySelector('.applicant-member.is-current');
+    const card = member?.querySelector('.card.resume');
+    if (!card) return;
+    this.resumeFlipping = true;
+    if (typeof Sound !== "undefined") Sound.cue("page");
+    card.classList.add(direction > 0 ? "resume-flip-next" : "resume-flip-prev");
+    const reduced = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const finish = () => {
+      this.resumeIndex = (this.resumeIndex + direction + count) % count;
+      this.resumeFlipping = false;
+      this.recruit();
+    };
+    if (reduced) finish();
+    else this.resumeFlipTimer = setTimeout(() => {
+      this.resumeFlipTimer = null;
+      finish();
+    }, 350);
+  },
+
+  cancelResumeTurn() {
+    if (this.resumeFlipTimer != null) clearTimeout(this.resumeFlipTimer);
+    this.resumeFlipTimer = null;
+    this.resumeFlipping = false;
+    this.root?.querySelectorAll('.resume-flip-next, .resume-flip-prev')
+      .forEach(card => card.classList.remove('resume-flip-next', 'resume-flip-prev'));
+  },
+
+  // Game の採用・再抽選は待たせない。消える紙だけを画面上へ複製し、状態更新後に後追いで動かす。
+  animateResumeExit(kind, index) {
+    if (!this.root || typeof document === "undefined") return;
+    this.cancelResumeTurn();
+    const source = kind === "hire"
+      ? this.root.querySelector(`.applicant-member[data-index="${index}"]`)
+      : this.root.querySelector(".applicant-deck");
+    if (!source || (typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches)) return;
+    const rect = source.getBoundingClientRect();
+    const ghost = source.cloneNode(true);
+    ghost.className += kind === "hire" ? " resume-hire-exit" : " resume-reroll-exit";
+    Object.assign(ghost.style, {
+      position: "fixed", left: `${rect.left}px`, top: `${rect.top}px`,
+      width: `${rect.width}px`, height: `${rect.height}px`, margin: "0", zIndex: "120",
+      pointerEvents: "none"
+    });
+    document.body.appendChild(ghost);
+    setTimeout(() => ghost.remove(), kind === "hire" ? 320 : 470);
+  },
 
   set(html, sceneHint) {
     if (typeof BattleScene !== "undefined") BattleScene.stop();
@@ -1464,6 +1518,8 @@ const UI = {
   recruit() {
     const st = Game.state;
     const full = !Game.canHire();
+    if (this.root?.dataset.scene !== "recruit") this.resumeIndex = 0;
+    this.resumeIndex = Math.max(0, Math.min(this.resumeIndex, Math.max(0, st.applicants.length - 1)));
     // 履歴書は「一枚の紙」（docs/SPEC_RESUME_CARD_2026-09-18.md §A-3）。
     // 採用ボタンは札の**外**（.card.resume の兄弟）に置く。めくり演出（CodeX）が札だけを裏返すため。
     // 食料の収支は履歴書から外した（採ってから軍団で分かることは履歴書に書かない＝§A-2）。
@@ -1474,7 +1530,7 @@ const UI = {
       const label = full ? "軍団が満員（誰かを解雇せよ）"
         : cost > 0 ? `追加採用（紹介料 ${cost}G・給与 ${m.salary}G）`
         : `無料枠で採用（給与 ${m.salary}G）`;
-      return `<div class="applicant-member" data-action="member" data-index="${i}" role="button" tabindex="0">`
+      return `<div class="applicant-member${i === this.resumeIndex ? " is-current" : ""}" data-action="member" data-index="${i}" role="button" tabindex="0">`
         + this.monsterCard(m, { resume: true, index: i })
         + `<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`
         + `</div>`;
@@ -1506,7 +1562,14 @@ const UI = {
         })()}
       </div>
       <div class="recruit-compare">
-        <div class="cards recruit-applicants">${cards}</div>
+        <div class="applicant-deck">
+          <div class="cards recruit-applicants">${cards}</div>
+          ${st.applicants.length ? `<div class="resume-nav" aria-label="履歴書をめくる">
+            <button type="button" data-action="resumeprev">◀ 前の一枚</button>
+            <span class="resume-count" aria-live="polite">${this.resumeIndex + 1} / ${st.applicants.length}</span>
+            <button type="button" data-action="resumenext">次の一枚 ▶</button>
+          </div>` : ""}
+        </div>
         <div class="recruit-roster">${rosterPanel}</div>
       </div>
       <div class="spacer"></div>

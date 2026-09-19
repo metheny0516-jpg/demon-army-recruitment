@@ -421,6 +421,12 @@ const App = {
       case "member":
         return UI.memberDetail(data.uid ? Number(data.uid) : null, data.index);
 
+      case "resumenext":
+        return UI.turnResume(1);
+
+      case "resumeprev":
+        return UI.turnResume(-1);
+
       case "closemember":
         return UI.memberFrom === "castle" ? UI.castle(UI.castleTab) : this.render();
 
@@ -428,8 +434,11 @@ const App = {
         return this.showTitle();
 
       case "hire": {
-        const hired = Game.state.applicants[Number(data.index)];
-        Game.hire(Number(data.index));
+        const hireIndex = Number(data.index);
+        const hired = Game.state.applicants[hireIndex];
+        UI.animateResumeExit("hire", hireIndex);
+        Game.hire(hireIndex);
+        UI.resumeIndex = Math.min(UI.resumeIndex, Math.max(0, Game.state.applicants.length - 1));
         this.render();
         // 遅咲き（裏方の職）を初めて採ったとき、モルモが一度だけほのめかす（技は6戦・12戦で開く。履歴書は「？？？」）。
         // 画面を覆う報告にはしない（採用の流れを止めない）。採用画面の一行として出す（UI 側が lateBloomerHint を読む）。
@@ -447,7 +456,9 @@ const App = {
       }
 
       case "reroll":
+        UI.animateResumeExit("reroll");
         Game.reroll();
+        UI.resumeIndex = 0;
         return this.render();
 
       case "skip":
