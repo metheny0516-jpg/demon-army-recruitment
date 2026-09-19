@@ -127,15 +127,20 @@ function trainOnce(st, opponentId) {
   assert(st.lastBattle.reward === 0, `報酬0（${st.lastBattle.reward}）`);
 }
 {
-  // 税収は無い。利子は普通どおり取られる
+  // 税収は無い。前借りの期限は普通どおり1つ減る（逃げ場を作らない）
+  // ＝利子の毎決着処理は廃止した（docs/SPEC_BANK_ADVANCE_2026-09-19.md §2-6）。
   const st = freshRun({ conquest: 3 });
-  Town.init(st); st.town.debt = 20;
+  Town.init(st);
+  st.roster[0].merit = 0;
+  Town.borrow(Game, 'small', st.roster[0].uid);
+  const leftBefore = st.town.advance.settlesLeft;
   const goldBefore = st.gold;
   trainOnce(st, 'scarecrow');
   const notes = st.lastBattle.notes.join(' / ');
   assert(/稽古の日は徴税に出ない/.test(notes), `税収の一行（${notes.match(/[^/]*徴税[^/]*/) || 'なし'}）`);
   assert(!/税収 \+/.test(notes), '税は入っていない');
-  assert(/利子/.test(notes), '利子は普通どおり取られる');
+  assert(st.town.advance.settlesLeft === leftBefore - 1,
+    `稽古でも前借りの期限は減る（${leftBefore} → ${st.town.advance.settlesLeft}）`);
   assert(st.gold < goldBefore, '金は減る方向にしか動かない');
 }
 

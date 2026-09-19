@@ -1,6 +1,6 @@
 // 城下町の札（2026-09-12）：札が出る／建てる／銀行で借りる・返す／家計簿。390px で横に溢れない。
 const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
-const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
+const { autoDismissMormo, keepMormoChoices, enterMissionPhase } = require('./helpers.js');
 const path = require('node:path');
 const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' : '  ✗ ') + m); };
 (async () => {
@@ -8,6 +8,7 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   const page = await b.newPage({ viewport: { width: 390, height: 844 } });
   const errs = []; page.on('pageerror', e => errs.push(e.message));
   await autoDismissMormo(page);
+  await keepMormoChoices(page);
   await page.goto('file://' + process.env.GAME + '/index.html?nostory=1');
   await page.evaluate(() => localStorage.clear()); await page.reload();
   await page.locator('.slot-card [data-action="new"][data-slot="1"]').first().click();
@@ -28,13 +29,27 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   const after = await page.evaluate(() => ({ lv: Town.lv(Game.state, 'market'), gold: Game.state.gold, materials: Game.state.materials, tax: Town.taxPerSettle(Game.state) }));
   ok(after.lv === 1 && after.gold === 45 && after.materials === 9 && after.tax === 6, `市場を建てた（Lv${after.lv}・所持金${after.gold}・建材${after.materials}・税${after.tax}）`);
   ok(await page.locator('.town-card [data-action="townbuild"]:not([disabled])').count() === 0, '同じ決着ではもう建てられない（一覧は全部 disabled）');
-  await page.locator('[data-action="townborrow"][data-amount="20"]').click();
+  // 前借り（docs/SPEC_BANK_ADVANCE_2026-09-19.md）。担保を選んでから契約が成立する。
+  await page.locator('[data-action="townborrow"][data-id="small"]').click();
+  await page.waitForTimeout(200);
+  await page.locator('#mormo-scene .mormo-scene-next').click();          // 全文表示
+  await page.waitForSelector('#mormo-scene .mormo-scene-choice');
+  await page.locator('#mormo-scene .mormo-scene-choice[data-action="advancepick"]').first().click();
+  await page.waitForTimeout(250);
+  const borrowed = await page.evaluate(() => {
+    const a = Game.state.town.advance;
+    return a ? { repay: a.repay, left: a.settlesLeft, uid: a.uid, gold: Game.state.gold } : null;
+  });
+  ok(borrowed && borrowed.repay === 20 && borrowed.left === 3 && borrowed.gold === 60,
+    `小口 15G を借りた（返す ${borrowed && borrowed.repay}G・あと${borrowed && borrowed.left}決着・所持金 ${borrowed && borrowed.gold}）`);
+  ok(/前借り/.test(await page.evaluate(() => document.querySelector('.hud').textContent)), 'HUD に前借りが出る（畳んだ行の中）');
+  await page.evaluate(() => { if (MormoScene.active) MormoScene.close(); UI.castle('town'); });
   await page.waitForTimeout(150);
-  ok(await page.evaluate(() => Game.state.town.debt === 20 && Game.state.gold === 65), '20G 借りた');
-  ok(/借金/.test(await page.evaluate(() => document.querySelector('.hud').textContent)), 'HUD に借金が出る（畳んだ行の中）');
   await page.locator('[data-action="townrepay"]').last().click();
-  await page.waitForTimeout(150);
-  ok(await page.evaluate(() => Game.state.town.debt === 0 && Game.state.gold === 45), '全部返した');
+  await page.waitForTimeout(200);
+  ok(await page.evaluate(() => Game.state.town.advance === null && Game.state.gold === 40),
+    `いま返した（所持金 ${await page.evaluate(() => Game.state.gold)}）`);
+  await page.evaluate(() => { if (MormoScene.active) MormoScene.close(); Game.state.gold = 45; UI.castle('town'); });
   // ── 統合（2026-09-13）：8施設が「町（6）」「軍（2）」の2見出しで並ぶ ──
   console.log('▼ 町と軍の2見出し');
   const groups = await page.evaluate(() => ({
@@ -58,15 +73,20 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   });
   ok(moved.facility === 0 && moved.town === 0, `軍団の札に施設の話は出ない（${moved.facility}）`);
 
-  // ── 音（2026-09-14）：施設が落ちた決着で金庫の音が鳴る ──
-  // 実際の経路（利子が払えず銀行が差し押さえる）を通して、決着の画面で鳴ることを見る。
-  console.log('▼ 施設が落ちた決着の音');
+  // ── 前借りの期限切れ（docs/SPEC_BANK_ADVANCE_2026-09-19.md §2-3）──
+  // 決着の中で期限が切れ、払えず2択になる経路。ここで銀行の音も鳴る。
+  console.log('▼ 前借りの期限切れ');
   await page.evaluate(() => {
     Sound.muted = false; Sound.volume = 0.01;      // 音は解禁しないと鳴らない
     Sound.media.forEach(a => a.pause()); Sound.media.clear();
+    // 前借りの期限切れ（docs/SPEC_BANK_ADVANCE_2026-09-19.md §2-3）。
+    // 利子の差し押さえは廃止したので、銀行が牙を剥くのはここだけになった。
     const st = Game.state;
-    st.town.lv.market = 2;                          // 落とせる施設を用意
-    st.town.debt = 2000; st.gold = 0;               // 利子が払えない ＝ 差し押さえ
+    st.gold = 0;
+    st.roster[0].merit = 30;                        // 大口の担保に立てる戦功
+    Town.borrow(Game, 'large', st.roster[0].uid);   // 受け取り 50G・返す 80G
+    st.town.advance.settlesLeft = 1;                // 次の決着が期限
+    st.gold = 0;                                    // 勝利報酬を足しても 80G には届かない
     st.roster.forEach(m => { m.hp = 9999; m.atk = 999; m.def = 99; m.spd = 99; });
     Game.prepareMissions(true);
     Game.selectMission(0); App.render();
@@ -74,17 +94,32 @@ const ok = (c, m) => { if (!c) process.exitCode = 1; console.log((c ? '  ✓ ' :
   await page.click('[data-action="deploy"]');
   await page.click('[data-action="skiplog"]');
   await page.click('[data-action="afterbattle"]');
-  await page.waitForTimeout(250);
-  const razed = await page.evaluate(() => ({
-    lv: Town.lv(Game.state, 'market'),
-    seized: (Game.state.town.ledger || []).some(r => r.seized),
-    played: [...Sound.media].map(a => (a.currentSrc || a.src || '').split('/').pop()),
-    cleared: Game.state.town.lastDemolished === undefined,
-    screen: (document.querySelector('.banner h2') || {}).textContent || ''
+  await page.click('[data-action="afterresult"]');
+  await page.waitForTimeout(300);
+  await page.locator('#mormo-scene .mormo-scene-next').click();          // 全文表示
+  await page.waitForSelector('#mormo-scene .mormo-scene-choice');
+  const overdue = await page.evaluate(() => ({
+    prompt: (Game.state.advancePrompt || {}).kind || null,
+    labels: [...document.querySelectorAll('#mormo-scene .mormo-scene-choice')].map(b => b.textContent.trim())
   }));
-  ok(razed.lv === 1, `利子が払えず市場が1段落ちた（Lv${razed.lv}）`);
-  ok(razed.played.includes('town-bank.wav'), `決着の画面で town-bank.wav が鳴る（${razed.played.join(' ') || 'なし'}）`);
-  ok(razed.cleared, '鳴らしたら控えは消える（次の決着では鳴らない）');
+  ok(overdue.prompt === 'overdue', `払えないと2択を聞かれる（${overdue.prompt}）`);
+  ok(overdue.labels.length === 2, `連れて行かせる／待ってもらう（${overdue.labels.join('／') || 'なし'}）`);
+  const rosterBefore = await page.evaluate(() => Game.state.roster.length);
+  await page.locator('#mormo-scene .mormo-scene-choice[data-action="advancehandover"]').click();
+  await page.waitForTimeout(300);
+  const taken = await page.evaluate(() => ({
+    roster: Game.state.roster.length,
+    note: (Game.state.relics || []).some(r => r.note),
+    advance: Game.state.town.advance,
+    credit: Game.state.town.credit,
+    played: [...Sound.media].map(a => (a.currentSrc || a.src || '').split('/').pop())
+  }));
+  ok(taken.roster === rosterBefore - 1, `担保の者が連れて行かれた（${rosterBefore} → ${taken.roster}）`);
+  ok(taken.note, '蔵に借用書が残る');
+  ok(taken.advance === null && taken.credit === false, '契約は帳消し、そのランはもう借りられない');
+  ok(taken.played.includes('town-bank.wav'), `銀行の音が鳴る（${taken.played.join(' ') || 'なし'}）`);
+  await page.evaluate(() => { if (MormoScene.active) MormoScene.close(); App.render(); });
+  await page.waitForTimeout(150);
 
   // ── 施設の詳細（docs/SPEC_FACILITY_DETAIL_2026-09-13.md §1・§7）──
   console.log('▼ 施設の詳細が開き、その場で増築できる');
