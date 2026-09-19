@@ -268,10 +268,22 @@ const FX = ['heavy', 'slash_multi', 'fire', 'dark', 'holy', 'nature', 'wind', 'a
     // 画面側も、死んだ札に吹き出しを足さないことを見る。
     BattleScene.render({ type: 'death', unitId: 'p1', name: 'ホネオ', text: '　ホネオ は倒れた！', cls: 'death' });
     await new Promise(r => setTimeout(r, 200));
-    return { bubbles: document.querySelectorAll('.bu-bubble').length,
-      dead: BattleScene.units.p1.el.classList.contains('dead') };
+    const list = [...document.querySelectorAll('.bu-bubble')].map(el => ({
+      onDead: el.closest('.bu') === BattleScene.units.p1.el,
+      skill: ((el.querySelector('.bu-skill') || {}).textContent || '').trim(),
+      text: el.innerText.replace(/\s+/g, ' ').trim()
+    }));
+    return { bubbles: list.length, list, dead: BattleScene.units.p1.el.classList.contains('dead') };
   });
-  ok(dead.bubbles === 0, `倒れた札に吹き出しは出ない（${dead.bubbles}）`);
+  // 契約の趣旨は「倒れた者が**技の口上**を喋らない」（エンジンは死んだ者に skill_call を出さない）。
+  // 2026-09-19 に戦闘不能の反応（docs/SPEC_BATTLE_RESULT_BUBBLES_2026-09-19.md）が入り、
+  // 倒れた札にも一言だけ出るようになった。総数0では両立しないので、**技の口上だけ**を禁じる形に絞る。
+  const skillBubbles = dead.list.filter(b => b.skill && b.skill !== '戦闘不能');
+  ok(skillBubbles.length === 0,
+    `倒れた札に技の口上は出ない（${skillBubbles.map(b => b.text).join(' / ') || '0件'}）`);
+  // 出てよいのは戦闘不能の反応だけ。本人の札に1つ、それ以外の吹き出しは無い。
+  ok(dead.list.length === 1 && dead.list[0].onDead && /遺書/.test(dead.list[0].text),
+    `倒れた札の吹き出しは戦闘不能の一言だけ（${dead.list.map(b => b.text).join(' / ') || 'なし'}）`);
   ok(dead.dead, '倒れた表示にはなっている（イベント自体は届いている）');
 
   ok(errs.length === 0, `ページエラーなし${errs.length ? '：' + errs[0] : ''}`);
