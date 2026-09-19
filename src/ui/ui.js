@@ -322,6 +322,10 @@ const UI = {
     const spiritValue = typeof m.spirit === "number" ? m.spirit : null;
     const spirit = (!opts.resume && spiritValue !== null && (m.traits || []).some(id => (TRAITS[id] || {}).order))
       ? `<span class="spirit" title="号令に使う。出撃で+1、留守番で+2">気合 ${"●".repeat(spiritValue)}${"○".repeat(Math.max(0, spiritRules.max - spiritValue))}</span>` : "";
+    // 履歴書（面接の札）は「一枚の紙」。390×844 にスクロールなしで収める
+    // （docs/SPEC_RESUME_CARD_2026-09-18.md §A）。順は 頭→基礎→条件→人物→特性→注記→採用。
+    // 攻略のヒント（食料・接続・技・特性の説明）はここでは出さず、人物の詳細（member）に残す。
+    if (opts.resume) return this.resumeCard(m, opts, { rank, relicByTrait, bondNote, broughtNote, veteranNote, legacy, secondGen });
     return `<div class="card">
       <div class="card-head">
         ${this.avatarHtml(m, opts.resume ? "photo" : "")}
@@ -360,6 +364,46 @@ const UI = {
       ${rank.id === "general" ? `<div class="general-ability">⚔ 将軍の号令：出撃中、味方全員の与ダメージ+15%</div>` : ""}
       ${this.faceQuote(m)}
       ${opts.resume ? "" : (opts.footer || "")}
+    </div>`;
+  },
+
+  // 履歴書の一枚（docs/SPEC_RESUME_CARD_2026-09-18.md §A-3）。
+  // 区画の並びと class 名は、めくり演出（CodeX）が前提にする契約なので勝手に変えない。
+  // 高さは固定しない（親に任せる）。data-resume-index は st.applicants の添字。
+  resumeCard(m, opts, parts) {
+    const { rank, relicByTrait, bondNote, broughtNote, veteranNote, legacy, secondGen } = parts;
+    const stat = (key, value) => `<div class="stat"><span class="k">${key}</span><span class="v">${value}</span></div>`;
+    // 人物欄。長文は2行で省略記号（全文は人物の詳細で読める＝未決 U1 の既定）。
+    const person = [["前職", m.prevJob], ["志望動機", m.motive], ["短所", m.flaw]].filter(r => r[1]);
+    // 特性は名前の札だけ。説明はタップした先（member の詳細）にある。
+    const chips = (m.traits || []).map(id => {
+      const t = TRAITS[id];
+      if (!t) return "";
+      const relicName = relicByTrait[id];
+      return `<span class="trait-chip">${this.isSkillTrait(id) ? `<span class="skill-mark" title="種族技">🗡</span>` : ""}`
+        + `${U.esc(t.name)}${relicName ? `<small>（${U.esc(relicName)}）</small>` : ""}</span>`;
+    }).join("");
+    // 縁・歴戦・遺物・殿堂入り。どれも無ければ区画ごと出さない。
+    const notes = `${veteranNote}${bondNote}${broughtNote}${legacy}`;
+    return `<div class="card resume" ${opts.index != null ? `data-resume-index="${opts.index}"` : ""}>
+      <div class="resume-head">
+        ${this.avatarHtml(m, "photo")}
+        <div class="card-identity">
+          <div class="card-name">${U.esc(Game.displayName(m))} <span class="rank-badge rank-${U.esc(rank.id)}">${U.esc(rank.name)}</span></div>
+          <div class="card-job">${U.esc(m.race)} / ${U.esc(m.job)}${secondGen ? ` <span class="second-gen">${secondGen}</span>` : ""}</div>
+        </div>
+      </div>
+      <div class="resume-stats">
+        ${stat("HP", m.hp)}${stat("攻撃", m.atk)}${stat("防御", m.def)}${stat("速度", m.spd)}
+      </div>
+      <div class="resume-terms">
+        <span class="salary">希望給与 ${m.salary}G</span>
+        <span class="loyal">忠誠 ${m.loyalty}</span>
+      </div>
+      ${person.length ? `<dl class="resume-person">${
+        person.map(([k, v]) => `<dt>${k}</dt><dd>${U.esc(v)}</dd>`).join("")}</dl>` : ""}
+      ${chips ? `<div class="resume-traits">${chips}</div>` : ""}
+      ${notes ? `<div class="resume-notes">${notes}</div>` : ""}
     </div>`;
   },
 
@@ -783,7 +827,22 @@ const UI = {
         ${skillStatus ? `<div class="skill-status">${U.esc(skillStatus)}</div>` : ""}${nextSkill ? `<div class="next-skill">次に覚える技／伝承：<b>【${U.esc(nextSkill.name)}】</b></div>` : ""}</section>
       <section><h3>記録</h3><div class="member-record">出撃 ${record.battles || 0}戦（${record.wins || 0}勝）　倒れた ${record.downed || 0}回　担がれた ${record.carried || 0}回　遅刻 ${record.late || 0}回　食べた ${record.ate || 0}回</div></section>
       ${held.length ? `<section><h3>遺物</h3>${held.map(r => `<span class="relic-chip">🏺 ${U.esc(r.name)}</span>`).join("")}</section>` : ""}
-      ${relicActions}${this.resumeHtml(m)}${this.faceQuote(m)}${actions}
+      ${relicActions}${this.resumeHtml(m)}${this.faceQuote(m)}
+      ${isApplicant ? `<section class="applicant-hints"><h3>採ると何が起きるか</h3>
+        ${this.nextSkillNote(m)}
+        ${this.applicantConnections(m)}
+        ${(() => {
+          // 履歴書から外した「食料の収支」はここへ移した（docs/SPEC_RESUME_CARD_2026-09-18.md §A-2）。
+          // 履歴書は人物の手掛かりだけを持ち、攻略の答えはタップした先で読む。
+          const fq = Game.foodBalanceIfHired(m);
+          const after = fq.before.produce - fq.needAfter;
+          const runsOut = after < 0 && fq.before.stock + after < 0;
+          return `<div class="hire-food ${runsOut ? "warn" : ""}">🍖 採ると 消費 ${fq.before.need} → ${fq.needAfter}`
+            + `（収支 ${fq.before.delta >= 0 ? "+" : ""}${fq.before.delta} → ${after >= 0 ? "+" : ""}${after}`
+            + `／備蓄 ${fq.before.stock}）${runsOut ? "　次の戦いで食料が尽きる" : ""}</div>`;
+        })()}
+      </section>` : ""}
+      ${actions}
     </article></div>`, "member");
   },
 
@@ -1405,26 +1464,21 @@ const UI = {
   recruit() {
     const st = Game.state;
     const full = !Game.canHire();
-    const cards = st.applicants.map((m, i) => `<div class="applicant-member" data-action="member" data-index="${i}" role="button" tabindex="0">${this.monsterCard(m, {
-      resume: true,
-      footer: (() => {
-        // 「採ったら食えるのか」を採用の瞬間に見せる。答えではなく、収支の動きだけを出す。
-        const fq = Game.foodBalanceIfHired(m);
-        const after = fq.before.produce - fq.needAfter;
-        // 赤字そのものは普通の状態なので煽らない。備蓄で吸収できなくなる時だけ警告する。
-        const runsOut = after < 0 && fq.before.stock + after < 0;
-        const foodNote = `<div class="hire-food ${runsOut ? "warn" : ""}">🍖 採ると 消費 ${fq.before.need} → ${fq.needAfter}`
-          + `（収支 ${fq.before.delta >= 0 ? "+" : ""}${fq.before.delta} → ${after >= 0 ? "+" : ""}${after}`
-          + `／備蓄 ${fq.before.stock}）`
-          + `${runsOut ? "　次の戦いで食料が尽きる" : ""}</div>`;
-        const cost = Game.hireCost();
-        const allowed = Game.canHireApplicant(i);
-        const label = full ? "軍団が満員（誰かを解雇せよ）"
-          : cost > 0 ? `追加採用（紹介料 ${cost}G・給与 ${m.salary}G）`
-          : `無料枠で採用（給与 ${m.salary}G）`;
-        return `${foodNote}<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`;
-      })()
-    })}</div>`).join("");
+    // 履歴書は「一枚の紙」（docs/SPEC_RESUME_CARD_2026-09-18.md §A-3）。
+    // 採用ボタンは札の**外**（.card.resume の兄弟）に置く。めくり演出（CodeX）が札だけを裏返すため。
+    // 食料の収支は履歴書から外した（採ってから軍団で分かることは履歴書に書かない＝§A-2）。
+    // 判断の材料としては人物の詳細と、面接画面の軍団一覧に残っている。
+    const cards = st.applicants.map((m, i) => {
+      const cost = Game.hireCost();
+      const allowed = Game.canHireApplicant(i);
+      const label = full ? "軍団が満員（誰かを解雇せよ）"
+        : cost > 0 ? `追加採用（紹介料 ${cost}G・給与 ${m.salary}G）`
+        : `無料枠で採用（給与 ${m.salary}G）`;
+      return `<div class="applicant-member" data-action="member" data-index="${i}" role="button" tabindex="0">`
+        + this.monsterCard(m, { resume: true, index: i })
+        + `<button class="primary wide" data-action="hire" data-index="${i}" ${allowed ? "" : "disabled"}>${label}</button>`
+        + `</div>`;
+    }).join("");
     // 面接中も比較できる軍団一覧。操作は人物詳細へ集約し、ここでは一行を読むだけ。
     const rosterPanel = st.roster.length ? `<div class="panel">
       <h3>現在の軍団 <span class="muted">（${st.roster.length}/${Game.maxArmy()}）</span></h3>

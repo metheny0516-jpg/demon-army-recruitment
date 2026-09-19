@@ -1252,8 +1252,10 @@ button.wide { width: 100%; }
   font-size: 12px;
 }
 
-/* ── 履歴書欄（採用画面のカード内）── */
-.resume {
+/* ── 履歴書欄（人物の詳細の中）──
+   2026-09-18：面接の札そのものが .card.resume になったので、この規則は dl だけに絞る
+   （絞らないと札の外枠にこの紙色と左の金線が二重に乗る）。中身は変えていない。 */
+dl.resume {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px 8px;
@@ -1264,8 +1266,8 @@ button.wide { width: 100%; }
   border-radius: 6px;
   font-size: 12px;
 }
-.resume dt { color: var(--dim); white-space: nowrap; }
-.resume dd { margin: 0; }
+dl.resume dt { color: var(--dim); white-space: nowrap; }
+dl.resume dd { margin: 0; }
 
 /* 戦闘後の一言。数字の隣に人格を戻すための行。 */
 .contrib-voice {
@@ -1754,8 +1756,8 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-recruit .stat .k { color: #725e70; }
 .game-scene-recruit .trait { color: #312139; background: rgba(91,50,112,.11); border-left-color: #793d8e; }
 .game-scene-recruit .trait b { color: #662a7d; }
-.game-scene-recruit .resume { color: #30212a; background: rgba(255,250,232,.46); border-left-color: #7e3e66; }
-.game-scene-recruit .resume dt { color: #775f6d; }
+.game-scene-recruit dl.resume { color: #30212a; background: rgba(255,250,232,.46); border-left-color: #7e3e66; }
+.game-scene-recruit dl.resume dt { color: #775f6d; }
 .game-scene-recruit .applicant-links { color: #244737; background: rgba(40,91,64,.08); border-color: rgba(40,91,64,.35); }
 .game-scene-recruit .applicant-links > b,
 .game-scene-recruit .applicant-links i { color: #276345; }
@@ -1792,6 +1794,58 @@ button.primary::first-letter { color: var(--gold); }
 .game-scene-recruit .aptitudes .apt-note { color: #5f5360; }
 .game-scene-recruit .quote { border-top-color: rgba(55,36,49,.25); }
 .game-scene-recruit .avatar.photo { border: 4px solid #f5ecd8; outline: 1px solid #66525e; box-shadow: 2px 3px 5px rgba(0,0,0,.32); }
+
+/* ── 履歴書の一枚（docs/SPEC_RESUME_CARD_2026-09-18.md §A）────────────
+   390×844 にスクロールなしで収める。区画の並びと class 名は、めくり演出が前提にする契約。
+   既存の .card の規則は編成・城が使っているので消さない。ここは .card.resume だけに足す。 */
+.card.resume { gap: 6px; padding: 10px 11px; }
+.resume-head { display: flex; align-items: center; gap: 9px; }
+.resume-head .card-identity { min-width: 0; flex: 1 1 auto; overflow-wrap: anywhere; }
+.resume-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; text-align: center; }
+.resume-terms { display: flex; gap: 12px; font-size: 12px; }
+.resume-terms .salary { color: var(--gold); }
+/* 人物欄。長い文は2行まで、それ以上は省略記号（全文は人物の詳細で読める＝未決 U1 の既定） */
+.resume-person {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 2px 8px;
+  margin: 0;
+  padding: 7px 9px;
+  background: #1b1530;
+  border-left: 3px solid var(--gold);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.resume-person dt { color: var(--dim); white-space: nowrap; }
+.resume-person dd {
+  margin: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+/* 特性は名前の札だけ。説明はタップした先（人物の詳細）にある＝ここでは答えを出さない */
+.resume-traits { display: flex; flex-wrap: wrap; gap: 5px; }
+.trait-chip {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border: 1px solid rgba(160,110,190,.45);
+  border-radius: 999px;
+  background: rgba(91,50,112,.18);
+  color: #e3cdf0;
+}
+.trait-chip small { font-weight: 400; font-size: 11px; opacity: .85; }
+.resume-notes { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.resume-notes .bond-note, .resume-notes .general-ability { margin: 0; }
+/* 紙の見た目（採用画面のテーマに合わせる） */
+.game-scene-recruit .resume-person { color: #30212a; background: rgba(255,250,232,.46); border-left-color: #7e3e66; }
+.game-scene-recruit .resume-person dt { color: #775f6d; }
+.game-scene-recruit .resume-terms .salary { color: #8a5915; }
+.game-scene-recruit .resume-terms .loyal { color: #315d85; }
+.game-scene-recruit .trait-chip { color: #4a2458; border-color: rgba(121,61,142,.5); background: rgba(91,50,112,.12); }
 
 /* 編成札は石板。将来の8〜10体表示では横密度を上げられる。 */
 .game-scene-formation .cards { grid-template-columns: repeat(auto-fit, minmax(215px, 1fr)); }

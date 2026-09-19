@@ -31,9 +31,12 @@ const { autoDismissMormo, enterMissionPhase } = require('./helpers.js');
     Game.state.hiresLeft = 1;
     Game.state.phase = 'recruit';
     App.render();
+    // 接続は履歴書から人物の詳細へ移した（docs/SPEC_RESUME_CARD_2026-09-18.md §A-2）。
+    // 履歴書は手掛かり（特性名）だけを持ち、答えはタップした先で読む。
+    UI.memberDetail(null, 0);
     return document.body.innerText;
   });
-  if (!recruitText.includes('今の軍団との接続')) errors.push('応募者カードに接続見出しが出ない');
+  if (!recruitText.includes('今の軍団との接続')) errors.push('人物の詳細に接続見出しが出ない');
   if (!/起点.*追い剥ぎ.*1Gを略奪予約.*反応.*強欲/s.test(recruitText)) {
     errors.push('採用前に「起点：追い剥ぎ → 1Gを略奪予約 → 反応：強欲」が読めない');
   }
