@@ -619,6 +619,9 @@ const TRAITS = {
     order: { label: "突っ込め", cost: 1, note: "ラウンドを問わず、次の終わりに敵の列を崩す" },
     lines: { order: ["フンッ", "道は、開ける", "止まれない"] },
     onRoundEnd(ctx) {
+      // 通常攻撃が「そっちじゃない」に置き換わったラウンドだけ、自動の列押し下げを重ねない。
+      // コマンド技 mino_rush は src/data/skills.js の別ID・別経路なので抑止しない。
+      if (ctx.unit.flags.mischargeRound === ctx.round) return;
       if (!ctx.unit.alive || (ctx.round !== 1 && !ctx.unit.flags.chargeOrdered)) return;
       const front = ctx.enemies.find(ctx.onField);
       if (!front || !ctx.moveEnemyBack(front)) return;

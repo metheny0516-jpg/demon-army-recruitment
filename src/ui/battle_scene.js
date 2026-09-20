@@ -850,9 +850,9 @@ const BattleScene = {
         break;
       }
       case "summon": {
-        if (ev.late && this.units[ev.unit.id]) {
+        if ((ev.late || ev.scout) && this.units[ev.unit.id]) {
           const u = this.clearAbsent(this.units[ev.unit.id], ev.unit);
-          this.arrival(u, "late", ev);
+          this.arrival(u, ev.scout ? "scout" : "late", ev);
           // 到着の一言も止めて読ませる（試遊で「反映されていない気がする」＝次の字幕に消されていた）
           if (ev.quote) this.speakAside({ speaker: { name: u.name, src: this.unitPortraitSrc(u) }, text: ev.quote });
           break;
@@ -1011,6 +1011,10 @@ const BattleScene = {
         this.clearFocus();
         if (culprit) culprit.el.classList.add("acting", "trouble");
         if (target) target.el.classList.add("targeted");
+        if (culprit && ev.id === "harpy_scout") {
+          culprit.absent = true;
+          culprit.el.classList.add("absent");
+        }
         this.pulse("incident");
         this.cutin(ev.name, "魔王軍で事件発生！", ev.id);
         this.shake();

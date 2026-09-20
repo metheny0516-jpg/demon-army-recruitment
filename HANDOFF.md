@@ -21,6 +21,12 @@
 
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
 
+### 済：戦闘中の人物ハプニング5件を隔離試作（2026-09-20・Sol）
+
+- `codex/battle-personality-happenings`。仕様：`docs/SPEC_BATTLE_PERSONALITY_HAPPENINGS_2026-09-20.md`。
+- スライム接着／トロル昼寝／ハーピー偵察帰還／ミノタウロス誤突進と、既存大食漢の弁当分配。自然発生率は0・試写室だけ強制発火。
+- Node全検査（既知の長時間 `test-chain-measure-retry.js` を除く）と1ラン全戦略シミュレーションは通過。Chromium不在のため新規ブラウザ試写テストと `run-all.sh` は未実行。本線へは未統合。
+
 ### 済：戦闘後の戦果発表を取り込んだ（2026-09-19・CodeX 実装／Opus 統合）
 
 `codex/battle-result-bubbles`（ce03145）を本線へ。仕様＝`docs/SPEC_BATTLE_RESULT_BUBBLES_2026-09-19.md`。

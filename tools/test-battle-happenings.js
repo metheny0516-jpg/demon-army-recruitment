@@ -15,7 +15,8 @@ assert(result.incidents.some(i => i.id === 'mutiny'), '低忠誠で仲間割れ�
 assert(result.timeline.some(e => e.type === 'splash' && e.label === '仲間割れ'), '仲間へのダメージを構造化イベントで記録');
 
 const happenings = vm.runInContext('BATTLE_HAPPENINGS', ctx);
-assert(happenings.length === 8, 'ハプニングは既存3件＋追加5件（宴の2件は 2026-09-16 に消した）');
+assert(happenings.length === 12, '自然発生8件＋隔離試作4件を定義');
+assert(happenings.filter(h => h.testOnly).every(h => h.chance === 0), '隔離試作は自然発生率0で通常プレイへ漏れない');
 const byId = id => happenings.find(h=>h.id===id);
 const contexts = [
   ['hunger_taste',{starved:true,traits:['hunger_demon']}],

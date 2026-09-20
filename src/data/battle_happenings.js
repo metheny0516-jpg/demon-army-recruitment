@@ -46,3 +46,29 @@ BATTLE_HAPPENINGS.push(
     text(u) { return `${u.name}「次、俺の番！？ 聞いてない！」 仲間の勢いに腰が引け、この一撃を取り逃した！`; }
   }
 );
+
+// 人物ハプニングの隔離試作（2026-09-20）。自然発生率は試遊後に決めるため、
+// 現在は chance: 0。Battle の options.forceHappenings でだけ発火させる。
+// 「便利な種族技」ではなく、本人も困る事故として読み取れるかを先に確かめる。
+BATTLE_HAPPENINGS.push(
+  {
+    id: "slime_cling", name: "くっついて離れない", kind: "slime_cling", chance: 0, testOnly: true,
+    check(u) { return u.race === "スライム"; },
+    text(u, target) { return `${u.name}「つかまえた……」 ${target.name}「お前も離れろ！」`; }
+  },
+  {
+    id: "troll_nap", name: "戦場で昼寝", kind: "troll_nap", chance: 0, testOnly: true,
+    check(u) { return u.race === "トロル"; },
+    text(u) { return `${u.name}「治るまで寝る」 味方「今寝るなー！」`; }
+  },
+  {
+    id: "harpy_scout", name: "上空偵察", kind: "harpy_scout", chance: 0, testOnly: true,
+    check(u) { return u.race === "ハーピー"; },
+    text(u) { return `${u.name}「ちょっと上から見てくる！」 味方「今行くのかよ！」`; }
+  },
+  {
+    id: "minotaur_wrong_way", name: "そっちじゃない", kind: "minotaur_wrong_way", chance: 0, testOnly: true,
+    check(u) { return u.race === "ミノタウロス"; },
+    text(u, target) { return `${u.name}「こっちか！」 味方「そっちじゃない！」 ${target.name}へ突っ込んだ！`; }
+  }
+);

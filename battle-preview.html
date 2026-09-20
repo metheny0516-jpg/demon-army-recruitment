@@ -12,6 +12,11 @@
   <button id="replay">▶ 1対1を再生</button>
   <button id="crowd">5対5を確認</button>
   <button id="spectacle" style="font-weight:bold">🔥 シナジーと連鎖の演出を確認</button>
+  <button id="happening-slime" style="font-weight:bold">💧 接着事故</button>
+  <button id="happening-troll" style="font-weight:bold">💤 トロル昼寝</button>
+  <button id="happening-harpy" style="font-weight:bold">🪽 上空偵察</button>
+  <button id="happening-minotaur" style="font-weight:bold">🐂 誤突進</button>
+  <button id="happening-ogre" style="font-weight:bold">🍱 半分だけ</button>
   <button id="loot-relay" style="font-weight:bold">💰 略奪から仲間へ連鎖（実戦計算）</button>
   <button id="ranged">弓と魔法を確認</button>
   <button id="arrival">召喚と復活を確認</button>
@@ -170,6 +175,51 @@ function replayLootRelay() {
   return result;
 }
 document.getElementById('loot-relay').onclick = replayLootRelay;
+// 自然発生率を決める前の隔離試作。ここからだけ forceHappenings を渡す。本編は一切渡さない。
+function replayPersonalityHappening(id) {
+  replayCurrent = () => replayPersonalityHappening(id);
+  BattleScene.stop();
+  const make = (uid, name, race, tplId, traits, hp, atk, spd) => Battle.makeUnit({
+    uid, name, race, tplId, traits: traits || [], hp, atk, def: 2, spd, salary: 2, loyalty: 100, tags: []
+  }, 'player');
+  const foe = (uid, name, hp = 180, atk = 5, spd = 4) => Battle.makeUnit({
+    uid, name, race: '人間', traits: [], hp, atk, def: 2, spd, loyalty: 100, tags: []
+  }, 'enemy');
+  let player, enemy, options = {};
+  if (id === 'slime_cling') {
+    player = [make('slime', 'ぷに', 'スライム', 'slime', [], 120, 8, 10), make('mate', 'ゴブ太', 'ゴブリン', 'goblin', [], 150, 9, 3)];
+    enemy = [foe('stuck', '王国槍兵', 220, 7, 7), foe('other', '王国剣士', 220, 7, 5)];
+    options = { forceHappenings: [id], forceHappeningTargetIds: { [id]: 'stuck' } };
+  } else if (id === 'troll_nap') {
+    player = [make('troll', 'ドルン', 'トロル', 'troll', [], 220, 16, 9), make('mate', 'ゴブ太', 'ゴブリン', 'goblin', [], 120, 8, 3)];
+    player[0].hp = 110; enemy = [foe('e1', '王国重装兵', 260, 9, 5)];
+    options = { forceHappenings: [id], forceHappeningTurns: { [id]: 2 } };
+  } else if (id === 'harpy_scout') {
+    player = [make('harpy', 'ピリカ', 'ハーピー', 'harpy', [], 120, 18, 10), make('mate', 'ゴブ太', 'ゴブリン', 'goblin', [], 180, 7, 3)];
+    enemy = [foe('e1', '王国弓兵', 250, 8, 5)];
+    options = { forceHappenings: [id], forceHappeningTurns: { [id]: 2 } };
+  } else if (id === 'minotaur_wrong_way') {
+    player = [make('mino', 'ブルガ', 'ミノタウロス', 'minotaur', ['charge'], 220, 24, 10), make('mate', 'ゴブ太', 'ゴブリン', 'goblin', [], 180, 7, 3)];
+    enemy = [foe('e1', '王国槍兵', 260, 7, 5)];
+    options = { forceHappenings: [id], forceHappeningTargetIds: { [id]: 'mate' } };
+  } else {
+    player = [make('ogre', 'ボグマ', 'オーガ', 'ogre', ['big_eater'], 220, 70, 10), make('mate', '傷ついたゴブ太', 'ゴブリン', 'goblin', [], 120, 6, 3)];
+    player[1].hp = 20; enemy = [foe('e1', '弁当持ち兵', 20, 4, 5), foe('e2', '王国兵', 180, 5, 4)];
+  }
+  const old = { rand: U.rand, chance: U.chance, pick: U.pick };
+  let result;
+  try {
+    U.rand = () => .75; U.chance = p => p > 0; U.pick = a => a[0];
+    result = Battle.simulate(player, enemy, options);
+  } finally { Object.assign(U, old); }
+  UI.set(BattleScene.shell({ stage: 1, army: '人物ハプニング試作', region: '隔離試写' }));
+  BattleScene.play(result.timeline, () => { document.getElementById('next-btn').textContent = 'もう一度見る'; });
+  document.getElementById('scene').scrollIntoView({ block: 'center' });
+  return result;
+}
+for (const [button, id] of [['happening-slime','slime_cling'],['happening-troll','troll_nap'],['happening-harpy','harpy_scout'],['happening-minotaur','minotaur_wrong_way'],['happening-ogre','ogre_lunch']]) {
+  document.getElementById(button).onclick = () => replayPersonalityHappening(id);
+}
 UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'pausebattle') BattleScene.togglePause(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replayCurrent(); });
 Sound.load();
 if (location.hash === '#loot') replayLootRelay(); else replay();

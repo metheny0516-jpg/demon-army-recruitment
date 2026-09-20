@@ -376,6 +376,12 @@ const Battle = {
       return { spare: Math.max(0, Number(r.spare) || 0), limit: lv >= 2 ? EAT.limitKitchen2 : EAT.limit, heal: lv >= 3 ? EAT.healKitchen3 : EAT.heal };
     })();
     let rationsEaten = 0;               // 食べた携行食の数（run.js が食料から引く）
+    // 隔離試作専用。通常の run.js は渡さない。配列に列挙した事件だけを確定発火させ、
+    // 自然発生率を決める前に見え方と処理を試す。
+    const forcedHappenings = new Set(Array.isArray(options.forceHappenings) ? options.forceHappenings : []);
+    const forcedHappeningsUsed = new Set();
+    const forcedHappeningTurns = options.forceHappeningTurns || {};
+    const forcedHappeningTargetIds = options.forceHappeningTargetIds || {};
     const actions = {};                 // uid → { attack, guard, skill, eat, cover } 手番で何をしたか（成長の偏り、docs/SPEC_GROWTH_BY_ACTION）
     const countAction = (u, key) => { if (u.side !== "player" || u.uid === null || u.uid === undefined) return; const a = actions[u.uid] || (actions[u.uid] = { attack: 0, guard: 0, skill: 0, eat: 0, cover: 0 }); a[key] += 1; };
     const canEat = () => eatRules.spare - rationsEaten > 0 && rationsEaten < eatRules.limit;
@@ -552,6 +558,14 @@ const Battle = {
       });
     }
 
+    const releaseCling = unit => {
+      const link = unit && unit.flags && unit.flags.cling;
+      if (!link) return;
+      const partner = link.partner;
+      delete unit.flags.cling;
+      if (partner && partner.flags && partner.flags.cling && partner.flags.cling.partner === unit) delete partner.flags.cling;
+    };
+
     // ダメージ適用。kind で attack / splash を出し分ける。
     const applyDamage = (attacker, target, amount, kind, opts) => {
       opts = opts || {};
@@ -629,6 +643,8 @@ const Battle = {
           target.alive = false;
           target.hp = 0;
           dead = true;
+          // 接着は片方が倒れた瞬間に終了。後で蘇生しても復活させない。
+          releaseCling(target);
         }
       }
 
@@ -745,27 +761,70 @@ const Battle = {
       return { dmg, event: damageEvent, deathEvent, overkillEvent };
     };
 
-    const tryIncident = (unit, allies, actionOpts) => {
-      if (unit.side !== "player" || unit.flags.incidentUsed) return false;
+    const tryIncident = (unit, allies, enemies, round, actionOpts) => {
+      // 人物事故は通常攻撃を置き換える。選んだコマンド技まで横取りしない。
+      if (unit.side !== "player" || unit.flags.incidentUsed || actionOpts.skillId) return false;
       // 既存3件は通常行動だけ。追撃中は明示した連鎖ハプニングだけを判定。
       const candidates = BATTLE_HAPPENINGS.filter(h => (!actionOpts.isExtra || h.duringChain) && h.check(unit));
       const generalPresent = allies.some(a => onField(a) && a.rankId === "general");
       for (const happening of candidates) {
+        const forced = forcedHappenings.has(happening.id) && !forcedHappeningsUsed.has(happening.id);
+        if (happening.testOnly && !forced) continue;
         const chance = happening.chance * (generalPresent ? 0.35 : 1);
-        if (!U.chance(chance)) continue;
+        if (!forced && !U.chance(chance)) continue;
         let target = null;
         if (happening.kind === "friendly_fire") {
           const victims = allies.filter(a => onField(a) && a !== unit);
           if (!victims.length) continue;
           target = U.pick(victims);
+        } else if (happening.kind === "slime_cling") {
+          const victims = enemies.filter(a => onField(a) && !a.flags.cling);
+          if (!victims.length) continue;
+          target = victims.find(v => v.id === forcedHappeningTargetIds[happening.id] || v.uid === forcedHappeningTargetIds[happening.id])
+            || (actionOpts.target && victims.includes(actionOpts.target) ? actionOpts.target : pickTarget(unit, victims, round));
+        } else if (happening.kind === "minotaur_wrong_way") {
+          const intendedPool = enemies.filter(onField);
+          if (!intendedPool.length) continue;
+          const intended = actionOpts.target && intendedPool.includes(actionOpts.target)
+            ? actionOpts.target : pickTarget(unit, intendedPool, round);
+          const alternatives = [...enemies.filter(a => onField(a) && a !== intended), ...allies.filter(a => onField(a) && a !== unit)];
+          if (!alternatives.length) continue; // 誤る先が無ければ事故不成立。通常攻撃へ戻す。
+          target = alternatives.find(v => v.id === forcedHappeningTargetIds[happening.id] || v.uid === forcedHappeningTargetIds[happening.id]) || U.pick(alternatives);
         }
         unit.flags.incidentUsed = true;
-        emitCausal("incident", {
+        if (forced) forcedHappeningsUsed.add(happening.id);
+        const incident = emitCausal("incident", {
           id: happening.id, name: happening.name, unitId: unit.id,
           targetId: target && target.id, emphasis: 3,
           text: happening.text(unit, target), cls: "incident"
         }, actionOpts.parentEvent || null);
-        if (target) applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true, parentEvent: timeline[timeline.length - 1] });
+        if (happening.kind === "friendly_fire") {
+          applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true, parentEvent: incident });
+        } else if (happening.kind === "slime_cling") {
+          // 本人は発動した今を1回目とする。敵はこの後の通常手番から2回止まる。
+          unit.flags.cling = { partner: target, remaining: 1 };
+          target.flags.cling = { partner: unit, remaining: 2 };
+        } else if (happening.kind === "troll_nap") {
+          const turns = Math.max(1, Math.min(2, Number(forcedHappeningTurns[happening.id]) || (1 + (U.rand() < 0.5 ? 1 : 0))));
+          unit.flags.napping = Math.max(0, turns - 1); // 発動手番を1回目として消化済み
+          const amount = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * 0.1));
+          if (amount > 0) { unit.hp += amount; emitCausal("heal", { unitId: unit.id, sourceId: unit.id, amount, hp: unit.hp, maxHp: unit.maxHp, label: "昼寝", emphasis: 1 }, incident); }
+        } else if (happening.kind === "harpy_scout") {
+          const turns = Math.max(1, Math.min(2, Number(forcedHappeningTurns[happening.id]) || (1 + (U.rand() < 0.5 ? 1 : 0))));
+          unit.flags.absent = true;
+          unit.flags.scouting = true;
+          // 発動手番が1回目。1回休みは次ラウンド、2回休みは次々ラウンドの本人の手番相当で帰る。
+          unit.flags.scoutReturnRound = round + turns;
+        } else if (happening.kind === "minotaur_wrong_way") {
+          unit.flags.mischargeRound = round; // trait charge の同ラウンド自動押し下げだけを抑止。mino_rush は別経路。
+          const friendly = target.side === unit.side;
+          applyDamage(unit, target, friendly ? unit.atk * 0.7 : unit.atk, "splash", {
+            label: "誤突進", incident: true, parentEvent: incident
+          });
+          if (friendly && unit.alive) applyDamage(unit, unit, unit.atk * 0.2, "splash", {
+            label: "誤突進の反動", incident: true, parentEvent: incident
+          });
+        }
         return true;
       }
       return false;
@@ -775,8 +834,12 @@ const Battle = {
       actionOpts = actionOpts || {};
       const living = enemies.filter(onField);
       if (living.length === 0) return;
+      // 追撃・反撃は停止回数に数えない。停止中の本人から新しい能動行動も始めない。
+      // 通常手番側だけが下のメインループで残り回数を消化する。
+      if (actionOpts.isExtra && (unit.flags.scouting || unit.flags.napping > 0
+        || (unit.flags.cling && unit.flags.cling.remaining > 0))) return;
       unit.chainDepth = actionOpts.parentEvent ? (actionOpts.parentEvent.chainDepth || 1) + 1 : 1;
-      if (tryIncident(unit, allies, actionOpts)) return;
+      if (tryIncident(unit, allies, enemies, round, actionOpts)) return;
       // 先頭（配置順）が60%で狙われる。前衛に壁を置く意味を持たせる。
       const target = actionOpts.target && living.includes(actionOpts.target)
         ? actionOpts.target
@@ -844,16 +907,30 @@ const Battle = {
           && (unit.flags.ateCount || 0) < eater.maxPerBattle && U.chance(eater.chance)) {
         unit.flags.ateCount = (unit.flags.ateCount || 0) + 1;
         unit.flags.stuffed = true;
-        const line = U.pick(TRAITS.big_eater.lines.eat);
+        const hungryAlly = allies.filter(a => onField(a) && a !== unit && a.hp <= a.maxHp * 0.3)
+          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] || null;
+        const foodLine = U.pick(TRAITS.big_eater.lines.eat);
+        const line = hungryAlly ? "……半分だけだぞ" : foodLine;
         const trig = emitCausal("trait_trigger", {
-          sourceId: unit.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 2,
-          note: "倒した相手の携行食を食べ始めた。次の手番は動かない。少し回復する",
-          text: `　${unit.name}の【大食漢】「${line}」 ${target.name}の携行食を食べ始めた（次の手番は動かない）`, cls: "trait"
+          sourceId: unit.id, targetId: hungryAlly && hungryAlly.id, traitId: "big_eater", name: "大食漢", quote: line, emphasis: 2,
+          note: hungryAlly ? `${hungryAlly.name}へ携行食を半分分けた。次の手番は動かない` : "倒した相手の携行食を食べ始めた。次の手番は動かない。少し回復する",
+          text: hungryAlly
+            ? `　${unit.name}の【大食漢】「${foodLine}」「……半分だけだぞ」 ${hungryAlly.name}へ携行食を分けた（次の手番は動かない）`
+            : `　${unit.name}の【大食漢】「${line}」 ${target.name}の携行食を食べ始めた（次の手番は動かない）`, cls: "trait"
         }, applied.deathEvent);
-        const heal = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * eater.healRate));
-        if (heal > 0) {
-          unit.hp += heal;
-          emitCausal("heal", { unitId: unit.id, amount: heal, hp: unit.hp, maxHp: unit.maxHp, emphasis: 1 }, trig);
+        const total = Math.ceil(unit.maxHp * eater.healRate);
+        const selfShare = hungryAlly ? Math.ceil(total / 2) : total;
+        const selfHeal = Math.min(unit.maxHp - unit.hp, selfShare);
+        if (selfHeal > 0) {
+          unit.hp += selfHeal;
+          emitCausal("heal", { unitId: unit.id, sourceId: unit.id, amount: selfHeal, hp: unit.hp, maxHp: unit.maxHp, label: "携行食", emphasis: 1 }, trig);
+        }
+        if (hungryAlly) {
+          const allyHeal = Math.min(hungryAlly.maxHp - hungryAlly.hp, Math.floor(total / 2));
+          if (allyHeal > 0) {
+            hungryAlly.hp += allyHeal;
+            emitCausal("heal", { unitId: hungryAlly.id, sourceId: unit.id, amount: allyHeal, hp: hungryAlly.hp, maxHp: hungryAlly.maxHp, label: "弁当を半分", emphasis: 2 }, trig);
+          }
         }
       }
       const post = {
@@ -1108,7 +1185,8 @@ const Battle = {
       return false;
     };
 
-    const wiped = us => us.every(u => !u.alive || u.flags.spared);   // 見逃した／雇った敵将は数に入れない（生きたまま去った）
+    // 偵察中のハーピーだけは地上全滅を救わない。酒好き等の遅刻者は従来どおり生存扱い。
+    const wiped = us => us.every(u => !u.alive || u.flags.spared || (u.side === "player" && u.flags.scouting));
     const all = () => [...playerUnits, ...enemyUnits];
     const tryGraveyardSummon = () => {
       if (!options.graveyard || graveyardUsed >= worksOf("graveyard")) return null;
@@ -1224,6 +1302,27 @@ const Battle = {
           text: `　${u.name}が遅れて到着「${quote}」`, cls: "revive"
         });
       }
+
+      // 上空偵察からの帰還。事故の急降下は専用の固定攻撃で、harpy_dive の習得・気合・命中判定とは別。
+      // 攻撃力100%、必中、気合消費なし。1回休みなら次ラウンド、2回なら次々ラウンドに帰る。
+      for (const u of playerUnits) {
+        if (!u.alive || !u.flags.scouting || round < u.flags.scoutReturnRound) continue;
+        u.flags.scouting = false;
+        u.flags.absent = false;
+        delete u.flags.scoutReturnRound;
+        const arrival = emit("summon", {
+          sourceUnitId: null, unit: snap(u), scout: true, quote: "偵察終了！ そこが弱点！", emphasis: 2,
+          text: `　${u.name}が上空偵察から帰還「偵察終了！ そこが弱点！」`, cls: "revive"
+        });
+        const targets = enemyUnits.filter(onField);
+        if (targets.length) {
+          const target = U.pick(targets);
+          applyDamage(u, target, Math.max(1, u.atk - target.def), "attack", {
+            label: "偵察急降下", incident: true, parentEvent: arrival, fx: "wind"
+          });
+        }
+      }
+      if (wiped(enemyUnits) || wiped(playerUnits)) break;
 
       // 大火球の燃焼は「次ラウンド開始時」にだけ解決する。flag に残した発動イベントを
       // 親にするので、燃焼も元の一発の因果列として描画・戦果に残る。
@@ -1383,6 +1482,28 @@ const Battle = {
       let rescuedThisRound = false;
       for (const unit of order) {
         if (!unit.alive) continue;
+        // 接着中。残り回数は通常手番だけで減る。先に2回を終えた側は、相手が終わるまで
+        // 接着表示が残っていても3回目の通常手番を失わない。
+        if (unit.flags.cling) {
+          const link = unit.flags.cling;
+          if (!link.partner || !link.partner.alive) releaseCling(unit);
+          else if (link.remaining > 0) {
+            link.remaining -= 1;
+            emit("note", { unitId: unit.id, cling: true, emphasis: 1,
+              text: `　${unit.name}は${link.partner.name}にくっついて動けない`, cls: "incident" });
+            if (link.remaining === 0 && link.partner.flags.cling && link.partner.flags.cling.remaining === 0) releaseCling(unit);
+            continue;
+          } else if (link.partner.flags.cling && link.partner.flags.cling.remaining === 0) releaseCling(unit);
+        }
+        // 昼寝中も通常手番だけを消化。受動的なかばう等の既存フックは無効化しない。
+        if (unit.flags.napping > 0) {
+          unit.flags.napping -= 1;
+          const amount = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * 0.1));
+          if (amount > 0) { unit.hp += amount; emit("heal", { unitId: unit.id, sourceId: unit.id, amount, hp: unit.hp, maxHp: unit.maxHp, label: "昼寝", emphasis: 1 }); }
+          emit("note", { unitId: unit.id, napping: true, emphasis: 1,
+            text: `　${unit.name}はまだ寝ている（この手番は動かない）`, cls: "incident" });
+          continue;
+        }
         // 号令の代償。息が上がった手番は動かない。一回だけ。
         if (unit.flags.winded) {
           unit.flags.winded = false;
