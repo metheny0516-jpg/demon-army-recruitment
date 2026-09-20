@@ -834,7 +834,8 @@ const BattleScene = {
           this.float(u, ev.permanent ? "戦死…" : "倒れた！", "fallen");
           if (!ev.permanent && u.side === "player" && !u.summoned && !this.downQuoteShown.has(ev.unitId)) {
             this.downQuoteShown.add(ev.unitId);
-            this.bubble(u, "まだ遺書、書いてませんけど…", "戦闘不能", { talk: true, life: 2600 });
+            const voice = this.downedVoice(u);
+            if (voice) this.bubble(u, voice, "戦闘不能", { talk: true, life: 2600 });
           }
         }
         break;
@@ -3049,12 +3050,24 @@ const BattleScene = {
   },
 
   // 決着済みの表示データだけを読む。成長・報酬の適用はしない。
+  // 既存の戦果用台詞を再利用。描画でゲーム用乱数 U.rand は消費しない。
+  downedVoice(unit) {
+    const templates = (typeof MONSTER_TEMPLATES !== "undefined" ? MONSTER_TEMPLATES : [])
+      .concat(typeof MONSTER_TEMPLATES_ACT2 !== "undefined" ? MONSTER_TEMPLATES_ACT2 : []);
+    const tpl = templates.find(t => t.id === unit.tplId);
+    const voices = (tpl && tpl.voices) ||
+      (typeof SPECIAL_MONSTER_VOICES !== "undefined" ? SPECIAL_MONSTER_VOICES[unit.tplId] : null);
+    const pool = voices && voices.dead;
+    return pool && pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  },
+
   reportLines(b, growth) {
     if (!b) return [];
     const lines = [];
     const members = b.contribution || [];
-    const speaker = members.find(c => c.survived !== false && !c.injured && !c.trainingDown && c.voice);
-    if (speaker) lines.push({ name: speaker.name, text: speaker.voice, kind: "voice" });
+    for (const speaker of members.filter(c => c.survived !== false && !c.injured && !c.trainingDown && c.voice)) {
+      lines.push({ name: speaker.name, text: speaker.voice, kind: "voice" });
+    }
     const grouped = new Map();
     const labels = { hp: "HP", atk: "攻撃", def: "防御", spd: "速度" };
     for (const r of growth || []) {

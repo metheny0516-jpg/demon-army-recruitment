@@ -282,7 +282,9 @@ const FX = ['heavy', 'slash_multi', 'fire', 'dark', 'holy', 'nature', 'wind', 'a
   ok(skillBubbles.length === 0,
     `倒れた札に技の口上は出ない（${skillBubbles.map(b => b.text).join(' / ') || '0件'}）`);
   // 出てよいのは戦闘不能の反応だけ。本人の札に1つ、それ以外の吹き出しは無い。
-  ok(dead.list.length === 1 && dead.list[0].onDead && /遺書/.test(dead.list[0].text),
+  // 台詞は種族ごと（2026-09-20 に固定文から voices.dead へ移行）。文言では縛らず、
+  // 「戦闘不能の一言が本人の札に1つだけ」という契約で見る。
+  ok(dead.list.length === 1 && dead.list[0].onDead && dead.list[0].skill === '戦闘不能' && dead.list[0].text.length > 0,
     `倒れた札の吹き出しは戦闘不能の一言だけ（${dead.list.map(b => b.text).join(' / ') || 'なし'}）`);
   ok(dead.dead, '倒れた表示にはなっている（イベント自体は届いている）');
 
