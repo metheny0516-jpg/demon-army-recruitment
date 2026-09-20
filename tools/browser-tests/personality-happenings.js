@@ -31,10 +31,43 @@ const { autoDismissMormo } = require('./helpers.js');
     // 偵察中だけ札が消え、帰還イベントで戻る。
     await page.evaluate(() => { BattleScene.speed = 1; replayPersonalityHappening('harpy_scout'); });
     await page.waitForFunction(() => BattleScene.units.p0 && BattleScene.units.p0.absent === true, null, { timeout: 12000 });
-    assert.ok(await page.locator('.battle-unit.absent').count() >= 1, '上空偵察中はハーピーが地上から消える');
+    // 札のクラスは .bu（.battle-unit はこのコードベースに存在しない）。
+    // 見え方は src/battlefield.css の `.battlefield .bu.absent`（opacity .28＋グレースケール）。
+    const aloft = await page.evaluate(() => {
+      const el = document.querySelector('#bu-p0');
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      return { absent: el.classList.contains('absent'), opacity: Number(cs.opacity), filter: cs.filter };
+    });
+    assert.ok(aloft && aloft.absent && aloft.opacity < 0.5 && /grayscale/.test(aloft.filter),
+      `上空偵察中はハーピーが地上から消える（${JSON.stringify(aloft)}）`);
     await page.evaluate(() => BattleScene.speed = 4);
-    await page.waitForFunction(() => BattleScene.finished, null, { timeout: 20000 });
+    // 試写は「事件で止めて見せる」「モルモの確認窓」で人の操作を待つ（設計どおり）。
+    // テストも人と同じように進める：窓は「続ける」を押し、止まった一コマは戦場をタップする。
+    // これをしないと finished に到達せず、演出の不具合と区別できない（2026-09-20）。
+    for (let i = 0; i < 400 && !await page.evaluate(() => BattleScene.finished); i++) {
+      await page.evaluate(() => {
+        const cont = document.querySelector('.mormo-aside.show .mormo-aside-continue');
+        if (cont) return cont.click();
+        const hint = document.querySelector('#hold-hint.show');
+        if (hint) return BattleScene.advanceBeat();
+      });
+      await page.waitForTimeout(50);
+    }
+    assert.ok(await page.evaluate(() => BattleScene.finished), '人と同じ操作で最後まで進む');
     assert.equal(await page.evaluate(() => !!BattleScene.units.p0.absent), false, '帰還後は戦場へ戻る');
+    assert.equal(await page.evaluate(() => document.querySelector('#bu-p0').classList.contains('absent')), false,
+      '帰還後は札の薄さも戻る');
+    // 離陸後に「最後まで飛ばす」を押しても札の薄さが残らない（2026-09-20）。
+    // skip() は render() を通らない独自経路を持ち、そこが summon を ev.late だけで
+    // 判定していたため、偵察の帰還を取りこぼして札が薄いまま残っていた。
+    await page.evaluate(() => { BattleScene.speed = 4; replayPersonalityHappening('harpy_scout'); });
+    await page.waitForFunction(() => BattleScene.units.p0 && BattleScene.units.p0.absent === true, null, { timeout: 12000 });
+    await page.evaluate(() => BattleScene.skip());
+    await page.waitForFunction(() => BattleScene.finished, null, { timeout: 12000 });
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.bu.absent').length), 0,
+      '離陸後に飛ばしても、薄いままの札が残らない');
+
     assert.deepEqual(errors, [], '試写中にJSエラーがない');
     console.log('✓ 人物ハプニング5件：隔離試写・実戦計算・ハーピー離脱帰還');
   } finally { await browser.close(); }

@@ -3001,7 +3001,7 @@ const BattleScene = {
           const ev = this.timeline[this.index++];
           if (ev.text) this.appendLog(ev.text, ev.cls);
           if (ev.type === "summon") {
-            if (ev.late && this.units[ev.unit.id]) this.clearAbsent(this.units[ev.unit.id], ev.unit);
+            if ((ev.late || ev.scout) && this.units[ev.unit.id]) this.clearAbsent(this.units[ev.unit.id], ev.unit);
             else this.addSummon(ev.unit);
           }
           const u = this.units[ev.toId] || this.units[ev.unitId];
@@ -3020,7 +3020,7 @@ const BattleScene = {
       const ev = this.timeline[this.index++];
       if (ev.text) this.appendLog(ev.text, ev.cls);
       if (ev.type === "summon") {
-        if (ev.late && this.units[ev.unit.id]) this.clearAbsent(this.units[ev.unit.id], ev.unit);
+        if ((ev.late || ev.scout) && this.units[ev.unit.id]) this.clearAbsent(this.units[ev.unit.id], ev.unit);
         else this.addSummon(ev.unit);
       }
       const u = this.units[ev.toId] || this.units[ev.unitId];
