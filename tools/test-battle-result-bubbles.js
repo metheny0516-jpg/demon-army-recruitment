@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const ctx = vm.createContext({});
+vm.runInContext(fs.readFileSync('src/data/monsters.js', 'utf8'), ctx);
 vm.runInContext(fs.readFileSync('src/ui/battle_scene.js', 'utf8') + '\nglobalThis.scene = BattleScene;', ctx);
 const b = { victory: true, reward: 18, lootGold: 2, contribution: [
   { name: '戦没者', survived: false, voice: '出さない' },
@@ -21,7 +22,7 @@ assert.equal(ctx.scene.reportLines({training:true},[])[0].text, '稽古終了');
 assert.equal(ctx.scene.reportLines(null,[]).length,0);
 console.log('battle result bubbles: passed');
 let speech = 0;
-Object.assign(ctx.scene, {units:{p0:{side:'player'}},chainFlare(){},tellChain(){},setLife(){},float(){},bubble(){speech++;}});
+Object.assign(ctx.scene, {units:{p0:{side:'player',tplId:'goblin'}},chainFlare(){},tellChain(){},setLife(){},float(){},bubble(){speech++;}});
 ctx.scene.render({type:'death',unitId:'p0',permanent:false});
 ctx.scene.render({type:'death',unitId:'p0',permanent:false});
 assert.equal(speech,1,'蘇生後に倒れても一戦に一度');
@@ -29,3 +30,16 @@ ctx.scene.downQuoteShown.clear();
 ctx.scene.render({type:'death',unitId:'p0',permanent:true});
 assert.equal(speech,1,'永久戦死に冗談を出さない');
 console.log('downed speech: passed');
+
+for (const id of ['goblin', 'orc', 'slime', 'succubus', 'king_slime']) {
+  const pool = vm.runInContext(`([...MONSTER_TEMPLATES, ...MONSTER_TEMPLATES_ACT2].find(t => t.id === '${id}')?.voices || SPECIAL_MONSTER_VOICES['${id}']).dead`, ctx);
+  assert.ok(pool.includes(ctx.scene.downedVoice({tplId:id})), id + ': 既存の本人の台詞');
+}
+assert.equal(ctx.scene.downedVoice({tplId:'unknown'}), null, '台詞なしに共通の遺書を足さない');
+const voices = ctx.scene.reportLines({contribution:[
+  {name:'一人目',voice:'既存1',survived:true},
+  {name:'二人目',voice:'既存2',survived:true},
+  {name:'負傷者',voice:'出さない',survived:true,injured:true}
+]}, []).filter(x => x.kind === 'voice');
+assert.equal(JSON.stringify(voices.map(x => x.text)), JSON.stringify(['既存1','既存2']));
+console.log('existing character voices: passed');
