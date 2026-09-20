@@ -84,7 +84,8 @@ assert(cowardSc.resolve(st, { actor: cw }, [cw]) === 'stand_memory', '前に逃�
 st.roster.push(mk({ name: '怪力', traits: ['brute'] }));
 party = [st.roster[st.roster.length - 1]];
 const before = sctx.enemyUnits.length;
-scenes = Story.rollScenes(st, 'road', party, sctx);
+// 冒頭の実戦で既に発生していても、ここは初回発生の独立した確認にする。
+scenes = Story.rollScenes({ ...st, traces: [] }, 'road', party, sctx);
 assert(scenes.length === 1 && scenes[0].id === 'road_brute_charge' && sctx.enemyUnits.length !== before, '怪力がいれば命令前の突撃で敵の頭数が変わる');
 st.roster.push(mk({ name: '荷運び', prevJob: '王国軍の荷運び（脱走）' }));
 party = [st.roster[st.roster.length - 1]];

@@ -374,7 +374,14 @@ const STORY_SCENES = [
   },
   {
     id: "road_brute_charge", slot: "road", title: "命令の前に",
-    check(st, party) { return party.find(m => ["brute", "first_strike", "charge"].some(t => (m.traits || []).includes(t))) || null; },
+    check(st, party) {
+      const candidates = party.filter(m => ["brute", "first_strike", "charge"].some(t => (m.traits || []).includes(t)));
+      // 同じ丘の事件は軍団が変わっても一ラン一度。本文だけでなく効果も再発させない。
+      if (!Story.count(st, "charged_early")) return candidates[0] || null;
+      // 過去の突撃を覚えた本人が、今度は待てたという後日談だけ一度許す。
+      if (Story.count(st, "waited")) return null;
+      return candidates.find(m => STORY_PAST.mateDownedAfter(st, m.uid, "charged_early")) || null;
+    },
     cast(st, party) { return { actor: this.check(st, party).uid }; },
     // 前に突っ込んで仲間が倒れた → 今回は命令を待つ／見栄っ張りが見ている → 必ず突っ込む／
     // 仲間に臆病者がいる → 一人で突っ込んで孤立（誰もついてこない）／それ以外 → 勝つか、気づかれるか
@@ -389,12 +396,12 @@ const STORY_SCENES = [
     },
     text(st, c) {
       const r = c._r || { kind: "plain", won: true }; const n = c.actor.name;
-      const head = `王国軍の斥候が一人、丘の上に立っていた。まだ誰も命令していない。\n`;
-      if (r === "wait") return head + `${n}の足が一歩出て、止まった。\n${n}「……前に、先に行って。誰かが倒れた」\n${n}は命令を待った。斥候は笛を吹かなかった。`;
+      const head = `丘の上に、敵の見張りがいる。こちらには、まだ気づいていない。\n`;
+      if (r === "wait") return head + `${n}は駆け出しかけて、足を止めた。\n${n}「……前は勝手に飛び出した。今度は、命令を待つ」\n見張りは、まだこちらに気づいていない。`;
       if (r.kind === "showoff") return head + `${r.who.name}が見ている。${n}は見られていることに気づいた。\n${n}「見てろ！」\n`
         + (r.won ? `丘を駆け上がり、斥候が笛を吹く前に倒した。${r.who.name}「今の、私の方が上手くやれた」` : `丘を駆け上がった。斥候は笛を吹いた。${r.who.name}「……見なかったことにする」`);
       if (r.kind === "alone") return head + `${n}「行くぞ！」\n誰もついてこなかった。${r.who.name}は藪の中にいた。\n${n}は一人で丘の上にいた。斥候も、その仲間も、${n}を見ていた。`;
-      return head + `${n}「見えた！」\n` + (r.won ? `丘を駆け上がり、斥候が笛を吹く前に倒した。包囲に、穴が空いた。` : `丘を駆け上がった。斥候は笛を吹いた。丘の向こうから、返事の笛が聞こえた。\n${n}「……あ」`);
+      return head + `${n}「一人なら、いける！」\n` + (r.won ? `丘を駆け上がり、斥候が笛を吹く前に倒した。包囲に、穴が空いた。` : `止める間もなく駆け出した。見張りが笛を吹くと、丘の向こうから兵隊が出てきた。\n${n}「……一人じゃなかった」`);
     },
     effect(st, c, ctx) {
       const r = this.resolve(st, c, ctx.party || []); c._r = r;
