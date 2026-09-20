@@ -130,17 +130,47 @@ checkClingSpeeds(2, 10, 'スライム後手');
   assert(!h.timeline.some(e => e.type === 'incident' && e.id === 'minotaur_wrong_way'), 'コマンド技の手番では通常攻撃用の事故抽選を通さない');
 }
 
+// 札に出す状態（接着・睡眠）は、始まりと終わりを必ずイベントで知らせる。
+// 描画側が規則を再現しなくて済むようにするため（2026-09-20）。
+{
+  const s = mk('スラ', 'スライム', 'player', { spd: 12, atk: 2 });
+  const e = mk('兵', '人間', 'enemy', { spd: 10, hp: 400, atk: 1 });
+  const r = Battle.simulate([s, mk('壁', 'ゴブリン', 'player', { spd: 1, hp: 400, atk: 30 })], [e], { forceHappenings: ['slime_cling'] });
+  const on = r.timeline.filter(x => x.type === 'condition' && x.kind === 'cling' && x.on);
+  const off = r.timeline.filter(x => x.type === 'condition' && x.kind === 'cling' && !x.on);
+  assert(on.length === 2 && on.some(x => x.unitId === s.id) && on.some(x => x.unitId === e.id), '接着は本人と相手の両方に状態を出す');
+  assert(on.every(x => x.pair === on[0].pair) && on[0].pair > 0, '同じ組には同じ組番号を振る');
+  assert(on.length === off.length, '接着の始まりと終わりの数が合う');
+}
+for (const turns of [1, 2]) {
+  const t = mk('トロ', 'トロル', 'player', { spd: 10, hp: 200 });
+  const r = Battle.simulate([t, mk('壁', 'ゴブリン', 'player', { spd: 1, hp: 400, atk: 30 })],
+    [mk('兵', '人間', 'enemy', { spd: 1, hp: 400, atk: 1 })], { forceHappenings: ['troll_nap'], forceHappeningTurns: { troll_nap: turns } });
+  const c = r.timeline.filter(x => x.type === 'condition' && x.kind === 'nap');
+  assert(c.length === 2 && c[0].on && !c[1].on, `${turns}回休みでも睡眠の開始と解除が1回ずつ出る`);
+}
+
 // 大食漢：新事件を増やさず既存最大2回を維持し、満タン本人でも瀕死の仲間へ半分渡す。
 {
   const ogre = mk('オーガ', 'オーガ', 'player', { spd: 10, hp: 160, traits: ['big_eater'], atk: 50 });
   const ally = mk('瀕死', 'ゴブリン', 'player', { spd: 1, hp: 100, atk: 1 });
   ally.hp = 10;
   const foes = [1,2,3,4].map(i => mk('敵'+i, '人間', 'enemy', { hp: 5, atk: 1, spd: 2 }));
-  const r = Battle.simulate([ogre, ally], foes);
+  // 味方への分け前は試写だけ（options.shareLunch）。通常プレイは従来どおり本人だけ回復する。
+  const r = Battle.simulate([ogre, ally], foes, { shareLunch: true });
   const eats = r.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === 'big_eater' && !e.busy);
   const shared = r.timeline.filter(e => e.type === 'heal' && e.label === '弁当を半分');
   assert(eats.length <= 2, '大食漢は共通1回制限の例外として既存の最大2回を維持');
   assert(shared.length >= 1 && shared[0].amount > 0 && shared[0].unitId === ally.id, '本人が満タンでも瀕死の仲間へ半分を渡し、実回復量を表示');
+  // 指定が無ければ分配しない＝通常プレイの大食漢は変わらない。
+  const ogre2 = mk('オーガ2', 'オーガ', 'player', { spd: 10, hp: 160, traits: ['big_eater'], atk: 50 });
+  const ally2 = mk('瀕死2', 'ゴブリン', 'player', { spd: 1, hp: 100, atk: 1 });
+  ally2.hp = 10;
+  const plain = Battle.simulate([ogre2, ally2], [1,2,3,4].map(i => mk('雑'+i, '人間', 'enemy', { hp: 5, atk: 1, spd: 2 })));
+  const plainEats = plain.timeline.filter(e => e.type === 'trait_trigger' && e.traitId === 'big_eater' && !e.busy);
+  assert(!plain.timeline.some(e => e.type === 'heal' && e.label === '弁当を半分'), '試写の指定が無ければ味方へ分配しない（通常プレイは従来どおり）');
+  assert(plainEats.length >= 1 && plainEats.length <= 2, '分配を切っても発生率・最大2回は変わらない');
+  assert(plain.timeline.some(e => e.type === 'heal' && e.label === '携行食' && e.unitId === ogre2.id), '分配を切っても本人は従来どおり回復する');
   assert(r.incidents.every(i => i.id !== 'ogre_lunch'), '食事休みを別事件として二重発生させない');
 }
 

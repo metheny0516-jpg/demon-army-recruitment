@@ -398,7 +398,7 @@ const BattleScene = {
   },
 
   setLife(u, dead, permanent = false) {
-    if (dead) { this.cancelReadySpin(u); this.cancelConfirmSpin(u); }
+    if (dead) { this.cancelReadySpin(u); this.cancelConfirmSpin(u); this.clearConditions(u); }
     u.el.classList.toggle("dead", dead);
     u.el.dataset.life = dead ? (permanent ? "fallen" : "down") : "alive";
     const label = u.el.querySelector(".bu-state");
@@ -438,6 +438,7 @@ const BattleScene = {
     this.bindBattlefieldTaps();   // 事件のタップ送り（自動再生でも効く）
     this.downQuoteShown = new Set();
     this.traitQuoteShown = new Set();   // 癖の台詞は1戦闘1回
+    this.clearConditions();             // 前の戦闘の接着・睡眠を持ち越さない
     this.stop();
     if (typeof Sound !== "undefined") Sound.stopAll();
     this.loadSpeed();
@@ -1050,6 +1051,12 @@ const BattleScene = {
         this.showAction(`${ev.name}が${ev.forName}をかばった！`, 1300);
         break;
       }
+      case "condition": {
+        // 札の状態表示（接着・睡眠）。battle.js が始まりと終わりを必ず出す。
+        const u = this.units[ev.unitId];
+        if (u) this.condition(u, ev.kind, ev.on, ev);
+        break;
+      }
       case "note": {
         const u = this.units[ev.unitId];
         // 味方の前に立つ（かばう宣言）。使用者は前へ出るが、狙われるのは次の被弾から。
@@ -1371,6 +1378,30 @@ const BattleScene = {
 
   // 残る印（拘束・燃焼・鼓舞・かばい）。解除のイベントが無いものは次のラウンド頭で消す。
   MARKS: { bound: "🌿", burn: "🔥", buff: "✨", cover: "🛡", charm: "💗" },
+  // 札に出す状態（人物ハプニング試作）。battle.js の condition イベントだけで付け外しする。
+  // 画像は増やさず、既存の .bu-marks に文字と丸数字で出す。
+  CONDITIONS: { cling: { icon: "🔗", label: "接着中" }, nap: { icon: "💤", label: "睡眠中" } },
+  PAIR_MARKS: ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨"],
+  condition(u, kind, on, info) {
+    const spec = this.CONDITIONS[kind];
+    if (!u || !u.el || !spec) return;
+    const box = u.el.querySelector(".bu-marks");
+    if (!box) return;
+    const found = box.querySelector(`.bu-cond-${kind}`);
+    if (!on) { if (found) found.remove(); return; }
+    const pair = info && info.pair ? (this.PAIR_MARKS[(info.pair - 1) % this.PAIR_MARKS.length] || "") : "";
+    const el = found || document.createElement("i");
+    el.className = `bu-mark bu-cond bu-cond-${kind}`;
+    el.textContent = `${spec.icon}${pair}${spec.label}`;
+    if (!found) box.appendChild(el);
+  },
+  clearConditions(u) {
+    const list = u ? [u] : Object.values(this.units);
+    for (const unit of list) {
+      const box = unit.el && unit.el.querySelector(".bu-marks");
+      if (box) box.querySelectorAll(".bu-cond").forEach(el => el.remove());
+    }
+  },
   mark(u, kind, on = true) {
     if (!u || !u.el || !this.MARKS[kind]) return;
     const box = u.el.querySelector(".bu-marks");
@@ -1384,9 +1415,11 @@ const BattleScene = {
     box.appendChild(el);
   },
   clearMarks() {
+    // 1ラウンドで解ける印（拘束・燃焼・鼓舞…）だけを落とす。
+    // 接着・睡眠はラウンドをまたいで続くので、condition イベントでだけ外す。
     for (const u of Object.values(this.units)) {
       const box = u.el && u.el.querySelector(".bu-marks");
-      if (box) box.innerHTML = "";
+      if (box) box.querySelectorAll(".bu-mark:not(.bu-cond)").forEach(el => el.remove());
     }
   },
 
@@ -3008,6 +3041,9 @@ const BattleScene = {
           if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
           if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
           if (ev.type === "revive" && u) this.setLife(u, false);
+          // 札の状態表示も飛ばす側で畳む。書き忘れると飛ばしたときだけ
+          // 「接着中」「睡眠中」が残る（2026-09-20 に absent で同じ取りこぼしを踏んだ）。
+          if (ev.type === "condition" && u) this.condition(u, ev.kind, ev.on, ev);
           if (ev.type === "synergy") this.countSynergy();
         }
         // 答えたら、通常再生へ戻さずに続きを飛ばす（飛ばすつもりで押したのだから）。
@@ -3027,6 +3063,9 @@ const BattleScene = {
       if (u && (ev.hp !== undefined)) this.setHp(u, ev.hp, ev.maxHp);
       if (ev.type === "death" && u) this.setLife(u, true, !!ev.permanent);
       if (ev.type === "revive" && u) this.setLife(u, false);
+      // 札の状態表示も飛ばす側で畳む。書き忘れると飛ばしたときだけ
+      // 「接着中」「睡眠中」が残る（2026-09-20 に absent で同じ取りこぼしを踏んだ）。
+      if (ev.type === "condition" && u) this.condition(u, ev.kind, ev.on, ev);
       if (ev.type === "synergy") this.countSynergy();
       if (this.chainViewVersion >= 2) this.chainFlare(ev);
       this.tellChain(ev, false);

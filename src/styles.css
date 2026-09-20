@@ -3799,6 +3799,15 @@ button.primary::first-letter { color: var(--gold); }
 /* 残る印（拘束・燃焼・鼓舞・かばい）。札の下に小さく並ぶ */
 .bu-marks { position: absolute; top: 100%; left: 0; right: 0; display: flex; gap: 2px; justify-content: center; margin-top: 12px; pointer-events: none; }
 .bu-mark { font-size: 11px; line-height: 1; filter: drop-shadow(0 1px 2px #000); animation: markIn .3s ease-out; }
+/* 人物ハプニング試作：札に残る状態（接着・睡眠）。絵は増やさず文字と丸数字で出す。
+   1ラウンドで解ける印と違い、解除のイベントが来るまで消えない（src/core/battle.js の condition）。 */
+/* 札は重なって並ぶので、状態の帯だけは前へ出さないと後ろの札に隠れて読めない
+   （.bu.report-speaker と同じやり方で親ごと持ち上げる）。 */
+.bu:has(.bu-cond) { z-index: 12; }
+.bu-cond { position: relative; z-index: 12; font-size: 10px; padding: 1px 5px; border-radius: 8px; white-space: nowrap;
+  background: rgba(16, 12, 24, .88); border: 1px solid #6d5b8f; color: #e6dcff; }
+.bu-cond-nap { border-color: #5c7fa8; color: #d6ecff; }
+.bu-cond-cling { border-color: #4f8f74; color: #d4ffe8; }
 .bu.covering { outline: 1px solid rgba(190, 215, 255, .7); }
 @keyframes markIn { from { opacity: 0; transform: translateY(3px) scale(.6); } to { opacity: 1; transform: none; } }
 

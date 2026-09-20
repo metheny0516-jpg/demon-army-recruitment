@@ -558,12 +558,23 @@ const Battle = {
       });
     }
 
+    // 札に出す状態（接着・睡眠）。描画側が自前で規則を再現しなくて済むよう、
+    // 始まりと終わりを必ずイベントで知らせる。戦闘の計算そのものには影響しない。
+    const emitCondition = (unit, kind, on, extra) => {
+      if (!unit) return;
+      emit("condition", Object.assign({ unitId: unit.id, kind, on: !!on }, extra || {}));
+    };
+    let clingPairSeq = 0;
     const releaseCling = unit => {
       const link = unit && unit.flags && unit.flags.cling;
       if (!link) return;
       const partner = link.partner;
       delete unit.flags.cling;
-      if (partner && partner.flags && partner.flags.cling && partner.flags.cling.partner === unit) delete partner.flags.cling;
+      emitCondition(unit, "cling", false);
+      if (partner && partner.flags && partner.flags.cling && partner.flags.cling.partner === unit) {
+        delete partner.flags.cling;
+        emitCondition(partner, "cling", false);
+      }
     };
 
     // ダメージ適用。kind で attack / splash を出し分ける。
@@ -802,11 +813,16 @@ const Battle = {
           applyDamage(unit, target, unit.atk * 0.7, "splash", { label: "仲間割れ", incident: true, parentEvent: incident });
         } else if (happening.kind === "slime_cling") {
           // 本人は発動した今を1回目とする。敵はこの後の通常手番から2回止まる。
-          unit.flags.cling = { partner: target, remaining: 1 };
-          target.flags.cling = { partner: unit, remaining: 2 };
+          const pair = ++clingPairSeq;                // 複数組でも どれとどれが繋がっているか分かるように
+          unit.flags.cling = { partner: target, remaining: 1, pair };
+          target.flags.cling = { partner: unit, remaining: 2, pair };
+          emitCondition(unit, "cling", true, { pair, partnerId: target.id });
+          emitCondition(target, "cling", true, { pair, partnerId: unit.id });
         } else if (happening.kind === "troll_nap") {
           const turns = Math.max(1, Math.min(2, Number(forcedHappeningTurns[happening.id]) || (1 + (U.rand() < 0.5 ? 1 : 0))));
           unit.flags.napping = Math.max(0, turns - 1); // 発動手番を1回目として消化済み
+          unit.flags.napShown = true;                 // 札の「睡眠中」。起きる手番で下ろす
+          emitCondition(unit, "nap", true);
           const amount = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * 0.1));
           if (amount > 0) { unit.hp += amount; emitCausal("heal", { unitId: unit.id, sourceId: unit.id, amount, hp: unit.hp, maxHp: unit.maxHp, label: "昼寝", emphasis: 1 }, incident); }
         } else if (happening.kind === "harpy_scout") {
@@ -907,8 +923,12 @@ const Battle = {
           && (unit.flags.ateCount || 0) < eater.maxPerBattle && U.chance(eater.chance)) {
         unit.flags.ateCount = (unit.flags.ateCount || 0) + 1;
         unit.flags.stuffed = true;
-        const hungryAlly = allies.filter(a => onField(a) && a !== unit && a.hp <= a.maxHp * 0.3)
-          .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] || null;
+        // 味方への分け前は**試写だけ**（options.shareLunch）。通常プレイの大食漢は従来どおり
+        // 本人だけが回復する。発生率・食事休み・最大2回の制約はどちらでも変えていない。
+        const hungryAlly = options.shareLunch
+          ? (allies.filter(a => onField(a) && a !== unit && a.hp <= a.maxHp * 0.3)
+              .sort((a, b) => a.hp / a.maxHp - b.hp / b.maxHp)[0] || null)
+          : null;
         const foodLine = U.pick(TRAITS.big_eater.lines.eat);
         const line = hungryAlly ? "……半分だけだぞ" : foodLine;
         const trig = emitCausal("trait_trigger", {
@@ -1499,6 +1519,11 @@ const Battle = {
           } else if (link.partner.flags.cling && link.partner.flags.cling.remaining === 0) releaseCling(unit);
         }
         // 昼寝中も通常手番だけを消化。受動的なかばう等の既存フックは無効化しない。
+        // 起きる手番で札の「睡眠中」を下ろす。1回休み（発動手番だけ）でもここを通る。
+        if (unit.flags.napShown && !(unit.flags.napping > 0)) {
+          delete unit.flags.napShown;
+          emitCondition(unit, "nap", false);
+        }
         if (unit.flags.napping > 0) {
           unit.flags.napping -= 1;
           const amount = Math.min(unit.maxHp - unit.hp, Math.ceil(unit.maxHp * 0.1));

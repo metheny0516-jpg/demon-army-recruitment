@@ -58,6 +58,50 @@ const { autoDismissMormo } = require('./helpers.js');
     assert.equal(await page.evaluate(() => !!BattleScene.units.p0.absent), false, '帰還後は戦場へ戻る');
     assert.equal(await page.evaluate(() => document.querySelector('#bu-p0').classList.contains('absent')), false,
       '帰還後は札の薄さも戻る');
+    // 札の状態表示（2026-09-20）。接着は本人と相手の両方に、同じ組番号で出る。
+    await page.evaluate(() => { BattleScene.speed = 4; replayPersonalityHappening('slime_cling'); });
+    await page.waitForFunction(() => document.querySelectorAll('.bu-cond-cling').length >= 2, null, { timeout: 15000 });
+    const cling = await page.evaluate(() => [...document.querySelectorAll('.bu-cond-cling')].map(el => ({
+      side: el.closest('.bu').dataset.side, text: el.textContent,
+      // 札は重なって並ぶので、前へ出ていないと後ろの札に隠れて読めない
+      z: Number(getComputedStyle(el.closest('.bu')).zIndex) || 0
+    })));
+    assert.equal(cling.length, 2, '接着は本人と相手の両方に出る');
+    assert.ok(cling.some(c => c.side === 'player') && cling.some(c => c.side === 'enemy'), '味方側と敵側の両方に出る');
+    assert.ok(cling.every(c => /接着中/.test(c.text) && /①/.test(c.text)), `同じ組番号で対応が分かる（${cling.map(c => c.text).join(' / ')}）`);
+    assert.ok(cling.every(c => c.z >= 10), '接着の帯は後ろの札に隠れない');
+    // 組が増えたら番号も変わる（試写の強制発火は1事件1回なので、描画側を直接見る）
+    const pairs = await page.evaluate(() => {
+      const u = BattleScene.units.p0;
+      BattleScene.condition(u, 'cling', true, { pair: 2 });
+      const two = u.el.querySelector('.bu-cond-cling').textContent;
+      BattleScene.condition(u, 'cling', true, { pair: 3 });
+      const three = u.el.querySelector('.bu-cond-cling').textContent;
+      return { two, three };
+    });
+    assert.ok(/②/.test(pairs.two) && /③/.test(pairs.three), `組ごとに番号が変わる（${JSON.stringify(pairs)}）`);
+    await page.evaluate(() => BattleScene.skip());
+    await page.waitForFunction(() => BattleScene.finished, null, { timeout: 15000 });
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.bu-cond').length), 0,
+      '飛ばしても接着の帯が残らない');
+
+    // 睡眠は寝ている間だけ出て、起きたら消える。
+    await page.evaluate(() => { BattleScene.speed = 4; replayPersonalityHappening('troll_nap'); });
+    await page.waitForFunction(() => document.querySelectorAll('.bu-cond-nap').length >= 1, null, { timeout: 15000 });
+    assert.match(await page.locator('.bu-cond-nap').first().innerText(), /睡眠中/, '寝ている間は睡眠中が出る');
+    await page.evaluate(() => BattleScene.skip());
+    await page.waitForFunction(() => BattleScene.finished, null, { timeout: 15000 });
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.bu-cond').length), 0,
+      '起きたあと・飛ばしたあとに睡眠中が残らない');
+
+    // 次の戦闘へ持ち越さない。
+    await page.evaluate(() => { BattleScene.speed = 4; replayPersonalityHappening('slime_cling'); });
+    await page.waitForFunction(() => document.querySelectorAll('.bu-cond-cling').length >= 2, null, { timeout: 15000 });
+    await page.evaluate(() => replayPersonalityHappening('minotaur_wrong_way'));
+    await page.waitForTimeout(400);
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.bu-cond').length), 0,
+      '次の戦闘に前の状態表示を持ち越さない');
+
     // 離陸後に「最後まで飛ばす」を押しても札の薄さが残らない（2026-09-20）。
     // skip() は render() を通らない独自経路を持ち、そこが summon を ev.late だけで
     // 判定していたため、偵察の帰還を取りこぼして札が薄いまま残っていた。

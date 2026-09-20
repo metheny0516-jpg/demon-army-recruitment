@@ -205,6 +205,7 @@ function replayPersonalityHappening(id) {
   } else {
     player = [make('ogre', 'ボグマ', 'オーガ', 'ogre', ['big_eater'], 220, 70, 10), make('mate', '傷ついたゴブ太', 'ゴブリン', 'goblin', [], 120, 6, 3)];
     player[1].hp = 20; enemy = [foe('e1', '弁当持ち兵', 20, 4, 5), foe('e2', '王国兵', 180, 5, 4)];
+    options = { shareLunch: true };   // 味方への分け前は試写だけ（通常プレイは本人だけ回復）
   }
   const old = { rand: U.rand, chance: U.chance, pick: U.pick };
   let result;
