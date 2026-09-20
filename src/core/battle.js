@@ -1292,7 +1292,10 @@ const Battle = {
       // 遅刻者の到着。その場にいなかった者が、途中から戦場に立つ。
       // 味方が全員倒れたあとに一人で着くこともある。それはそれで、そういう戦いだったということ。
       for (const u of playerUnits) {
-        if (!u.flags.absent || round <= u.flags.late) continue;
+        // 上空偵察（隔離試作）も absent を使うが、それは遅刻ではない。
+        // flags.late を持たない絶対者はここで `round <= undefined` が偽になり、
+        // 「遅れて到着」として1ラウンド早く降ろされてしまう（2026-09-20 実測）。
+        if (!u.flags.absent || u.flags.scouting || round <= u.flags.late) continue;
         u.flags.absent = false;
         u.flags.arrivedRound = round;
         const lines = (TRAITS[u.flags.lateTrait] || {}).lines;

@@ -83,6 +83,14 @@ checkClingSpeeds(2, 10, 'スライム後手');
   const r = Battle.simulate([h, wall], [foe], { forceHappenings: ['harpy_scout'], forceHappeningTurns: { harpy_scout: 2 } });
   const arrival = r.timeline.findIndex(e => e.type === 'summon' && e.scout);
   assert(roundOf(r.timeline, arrival) === 3, '2回休みは離脱手番と次の手番を失い、その次に帰還');
+  // 2026-09-20：帰還ラウンドだけを見ていたため、離脱中に本人が動く不具合を見落としていた。
+  // 既存の「遅刻者の到着」が flags.absent を拾い、flags.late を持たない偵察中の本人を
+  // 1ラウンド早く降ろしていた（そのラウンドで普通に攻撃していた）。
+  const away = r.timeline.findIndex(e => e.type === 'incident' && e.id === 'harpy_scout');
+  const actedAloft = r.timeline.filter((e, i) => i > away && i < arrival && e.fromId === h.id).length;
+  assert(actedAloft === 0, '上空にいる間は本人が行動しない');
+  assert(!r.timeline.some(e => e.type === 'summon' && e.late && e.unit && e.unit.id === h.id),
+    '偵察中の本人を遅刻者として降ろさない');
 }
 {
   const h = mk('ハピ', 'ハーピー', 'player', { spd: 10 });
