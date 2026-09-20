@@ -6,6 +6,15 @@
 //
 // アニメーションは transform と opacity のみを使う（レイアウトを走らせない＝スマホで滑らか）。
 const BattleScene = {
+  // 初回実装：通常攻撃と代表5技。戦闘計算には触れない。
+  SKILL_MOTIONS: {
+    ogre_smash: { ms: 1070, contact: .57, path: "drop", effect: "vertical" },
+    mino_rush: { ms: 880, contact: .53, path: "rush", effect: "ring" },
+    knight_ittou: { ms: 940, contact: .60, path: "still", effect: "horizontal" },
+    mage_fireball: { ms: 840, contact: .64, path: "cast", effect: "flame" },
+    succubus_charm: { ms: 940, contact: .48, path: "bite", effect: "fang" }
+  },
+  drainTargets: new Map(),
   EFFECT_DIR: "assets/battle/effects/",
   UNIT_DIR: "assets/battle/units/",
   VFX_DURATION: { slash: 500, impact: 460, guard: 680, revive: 860, overkill: 860 },
@@ -201,6 +210,7 @@ const BattleScene = {
     this.resetChain(true);
     for (const settle of this.pendingHits) settle();
     this.pendingHits.clear();
+    this.drainTargets.clear();
     for (const motion of this.motions) motion.cancel();
     this.motions.clear();
     for (const t of this.timers) clearTimeout(t);
@@ -208,7 +218,7 @@ const BattleScene = {
     this.mormoAwaiting = false;
     const scene = document.getElementById("scene");
     if (scene) {
-      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .chain-bolt, .mormo-aside").forEach(el => el.remove());
+      scene.querySelectorAll(".bu-vfx, .fnum, .battle-projectile, .motion-fx, .chain-bolt, .mormo-aside").forEach(el => el.remove());
       scene.querySelectorAll(".show").forEach(el => el.classList.remove("show"));
       scene.classList.remove("fx-active", "shake", "zoomed", "heat-1", "heat-2", "heat-3", ...this.EFFECT_CLASSES);
     }
@@ -618,6 +628,10 @@ const BattleScene = {
   },
 
   durationOf(ev) {
+    if (ev.type === "attack" || (ev.type === "note" && ev.skillMiss)) {
+      const motion = this.SKILL_MOTIONS[ev.skillId];
+      if (motion) return Math.max(motion.ms + 90, (this.DURATION[ev.emphasis] || 760) * this.magnitude(ev));
+    }
     if (ev.type === "battle_start" && this.isFinalBattle) return 1450;
     const base = this.SPECIAL_DURATION[ev.type] !== undefined
       ? this.SPECIAL_DURATION[ev.type]
@@ -817,10 +831,10 @@ const BattleScene = {
         this.focusAttack(from, to, ev);
         if (group) {
           // 全体技：対象全員へ同時。数字も同時に出る。
-          for (const member of group) {
+          for (const [index, member] of group.entries()) {
             const target = this.units[member.toId];
             if (target) target.el.classList.add("targeted");
-            this.attackMotion(from, target, member);
+            this.attackMotion(from, target, member, index > 0);
           }
           break;
         }
@@ -868,6 +882,11 @@ const BattleScene = {
         // 味方対象：使用者は動かない（acting だけ）。光るのは対象の側。
         if (src && src !== u) src.el.classList.add("acting");
         if (u) {
+          if (ev.skillId === "succubus_charm" && ev.amount > 0) {
+            const victim = this.drainTargets.get(ev.sourceId);
+            if (victim) this.absorbMotion(victim, u);
+            this.drainTargets.delete(ev.sourceId);
+          }
           this.setHp(u, ev.hp, ev.maxHp);
           this.fxVfx(u, ev.fx || (ev.skillId ? "holy" : null), 1);
           this.float(u, "+" + ev.amount, "heal");
@@ -1048,6 +1067,10 @@ const BattleScene = {
         break;
       }
       case "note": {
+        if (ev.skillMiss && this.SKILL_MOTIONS[ev.skillId]) {
+          const actor = this.units[ev.unitId];
+          this.performSkillMotion(actor, null, ev, this.visualDuration(this.SKILL_MOTIONS[ev.skillId].ms));
+        }
         const u = this.units[ev.unitId];
         // 味方の前に立つ（かばう宣言）。使用者は前へ出るが、狙われるのは次の被弾から。
         if (ev.covering) {
@@ -1548,25 +1571,91 @@ const BattleScene = {
 
   // ルールは即時計算済み。表示だけを「溜め→接触→戻り」へ分ける。
   // 中断時は pendingHits でHPだけ確定し、次イベントやスキップと食い違わせない。
-  attackMotion(from, to, ev) {
+  motionFrames(path, dx, dy, direction) {
+    const frame = (x, y, offset) => ({ transform: `translate(${x}px,${y}px)`, offset });
+    const zero = frame(0, 0, 0), end = frame(0, 0, 1);
+    switch (path) {
+      case "drop": return [zero, frame(0, 8, .18), frame(direction * 36, -24, .36), frame(direction * 36, -24, .44), frame(direction * 36, 4, .57), frame(direction * 26, 0, .73), end];
+      case "rush": return [zero, frame(0, 0, .20), frame(dx * .18, dy * .18, .32), frame(dx, dy, .53), frame(dx, dy, .61), frame(dx * .82, dy, .73), end];
+      case "bite": return [zero, frame(0, 0, .13), frame(dx * .6, dy * .6 - 16, .29), frame(dx, dy, .48), frame(dx, dy, .57), frame(dx * .45, dy * .45 - 24, .78), end];
+      case "still": return [zero, frame(0, 0, .6), end];
+      case "cast": return [zero, frame(-direction * 4, 0, .25), frame(direction * 4, 0, .64), end];
+      default: return [zero, frame(direction * 24, 0, .38), frame(direction * 24, 0, .52), end];
+    }
+  },
+
+  // 全て motion-fx 配下。stop/skip の共通掃除に含める。
+  motionFx(kind, unit, life = 320) {
+    const scene = document.getElementById("scene");
+    if (!scene) return;
+    const el = document.createElement("span");
+    el.className = `motion-fx motion-${kind}`;
+    el.setAttribute("aria-hidden", "true");
+    if (unit?.actor) {
+      const a = unit.actor.getBoundingClientRect(), b = scene.getBoundingClientRect();
+      el.style.left = `${a.x + a.width / 2 - b.x}px`;
+      el.style.top = `${a.y + a.height / 2 - b.y}px`;
+    }
+    scene.appendChild(el);
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    el.style.animationDuration = `${reduced ? 0 : this.visualDuration(life)}ms`;
+    this.timers.push(setTimeout(() => el.remove(), this.visualDuration(life)));
+    return el;
+  },
+
+  absorbMotion(victim, actor) {
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const remove = this.projectileMotion(victim, actor, "drain", this.visualDuration(360), false);
+    this.timers.push(setTimeout(remove, this.visualDuration(360)));
+  },
+
+  performSkillMotion(from, to, ev, total) {
+    const spec = this.SKILL_MOTIONS[ev.skillId];
+    if (!from || !spec || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const direction = from.side === "player" ? 1 : -1;
+    const a = from.actor.getBoundingClientRect(), b = to?.actor.getBoundingClientRect();
+    const dx = b ? b.x + b.width / 2 - a.x - a.width / 2 - direction * b.width * .6 : direction * 28;
+    const dy = b ? b.y - a.y : 0;
+    this.setPose(from, "attack-windup");
+    this.animateActor(from, this.motionFrames(spec.path, dx, dy, direction), total);
+    for (const [at, pose] of [[spec.contact * .85, "strike"], [.76, "recover"], [1, "idle"]]) {
+      this.timers.push(setTimeout(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : pose), total * at));
+    }
+    if (spec.path === "still") {
+      const veil = this.motionFx("darkness", null, spec.ms);
+      // 尺は eventScale と速度で同期する。
+      if (veil) veil.style.animationDuration = `${total}ms`;
+    }
+    if (spec.path === "rush" || spec.path === "drop") {
+      this.timers.push(setTimeout(() => this.motionFx("dust", from, 260), total * .32));
+    }
+  },
+
+  attackMotion(from, to, ev, impactOnly = false) {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     // 振りかぶり→接触→戻りのポーズを、それぞれ目で追える長さにする（2026-09-16 オーナー: ポーズが一瞬で見損ねる）。
     // 尺の上限は倍近くまで許す。読む時間（durationOf）より先に動作が終わるのは変えない。
-    const total = this.visualDuration(Math.min(1700, this.durationOf(ev) * .85));
+    const spec = this.SKILL_MOTIONS[ev.skillId];
+    const normal = !ev.skillId && !ev.fx;
+    const total = this.visualDuration(spec ? spec.ms : normal ? 660 : Math.min(1700, this.durationOf(ev) * .85));
     // 演出プリセット。無い（通常攻撃）なら今までどおり。
     const preset = (ev.fx && this.FX[ev.fx]) || null;
-    const kind = ev.type === "splash" ? "melee"
+    const kind = spec ? (spec.path === "cast" ? "fire" : "melee") : ev.type === "splash" ? "melee"
       : preset && preset.projectile ? preset.projectile : this.attackKind(from);
     const ranged = kind !== "melee";
     // heavy は溜めてから当てる（接触を後ろへ）。wind は速い（接触を前へ）。
     // 大技は溜めを長く、弾もゆっくり飛ばす（速いほど迫力が落ちる）。
     const beat = (preset ? (preset.windup ? 1.5 : preset.fast ? 0.6 : 1) : 1) * (ev.big ? this.BIG.projectileMult : 1);
-    const contact = reduced ? 0 : Math.min(total * .85, total * (ranged ? .62 : .38) * beat);
+    const contact = reduced ? 0 : Math.min(total * .85, total * (spec ? spec.contact : (ranged ? .62 : .38) * beat));
     const settle = () => { if (to) this.setHp(to, ev.hp, ev.maxHp); };
     this.pendingHits.add(settle);
     const later = (fn, ms) => this.timers.push(setTimeout(fn, ms));
     let removeProjectile = () => {};
-    if (from && to && ranged && !reduced) {
+    if (spec && !impactOnly) {
+      this.performSkillMotion(from, to, ev, total);
+      if (from && to && ranged && !reduced) removeProjectile = this.projectileMotion(from, to, kind, contact, ev.big);
+    }
+    if (!spec && !impactOnly && from && to && ranged && !reduced) {
       this.setPose(from, "attack-windup");
       later(() => this.setPose(from, "strike"), total * .22);
       later(() => this.setPose(from, "recover"), total * .68);
@@ -1593,13 +1682,13 @@ const BattleScene = {
       ];
       this.animateActor(from, frames, total);
     }
-    if (from && to && ev.type === "attack" && !ranged && !reduced) {
+    if (!spec && !impactOnly && from && to && ev.type === "attack" && !ranged && !reduced) {
       const a = from.actor.getBoundingClientRect(), b = to.actor.getBoundingClientRect();
       const direction = from.side === "player" ? 1 : -1;
       const dx = b.x + b.width / 2 - a.x - a.width / 2 - direction * b.width * .75;
       const dy = b.y - a.y;
       this.setPose(from, "attack-windup");
-      this.animateActor(from, this.meleeFrames(from, dx, dy, direction), total);
+      this.animateActor(from, normal ? this.motionFrames("step", dx, dy, direction) : this.meleeFrames(from, dx, dy, direction), total);
       later(() => this.setPose(from, "strike"), contact * .85);
       later(() => this.setPose(from, "recover"), total * .6);
       later(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : "idle"), total);
@@ -1608,10 +1697,13 @@ const BattleScene = {
       removeProjectile();
       settle();
       this.pendingHits.delete(settle);
-      if (typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId, attackKind: kind });
+      if (!impactOnly && typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId, attackKind: kind });
 
       if (!to) return;
-      if (preset) {
+      if (ev.skillId === "succubus_charm") this.drainTargets.set(ev.fromId, to);
+      if (spec) {
+        this.motionFx(spec.effect, to, 280);
+      } else if (preset) {
         // プリセットの絵。打数のある技（二連打・血の雄叫び）は短い間隔で2回。
         const hits = preset.hits || 1;
         for (let i = 0; i < hits; i++) {
