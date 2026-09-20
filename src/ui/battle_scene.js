@@ -3078,6 +3078,9 @@ const BattleScene = {
     }
     for (const row of grouped.values()) lines.push({ name: row.name, text: row.parts.join("、") + "！", kind: "growth" });
     for (const row of b.unlocked || []) lines.push({ name: row.name, text: `《${row.skillName}》を覚えた！`, kind: "skill" });
+    // 本人の一言 → その人の成長 → 新技。種別ごとの全員読み上げにしない。
+    const personOrder = [...new Set([...members.map(c => c.name), ...lines.map(r => r.name)])];
+    lines.sort((a, b) => personOrder.indexOf(a.name) - personOrder.indexOf(b.name));
     lines.push({ text: b.training ? "稽古終了" : b.retreated ? "撤退・報酬なし"
       : b.victory ? `獲得報酬 ${b.reward || 0}G${b.lootGold ? ` ／ 戦利金 ${b.lootGold}G` : ""}` : "敗北・報酬なし", kind: "reward" });
     return lines;
@@ -3101,7 +3104,7 @@ const BattleScene = {
     const advance = document.createElement("button");
     advance.id = "battle-report-next";
     advance.className = "small";
-    advance.textContent = "次のひとこと ▶";
+    advance.textContent = "次へ ▶（タップで進む）";
     advance.onclick = () => this.advanceReport();
     strip.after(advance);
     this.advanceReport();
@@ -3124,7 +3127,8 @@ const BattleScene = {
       u.el.classList.add("report-speaker");
       this.bubble(u, row.text, row.kind === "skill" ? "新しい技" : "", { talk: true, life: 3600, report: true });
     }
-    this.reportTimer = setTimeout(() => this.advanceReport(), row.kind === "skill" ? 3000 : 2400);
+    // 戦闘速度に関係なく、本人の一言と成長は読み終わるまで待つ。
+    this.reportTimer = null;
   },
 
   endReport() {

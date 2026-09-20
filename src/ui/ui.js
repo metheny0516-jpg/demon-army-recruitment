@@ -1573,12 +1573,12 @@ const UI = {
               (st.relics || []).length ? `　🏺 蔵に ${st.relics.length}品` : ""}</div>` : ""}
         ${this.armyHistoryLine()}
         ${st.lateBloomerHint ? `<p class="first-guide late-bloomer-hint">モルモ：${U.esc(st.lateBloomerHint)}</p>` : ""}
-        ${st.generation === 1 && st.turn <= 2 ?`<p class="first-guide">モルモ：${st.roster.length ? "「今の軍団との接続」は、仲間の能力とつながる手がかりデス。" : "まずは能力の発動条件を一つ見てみましょう。どんな仲間がいれば活かせそうですか？"}</p>` : ""}
+        ${st.generation === 1 && st.turn <= 2 ?`<p class="first-guide">モルモ：${st.roster.length ? "気になる人をタップすると、詳しい能力や仲間との組み合わせを見られますヨ。" : "まずは写真と経歴を見て、迎えたい人を選びましょう。詳しく知りたいときは、その人をタップですヨ。"}</p>` : ""}
         <div class="muted">${
           st.turn === 1 && st.hiresLeft > 1 ? `軍団の設立だ。${st.hiresLeft}名まで採用できる。`
           : st.hiresLeft > 1 ? `先の戦いで欠員が出た。${st.hiresLeft}名まで補充できる。`
           : st.hiresLeft === 0 ? `無料採用枠は終了。${Game.additionalHireCost()}Gで追加紹介を受けるか、面接を終了できる。`
-          : "3名が魔王軍への入隊を希望している。採用できるのは1名だけだ。"}</div>
+          : "無料で採用できるのはあと1名。紹介料を払えば追加採用もできる。"}</div>
         ${(() => {
           const l = Game.activeLesson();
           return l ? `<div class="lesson-note">${l.icon} 前代の教訓【${U.esc(l.name)}】${U.esc(l.effect)}</div>` : "";
@@ -1901,6 +1901,17 @@ const UI = {
     </div>`;
   },
 
+  // 確定済みの内訳だけ表示。終値の記録がないため純収支を推定しない。
+  resultMoneyPanel(b, payroll) {
+    const rows = [];
+    if (Number.isFinite(b.reward)) rows.push(`戦闘報酬 +${b.reward}G`);
+    if (Number.isFinite(b.lootGold) && b.lootGold > 0) rows.push(`戦利金 +${b.lootGold}G`);
+    if (Number.isFinite(payroll.paid)) rows.push(`給与・手当 −${payroll.paid}G`);
+    if (!rows.length) return "";
+    return `<section class="panel result-money"><h3>報酬と給与</h3><div>${rows.join(" ／ ")}</div>
+      <small class="muted">税収・建設・返済などを含む総収支ではありません。</small></section>`;
+  },
+
   result() {
     const st = Game.state;
     const b = st.lastBattle;
@@ -1985,8 +1996,10 @@ const UI = {
         <ul class="notes">${b.notes.map(n => `<li>${U.esc(n)}</li>`).join("")}</ul>
       </div>`;
     this.set(`${this.hud()}
-      ${this.storyResultPanel(b)}
       ${banner}
+      ${this.resultMoneyPanel(b, payrollReport)}
+      ${this.growthPanel()}
+      ${this.storyResultPanel(b)}
       ${this.incidentCards("B")}
       ${st.incidents?.tail?.ready ? '<p><button data-action="incidenttailview">📜 噂の続きが届いている</button></p>' : ""}
       ${this.incidentResultHtml(st.incidents?.result)}
@@ -2005,11 +2018,10 @@ const UI = {
       ${b.synergies.length ? `<div class="panel"><h3>この戦いで働いたシナジー</h3><div class="syn-list">${
         b.synergies.map(n => `<div class="syn"><b>${U.esc(n)}</b></div>`).join("")}</div></div>` : ""}
       ${this.captainPanel()}
-      ${this.growthPanel()}
       ${this.breakthroughPanel(b)}
       ${this.debtPanel()}
       ${this.facilityPanel(b)}
-      ${this.contributionPanel(b.contribution)}
+      <details class="panel result-details"><summary>一人ずつの戦果を見る</summary>${this.contributionPanel(b.contribution)}</details>
       ${(b.incidents && b.incidents.length) ? `<div class="panel incident-panel"><h3>💥 この戦いの不祥事</h3>
         ${b.incidents.map(i => `<div><b>${U.esc(i.name)}</b>：${U.esc(i.text)}</div>`).join("")}</div>` : ""}
       ${(st.lastPromotions && st.lastPromotions.length) ? `<div class="panel promotion-panel">
@@ -2030,10 +2042,9 @@ const UI = {
         <div class="muted">${st.lastFallen.map(f => `${this.icon(f.race)} ${U.esc(f.name)}`).join("　")}</div>
         <div class="muted">この者たちは軍を去った。次の面接で ${st.lastFallen.length} 名まで補充できる。</div>
       </div>` : ""}
-      <div class="panel">
-        <h3>現在の軍団</h3>
+      <details class="panel result-details"><summary>現在の軍団（${st.roster.length}人）</summary>
         <div class="cards">${st.roster.map(m => this.monsterCard(m)).join("") || `<div class="muted">誰も残っていない……</div>`}</div>
-      </div>
+      </details>
       <button class="primary wide" data-action="afterresult">次へ</button>`, "report");
     this.playGrowth(this.root);   // 成長は一行ずつ読み上げる（描いたあとに1回だけ）
     if (st.lastPromotions && st.lastPromotions.length && typeof Sound !== "undefined") Sound.cue("promotion");
@@ -2089,7 +2100,7 @@ const UI = {
       ${this.nearMissPanel(b.nearMiss)}
       ${this.breakthroughPanel(b)}
       ${this.facilityPanel(b)}
-      ${this.contributionPanel(b.contribution)}
+      <details class="panel result-details"><summary>一人ずつの戦果を見る</summary>${this.contributionPanel(b.contribution)}</details>
       <div class="panel">
         <h3>全員を失い、金庫も空だ</h3>
         <div class="muted">

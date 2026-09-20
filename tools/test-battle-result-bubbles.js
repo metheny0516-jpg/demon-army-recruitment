@@ -43,3 +43,22 @@ const voices = ctx.scene.reportLines({contribution:[
 ]}, []).filter(x => x.kind === 'voice');
 assert.equal(JSON.stringify(voices.map(x => x.text)), JSON.stringify(['既存1','既存2']));
 console.log('existing character voices: passed');
+const ordered = ctx.scene.reportLines({contribution:[
+  {name:'甲',survived:true,voice:'甲の声'}, {name:'乙',survived:true,voice:'乙の声'}
+], unlocked:[{name:'甲',skillName:'甲の技'}]}, [{uid:1,name:'甲',key:'hp',delta:1}]);
+assert.equal(JSON.stringify(ordered.slice(0,4).map(r => [r.name,r.kind])),
+  JSON.stringify([['甲','voice'],['甲','growth'],['甲','skill'],['乙','voice']]));
+let timers = 0;
+const strip = {textContent:'',dataset:{}};
+ctx.clearTimeout = () => {};
+ctx.setTimeout = () => {timers++;};
+ctx.document = {querySelectorAll:()=>[],getElementById:()=>strip};
+Object.assign(ctx.scene,{units:{},reportQueue:[{text:'待って読む',kind:'growth'},{text:'次の行',kind:'reward'}]});
+ctx.scene.advanceReport();
+assert.equal(strip.textContent,'待って読む');
+assert.equal(ctx.scene.reportQueue.length,1);
+assert.equal(timers,0,'自動送りタイマーを登録しない');
+ctx.scene.advanceReport();
+assert.equal(strip.textContent,'次の行');
+assert.equal(ctx.scene.reportTimer,null);
+console.log('manual report and person ordering: passed');

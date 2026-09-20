@@ -18,6 +18,10 @@ const assert = require('node:assert/strict');
    BattleScene.startReport();
   });
   assert.match(await page.locator('.bu-bubble').innerText(),/査定/);
+  await page.waitForTimeout(3300);
+  assert.match(await page.locator('.bu-bubble').innerText(),/査定/);
+  assert.equal(await page.evaluate(()=>BattleScene.reportTimer),null);
+
   await page.locator('#scene').click({position:{x:5,y:5}});
   assert.match(await page.locator('.bu-bubble').innerText(),/HPが1アップ/);
   await page.evaluate(()=>BattleScene.advanceReport());
