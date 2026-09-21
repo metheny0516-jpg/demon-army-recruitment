@@ -27,9 +27,19 @@
   <button id="kobold">コボルトを確認</button>
   <button id="zombie">ゾンビを確認</button><button id="ogre">オーガを確認</button><button id="king_slime">キングスライムを確認</button>
 <button id="shield">盾兵を確認</button><button id="slinger">投石兵を確認</button><button id="axeman">斧兵を確認</button><button id="cavalry">騎兵を確認</button><button id="commander">指揮官を確認</button><button id="hero">勇者を確認</button></header>
+<nav id="skill-motion-preview" style="max-width:1128px;margin:12px auto;padding:0 12px">
+  <p>新モーション比較（固定演出）：通常攻撃 → 選んだ技。数値・成功率の検証用ではありません。</p>
+  <button data-motion="ogre_smash">振り下ろす</button>
+  <button data-motion="mino_rush">突進</button>
+  <button data-motion="knight_ittou">一刀</button>
+  <button data-motion="mage_fireball">火球（3体）</button>
+  <button data-motion="succubus_charm">吸血</button>
+  <button data-motion="ogre_smash" data-miss="1">振り下ろす・空振り</button>
+</nav>
 <div id="app"></div>
 <script src="src/data/portraits.js"></script>
 <script src="src/core/util.js"></script>
+<script src="src/data/skills.js"></script>
 <script src="src/data/traits.js"></script>
 <script src="src/data/synergies.js"></script>
 <script src="src/data/battle_happenings.js"></script>
@@ -169,6 +179,26 @@ function replayLootRelay() {
   document.getElementById('scene').scrollIntoView({block: 'center'});
   return result;
 }
+function replaySkillMotion(skillId, miss = false) {
+  replayCurrent = () => replaySkillMotion(skillId, miss);
+  BattleScene.stop();
+  const skill = BattleScene.skillOf(skillId);
+  const player = [{id:'p0', tplId:skill.species, name:skill.name + '役', side:'player', icon:'⚔️', hp:30, maxHp:50}];
+  const enemy = Array.from({length:skillId === 'mage_fireball' ? 3 : 1}, (_, i) => ({id:'e'+i,tplId:'swordsman',name:'練習相手'+(i+1),side:'enemy',icon:'🗡',hp:100,maxHp:100}));
+  const events = [{type:'battle_start',player,enemy}, {type:'round_start',round:1},
+    {type:'attack',fromId:'p0',toId:'e0',dmg:8,hp:92,maxHp:100,emphasis:1},
+    {type:'skill_call',unitId:'p0',skillId,skillName:skill.name,quote:'次は、技！',target:skill.target}];
+  if (miss) events.push({type:'note',unitId:'p0',skillId,skillMiss:true,text:'振り下ろしたが、外れた！',emphasis:1});
+  else {
+    for (const [i, unit] of enemy.entries()) events.push({type:'attack',fromId:'p0',toId:unit.id,skillId,fx:skill.fx,aoe:skill.kind === 'aoe',dmg:20,hp:i ? 80 : 72,maxHp:100,emphasis:2});
+    if (skillId === 'succubus_charm') events.push({type:'heal',sourceId:'p0',unitId:'p0',skillId,fx:'dark',amount:10,hp:40,maxHp:50,label:'吸血'});
+  }
+  events.push({type:'result',victory:true});
+  UI.set(BattleScene.shell({stage:1,army:'固定演出の比較',region:'通常攻撃 → '+skill.name}));
+  BattleScene.play(events, () => { document.getElementById('next-btn').textContent = 'もう一度見る'; });
+  return events;
+}
+document.querySelectorAll('[data-motion]').forEach(button => button.onclick = () => replaySkillMotion(button.dataset.motion, !!button.dataset.miss));
 document.getElementById('loot-relay').onclick = replayLootRelay;
 UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'pausebattle') BattleScene.togglePause(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replayCurrent(); });
 Sound.load();

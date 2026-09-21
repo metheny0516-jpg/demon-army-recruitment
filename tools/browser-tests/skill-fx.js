@@ -91,10 +91,27 @@ const FX = ['heavy', 'slash_multi', 'fire', 'dark', 'holy', 'nature', 'wind', 'a
     BattleScene.render(timeline[2]);
     return { durations: plan.items.map(i => i.duration), single };
   });
-  await page.waitForTimeout(600);
-  const aoeDrawn = await page.evaluate(() => ['e0', 'e1', 'e2'].map(id => document.querySelectorAll(`#bu-${id} .bu-vfx.fx-fire`).length));
-  aoe.drawn = aoeDrawn.map(n => n >= 1);
-  aoe.after = aoeDrawn;
+  // 着弾の描き方は技によって2通りある（2026-09-20 の技別モーション）。
+  //   ・プリセットの絵 … 対象の札の中に .bu-vfx.fx-*
+  //   ・技別モーション … 場面直下に .motion-* を対象の位置へ置く（寿命280msで消える）
+  // どちらでも「3体それぞれの位置に1つずつ」を見る。消えてしまうので山を取りに行く。
+  const impactsAt = () => page.evaluate(() => {
+    const sr = document.getElementById('scene').getBoundingClientRect();
+    const mid = el => { const r = el.getBoundingClientRect(); return Math.round(r.top + r.height / 2 - sr.top); };
+    const marks = [...document.querySelectorAll('.bu-vfx.fx-fire, .motion-fx')].map(mid);
+    return ['e0', 'e1', 'e2'].map(id => {
+      const c = mid(BattleScene.units[id].actor);
+      return marks.filter(m => Math.abs(m - c) <= 24).length;
+    });
+  });
+  let peak = [0, 0, 0];
+  for (let i = 0; i < 14; i++) {
+    const now = await impactsAt();
+    peak = peak.map((n, k) => Math.max(n, now[k]));
+    await page.waitForTimeout(70);
+  }
+  aoe.drawn = peak.map(n => n >= 1);
+  aoe.after = peak;
   ok(aoe.drawn.every(Boolean), `3体とも同時に着弾する（${aoe.drawn.join(',')}）`);
   ok(aoe.after.every(n => n === 1), `2件目以降は二度描きしない（${aoe.after.join(',')}）`);
   ok(aoe.durations[1] === 0 && aoe.durations[2] === 0, `2件目以降の尺は0（${aoe.durations.join(',')}）`);

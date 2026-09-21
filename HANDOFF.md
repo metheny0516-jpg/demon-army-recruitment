@@ -19,7 +19,53 @@
 
 ---
 
+
+## 0. 技モーション第1弾（2026-09-20、CodeX実装・ブラウザ検証待ち）
+
+オーナー指示で先行実装。通常攻撃は24px小前進、振り下ろす／突進／一刀／火球／吸血に専用軌道とCSS着弾。元設計と実装・Opus検証指示を同じ枝に収録。
+詳細: `docs/IMPLEMENT_SKILL_MOTIONS_2026-09-20.md`。残り26技は既存演出であり全31技完了ではない。
+本線baaeab5起点。ハプニング試作、戦果手動送り、ストーリー枝を混ぜていない。core・戦闘数値変更なし。
+比較は battle-preview.html の「新モーション比較」。専用Nodeと既存関連5本が通過。Chromium取得タイムアウトのため実画面・run-all未実施。本線配信はOpus検証後。
+
+
 ## 0. 次チャットの開始点（最新が上。2026-09-17 朝 現在）
+
+### 済：技別モーション第1弾を取り込んだ（2026-09-20・CodeX 実装／Opus 統合）
+
+`codex/skill-motion-implementation`（686beca）を本線へ。仕様＝`docs/IMPLEMENT_SKILL_MOTIONS_2026-09-20.md`。
+通常攻撃の小前進と、代表5技（ogre_smash／mino_rush／knight_ittou／mage_fireball／succubus_charm）に専用の動きと着弾。
+残り26技は既存演出のまま。**31技すべての完了ではない。**
+
+**壊してはいけない約束**
+- `src/core/` `src/data/` は一切触っていない＝**戦闘計算は不変**。描画だけの変更。
+- 描画から `U.rand` を消費しない（種を固定したランの再現性を守る。台詞統合と同じ理由）。
+- `pendingHits` でスキップ時もHPを確定。`motion-fx` は `stop()` の掃除対象。`drainTargets` も毎戦クリア。
+- 全体技は**動作・飛び道具・命中音が一回、着弾とHPは各対象へ**。まとめ描画は `plan()` が作る
+  `aoeGroups` に従う。**`plan()` を呼ばずに `render()` だけ叩くとまとめが効かず、1体ぶんしか出ない**
+  （テストを書くときの落とし穴。2026-09-20 に踏んだ）。
+
+**統合で直した2件（どちらも実装ではなくテストの期待値）**
+1. `tools/browser-tests/skill-motions.js` の「横はみ出しは0」。390px では舞台を組んだだけで既に 19px
+   出ており（`scrollWidth 391 / clientWidth 372`）、**本線でも同じ値**。既存の遠隔攻撃でも再生中は
+   本線・統合枝とも28〜29px（3回ずつ計測）。絶対0は本線でも満たせない条件だった。
+   「素の状態と比べて余分なはみ出しを残さない」に変更。
+2. `tools/browser-tests/skill-fx.js` の全体技2件。`mage_fireball` の着弾がプリセット `.bu-vfx.fx-fire` から
+   場面直下の `.motion-*` へ変わったため、旧表現だけを見ていた判定が落ちた。
+   両表現を拾い、**対象の中心から24px以内**まで見る形へ（旧判定より厳しい）。
+   着弾は**寿命280msで消える**ので、固定待ちではなく山を取りに行くこと。
+
+**実戦闘での確認**（エンジンを直接動かし、5技が `skillId` 付き attack を出すことを確認）
+- ogre_smash：attack×7 ＋ **MISS 1件**（`note.skillMiss`）／mino_rush：attack×9
+- knight_ittou：**弱った敵にだけ** attack が出る（処刑技 `kind: execute`・`trait: oath` の上位技。
+  健全な敵には `order_exec`/`skill_call` だけで attack が出ない＝仕様どおり）
+- mage_fireball：attack×16 ＋ splash×2（全体）／succubus_charm：attack×11 ＋ heal×8（1〜3の正数）
+
+**未確認**：**吸血の「回復0」の経路**。満タンのサキュバスでも heal は常に1以上で、amount 0 を作れなかった。
+実装は `amount > 0` のときだけ吸収演出を出すので安全側だが、0 の経路自体は通していない。
+
+検証：node 全件（400秒枠）・`sh tools/browser-tests/run-all.sh` 全通過。
+390px／1280px × x1・x2・x4 × 5技の全組み合わせで、終了時に motion-fx・飛び道具・transform・
+pendingHits・motions すべて0、姿勢も idle に戻ることを確認。低モーションも同様。
 
 ### 済：既存の本人台詞を吹き出しへ（2026-09-20・CodeX 実装／Opus 統合）
 
