@@ -1810,6 +1810,13 @@ const BattleScene = {
       if (!impactOnly && typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId, attackKind: kind });
 
       if (!to) return;
+      // 燃焼は札の下に小さな炎を残す（次のラウンド頭で消える）。燃え移る技だけ
+      // （火球のように燃焼を残さない技には付けない）。
+      // **技別モーションの経路でも付ける**：2026-09-21 に全31技が spec 経路へ移り、
+      // プリセット側にだけ書いてあったこの印が出なくなっていた。
+      // 状態の印は演出ではなく読み取り情報なので、経路に依らせない。
+      if (preset && preset.linger === "burn" && (this.skillOf(ev.skillId) || {}).burn
+        && to.el && !to.el.classList.contains("dead")) this.mark(to, "burn");
       if (this.motionId(ev) === "succubus_charm") this.drainTargets.set(ev.fromId, to);
       if (spec) {
         this.motionFx(spec.effect, to, 280);
@@ -1821,10 +1828,6 @@ const BattleScene = {
           else later(() => { this.fxVfx(to, ev.fx, ev.emphasis); this.float(to, String(ev.dmg), "big"); }, 140 * i);
         }
         this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
-        // 燃焼は札の下に小さな炎を残す（次のラウンド頭で消える）
-        // （燃え移る技だけ。火球のように燃焼を残さない技には付けない）
-        if (preset.linger === "burn" && (this.skillOf(ev.skillId) || {}).burn
-          && to.el && !to.el.classList.contains("dead")) this.mark(to, "burn");
       } else {
         if (ev.type !== "splash" && !ranged && !["slime", "king_slime", "kobold", "zombie", "ogre", "shield"].includes(from?.tplId)) this.unitVfx(to, "slash", from?.side === "enemy" ? "reverse" : "", ev.emphasis);
         this.unitVfx(to, "impact", ranged ? `impact-${kind}` : "", ev.emphasis);
