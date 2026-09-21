@@ -30,16 +30,21 @@ const { chromium } = require(process.env.PLAYWRIGHT || 'playwright');
     for (const width of [390,1280]) {
       await page.setViewportSize({width,height:844});
       for (const id of [null,'ogre_smash','mino_rush','knight_ittou','mage_fireball','succubus_charm']) {
-        await page.evaluate(id=>{motionStage();motionAttack(id);if(id==='mage_fireball')motionAttack(id,true);},id);
+        // 舞台を組んだだけの「素のはみ出し」を基準にする。390px では本線でも 19px 出ており
+        // （scrollWidth 391 / clientWidth 372）、絶対0は本線でも満たせない条件だった。
+        // ここで見たいのは「モーションが余分なはみ出しを残さないこと」。
+        const rest = await page.evaluate(()=>{motionStage();const s=document.getElementById('scene');return s.scrollWidth-s.clientWidth;});
+        await page.evaluate(id=>{motionAttack(id);if(id==='mage_fireball')motionAttack(id,true);},id);
         const start=await page.evaluate(()=>motionRecords);
         assert.equal(start.filter(r=>r.name==='setHp').length,0,'HP is deferred until contact');
         assert.equal(start.filter(r=>r.name==='animateActor'&&r.unit==='p0').length,1,'one actor motion');
         if (!id) assert.ok(start.find(r=>r.frames)?.frames.some(f=>f.transform==='translate(24px,0px)'));
         if(id==='mage_fireball')assert.equal(start.filter(r=>r.name==='projectileMotion').length,1);
         await page.waitForTimeout(1250);
-        const end=await page.evaluate(()=>({records:motionRecords,pending:BattleScene.pendingHits.size,fx:document.querySelectorAll('.motion-fx,.battle-projectile').length,overflow:document.getElementById('scene').scrollWidth>document.getElementById('scene').clientWidth+1}));
+        const end=await page.evaluate(()=>({records:motionRecords,pending:BattleScene.pendingHits.size,fx:document.querySelectorAll('.motion-fx,.battle-projectile').length,overflow:document.getElementById('scene').scrollWidth-document.getElementById('scene').clientWidth}));
         assert.equal(end.records.filter(r=>r.name==='setHp').length,id==='mage_fireball'?2:1);
-        assert.equal(end.pending,0);assert.equal(end.fx,0);assert.equal(end.overflow,false);
+        assert.equal(end.pending,0);assert.equal(end.fx,0);
+        assert.equal(end.overflow,rest,`${width}px ${id}：モーション後に余分な横はみ出しを残さない（素 ${rest}px → ${end.overflow}px）`);
       }
     }
     // 発動直後のスキップでも未着弾HPを確定し、暗幕・transform・タイマーを残さない。
