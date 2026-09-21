@@ -47,7 +47,7 @@ const CatalogEffects = {
       || c.lowestAlly(c.allies, exceptSelf ? c.unit : null);
   },
   say(c, text) {
-    c.emit("note", { unitId: c.unit.id, text: [...text].slice(0, 28).join(""), cls: "trait" });
+    return c.emit("note", { unitId: c.unit.id, text: [...text].slice(0, 28).join(""), cls: "trait" });
   },
   recoil(c, amount) {
     if (c.onField(c.unit) && amount > 0) c.applyDamage(c.unit, c.unit, amount, "splash", { label: "反動", incident: true });
@@ -143,9 +143,11 @@ Object.assign(SKILL_EFFECTS, {
   // 目覚めの声（マンドラゴラの上位技、docs/SPEC_BATTLE_DEPTH_ACD_2026-09-14.md D）：全員の足止め・魅了・燃焼を払い、次の自分の手番は休む
   cleanse_all: { immediate(c) {
     let n = 0;
-    for (const a of c.allies) { if (!c.onField(a)) continue; for (const key of ["stunned", "charmed", "burn"]) if (a.flags[key]) { delete a.flags[key]; n++; } }
+    const cleared = [];
+    for (const a of c.allies) { if (!c.onField(a)) continue; for (const key of ["stunned", "charmed", "burn"]) if (a.flags[key]) { cleared.push({unitId:a.id,state:key}); delete a.flags[key]; n++; } }
     c.unit.flags.skillCmd = { id: c.cmd.id || null, done: true };   // 手番は身構えるだけ
-    CatalogEffects.say(c, n ? `目覚めの声。${n}つの足止め・魅了・燃焼が解けた` : "目覚めの声。誰も眠っていなかった");
+    const event = CatalogEffects.say(c, n ? `目覚めの声。${n}つの足止め・魅了・燃焼が解けた` : "目覚めの声。誰も眠っていなかった");
+    event.motion = {skillId:c.cmd.id,sourceId:c.unit.id,outcome:"cleanse",targets:[...new Set(cleared.map(x=>x.unitId))],cleared};
   } },
   rescue: { immediate(c) {
     const t = CatalogEffects.ally(c, true); if (!t) return;

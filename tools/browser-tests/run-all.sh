@@ -34,7 +34,7 @@ run() {
   fi
 }
 
-for t in first-play daily smoke autoplay mission recruitment resume-flip battle-result-bubbles clear scene cutin effects spectacle loot-relay vfx-lifecycle battlefield ranged arrival pacing sound fanfare music mormo mormo-aside mormo-spotlight contrib retry nearmiss softlock resume tier0 reroll eventui eventcast casualty report records castle memory kpi synergy synergy-pool chainmap chain-answer spotlight food kingslime retreat inheritance general skills skills-window skill-fx skill-motions ready-spin readability captain-art wipe counterattack order slots town map incidents story; do
+for t in first-play daily smoke autoplay mission recruitment resume-flip battle-result-bubbles clear scene cutin effects spectacle loot-relay vfx-lifecycle battlefield ranged arrival pacing sound fanfare music mormo mormo-aside mormo-spotlight contrib retry nearmiss softlock resume tier0 reroll eventui eventcast casualty report records castle memory kpi synergy synergy-pool chainmap chain-answer spotlight food kingslime retreat inheritance general skills skills-window skill-fx skill-motions skill-motions-all ready-spin readability captain-art wipe counterattack order slots town map incidents story; do
   run "$t" DUMMY=1
 done
 run portrait MODE=present

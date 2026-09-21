@@ -169,3 +169,32 @@
 @keyframes motion-impact { 0% { opacity:0; transform:scale(.55); } 18% { opacity:1; } 100% { opacity:0; transform:scale(1.3); } }
 @keyframes motion-darken { 0%,100% { opacity:0; } 22%,65% { opacity:.83; } }
 @media (prefers-reduced-motion:reduce) { .motion-fx { animation:none; opacity:.85; } .motion-darkness,.motion-dust { display:none; } }
+/* 全31技：線・円・膜・影で効果を区別する。数値と状態は実イベントだけ。 */
+.motion-arc { border:5px solid transparent; border-bottom-color:#ffd998; border-radius:50%; width:92px; height:45px; margin:-22px -46px; transform-origin:center; }
+.motion-nick { width:4px; height:58px; margin:-29px -2px; background:#fff4c9; box-shadow:0 0 7px #efcb58; rotate:35deg; }
+.motion-cheer { border:3px solid #ffd864; border-radius:50%; box-shadow:0 0 0 10px #fcd54b33; }
+.motion-slime { border:6px dotted #94dec4; border-radius:50%; height:30px; margin-top:12px; background:#79d6b733; }
+.motion-bone { border:7px double #ede2c8; border-radius:48% 48% 5% 5%; background:repeating-linear-gradient(0deg,transparent 0 12px,#e8dbc744 12px 16px); }
+.motion-stone { border:7px solid #949ba7; border-radius:5px; background:repeating-linear-gradient(0deg,#60677266 0 17px,#b5b9bf99 18px 20px); }
+.motion-rot { border:5px dotted #819945; background:radial-gradient(ellipse,#6f874e99,transparent 65%); border-radius:35% 60% 25% 50%; }
+.motion-hand { border:4px solid #c393ed; border-top-style:dotted; border-bottom-width:12px; border-radius:32% 32% 50% 50%; width:38px; margin-left:-19px; background:linear-gradient(0deg,#61349aaa,transparent); animation-name:motion-rise; }
+.motion-pulse { border:4px solid #b884df; border-radius:50%; box-shadow:0 0 0 12px #7c41a533; height:36px; margin-top:8px; }
+.motion-diagonal { width:4px; height:90px; margin:-45px -2px; background:#e8ffff; box-shadow:-10px 0 0 #bce6f655,10px 0 0 #bce6f655; rotate:-35deg; }
+.motion-herb { width:26px; height:36px; margin:-18px -13px; background:#cbeab5; border:3px solid #58935f; border-radius:4px 14px; box-shadow:0 0 20px 12px #6dc78f77; animation-name:motion-gather; }
+.motion-wave { border:7px solid #81e8df; border-right-color:transparent; border-radius:50% 20%; background:linear-gradient(0deg,#2b9ac699,transparent); height:50px; }
+.motion-darkheal { border:5px solid #765095; border-radius:50%; box-shadow:inset 0 0 16px #f5afdb,0 0 12px #a069c7; animation-name:motion-gather; }
+.motion-wake { border:3px solid #fff4b0; border-radius:50%; box-shadow:0 0 0 8px #fffacc55,0 0 0 16px #fffacc22; }
+.motion-membrane { border:3px solid #8aeadb; border-radius:45%; background:#6addc72b; box-shadow:inset 0 0 14px #b6ffed; animation-name:motion-gather; }
+.motion-crack { background:#ef7861; clip-path:polygon(44% 0,60% 0,47% 40%,75% 31%,56% 65%,64% 100%,44% 78%,42% 58%,22% 66%); }
+.motion-deathwave { border:6px double #b296d7; border-top-width:30px; border-radius:10% 10% 50% 50%; background:linear-gradient(#29133b99,transparent); animation-name:motion-gather; }
+.motion-fan { border:6px solid #ffc38a; border-bottom-color:transparent; border-radius:50% 50% 10% 10%; background:radial-gradient(ellipse at bottom,#ffc88066,transparent); }
+.motion-sunfire { background:radial-gradient(circle,#fffad0 0 16%,#ffdb52 20%,#ec7328 38%,#d6352766 52%,transparent 69%); width:100px; height:100px; margin:-50px; }
+.motion-redslash { width:5px; height:80px; margin:-40px -2px; background:#ffc6bf; box-shadow:0 0 12px 3px #d33d54; rotate:-50deg; }
+.motion-trail { width:100px; height:4px; margin:-2px -50px; background:linear-gradient(90deg,transparent,#c9ffe6,#fff); }
+.motion-goldwave { border:5px solid #d6b052; border-top-color:#22152f; border-radius:45%; height:38px; margin-top:-19px; background:linear-gradient(#1f172c88,#d6b05244); }
+.motion-coin { width:25px; height:32px; margin:-16px -12px; border:5px double #f4d97a; border-radius:50%; background:#aa842c; }
+.motion-ghost { object-fit:contain; animation:none; filter:grayscale(.3); z-index:4; }
+.motion-darkness { z-index:0; }
+@keyframes motion-gather { 0% {opacity:0;transform:scale(1.3);} 30% {opacity:1;} 100% {opacity:0;transform:scale(.65);} }
+@keyframes motion-rise { 0% {opacity:0;transform:translateY(15px);} 35% {opacity:1;} 100% {opacity:0;transform:translateY(-12px);} }
+@media (prefers-reduced-motion:reduce) { .motion-fx { animation:none; } .motion-ghost {display:none;} }

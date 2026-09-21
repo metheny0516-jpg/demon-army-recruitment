@@ -6,15 +6,42 @@
 //
 // アニメーションは transform と opacity のみを使う（レイアウトを走らせない＝スマホで滑らか）。
 const BattleScene = {
-  // 初回実装：通常攻撃と代表5技。戦闘計算には触れない。
+  // 表示専用の31技定義。効果イベントのmotion情報を正本にする。
   SKILL_MOTIONS: {
     ogre_smash: { ms: 1070, contact: .57, path: "drop", effect: "vertical" },
     mino_rush: { ms: 880, contact: .53, path: "rush", effect: "ring" },
     knight_ittou: { ms: 940, contact: .60, path: "still", effect: "horizontal" },
     mage_fireball: { ms: 840, contact: .64, path: "cast", effect: "flame" },
-    succubus_charm: { ms: 940, contact: .48, path: "bite", effect: "fang" }
+    succubus_charm: { ms: 940, contact: .48, path: "bite", effect: "fang" },
+    orc_cleave: { ms: 880, contact: .46, path: "sweep", effect: "arc" },
+    imp_rob: { ms: 920, contact: .43, path: "snatch", effect: "nick", ghost: true },
+    goblin_warcry: { ms: 700, contact: .3, path: "call", effect: "cheer" },
+    slime_cling: { ms: 820, contact: .48, path: "cling", effect: "slime" },
+    skeleton_wall: { ms: 760, contact: .4, path: "guard", effect: "bone", pose: "guard" },
+    zombie_bite: { ms: 1100, contact: .58, path: "stagger", effect: "rot" },
+    kobold_feint: { ms: 820, contact: .4, path: "zigzag", effect: "trail", ghost: true },
+    necro_hand: { ms: 880, contact: .35, path: "lift", effect: "hand" },
+    troll_rest: { ms: 880, contact: .45, path: "guard", effect: "stone", pose: "guard" },
+    lich_pulse: { ms: 920, contact: .6, path: "float", effect: "pulse" },
+    mimic_box: { ms: 800, contact: .56, path: "box", effect: "flame" },
+    harpy_dive: { ms: 1000, contact: .52, path: "dive", effect: "diagonal", ghost: true },
+    knight_iai: { ms: 780, contact: .43, path: "draw", effect: "horizontal", ghost: true },
+    mandragora_mend: { ms: 760, contact: .32, path: "cast", effect: "herb" },
+    king_wave: { ms: 1000, contact: .6, path: "wave", effect: "wave" },
+    succubus_dark_heal: { ms: 760, contact: .32, path: "cast", effect: "darkheal" },
+    mandragora_wake: { ms: 700, contact: .3, path: "call", effect: "wake" },
+    king_slime_wrap: { ms: 820, contact: .4, path: "wrap", effect: "membrane" },
+    rampage: { ms: 1100, contact: .58, path: "rush", effect: "crack", ghost: true },
+    death_pulse: { ms: 1050, contact: .58, path: "still", effect: "deathwave", dark: true },
+    ogre_charge: { ms: 1100, contact: .58, path: "rush", effect: "fan" },
+    great_fireball: { ms: 1100, contact: .64, path: "cast", effect: "sunfire", projectile: "fire" },
+    blood_howl: { ms: 820, contact: .48, path: "sweep", effect: "redslash" },
+    goblin_tactics: { ms: 780, contact: .46, path: "flank", effect: "nick", ghost: true },
+    gale: { ms: 880, contact: .48, path: "cross", effect: "trail", ghost: true },
+    general_might: { ms: 1100, contact: .58, path: "command", effect: "goldwave", dark: true }
   },
   drainTargets: new Map(),
+  motionGroupsSeen: new Set(),
   EFFECT_DIR: "assets/battle/effects/",
   UNIT_DIR: "assets/battle/units/",
   VFX_DURATION: { slash: 500, impact: 460, guard: 680, revive: 860, overkill: 860 },
@@ -211,6 +238,7 @@ const BattleScene = {
     for (const settle of this.pendingHits) settle();
     this.pendingHits.clear();
     this.drainTargets.clear();
+    this.motionGroupsSeen.clear();
     for (const motion of this.motions) motion.cancel();
     this.motions.clear();
     for (const t of this.timers) clearTimeout(t);
@@ -628,8 +656,8 @@ const BattleScene = {
   },
 
   durationOf(ev) {
-    if (ev.type === "attack" || (ev.type === "note" && ev.skillMiss)) {
-      const motion = this.SKILL_MOTIONS[ev.skillId];
+    if (["attack", "splash", "heal", "revive", "resource_gain"].includes(ev.type) || ev.motion || (ev.type === "note" && ev.skillMiss)) {
+      const motion = this.motionSpec(ev);
       if (motion) return Math.max(motion.ms + 90, (this.DURATION[ev.emphasis] || 760) * this.magnitude(ev));
     }
     if (ev.type === "battle_start" && this.isFinalBattle) return 1450;
@@ -860,7 +888,7 @@ const BattleScene = {
           this.setLife(u, false);
           this.setHp(u, ev.hp, ev.maxHp);
           this.arrival(u, "revive");
-          if (ev.fx) this.fxVfx(u, ev.fx, 2);
+          if (!this.supportMotion(ev, u) && ev.fx) this.fxVfx(u, ev.fx, 2);
         }
         break;
       }
@@ -888,7 +916,7 @@ const BattleScene = {
             this.drainTargets.delete(ev.sourceId);
           }
           this.setHp(u, ev.hp, ev.maxHp);
-          this.fxVfx(u, ev.fx || (ev.skillId ? "holy" : null), 1);
+          if (!this.supportMotion(ev, u)) this.fxVfx(u, ev.fx || (ev.skillId ? "holy" : null), 1);
           this.float(u, "+" + ev.amount, "heal");
           if (ev.label) this.showAction(`${ev.label}　→　${u.name} に +${ev.amount}`, 900);
         }
@@ -933,6 +961,7 @@ const BattleScene = {
         this.cutin(ev.name, `連鎖の着地：次の味方攻撃+${ev.amount || 0}%`, "synergy");
         break;
       case "resource_gain": {
+        if (ev.motion && ev.amount > 0) this.supportMotion(ev, this.units[ev.sourceId]);
         const u = this.units[ev.sourceId];
         const unit = ev.resource === "gold" ? "G" : ev.resource === "soul" ? "魂" : ev.resource;
         if (u) {
@@ -1067,7 +1096,15 @@ const BattleScene = {
         break;
       }
       case "note": {
-        if (ev.skillMiss && this.SKILL_MOTIONS[ev.skillId]) {
+        if (ev.motion && this.motionSpec(ev) && !["cover", "buff"].includes(ev.motion.outcome)) {
+          const source = this.units[ev.motion.sourceId];
+          const targets = (ev.motion.targets || []).map(id=>this.units[id]).filter(Boolean);
+          this.performSkillMotion(source, targets[0], ev, this.visualDuration(this.motionSpec(ev)?.ms || 700));
+          if (ev.motion.outcome !== "miss") for (const target of targets) this.motionFx(this.motionSpec(ev).effect,target,420);
+          if (ev.motion.outcome === "bound") for (const target of targets) this.mark(target,"bound");
+          for (const cleared of ev.motion.cleared || []) this.mark(this.units[cleared.unitId], {stunned:"bound",charmed:"charm",burn:"burn"}[cleared.state],false);
+        }
+        if (ev.skillMiss && this.SKILL_MOTIONS[ev.skillId] && ev.skillId !== "knight_ittou") {
           const actor = this.units[ev.unitId];
           this.performSkillMotion(actor, null, ev, this.visualDuration(this.SKILL_MOTIONS[ev.skillId].ms));
         }
@@ -1075,13 +1112,14 @@ const BattleScene = {
         // 味方の前に立つ（かばう宣言）。使用者は前へ出るが、狙われるのは次の被弾から。
         if (ev.covering) {
           const t = this.units[ev.forId];
-          if (u) { u.el.classList.add("acting", "covering"); this.fxVfx(u, ev.fx || "shield", 2); this.mark(u, "cover"); }
+          if (u) { u.el.classList.add("acting", "covering"); if (!this.supportMotion(ev,t)) this.fxVfx(u, ev.fx || "shield", 2); this.mark(u, "cover"); }
           if (t) this.fxVfx(t, ev.fx || "shield", 1);
           this.showAction(String(ev.text || "").trim(), 1000);
           break;
         }
         // 鼓舞：対象全員の足元に同時に輪。1ラウンド残る。
         if (ev.buff) {
+          if (ev.motion) this.performSkillMotion(u,null,ev,this.visualDuration(this.motionSpec(ev).ms));
           const side = u ? u.side : "player";
           const ids = (ev.targets && ev.targets.length)
             ? ev.targets
@@ -1089,7 +1127,7 @@ const BattleScene = {
           for (const id of ids) {
             const t = this.units[id];
             if (!t) continue;
-            this.fxVfx(t, ev.fx || "aura", 1);
+            if (ev.motion) this.motionFx(this.motionSpec(ev).effect,t,420); else this.fxVfx(t, ev.fx || "aura", 1);
             this.mark(t, "buff");
           }
           if (u) u.el.classList.add("acting");
@@ -1138,6 +1176,7 @@ const BattleScene = {
       }
       // 技を繰り出す直前。本人の口元に吹き出し（台詞＋技名）。ロマサガ風に札の上へ浮かせる。
       case "skill_call": {
+        if (ev.motion?.outcome === "scatter") this.supportMotion(ev,this.units[ev.unitId]);
         const u = this.units[ev.unitId];
         const sk = this.skillOf(ev.skillId);
         if (u) {
@@ -1571,10 +1610,77 @@ const BattleScene = {
 
   // ルールは即時計算済み。表示だけを「溜め→接触→戻り」へ分ける。
   // 中断時は pendingHits でHPだけ確定し、次イベントやスキップと食い違わせない。
+  motionId(ev) {
+    if (ev.motion?.skillId) return ev.motion.skillId;
+    if (["attack", "splash"].includes(ev.type) && this.skillOf(ev.skillId)?.kind === "trait") return null;
+    return ev.skillId || null;
+  },
+
+  motionSpec(ev) {
+    const id = this.motionId(ev), spec = this.SKILL_MOTIONS[id];
+    if (!spec || ev.spark || (ev.fromId && ev.fromId === ev.toId)) return null;
+    if (id === "mimic_box") return {...spec, effect: ev.type === "heal" ? "herb" : ev.type === "resource_gain" ? "coin" : "flame"};
+    return spec;
+  },
+
+  beginMotionGroup(ev) {
+    const group = ev.motion?.group;
+    // 連撃は実攻撃ごとに動く。全体技・分配回復だけ本人の動作を共有する。
+    const shared = ["orc_cleave", "mage_fireball", "lich_pulse", "king_wave", "general_might", "great_fireball", "ogre_charge", "death_pulse", "mandragora_mend", "mimic_box"];
+    if (!group || !shared.includes(this.motionId(ev))) return true;
+    if (this.motionGroupsSeen.has(group)) return false;
+    this.motionGroupsSeen.add(group);
+    return true;
+  },
+
+  supportMotion(ev, target) {
+    const spec = this.motionSpec(ev);
+    if (!spec) return false;
+    const source = this.units[ev.motion?.sourceId || ev.sourceId || ev.unitId];
+    const first = this.beginMotionGroup(ev);
+    if (first) this.performSkillMotion(source, target, ev, this.visualDuration(spec.ms));
+    if (target) this.motionFx(spec.effect, target, 420);
+    return true;
+  },
+
+  // 残像は札の複製ではなく、見えている絵だけ。戦闘員・操作要素を作らない。
+  motionGhost(u, dx, dy, duration) {
+    if (!u?.actor || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const scene = document.getElementById("scene");
+    if (!scene) return;
+    const a = u.actor.getBoundingClientRect(), box = scene.getBoundingClientRect();
+    const el = document.createElement(u.sprite ? "img" : "span");
+    if (u.sprite) { el.src = u.sprite.src; el.alt = ""; } else el.textContent = u.icon || "";
+    el.className = "motion-fx motion-ghost";
+    el.setAttribute("aria-hidden", "true");
+    Object.assign(el.style, {left:`${a.x-box.x}px`,top:`${a.y-box.y}px`,width:`${a.width}px`,height:`${a.height}px`,margin:"0"});
+    scene.appendChild(el);
+    const motion = el.animate([{transform:"translate(0,0)",opacity:.28},{transform:`translate(${dx}px,${dy}px)`,opacity:0}], {duration,easing:"ease-out"});
+    this.motions.add(motion);
+    this.timers.push(setTimeout(()=>{motion.cancel();this.motions.delete(motion);el.remove();},duration));
+  },
+
   motionFrames(path, dx, dy, direction) {
     const frame = (x, y, offset) => ({ transform: `translate(${x}px,${y}px)`, offset });
     const zero = frame(0, 0, 0), end = frame(0, 0, 1);
     switch (path) {
+      case "sweep": return [zero, frame(-direction*6,0,.18),frame(direction*24,0,.46),frame(direction*24,0,.66),end];
+      case "snatch": return [zero,frame(dx*.4,dy*.4+12,.24),frame(dx,dy,.43),frame(dx*.4,dy*.4-12,.65),end];
+      case "call": return [zero,frame(direction*12,-8,.3),frame(direction*12,0,.65),end];
+      case "guard": return [zero,frame(direction*24,0,.4),frame(direction*24,0,.8),end];
+      case "stagger": return [zero,frame(dx*.35,dy*.35,.22),frame(dx*.28,dy*.28+5,.34),frame(dx,dy,.58),frame(dx*.7,dy*.7,.82),end];
+      case "zigzag": return [zero,frame(direction*30,-10,.2),frame(-direction*14,8,.4),frame(direction*26,-6,.65),end];
+      case "flank": return [zero,frame(dx*.6,dy*.6-18,.23),frame(dx,dy,.46),frame(dx*.5,dy*.5+18,.72),end];
+      case "lift": return [zero,frame(0,5,.2),frame(0,-6,.35),frame(0,-6,.7),end];
+      case "float": return [zero,frame(0,-8,.3),frame(0,-8,.6),end];
+      case "box": return [zero,frame(0,-9,.15),frame(0,0,.26),frame(0,-9,.38),frame(0,0,.44),frame(0,0,.56),end];
+      case "dive": return [zero,frame(0,-40,.28),frame(dx,dy,.52),frame(dx*.5,dy*.5-26,.74),end];
+      case "draw": return [zero,frame(0,0,.24),frame(dx,dy,.38),frame(dx,dy,.43),frame(dx*.2,dy*.2,.6),end];
+      case "cross": return [zero,frame(0,0,.2),frame(dx,dy,.48),frame(dx+direction*18,dy,.58),frame(dx*.45,dy*.45-14,.76),end];
+      case "command": return [zero,frame(direction*16,0,.32),frame(direction*16,0,.58),end];
+      case "wrap": return [zero,frame(direction*16,0,.4),frame(direction*16,0,.7),end];
+      case "cling": return [zero,{...frame(0,6,.2),transform:"translateY(6px) scale(1.16,.8)"},frame(dx,dy,.48),frame(dx*.5,dy*.5,.72),end];
+      case "wave": return [zero,{...frame(0,6,.25),transform:"translateY(6px) scale(1.18,.8)"},frame(direction*36,0,.6),end];
       case "drop": return [zero, frame(0, 8, .18), frame(direction * 36, -24, .36), frame(direction * 36, -24, .44), frame(direction * 36, 4, .57), frame(direction * 26, 0, .73), end];
       case "rush": return [zero, frame(0, 0, .20), frame(dx * .18, dy * .18, .32), frame(dx, dy, .53), frame(dx, dy, .61), frame(dx * .82, dy, .73), end];
       case "bite": return [zero, frame(0, 0, .13), frame(dx * .6, dy * .6 - 16, .29), frame(dx, dy, .48), frame(dx, dy, .57), frame(dx * .45, dy * .45 - 24, .78), end];
@@ -1610,18 +1716,21 @@ const BattleScene = {
   },
 
   performSkillMotion(from, to, ev, total) {
-    const spec = this.SKILL_MOTIONS[ev.skillId];
+    const spec = this.motionSpec(ev);
     if (!from || !spec || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const direction = from.side === "player" ? 1 : -1;
     const a = from.actor.getBoundingClientRect(), b = to?.actor.getBoundingClientRect();
-    const dx = b ? b.x + b.width / 2 - a.x - a.width / 2 - direction * b.width * .6 : direction * 28;
+    let dx = b ? b.x + b.width / 2 - a.x - a.width / 2 - direction * b.width * .6 : direction * 28;
+    const sceneBox = typeof document !== "undefined" && document.getElementById("scene")?.getBoundingClientRect();
+    if (sceneBox) dx = Math.max(sceneBox.left+8-a.left, Math.min(dx, sceneBox.right-8-a.right));
     const dy = b ? b.y - a.y : 0;
     this.setPose(from, "attack-windup");
     this.animateActor(from, this.motionFrames(spec.path, dx, dy, direction), total);
-    for (const [at, pose] of [[spec.contact * .85, "strike"], [.76, "recover"], [1, "idle"]]) {
+    for (const [at, pose] of [[spec.contact * .85, spec.pose || "strike"], [.76, "recover"], [1, "idle"]]) {
       this.timers.push(setTimeout(() => this.setPose(from, from.el.classList.contains("dead") ? "fallen" : pose), total * at));
     }
-    if (spec.path === "still") {
+    if (spec.ghost) this.motionGhost(from, dx*.65, dy*.65, total*.65);
+    if (spec.path === "still" || spec.dark) {
       const veil = this.motionFx("darkness", null, spec.ms);
       // 尺は eventScale と速度で同期する。
       if (veil) veil.style.animationDuration = `${total}ms`;
@@ -1635,12 +1744,12 @@ const BattleScene = {
     const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
     // 振りかぶり→接触→戻りのポーズを、それぞれ目で追える長さにする（2026-09-16 オーナー: ポーズが一瞬で見損ねる）。
     // 尺の上限は倍近くまで許す。読む時間（durationOf）より先に動作が終わるのは変えない。
-    const spec = this.SKILL_MOTIONS[ev.skillId];
-    const normal = !ev.skillId && !ev.fx;
+    const spec = this.motionSpec(ev);
+    const normal = !this.motionId(ev) && !ev.fx;
     const total = this.visualDuration(spec ? spec.ms : normal ? 660 : Math.min(1700, this.durationOf(ev) * .85));
     // 演出プリセット。無い（通常攻撃）なら今までどおり。
     const preset = (ev.fx && this.FX[ev.fx]) || null;
-    const kind = spec ? (spec.path === "cast" ? "fire" : "melee") : ev.type === "splash" ? "melee"
+    const kind = spec ? (spec.projectile || (spec.path === "cast" ? "fire" : "melee")) : ev.type === "splash" ? "melee"
       : preset && preset.projectile ? preset.projectile : this.attackKind(from);
     const ranged = kind !== "melee";
     // heavy は溜めてから当てる（接触を後ろへ）。wind は速い（接触を前へ）。
@@ -1651,7 +1760,8 @@ const BattleScene = {
     this.pendingHits.add(settle);
     const later = (fn, ms) => this.timers.push(setTimeout(fn, ms));
     let removeProjectile = () => {};
-    if (spec && !impactOnly) {
+    const moveActor = !impactOnly && this.beginMotionGroup(ev);
+    if (spec && moveActor) {
       this.performSkillMotion(from, to, ev, total);
       if (from && to && ranged && !reduced) removeProjectile = this.projectileMotion(from, to, kind, contact, ev.big);
     }
@@ -1700,7 +1810,7 @@ const BattleScene = {
       if (!impactOnly && typeof Sound !== "undefined") Sound.battle(ev, { speed: this.speed, final: this.isFinalBattle, fromSide: from?.side, tplId: from?.tplId, attackKind: kind });
 
       if (!to) return;
-      if (ev.skillId === "succubus_charm") this.drainTargets.set(ev.fromId, to);
+      if (this.motionId(ev) === "succubus_charm") this.drainTargets.set(ev.fromId, to);
       if (spec) {
         this.motionFx(spec.effect, to, 280);
       } else if (preset) {
@@ -1740,7 +1850,7 @@ const BattleScene = {
       }, Math.min(total * .5, total - contact));
       // 大技（docs/SPEC_BIG_SKILL_FX_2026-09-15.md §2）。
       // 止め→白フラッシュ→強い揺れ→相手を弾く→着弾の絵。ここが `ev.big` を見る唯一の着弾側の分岐。
-      if (ev.big) this.bigImpact(to, ev);
+      if (ev.big && !spec) this.bigImpact(to, ev);
       // heavy は一撃で画面が小さく揺れる（大技を「重い」と感じさせるのはここだけ）
       else if ((ev.emphasis >= 3 || (preset && preset.shake)) && !reduced) this.shake();
     };
