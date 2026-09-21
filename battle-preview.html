@@ -36,6 +36,12 @@
   <button data-motion="succubus_charm">吸血</button>
   <button data-motion="ogre_smash" data-miss="1">振り下ろす・空振り</button>
 </nav>
+<nav style="max-width:1128px;margin:12px auto;padding:0 12px">
+  <label>全31技・実戦計算 <select id="all-motion-skill"></select></label>
+  <button id="all-motion-play">選んだ技を再生</button>
+  <button id="all-motion-seed">別の展開で再生</button>
+  <p id="all-motion-note">実際に成立した効果だけを再生します。回復は負傷者、蘇生は倒れた仲間を含む試験編成です。</p>
+</nav>
 <div id="app"></div>
 <script src="src/data/portraits.js"></script>
 <script src="src/core/util.js"></script>
@@ -44,6 +50,7 @@
 <script src="src/data/synergies.js"></script>
 <script src="src/data/battle_happenings.js"></script>
 <script src="src/core/synergy.js"></script>
+<script src="src/core/skill_effects.js"></script>
 <script src="src/core/battle.js"></script>
 <script src="src/core/spotlight.js"></script>
 <script src="src/data/mormo_lines.js"></script>
@@ -199,6 +206,41 @@ function replaySkillMotion(skillId, miss = false) {
   return events;
 }
 document.querySelectorAll('[data-motion]').forEach(button => button.onclick = () => replaySkillMotion(button.dataset.motion, !!button.dataset.miss));
+let motionPreviewSeed = 1;
+function replayAllSkillMotion(id, seed = motionPreviewSeed) {
+  replayCurrent = () => replayAllSkillMotion(id, seed);
+  BattleScene.stop();
+  const sk = BattleScene.skillOf(id);
+  const mk = (name, side, extra = {}) => Battle.makeUnit({uid:name,name,tplId:sk.species||'goblin',race:'ゴブリン',icon:'⚔️',hp:300,atk:28,def:3,spd:10,spirit:50,loyalty:100,traits:[],tags:[],skills:[],...extra}, side);
+  const player = [mk('技を使う本人','player',{skills:[id],traits:sk.trait?[sk.trait]:[]}),mk('仲間A','player',{spd:8}),mk('仲間B','player',{spd:7})];
+  player[0].hp=id==='king_wave'?300:180; player[1].hp=100; player[2].hp=120;
+  if(id==='necro_hand'){player[1].alive=false;player[1].hp=0;}
+  if(id==='mandragora_wake'){player[1].flags.stunned=true;player[2].flags.charmed=true;}
+  const enemy=Array.from({length:3},(_,i)=>mk('練習相手'+(i+1),'enemy',{tplId:'swordsman',race:'人間',hp:180,atk:5,spd:i+1}));
+  if(id==='knight_ittou')enemy[0].hp=40;
+  const before=U.rand;
+  let timeline;
+  try {
+    U.rand=U.seeded(seed);
+    const battle=Battle.start(player,enemy,{rations:{consumed:3,need:3,shortage:0}});
+    let step=battle.next(), rounds=0;
+    while(step.type==='commands' && rounds++<40){
+      const commands={};
+      for(const a of step.allies) commands[a.id]=a.name==='技を使う本人'?{cmd:'skill',id,target:['ally','fallen'].includes(sk.target)?'p1':'e0'}:{cmd:'attack'};
+      step=battle.next(commands);
+    }
+    timeline=battle.timeline;
+  } finally {U.rand=before;}
+  document.getElementById('all-motion-note').textContent=`${sk.name} ／ seed ${seed} ／ 効果イベント ${timeline.filter(e=>e.motion?.skillId===id).length}件（台詞だけ・不成立は効果に数えません）`;
+  UI.set(BattleScene.shell({stage:1,army:'実戦計算による試写',region:sk.name}));
+  BattleScene.play(timeline,()=>{document.getElementById('next-btn').textContent='もう一度見る';});
+  return timeline;
+}
+for(const [id,sk] of Object.entries(SKILLS)){
+  const option=document.createElement('option');option.value=id;option.textContent=sk.name;document.getElementById('all-motion-skill').appendChild(option);
+}
+document.getElementById('all-motion-play').onclick=()=>replayAllSkillMotion(document.getElementById('all-motion-skill').value);
+document.getElementById('all-motion-seed').onclick=()=>replayAllSkillMotion(document.getElementById('all-motion-skill').value,++motionPreviewSeed);
 document.getElementById('loot-relay').onclick = replayLootRelay;
 UI.bind(action => { if (action === 'speed') BattleScene.cycleSpeed(); if (action === 'pausebattle') BattleScene.togglePause(); if (action === 'skiplog') BattleScene.skip(); if (action === 'afterbattle') replayCurrent(); });
 Sound.load();

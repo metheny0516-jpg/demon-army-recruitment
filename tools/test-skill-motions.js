@@ -16,7 +16,7 @@ const unit = (side, x) => ({side, tplId:'ogre', actor:{getBoundingClientRect:()=
 const from = unit('player', 20), to = unit('enemy', 220);
 Object.assign(b, {speed:1,eventScale:1, attackKind:()=> 'melee', setPose(){},
   animateActor(u, frames, duration){records.push({kind:'move',u,frames,duration});},
-  motionFx(kind){records.push({kind});}, unitVfx(){}, hit(){records.push({kind:'hit'});}, shake(){},
+  motionGhost(){records.push({kind:"ghost"});}, motionFx(kind){records.push({kind});}, unitVfx(){}, hit(){records.push({kind:'hit'});}, shake(){},
   setHp(u,hp){u.hp=hp;records.push({kind:'hp',hp});},
   projectileMotion(){records.push({kind:'projectile'});return ()=>{};}
 });
@@ -55,4 +55,29 @@ for (const speed of [2,4]) {
 reduced=true; records.length=0;
 b.attackMotion(from,to,event('knight_ittou'));
 assert.equal(to.hp,80);assert.ok(!records.some(r=>r.kind==='darkness'),'低モーションは暗転なし');flush();
-console.log('skill motions: normal / five skills / contact / AoE / miss / speed / reduced passed');
+console.log('skill motions: normal / 31 skills / contact / AoE / miss / speed / reduced passed');
+// 支援技は実イベントでだけ光り、攻撃数字を作らない。
+reduced=false;b.speed=1;
+Object.assign(b,{units:{p0:from,p1:to,e0:to},fxVfx(){},chainFlare(){},tellChain(){},appendLog(){},float(){},showAction(){},mark(){},setLife(){},arrival(){},bubble(){},pulse(){},flashSpirit(){},clearFocus(){}});
+from.el.classList.add=()=>{};to.el.classList.add=()=>{};
+for(const [id,type,outcome] of [
+ ['goblin_warcry','note','buff'],['slime_cling','note','bound'],['skeleton_wall','note','cover'],['troll_rest','note','cover'],
+ ['necro_hand','revive','revive'],['mandragora_mend','heal','heal'],['succubus_dark_heal','heal','heal'],['king_slime_wrap','heal','heal'],
+ ['mandragora_wake','note','cleanse'],['kobold_feint','skill_call','scatter'],['mimic_box','resource_gain','resource_gain']
+]){
+ records.length=0;b.motionGroupsSeen.clear();
+ const ev={type,unitId:type==='note'||type==='skill_call'?'p0':'p1',sourceId:'p0',skillId:id,amount:10,hp:90,maxHp:100,resource:'gold',forId:'p1',covering:outcome==='cover',buff:outcome==='buff',targets:['p1'],motion:{skillId:id,sourceId:'p0',outcome,targets:['p1'],cleared:[]}};
+ b.render(ev);flush();
+ assert.equal(records.filter(r=>r.kind==='hit').length,0,id+': 支援から攻撃を作らない');
+ assert.ok(records.some(r=>r.kind===b.motionSpec(ev).effect),id+': 本人の支援表現');
+}
+records.length=0;b.motionGroupsSeen.clear();
+const cleave={...event('orc_cleave'),motion:{skillId:'orc_cleave',sourceId:'p0',group:'cleave1'}};
+b.attackMotion(from,to,cleave);flush();b.attackMotion(from,to,{...cleave,type:'splash'});flush();
+assert.equal(records.filter(r=>r.kind==='move'&&r.u===from).length,1,'薙ぎ払いの余波で本人を二度動かさない');
+records.length=0;b.drainTargets.clear();b.render({type:'note',unitId:'p0',text:'回復イベントなし'});flush();
+assert.ok(!records.some(r=>r.kind==='projectile'),'回復が発生しないと吸収線なし');
+records.length=0;b.drainTargets.set('p0',to);
+b.render({type:'heal',unitId:'p0',sourceId:'p0',skillId:'succubus_charm',amount:0,hp:100,maxHp:100});flush();
+assert.ok(!records.some(r=>r.kind==='projectile'),'回復0を渡しても吸収線なし');
+console.log('✓ 支援11経路・薙ぎ払いの単一動作・吸血の非回復');

@@ -791,7 +791,11 @@ const Battle = {
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
-        if (tr && tr.modDealt && !autoExhausted(unit, tid)) tr.modDealt(ctx);
+        if (tr && tr.modDealt && !autoExhausted(unit, tid)) {
+          const before = ctx.mult;
+          tr.modDealt(ctx);
+          if (["rampage", "gale"].includes(tid) && ctx.mult !== before) ctx.motionSkillId = tid;
+        }
       }
       // 号令（自動戦闘の節目）は+50%と息切れ。コマンドの「技」は気合を払うだけ（倍率も息切れも無し）。
       if (ordered && !unit.flags.orderedManual) { ctx.mult *= 1.5; ctx.notes.push("号令"); }
@@ -825,6 +829,8 @@ const Battle = {
         big: !!bigSkill,
         parentEvent: actionOpts.parentEvent || ledgerParent || null
       });
+      const damageMotion = actionOpts.skillId || actionOpts.parentEvent?.skillId || ctx.motionSkillId;
+      if (damageMotion) applied.event.motion = {skillId:damageMotion,sourceId:unit.id,outcome:"attack",group:applied.event.eventId};
       const dmg = applied.dmg;
 
       // 攻撃後フック（火球・悪戯など）
@@ -869,7 +875,16 @@ const Battle = {
       };
       for (const tid of unit.traits) {
         const tr = TRAITS[tid];
-        if (tr && tr.postAttack && target && !autoExhausted(unit, tid)) tr.postAttack(post);
+        if (tr && tr.postAttack && target && !autoExhausted(unit, tid)) {
+          const start = timeline.length;
+          tr.postAttack(post);
+          if (UPPER_BY_TRAIT[tid]) {
+            const shared = ["great_fireball", "ogre_charge"].includes(tid)
+              && timeline.slice(start).some(e=>e.type === "trait_trigger" && e.traitId === tid);
+            if (shared) applied.event.motion = {skillId:tid,sourceId:unit.id,outcome:"attack",group:applied.event.eventId};
+            stampMotion(start, unit, UPPER_BY_TRAIT[tid].id, shared ? applied.event.eventId : null);
+          }
+        }
       }
       if (triggeredEvents.length) {
         // 金貨は軍団の成果。盗む役と反応する役を別の人材で組める。
@@ -929,7 +944,27 @@ const Battle = {
         return applyDamage(unit, target, Math.max(1, Math.round(raw) - Math.floor(target.def / 2)), "attack", Object.assign({ label, traits: label ? [label] : [], skillId: cmd && cmd.id || null, fx: fxOf(sk) }, extra || {})).dmg;
       }
     });
+    // 表示専用。実際にこの呼出しが作った本人の効果だけを束ねる。
+    // 反撃・反動・火の粉は技本体の移動を再生しない。イベント数と因果は不変。
+    const stampMotion = (start, unit, skillId, sharedGroup) => {
+      const group = sharedGroup || `${unit.id}:${start}`;
+      const ownTriggers = new Set(timeline.slice(start).filter(e=>e.type === "trait_trigger" && e.traitId === skillId).map(e=>e.eventId));
+      for (const ev of timeline.slice(start)) {
+        // 死亡をきっかけに別の特性が作った連鎖・資源を、この技へ取り込まない。
+        if (ev.skillId !== skillId && ev.motion?.skillId !== skillId && !ownTriggers.has(ev.parentEventId)) continue;
+        const source = ev.fromId || ev.sourceId;
+        if ((ev.motion && ev.motion.skillId !== skillId) || source !== unit.id || ev.spark || (ev.fromId && ev.fromId === ev.toId)) continue;
+        if (["attack", "splash", "heal", "revive", "resource_gain"].includes(ev.type)) {
+          ev.motion = { skillId, group, sourceId: unit.id, outcome: ev.type };
+        }
+      }
+    };
     const resolveSkill = (unit, sk, cmd, allies, enemies, round) => {
+      const start = timeline.length;
+      resolveSkillBody(unit, sk, cmd, allies, enemies, round);
+      stampMotion(start, unit, cmd.id);
+    };
+    const resolveSkillBody = (unit, sk, cmd, allies, enemies, round) => {
       if (!sk) return;
       const living = enemies.filter(onField);
       if (sk.hit !== undefined && !U.chance(sk.hit)) {
@@ -956,7 +991,10 @@ const Battle = {
           }
           if (sk.atkDown && target && target.alive) { target.atk = Math.max(1, target.atk - sk.atkDown); note(`　${target.name}の攻撃力が${sk.atkDown}下がった（残${target.atk}）`, "trait"); }
           if (sk.push && target && target.alive) moveBack(enemies, target);
-          if (sk.gold) gainBattleResource(unit, "gold", sk.gold, sk.name, null);
+          if (sk.gold) {
+            const reward = gainBattleResource(unit, "gold", sk.gold, sk.name, null);
+            reward.motion = {skillId,sourceId:unit.id,outcome:"resource_gain"};
+          }
           if (sk.recoil && dmg > 0 && unit.alive) applyDamage(unit, unit, Math.max(1, Math.round(dmg * sk.recoil)), "splash", { label: "反動", incident: true });
           break;
         }
@@ -992,9 +1030,13 @@ const Battle = {
         case "rest": heal(unit, sk.power); break;
         case "stun": {
           const target = pickEnemy(); if (!target) break;
-          if (U.chance(sk.chance || 0.5)) { target.flags.stunned = true; note(`　${target.name}は${sk.name}で動けない`, "trait"); }
+          if (U.chance(sk.chance || 0.5)) { target.flags.stunned = true; Object.assign(note(`　${target.name}は${sk.name}で動けない`, "trait"), {
+            motion: {skillId, sourceId:unit.id, targets:[target.id], outcome:"bound"}
+          }); }
           else {
-            note(`　${target.name}は${sk.name}を振り払った`, "trait");
+            Object.assign(note(`　${target.name}は${sk.name}を振り払った`, "trait"), {
+              motion: {skillId, sourceId:unit.id, targets:[target.id], outcome:"miss"}
+            });
             if (sk.retaliate && onField(target)) act(target, enemies, allies, round, { target: unit, label: "反撃", isExtra: true });
           }
           break;
@@ -1035,12 +1077,12 @@ const Battle = {
       if (fx && fx.immediate) { fx.immediate(hookCtx(unit, sk, cmd, playerUnits, enemyUnits, round)); return true; }
       if (sk.kind === "cover") {
         const t = (cmd.targetId && playerUnits.find(a => a.id === cmd.targetId && onField(a) && a !== unit)) || lowestAlly(playerUnits, unit);
-        if (t) { unit.flags.covering = t.id; unit.flags.coverRatio = sk.power || 0.6; emit("note", { unitId: unit.id, forId: t.id, fx: "shield", covering: true, emphasis: 1, text: `　${unit.name}が${t.name}の前に立つ`, cls: "trait" }); }
+        if (t) { unit.flags.covering = t.id; unit.flags.coverRatio = sk.power || 0.6; emit("note", { unitId: unit.id, forId: t.id, motion: {skillId:cmd.id, sourceId:unit.id, targets:[t.id], outcome:"cover"}, fx: "shield", covering: true, emphasis: 1, text: `　${unit.name}が${t.name}の前に立つ`, cls: "trait" }); }
         return true;
       }
       if (sk.kind === "buff") {
         for (const a of playerUnits.filter(onField)) a.flags.buff = { mult: sk.power || 1.3, until: round, name: sk.name };
-        emit("note", { unitId: unit.id, fx: fxOf(sk) || "aura", buff: true, targets: playerUnits.filter(onField).map(a => a.id), emphasis: 1, text: `　${unit.name}の${sk.name}で味方が奮い立つ`, cls: "trait" });
+        emit("note", { unitId: unit.id, motion: {skillId:cmd.id, sourceId:unit.id, targets:playerUnits.filter(onField).map(a=>a.id), outcome:"buff"}, fx: fxOf(sk) || "aura", buff: true, targets: playerUnits.filter(onField).map(a => a.id), emphasis: 1, text: `　${unit.name}の${sk.name}で味方が奮い立つ`, cls: "trait" });
         return true;
       }
       if (sk.kind === "scatter") { scatterUntil = round + 1; unit.flags.decoyUntil = round + 1; return true; }
@@ -1152,9 +1194,14 @@ const Battle = {
         for (const tid of unit.traits) {
           const tr = TRAITS[tid];
           if (!tr || !tr.onRoundEnd || (rescueOnly && !tr.rescueOnWipe)) continue;
+          const motionStart = timeline.length;
           tr.onRoundEnd({ unit, allies, enemies, round, onField, log: note, rng: U.rand,
             trigger: traitId => skillTrigger(unit, traitId, null),
-            dealRaw: (attacker, target, dmg, label, parentEvent) => applyDamage(attacker, target, dmg, "splash", { label, parentEvent }).dmg,
+            dealRaw: (attacker, target, dmg, label, parentEvent) => {
+              const result = applyDamage(attacker, target, dmg, "splash", { label, parentEvent });
+              if (UPPER_BY_TRAIT[tid] && attacker !== target) result.event.motion = {skillId:UPPER_BY_TRAIT[tid].id,sourceId:attacker.id,outcome:"splash",group:`${unit.id}:${motionStart}`};
+              return result.dmg;
+            },
             moveEnemyBack: target => {
               const i = enemies.indexOf(target);
               const next = i >= 0 ? enemies.findIndex((u, n) => n > i && onField(u)) : -1;
@@ -1162,6 +1209,7 @@ const Battle = {
               return next >= 0;
             }
           });
+          if (UPPER_BY_TRAIT[tid]) stampMotion(motionStart, unit, UPPER_BY_TRAIT[tid].id);
         }
       }
       for (const s of before) {
@@ -1359,7 +1407,7 @@ const Battle = {
                   text: `　魔王「${u.name}、${sk.name}！」 ${u.name}「${quote}」`, cls: "order"
                 });
                 // 指示の直後に効く技（かばう・鬨の声・かく乱）は今ここで台詞。それ以外は本人の手番で
-                if (applyImmediateSkill(u, sk, cmd, round)) { cmd.done = true; emit("skill_call", Object.assign({ unitId: u.id, name: u.name, emphasis: 3, text: `　${u.name}「${quote}」【${sk.name}】`, cls: "order" }, call)); }
+                if (applyImmediateSkill(u, sk, cmd, round)) { cmd.done = true; emit("skill_call", Object.assign({ unitId: u.id, name: u.name, emphasis: 3, text: `　${u.name}「${quote}」【${sk.name}】`, cls: "order" }, call, sk.kind === "scatter" ? {motion:{skillId:sid,sourceId:u.id,targets:[],outcome:"scatter"}} : {})); }
                 else u.flags.orderCall = call;
                 u.flags.skillCmd = cmd;
               }
