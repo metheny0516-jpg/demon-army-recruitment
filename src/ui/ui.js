@@ -1612,6 +1612,7 @@ const UI = {
     const offers = st.missionOffers.length ? st.missionOffers : Game.prepareMissions(true);
     const salary = Game.salaryTotal();
     const construction = Game.departmentOutput().material;
+    const storyGoal = typeof Story !== "undefined" ? Story.routeObjective(st) : null;
     // 地図の候補（docs/SPEC_TERRITORY_A_2026-09-15.md §2-2）。
     // 同じ場所の「落とす／略奪／贈る」は裏の選択肢として offers に並んでいるので、
     // 表に出すのは代表の1枚だけにして、切り替えは同じ札の中のボタンで行う。
@@ -1716,6 +1717,7 @@ const UI = {
       : "🗺 作戦会議";
     this.set(`${this.hud()}
       ${postAct2}
+      ${storyGoal ? `<div class="panel"><h3>第${storyGoal.chapter}章 · ${U.esc(storyGoal.title)}</h3><p>${U.esc(storyGoal.goal)}</p><p class="muted">${U.esc(storyGoal.hint || "")}</p></div>` : ""}
       <div class="mission-warroom">
       <header class="mission-warroom-head">
       <div class="panel mission-briefing">
@@ -2272,10 +2274,10 @@ const UI = {
       ? `<div class="mormo-aside show story-band${cut.say.mormo ? "" : " mormo-aside-unit"}">
           ${this.storyFaceHtml(cut.say, cut.body)}
           <div class="mormo-aside-bubble"><b>${U.esc(cut.say.name)}</b><p>「${U.esc(cut.body)}」</p>
-            ${last ? `<button type="button" class="mormo-aside-continue" data-action="${lastAction}">${U.esc(lastLabel)}</button>` : ""}</div></div>`
+            ${last && lastAction ? `<button type="button" class="mormo-aside-continue" data-action="${lastAction}">${U.esc(lastLabel)}</button>` : ""}</div></div>`
       : `<div class="mormo-aside show story-band story-band-caption">
           <div class="mormo-aside-bubble story-caption"><p>${U.esc(cut.body)}</p>
-            ${last ? `<button type="button" class="mormo-aside-continue" data-action="${lastAction}">${U.esc(lastLabel)}</button>` : ""}</div></div>`;
+            ${last && lastAction ? `<button type="button" class="mormo-aside-continue" data-action="${lastAction}">${U.esc(lastLabel)}</button>` : ""}</div></div>`;
     return `<div class="story-stage story-bg-${U.esc(bg || "throne")}" data-action="${last ? "storynoop" : "storynext"}"
         style="background-image:url('assets/story/bg/${U.esc(bg || "throne")}.webp'), var(--story-grad, none)">
       <div class="story-head"><span class="story-chapter">${chapter ? `第${chapter}章` : ""}</span><span class="story-kicker">${U.esc(kicker || "")}</span><b>${U.esc(title || "")}</b>
@@ -2296,7 +2298,8 @@ const UI = {
     const extra = beat.html === "map" ? this.storyMapHtml(st) : "";
     this.set(`${this.hud()}
       ${this.storyStageHtml({ bg: beat.bg, kicker: beat.kicker, title: beat.title, cuts, index: this.storyCut, chapter: beat.chapter,
-        lastLabel: remaining > 0 ? "続ける" : "……続ける", lastAction: "storydone" })}
+        lastLabel: beat.choices ? "方針を選ぶ" : remaining > 0 ? "続ける" : "……続ける", lastAction: beat.choices ? null : "storydone" })}
+      ${beat.choices && this.storyCut >= cuts.length - 1 ? `<div class="panel actions">${beat.choices.map(c => `<button data-action="storychoice" data-choice="${U.esc(c.id)}">${U.esc(c.label)}</button>`).join("")}</div>` : ""}
       ${this.storyCut >= cuts.length - 1 ? extra : ""}`, "story");
   },
 

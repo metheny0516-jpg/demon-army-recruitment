@@ -23,6 +23,14 @@ const Story = {
     if (!s.npcs) s.npcs = {};
     if (!Array.isArray(s.queue)) s.queue = [];
     if (typeof s.chapter !== "number") s.chapter = 1;
+    if (this.routeEnabled() && !s.route) {
+      s.route = { version: 1, completed: {}, pending: [], shown: [] };
+      // 未読の旧「征服度だけ」の章場面は新しい事実ベースの報告へ置き換える。
+      if (s.queue.some(b => b.id === "finale")) s.seen = s.seen.filter(id => id !== "finale");
+      s.queue = s.queue.filter(b => !(b.chapter >= 2) || /^route_/.test(b.id));
+      // 戦闘・編成中の選択は捨てない。作戦会議だけ次の描画で札を更新する。
+      if (st.phase === "mission") st.missionOffers = [];
+    }
   },
 
   chapterFor(st) {
@@ -66,6 +74,8 @@ const Story = {
     const now = this.chapterFor(st).n;
     let queued = 0;
     for (const beat of STORY_BEATS) {
+      // 地図ありの本編は征服度ではなく、実際の場所・決着で第二章以降を進める。
+      if (this.routeEnabled() && beat.chapter >= 2) continue;
       if (beat.trigger !== trigger) continue;
       if (s.seen.includes(beat.id)) continue;
       if (beat.chapter > now) continue;
@@ -86,6 +96,7 @@ const Story = {
       queued++;
     }
     s.chapter = now;
+    if (this.routeEnabled()) queued += this.queueRoute(st, trigger);
     return queued > 0;
   },
 
@@ -274,3 +285,152 @@ Story.describe = function (trace, nameOf) {
   const name = typeof trace.subject === "number" ? (nameOf(trace.subject) || "誰か") : "誰か";
   return tpl.replace(/\{subject\}/g, name);
 };
+
+// 第一幕の正規筋。状態は既存の story 内だけに保存する。地図なしの旧試験は従来経路。
+Object.assign(Story, {
+  routeEnabled() { return this.enabled && typeof Territory !== "undefined" && typeof STORY_ROUTE !== "undefined"; },
+  routeState(st) {
+    this.init(st);
+    if (!st.story.route) st.story.route = { version: 1, completed: {}, pending: [], shown: [] };
+    const r = st.story.route;
+    r.completed = r.completed || {};
+    r.pending = Array.isArray(r.pending) ? r.pending : [];
+    r.shown = Array.isArray(r.shown) ? r.shown : [];
+    return r;
+  },
+  routeDone(st, step) {
+    const r = this.routeState(st);
+    return !!r.completed[step.id] || !!(!step.visit && step.place && Territory.has(st, step.place));
+  },
+  routeStep(st) {
+    if (!this.routeEnabled() || (st.act || 1) !== 1 || !st.story?.flags.rescueResolved) return null;
+    return STORY_ROUTE.find(step => !this.routeDone(st, step)) || null;
+  },
+  // 隣接を守り、目的地までの最短経路の最初の未領土を案内する。新しい道は作らない。
+  routeWaypoint(st, target) {
+    const owned = Territory.owned(st), queue = [[target]], seen = new Set([target]);
+    while (queue.length) {
+      const path = queue.shift(), id = path[path.length - 1];
+      if (owned.has(id)) return path.length > 1 ? Territory.byId(path[path.length - 2]) : null;
+      for (const next of Territory.neighbors(id)) {
+        const place = Territory.byId(next);
+        if (seen.has(next) || (next !== "castle" && (!place || place.act > 1))) continue;
+        seen.add(next); queue.push(path.concat(next));
+      }
+    }
+    return null;
+  },
+  routeObjective(st) {
+    const step = this.routeStep(st);
+    if (!step) return null;
+    const waypoint = step.place ? this.routeWaypoint(st, step.place) : null;
+    return { chapter: step.chapter, title: step.title, goal: step.goal,
+      hint: st.counterattack?.pending ? "まず迫る敵を退ける。物語の目標はその後も残る。"
+        : waypoint && waypoint.id !== step.place ? `まず${waypoint.name}から道を開く。` : step.hint };
+  },
+  // 候補から目的地への道が永久に抜けないよう1枚だけ加える。既存の選択肢は残す。
+  routeOffers(game, offers) {
+    const st = game.state, step = this.routeStep(st);
+    if (!step || st.counterattack?.pending) return offers;
+    if (!step.place) {
+      if (!offers.some(m => m.storyRoute === step.id)) {
+        const type = MISSION_TYPES.find(t => t.id === "suppress");
+        const m = game.buildMission(type);
+        m.storyRoute = step.id; m.missionTitle = "報復隊を止める";
+        m.region = "魔王城の外門"; m.army = "報復を求める魔族";
+        m.description = "捕虜を奪おうとする一団を止める。勝てば報復隊は解散する。";
+        m.strategyHint = "捕虜を渡さず、武力で止める。領土は増えない。";
+        // 通常の鎮圧と同じ数値・敵将処理。名無しの反乱兵だけ場面に合わせる。
+        m.units = m.units.map((u, i) => u.captain ? u : { ...u, name: `報復隊の兵${i + 1}` });
+        offers.unshift(m);
+      }
+    } else {
+      const p = this.routeWaypoint(st, step.place);
+      if (p && !offers.some(m => m.territoryId === p.id && m.territoryMode === "take")) {
+        offers.unshift(game.buildMission(MISSION_TYPES.find(t => t.id === (Territory.isTribe(p.id) ? "suppress" : "invade")), null, p));
+        const cost = Territory.tributeCost(p.id);
+        if (cost) offers.push(game.tributeOffer(p, cost));
+        else if (Territory.isLand(p.id)) offers.push(game.buildMission(MISSION_TYPES.find(t => t.id === "raid"), null, p));
+      }
+    }
+    return offers.map(m => this.dressRouteMission(st, m));
+  },
+  dressRouteMission(st, mission) {
+    if (!this.routeEnabled() || (st.act || 1) !== 1 || !mission || mission.training || mission.story === "goblin_rescue") return mission;
+    const step = STORY_ROUTE.find(s => !s.visit && s.place === mission.territoryId && mission.territoryMode === "take");
+    if (!step || this.routeDone(st, step)) return mission;
+    mission.storyRoute = step.id;
+    // 鉱山は地図ではコボルトの領域。オークも一緒に働く。戦闘員数値・敵将は変えない。
+    if (step.id === "mine") {
+      mission.missionTitle = "鉱山の占領軍を退ける";
+      mission.army = "鉱山占領守備隊";
+      mission.description = "コボルトとオークが働く鉱山を解放する。人間の作業員も残されている。";
+      mission.units = mission.units.map((u, i) => u.captain ? u : { ...u, name: `鉱山守備兵${i + 1}`, tplId: null, race: "人間", icon: "🛡", rebel: false });
+    }
+    return mission;
+  },
+  routeScene(st, key, stage, slot) {
+    const data = STORY_ROUTE_TEXT[key]?.[stage];
+    if (!data) return null;
+    const text = typeof data.text === "function" ? data.text(st) : data.text;
+    return { id: `route_${key}_${stage}`, slot, title: data.title, bg: data.bg,
+      kicker: stage === "intro" ? "作戦の目標" : stage === "post" ? "決着" : "現地",
+      chapter: data.chapter, text, choices: data.choices || null, cast: { mormo: "mormo", ...(data.cast || {}) } };
+  },
+  routePre(st, mission) {
+    if (!this.routeEnabled() || (st.act || 1) !== 1 || !mission?.storyRoute || mission.missionPhase === "outpost") return [];
+    const scene = this.routeScene(st, mission.storyRoute, "pre", "arrival");
+    return scene ? [scene] : [];
+  },
+  // 実際の勝利決着の後だけ呼ぶ。前哨・略奪・撤退・訓練からは達成しない。
+  routeSettled(st, mission, won) {
+    if (!this.routeEnabled() || !won || !mission?.storyRoute || mission.missionPhase === "outpost" || mission.training) return;
+    const r = this.routeState(st), step = STORY_ROUTE.find(s => s.id === mission.storyRoute);
+    if (!step || step.visit || r.completed[step.id]) return;
+    if (step.place && (mission.territoryMode !== "take" || !Territory.has(st, step.place))) return;
+    r.completed[step.id] = { turn: st.turn, place: step.place || null };
+    const scene = this.routeScene(st, step.id, "post", "aftermath");
+    if (scene) r.pending.push(scene);
+    this.mark(st, "route_completed", null, { title: step.title, place: step.place || null });
+  },
+  queueRoute(st, trigger) {
+    if (!["after_battle", "before_mission"].includes(trigger)) return 0;
+    const r = this.routeState(st), queue = st.story.queue;
+    let count = 0;
+    const add = scene => {
+      if (!scene || r.shown.includes(scene.id)) return;
+      r.shown.push(scene.id); queue.push(scene); count++;
+    };
+    // 旧セーブの章場面を再生して矛盾させない。新規に決着した報告だけを積む。
+    for (const scene of r.pending.splice(0)) add(scene);
+    if (r.defenseDecision === "pending") {
+      add(this.routeScene(st, "defense", "choice", "aftermath"));
+      return count;
+    }
+    const ending = (st.actHistory || []).find(a => a.act === 1);
+    if (ending && (st.act || 1) >= 2) {
+      if (!st.story.seen.includes("finale")) {
+        const key = ending.by === "conquest" && Territory.has(st, "h12") ? "capital" : "defense";
+        add(this.routeScene(st, key, "ending", "aftermath"));
+        st.story.seen.push("finale");
+      }
+      st.story.chapter = 8;
+      return count;
+    }
+    let step = this.routeStep(st);
+    // 町は砦へ向かう途中で制圧する地形。新たに攻略したふりをせず帰還報告で扱う。
+    if (step?.visit && Territory.has(st, step.place)) {
+      add(this.routeScene(st, step.id, "intro", "road"));
+      add(this.routeScene(st, step.id, "post", "aftermath"));
+      r.completed[step.id] = { turn: st.turn, place: step.place, visit: true };
+      this.mark(st, "route_completed", null, { title: step.title, place: step.place });
+      step = this.routeStep(st);
+    }
+    if (step) {
+      st.story.chapter = step.chapter;
+      add(this.routeScene(st, step.id, "intro", "road"));
+    }
+    return count;
+  }
+});
+Story.TAG_LINES.route_completed = "魔王軍の物語が進んだ";

@@ -1136,7 +1136,9 @@ const Game = {
     st.stage = Math.min(this.MAX_CONQUEST, st.conquest + 1);
     if (notes) {
       notes.push(by === "conquest"
-        ? `王都は落ちた。だが王は隣国へ逃げ、援軍を呼んだ。——第${next}幕`
+        ? (typeof Story !== "undefined" && Story.routeEnabled() && prev === 1
+          ? `王都を制した。隣国は鉱山の権益を求めて介入する。——第${next}幕`
+          : `王都は落ちた。だが王は隣国へ逃げ、援軍を呼んだ。——第${next}幕`)
         : `勇者は退いた。だが隣国の援軍を連れて戻るだろう。——第${next}幕`);
     }
     this.trace("act", null, null, { act: next, by });
@@ -1243,6 +1245,7 @@ const Game = {
       : this.territoryOffers(previous))
       .concat(this.patrolOffer() ? [this.patrolOffer()] : [])
       .concat([this.buildMission(MISSION_TYPES.train, previous.get("train"))]);
+    if (typeof Story !== "undefined" && Story.routeEnabled() && !rescue) Story.routeOffers(this, st.missionOffers);
     st.phase = "mission";
     this.save();
     return st.missionOffers;
@@ -1739,7 +1742,8 @@ const Game = {
       units: training ? this.trainingUnits(units, opponent) : (isOutpost ? this.outpostUnits(units) : units)
     };
     if (place) this.dressPlaceMission(mission, type, place);
-    return this.applyInvasionReward(this.attachCaptains(mission, place, type, scale));
+    const built = this.applyInvasionReward(this.attachCaptains(mission, place, type, scale));
+    return typeof Story !== "undefined" ? Story.dressRouteMission(st, built) : built;
   },
 
   // 第一幕の侵攻は、前哨・本戦とも勝利1決着につき固定12G（試遊値）。
@@ -2958,7 +2962,7 @@ const Game = {
     if (typeof Story !== "undefined" && Story.enabled && !openingBattle) {
       const party = this.activeRoster();
       const storyCtx = { mission: stageData, enemyUnits: storyUnits, notes, stageData };
-      storyPre = [...Story.rollScenes(st, "road", party, storyCtx), ...Story.rollScenes(st, "arrival", party, storyCtx)];
+      storyPre = [...Story.rollScenes(st, "road", party, storyCtx), ...Story.routePre(st, stageData), ...Story.rollScenes(st, "arrival", party, storyCtx)];
     }
     const enemyUnits = storyUnits.map(e => Battle.makeUnit(e, "enemy"));
 
@@ -3329,7 +3333,13 @@ const Game = {
         // 幕の着地。魔王城で勇者を退けた（待った）か、王都まで落とした（攻めた）か。
         // **最後の幕でなければ、ランは終わらずに次の幕が始まる。**
         st.clearedBy = heroDefense ? "defense" : "conquest";
-        if ((st.act || 1) < this.MAX_ACT) {
+        if (heroDefense && (st.act || 1) === 1 && typeof Story !== "undefined" && Story.routeEnabled()
+          && !Territory.has(st, "h12")) {
+          // 勇者を退けても、王都への物語を強制的に打ち切らない。勝利後に本人が着地を選ぶ。
+          Story.routeState(st).defenseDecision = "pending";
+          st.phase = "result";
+          this.genApplicants();
+        } else if ((st.act || 1) < this.MAX_ACT) {
           actAdvance = this.beginAct((st.act || 1) + 1, st.clearedBy, notes);
           st.phase = "result";
           this.genApplicants();        // 新しい顔を見せる（未決U1の既定）
@@ -3482,6 +3492,7 @@ const Game = {
         highlightIds: pending.highlightIds || []
       }) : null
     };
+    if (typeof Story !== "undefined") Story.routeSettled(st, stageData, result.victory);
     this.rememberSpotlight(st.lastBattle.spotlight, stageData, result.victory);
     st.battleIncidentTotal = (st.battleIncidentTotal || 0) + (result.incidents || []).length;
 
@@ -3901,7 +3912,7 @@ const Game = {
       if (mission.territoryMode === "raid") {
         st.raided[mission.territoryId] = (st.raided[mission.territoryId] || 0) + 1;
         notes.push(`${mission.region}から奪って引き上げた。次に来るときは守りが硬い`);
-      } else if (mission.territoryMode === "take") {
+      } else if (mission.territoryMode === "take" && mission.missionPhase !== "outpost") {
         Territory.take(st, mission.territoryId);
         notes.push(`${mission.region}は魔王軍の領土になった（領土 ${Territory.init(st).lands.length + Territory.init(st).tribes.length}）`);
       }
@@ -5017,9 +5028,30 @@ const Game = {
   },
 
   // 幹の場面を一つ閉じる。全部閉じたら、積んだときに控えた行き先へ進む。
+  storyChoose(choice) {
+    const st = this.state;
+    if (!st || st.phase !== "story" || typeof Story === "undefined"
+      || Story.currentBeat(st)?.id !== "route_defense_choice"
+      || Story.routeState(st).defenseDecision !== "pending"
+      || !["continue", "advance"].includes(choice)) return false;
+    st.story.route.defenseDecision = choice;
+    if (choice === "advance") {
+      const notes = [];
+      const advance = this.beginAct(2, "defense", notes);
+      if (st.lastBattle) { st.lastBattle.actAdvance = advance; st.lastBattle.notes.push(...notes); }
+      st.missionOffers = []; st.selectedMission = null;
+      this.genApplicants();
+    }
+    this.storyDone();
+    this.save();
+    return true;
+  },
+
   storyDone() {
     const st = this.state;
     if (!st || typeof Story === "undefined") return null;
+    if (Story.currentBeat(st)?.id === "route_defense_choice"
+      && Story.routeState(st).defenseDecision === "pending") return "story";
     Story.shiftBeat(st);
     if (Story.currentBeat(st)) { this.save(); return "story"; }
     const next = st.story.next;

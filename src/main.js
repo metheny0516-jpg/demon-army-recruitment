@@ -228,7 +228,9 @@ const App = {
       const by = b.actAdvance.by;
       return this.report("report",
         (by === "conquest"
-          ? `王都は落ちましたデス！ ……ですが王は隣国へ逃げ、援軍を呼んだそうデス。`
+          ? (typeof Story !== "undefined" && Story.routeEnabled() && b.actAdvance.from === 1
+            ? `王都を制しましたデス！ まずは、ここまで戦った皆さんに感謝を。隣国からも使者が来ています。`
+            : `王都は落ちましたデス！ ……ですが王は隣国へ逃げ、援軍を呼んだそうデス。`)
           : `勇者は退きましたデス！ ……ですが、隣国の援軍を連れて戻るでしょう。`)
         + `\n魔王様、第${b.actAdvance.to}幕デス。まだ終わりません。`,
         { kicker: "幕替わり", title: "宰相モルモ" });
@@ -673,7 +675,12 @@ ${spec.gold}G 受け取りました。${spec.settles}決着後に ${spec.repay}G
         return UI.battleManual(this.pendingBattle);
 
       case "storydone":
-        Game.storyDone();
+      case "storychoice":
+        if (action === "storychoice") {
+          if (!Game.storyChoose(data.choice)) return;
+        } else {
+          Game.storyDone();
+        }
         this.render();
         if (Game.state.phase === "event") {
           const ev = Game.currentEvent();
